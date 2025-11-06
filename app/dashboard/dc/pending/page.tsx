@@ -107,6 +107,7 @@ export default function PendingDCPage() {
   const currentUser = getCurrentUser()
   const isCoordinator = currentUser?.role === 'Coordinator'
   const isSeniorCoordinator = currentUser?.role === 'Senior Coordinator'
+  const isAdmin = currentUser?.role === 'Admin' || currentUser?.role === 'Super Admin'
   
   // DC Details form fields
   const [financeRemarks, setFinanceRemarks] = useState('')
@@ -726,7 +727,7 @@ export default function PendingDCPage() {
               >
                 {saving ? 'Saving...' : 'Save'}
               </Button>
-              {isSeniorCoordinator && (
+              {(isSeniorCoordinator || isAdmin) && (
                 <Button
                   className="bg-red-600 hover:bg-red-700 text-white"
                   onClick={handleSubmitToWarehouse}
