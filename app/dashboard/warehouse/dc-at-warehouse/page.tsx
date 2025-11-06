@@ -52,6 +52,7 @@ export default function WarehouseDcAtWarehouse() {
   // Get current user to check role
   const currentUser = getCurrentUser()
   const isManager = currentUser?.role === 'Manager'
+  const isAdmin = currentUser?.role === 'Admin' || currentUser?.role === 'Super Admin'
 
   async function load() {
     try {
@@ -220,7 +221,7 @@ export default function WarehouseDcAtWarehouse() {
                   <TableCell className="whitespace-nowrap font-medium">{r.requestedQuantity || '-'}</TableCell>
                   <TableCell className="whitespace-nowrap">{r.managerId?.name || '-'}</TableCell>
                   <TableCell className="whitespace-nowrap">
-                    {isManager && (
+                    {(isManager || isAdmin) && (
                       <div className="flex items-center gap-2">
                         <Button size="sm" onClick={() => openProcessDialog(r)}>
                           Update & Submit
