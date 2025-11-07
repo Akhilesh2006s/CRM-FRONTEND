@@ -126,6 +126,7 @@ const NAV: NavItem[] = [
       { label: 'Saved DC', href: '/dashboard/dc/saved', icon: Save },
       { label: 'Pending DC', href: '/dashboard/dc/pending', icon: Clock },
       { label: 'EMP DC', href: '/dashboard/dc/emp', icon: UserCircle2 },
+      { label: 'My DC (Admin)', href: '/dashboard/dc/admin/my', icon: Shield },
     ],
   },
   {
