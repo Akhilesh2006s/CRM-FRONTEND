@@ -5,9 +5,12 @@ import { Card } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { apiRequest } from '@/lib/api'
 import { toast } from 'sonner'
-import { Pencil, CreditCard, ClipboardList } from 'lucide-react'
+import { Pencil, CreditCard, X } from 'lucide-react'
 
 type Row = {
   _id: string
@@ -19,11 +22,37 @@ type Row = {
   schoolCode?: string
   zone?: string
   executive?: string
+  transport?: string
+  lrNo?: string
+  lrDate?: string
+  boxes?: string
+  transportArea?: string
+  deliveryStatus?: string
+  remarks?: string
+  completedDate?: string
+  poPhotoUrl?: string
+  poDocument?: string
+  dcId?: string // The actual DC model ID (if this row is from DcOrder)
+  isDcOrder?: boolean // Flag to indicate if this is from DcOrder model
 }
 
 export default function CompletedDCPage() {
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
+  const [editingDC, setEditingDC] = useState<Row | null>(null)
+  const [editForm, setEditForm] = useState({
+    transport: '',
+    lrNo: '',
+    boxes: '',
+    dcCategory: '',
+    transportArea: '',
+    lrDate: '',
+    deliveryStatus: '',
+    remarks: '',
+  })
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null)
+  const [pdfDC, setPdfDC] = useState<Row | null>(null)
+  const [saving, setSaving] = useState(false)
   const [filters, setFilters] = useState({
     zone: '',
     employee: '',
@@ -34,39 +63,141 @@ export default function CompletedDCPage() {
   })
 
   async function load() {
+    setLoading(true)
     const qs = new URLSearchParams()
     Object.entries(filters).forEach(([k, v]) => v && qs.append(k, v))
     // show only active (not on hold)
     qs.append('hold', 'false')
     try {
       // Fetch from both DcOrder and DC model
-      const [dcOrderData, dcModelData] = await Promise.all([
-        apiRequest<Row[]>(`/warehouse/dc/list?${qs.toString()}`).catch(() => []),
-        apiRequest<any[]>(`/dc?status=completed`).catch(() => [])
-      ])
+      let dcOrderData: Row[] = []
+      let dcModelData: any[] = []
+      
+      try {
+        dcOrderData = await apiRequest<Row[]>(`/warehouse/dc/list?${qs.toString()}`)
+        console.log('Loaded DcOrder data:', dcOrderData?.length || 0, 'entries')
+      } catch (err: any) {
+        console.warn('Failed to load warehouse DC list:', err)
+        dcOrderData = []
+      }
+      
+      try {
+        dcModelData = await apiRequest<any[]>(`/dc?status=completed`)
+        console.log('Loaded DC model data:', dcModelData?.length || 0, 'entries')
+      } catch (err: any) {
+        console.warn('Failed to load completed DCs:', err)
+        dcModelData = []
+      }
 
       // Transform DC model entries to match Row format
-      const transformedDCs: Row[] = dcModelData.map((dc: any) => ({
-        _id: dc._id,
-        dcNo: dc.createdAt 
-          ? `${new Date(dc.createdAt).getFullYear().toString().slice(-2)}-${(new Date(dc.createdAt).getFullYear() + 1).toString().slice(-2)}/${dc._id.slice(-4)}`
-          : `DC-${dc._id.slice(-6)}`,
-        dcDate: dc.dcDate || dc.createdAt,
-        dcCategory: dc.dcCategory || 'Term 2',
-        dcFinYear: dc.createdAt 
-          ? `${new Date(dc.createdAt).getFullYear()}-${new Date(dc.createdAt).getFullYear() + 1}`
-          : '',
-        schoolName: dc.dcOrderId?.school_name || dc.customerName || '',
-        schoolCode: dc.dcOrderId?.dc_code || '',
-        zone: dc.dcOrderId?.zone || '',
-        executive: dc.employeeId?.name || dc.dcOrderId?.assigned_to?.name || '',
-      }))
+      const transformedDCs: Row[] = (dcModelData || []).map((dc: any) => {
+        const dcId = dc._id?.toString() || dc._id
+        return {
+          _id: dcId,
+          dcId: dcId, // This is a DC entry
+          isDcOrder: false,
+          dcNo: dc.createdAt 
+            ? `${new Date(dc.createdAt).getFullYear().toString().slice(-2)}-${(new Date(dc.createdAt).getFullYear() + 1).toString().slice(-2)}/${dcId.slice(-4)}`
+            : `DC-${dcId.slice(-6)}`,
+          dcDate: dc.dcDate || dc.createdAt,
+          dcCategory: dc.dcCategory || 'Term 2',
+          dcFinYear: dc.createdAt 
+            ? `${new Date(dc.createdAt).getFullYear()}-${new Date(dc.createdAt).getFullYear() + 1}`
+            : '',
+          schoolName: dc.dcOrderId?.school_name || dc.customerName || '',
+          schoolCode: dc.dcOrderId?.dc_code || '',
+          zone: dc.dcOrderId?.zone || '',
+          executive: dc.employeeId?.name || dc.dcOrderId?.assigned_to?.name || '',
+          transport: dc.transport || '',
+          lrNo: dc.lrNo || '',
+          lrDate: dc.lrDate || '',
+          boxes: dc.boxes || '',
+          transportArea: dc.transportArea || '',
+          deliveryStatus: dc.deliveryStatus || '',
+          remarks: dc.deliveryNotes || dc.remarks || '',
+          completedDate: dc.completedAt || '',
+          poPhotoUrl: dc.poPhotoUrl || dc.poDocument || '',
+          poDocument: dc.poDocument || dc.poPhotoUrl || '',
+        }
+      })
+      
+      // Mark DcOrder entries and find their corresponding DC IDs
+      const dcOrderRows: Row[] = (dcOrderData || []).map((row: any) => {
+        const rowId = row._id?.toString() || row._id
+        return {
+          ...row,
+          _id: rowId, // This is a DcOrder ID
+          isDcOrder: true,
+        }
+      })
+      
+      // Find DC entries for DcOrder rows
+      for (const row of dcOrderRows) {
+        try {
+          // Find DC that has this dcOrderId
+          const matchingDC = dcModelData.find((dc: any) => {
+            if (!dc.dcOrderId) return false
+            // Handle both populated object and ID string
+            let dcOrderIdValue: string
+            if (typeof dc.dcOrderId === 'object' && dc.dcOrderId._id) {
+              dcOrderIdValue = dc.dcOrderId._id.toString()
+            } else if (typeof dc.dcOrderId === 'object' && dc.dcOrderId.toString) {
+              dcOrderIdValue = dc.dcOrderId.toString()
+            } else {
+              dcOrderIdValue = String(dc.dcOrderId)
+            }
+            return dcOrderIdValue === row._id.toString()
+          })
+          if (matchingDC) {
+            row.dcId = matchingDC._id?.toString() || matchingDC._id
+            console.log(`Found DC ${row.dcId} for DcOrder ${row._id}`)
+          } else {
+            console.warn(`No DC found for DcOrder ${row._id} - this entry cannot be updated`)
+          }
+        } catch (e) {
+          console.warn('Error finding DC for DcOrder:', e)
+        }
+      }
 
-      // Combine both lists
-      const allData = [...dcOrderData, ...transformedDCs]
+      // Combine both lists (DcOrder entries first, then DC entries)
+      // Remove duplicates - if a DC entry exists, prefer it over DcOrder entry
+      const allDataMap = new Map<string, Row>()
+      
+      // First add DC entries (these are authoritative)
+      transformedDCs.forEach(dc => {
+        allDataMap.set(dc._id, dc)
+      })
+      
+      // Then add DcOrder entries only if they don't have a corresponding DC or if DC doesn't exist
+      dcOrderRows.forEach(dcOrder => {
+        if (dcOrder.dcId) {
+          // If we found a DC for this DcOrder, use the DC entry instead
+          if (!allDataMap.has(dcOrder.dcId)) {
+            // DC entry doesn't exist in our list, so add the DcOrder entry
+            allDataMap.set(dcOrder._id, dcOrder)
+          }
+          // If DC entry exists, we skip the DcOrder entry (DC is authoritative)
+        } else {
+          // No DC found, add the DcOrder entry
+          allDataMap.set(dcOrder._id, dcOrder)
+        }
+      })
+      
+      const allData = Array.from(allDataMap.values())
       setRows(allData)
+      
+      if (allData.length === 0) {
+        // Don't show error if filters are applied - might be intentional
+        if (Object.values(filters).some(v => v)) {
+          // Filters applied but no results
+        } else {
+          // No filters but no data - might be normal
+        }
+      }
     } catch (err: any) {
+      console.error('Error loading DCs:', err)
       toast.error(err?.message || 'Failed to load DCs')
+      setRows([])
     } finally {
       setLoading(false)
     }
@@ -76,6 +207,142 @@ export default function CompletedDCPage() {
 
   function actionPlaceholder(msg: string) {
     toast.message(msg)
+  }
+
+  const openEditDialog = async (row: Row) => {
+    if (!row._id) {
+      toast.error('Invalid DC ID. Cannot edit.')
+      return
+    }
+    
+    try {
+      // Determine which ID to use for fetching
+      const dcIdToFetch = row.dcId || row._id // Use dcId if available (for DcOrder entries), otherwise use _id
+      
+      // Try to fetch full DC details, but use row data as fallback
+      let fullDC: any = null
+      try {
+        console.log('Fetching DC details for:', dcIdToFetch, 'isDcOrder:', row.isDcOrder)
+        fullDC = await apiRequest<any>(`/dc/${dcIdToFetch}`)
+        console.log('Fetched DC:', fullDC)
+      } catch (err: any) {
+        console.warn('Failed to fetch full DC details, using row data:', err)
+        // Use row data as fallback
+        fullDC = row
+      }
+      
+      if (!fullDC) {
+        toast.error('DC not found')
+        return
+      }
+      
+      // Preserve all row properties including isDcOrder and dcId
+      setEditingDC({
+        ...row,
+        isDcOrder: row.isDcOrder,
+        dcId: row.dcId,
+      })
+      setEditForm({
+        transport: fullDC?.transport || row.transport || '',
+        lrNo: fullDC?.lrNo || row.lrNo || '',
+        boxes: fullDC?.boxes || row.boxes || '',
+        dcCategory: fullDC?.dcCategory || row.dcCategory || 'Term 2',
+        transportArea: fullDC?.transportArea || row.transportArea || '',
+        lrDate: fullDC?.lrDate 
+          ? new Date(fullDC.lrDate).toISOString().split('T')[0] 
+          : row.lrDate 
+            ? new Date(row.lrDate).toISOString().split('T')[0] 
+            : '',
+        deliveryStatus: fullDC?.deliveryStatus || row.deliveryStatus || '',
+        remarks: fullDC?.deliveryNotes || fullDC?.remarks || row.remarks || '',
+      })
+    } catch (err: any) {
+      console.error('Error opening edit dialog:', err)
+      toast.error(err?.message || 'Failed to load DC details')
+    }
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editingDC) return
+    
+    // Determine which ID to use for updating
+    // For DC entries: use _id directly
+    // For DcOrder entries: use dcId (the corresponding DC ID)
+    let dcIdToUpdate: string | undefined
+    
+    if (editingDC.isDcOrder) {
+      // This is a DcOrder entry - we need the corresponding DC ID
+      if (!editingDC.dcId) {
+        toast.error('No corresponding DC found for this DcOrder entry. Cannot update. Please ensure a DC exists for this order.')
+        return
+      }
+      dcIdToUpdate = editingDC.dcId
+    } else {
+      // This is a DC entry - use its own ID
+      dcIdToUpdate = editingDC._id || editingDC.dcId
+    }
+    
+    // Validate DC ID exists
+    if (!dcIdToUpdate) {
+      toast.error('Invalid DC ID. Cannot update.')
+      return
+    }
+    
+    setSaving(true)
+    try {
+      console.log('Updating DC:', {
+        dcIdToUpdate,
+        isDcOrder: editingDC.isDcOrder,
+        originalId: editingDC._id,
+        dcId: editingDC.dcId,
+        data: editForm
+      })
+      
+      const updateData: any = {
+        transport: editForm.transport || undefined,
+        lrNo: editForm.lrNo || undefined,
+        boxes: editForm.boxes || undefined,
+        dcCategory: editForm.dcCategory || undefined,
+        transportArea: editForm.transportArea || undefined,
+        lrDate: editForm.lrDate || undefined,
+        deliveryStatus: editForm.deliveryStatus || undefined,
+        deliveryNotes: editForm.remarks || undefined,
+      }
+      
+      // Remove undefined and empty string values
+      Object.keys(updateData).forEach(key => {
+        if (updateData[key] === undefined || updateData[key] === '') {
+          delete updateData[key]
+        }
+      })
+      
+      const response = await apiRequest(`/dc/${dcIdToUpdate}`, {
+        method: 'PUT',
+        body: JSON.stringify(updateData),
+      })
+      
+      console.log('Update response:', response)
+      toast.success('DC updated successfully')
+      setEditingDC(null)
+      await load() // Reload to show updated data
+    } catch (err: any) {
+      console.error('Update error:', err)
+      const errorMessage = err?.message || err?.response?.data?.message || 'Failed to update DC'
+      toast.error(errorMessage)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const openPDF = (row: Row) => {
+    // Try to get PDF from poPhotoUrl or poDocument
+    const url = row.poPhotoUrl || row.poDocument
+    if (url) {
+      setPdfUrl(url)
+      setPdfDC(row)
+    } else {
+      toast.error('No PDF document available for this DC')
+    }
   }
 
   return (
@@ -126,7 +393,15 @@ export default function CompletedDCPage() {
                 </TableRow>
               )}
               {rows.map((r, idx) => (
-                <TableRow key={r._id}>
+                <TableRow 
+                  key={r._id} 
+                  className="cursor-pointer hover:bg-neutral-50"
+                  onClick={(e) => {
+                    // Don't trigger if clicking on buttons
+                    if ((e.target as HTMLElement).closest('button')) return
+                    openPDF(r)
+                  }}
+                >
                   <TableCell>{idx + 1}</TableCell>
                   <TableCell className="whitespace-nowrap">{r.dcNo}</TableCell>
                   <TableCell className="whitespace-nowrap">{r.dcDate ? new Date(r.dcDate).toLocaleDateString() : '-'}</TableCell>
@@ -136,27 +411,169 @@ export default function CompletedDCPage() {
                   <TableCell className="whitespace-nowrap">{r.schoolCode || '-'}</TableCell>
                   <TableCell className="whitespace-nowrap">{r.zone || '-'}</TableCell>
                   <TableCell className="whitespace-nowrap">{r.executive || '-'}</TableCell>
-                  <TableCell className="whitespace-nowrap">-</TableCell>
-                  <TableCell className="whitespace-nowrap">-</TableCell>
-                  <TableCell className="whitespace-nowrap">-</TableCell>
+                  <TableCell className="whitespace-nowrap">{r.completedDate ? new Date(r.completedDate).toLocaleDateString() : '-'}</TableCell>
+                  <TableCell className="whitespace-nowrap">{r.lrNo || '-'}</TableCell>
+                  <TableCell className="whitespace-nowrap">{r.lrDate ? new Date(r.lrDate).toLocaleDateString() : '-'}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <Button size="sm" variant="secondary" onClick={() => actionPlaceholder('Action: open')}><ClipboardList size={14} /></Button>
-                      <Button size="sm" variant="secondary" onClick={() => actionPlaceholder('Action: edit')}><Pencil size={14} /></Button>
-                      <Button size="sm" variant="secondary" onClick={() => actionPlaceholder('Action: payment')}><CreditCard size={14} /></Button>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          openPDF(r) 
+                        }}
+                        title="View PDF"
+                      >
+                        PDF
+                      </Button>
+                      <Button size="sm" variant="secondary" onClick={(e) => { e.stopPropagation(); openEditDialog(r) }}><Pencil size={14} /></Button>
+                      <Button size="sm" variant="secondary" onClick={(e) => { e.stopPropagation(); actionPlaceholder('Action: payment') }}><CreditCard size={14} /></Button>
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Button size="sm" onClick={() => actionPlaceholder('Stock Return')}>Stock Return</Button>
+                    <Button size="sm" onClick={(e) => { e.stopPropagation(); actionPlaceholder('Stock Return') }}>Stock Return</Button>
                   </TableCell>
-                  <TableCell className="truncate max-w-[240px]">-</TableCell>
-                  <TableCell className="whitespace-nowrap">-</TableCell>
+                  <TableCell className="truncate max-w-[240px]">{r.remarks || '-'}</TableCell>
+                  <TableCell className="whitespace-nowrap">{r.deliveryStatus || '-'}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </div>
       </Card>
+
+      {/* Edit Dialog */}
+      <Dialog open={!!editingDC} onOpenChange={(open) => !open && setEditingDC(null)}>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>DC Information Update</DialogTitle>
+            <DialogDescription>
+              Update DC details for DC No: {editingDC?.dcNo}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="text-center mb-4">
+              <div className="text-lg font-semibold">DC No: {editingDC?.dcNo}</div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Transport</Label>
+                <Input
+                  value={editForm.transport}
+                  onChange={(e) => setEditForm({ ...editForm, transport: e.target.value })}
+                  placeholder="Transport"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label>LR No</Label>
+                <Input
+                  value={editForm.lrNo}
+                  onChange={(e) => setEditForm({ ...editForm, lrNo: e.target.value })}
+                  placeholder="LR No"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label>Boxes</Label>
+                <Input
+                  value={editForm.boxes}
+                  onChange={(e) => setEditForm({ ...editForm, boxes: e.target.value })}
+                  placeholder="Boxes"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label>DC Category</Label>
+                <Select value={editForm.dcCategory} onValueChange={(v) => setEditForm({ ...editForm, dcCategory: v })}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Select DC Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Term 1">Term 1</SelectItem>
+                    <SelectItem value="Term 2">Term 2</SelectItem>
+                    <SelectItem value="Term 3">Term 3</SelectItem>
+                    <SelectItem value="Full Year">Full Year</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Transport Area</Label>
+                <Input
+                  value={editForm.transportArea}
+                  onChange={(e) => setEditForm({ ...editForm, transportArea: e.target.value })}
+                  placeholder="Transport Area"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label>LR Date</Label>
+                <Input
+                  type="date"
+                  value={editForm.lrDate}
+                  onChange={(e) => setEditForm({ ...editForm, lrDate: e.target.value })}
+                  className="mt-1"
+                />
+              </div>
+              <div className="col-span-2">
+                <Label>Delivery Status</Label>
+                <Select value={editForm.deliveryStatus} onValueChange={(v) => setEditForm({ ...editForm, deliveryStatus: v })}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Select Delivery Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Pending">Pending</SelectItem>
+                    <SelectItem value="In Transit">In Transit</SelectItem>
+                    <SelectItem value="Delivered">Delivered</SelectItem>
+                    <SelectItem value="Completed">Completed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingDC(null)}>Cancel</Button>
+            <Button onClick={handleSaveEdit} disabled={saving}>
+              {saving ? 'Saving...' : 'Update'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* PDF Viewer Dialog */}
+      <Dialog open={!!pdfUrl} onOpenChange={(open) => {
+        if (!open) {
+          setPdfUrl(null)
+          setPdfDC(null)
+        }
+      }}>
+        <DialogContent className="sm:max-w-[90vw] max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>DC Document</DialogTitle>
+            <DialogDescription>
+              Viewing document for DC: {pdfDC?.dcNo || 'N/A'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="w-full h-[80vh] flex items-center justify-center bg-neutral-100 rounded">
+            {pdfUrl ? (
+              <iframe
+                src={pdfUrl}
+                className="w-full h-full border-0"
+                title="DC Document"
+              />
+            ) : (
+              <div className="text-neutral-500">No document available</div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPdfUrl(null)}>
+              <X className="mr-2 h-4 w-4" />
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

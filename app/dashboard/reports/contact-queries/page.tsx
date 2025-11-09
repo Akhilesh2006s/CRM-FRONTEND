@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
-import { apiRequest, API_BASE_URL } from '@/lib/api'
+import { apiRequest } from '@/lib/api'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -145,6 +145,7 @@ export default function ContactQueriesPage() {
       if (contactMobile) qs.append('contactMobile', contactMobile)
 
       const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, '') || 'https://crm-backend-production-2ffd.up.railway.app'
 
       const response = await fetch(`${API_BASE_URL}/api/contact-queries/export?${qs.toString()}`, {
         method: 'GET',

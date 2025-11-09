@@ -40,6 +40,7 @@ import {
   History,
   Menu,
   X,
+  Phone,
 } from 'lucide-react'
 
 type NavItem = {
@@ -118,7 +119,7 @@ function HoverTooltip({ item, pathname, onClose }: { item: NavItem; pathname: st
 const NAV: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
   {
-    label: 'DC',
+    label: 'Clients',
     icon: Truck,
     children: [
       { label: 'Create Sale', href: '/dashboard/dc/create', icon: PlusCircle },
@@ -286,10 +287,19 @@ export function Sidebar() {
     finalNav = [
       { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
       {
-        label: 'DC',
+        label: 'Leads',
+        icon: TrendingUp,
+        children: [
+          { label: 'Add Lead', href: '/dashboard/leads/add', icon: PlusCircle },
+          { label: 'Followup Leads', href: '/dashboard/leads/followup', icon: Phone },
+        ],
+      },
+      {
+        label: 'Clients',
         icon: Truck,
         children: [
-          { label: 'My DC', href: '/dashboard/dc/my', icon: UserCircle2 },
+          { label: 'My Clients', href: '/dashboard/dc/my', icon: UserCircle2 },
+          { label: 'Client DC', href: '/dashboard/dc/client-dc', icon: Package },
         ],
       },
       {
@@ -297,6 +307,7 @@ export function Sidebar() {
         icon: CreditCard,
         children: [
           { label: 'Add Payment', href: '/dashboard/payments/add-payment', icon: PlusCircle },
+          { label: 'Payments Done', href: '/dashboard/payments/done', icon: CheckCircle2 },
         ],
       },
       {
@@ -311,12 +322,12 @@ export function Sidebar() {
       { label: 'Sign out', icon: LogOut, href: '/auth/login' },
     ]
   } else if (isManager) {
-    // For Manager role, only show: Dashboard, DC, Warehouse, Expenses, Reports, Settings, Sign out
-    const allowedMenuItems = ['Dashboard', 'DC', 'Warehouse', 'Expenses', 'Reports', 'Settings', 'Sign out']
+    // For Manager role, only show: Dashboard, Clients, Warehouse, Expenses, Reports, Settings, Sign out
+    const allowedMenuItems = ['Dashboard', 'Clients', 'Warehouse', 'Expenses', 'Reports', 'Settings', 'Sign out']
     finalNav = NAV.filter(item => allowedMenuItems.includes(item.label))
       .map(item => {
-        // Filter DC menu items to exclude "Create Sale"
-        if (item.label === 'DC' && item.children) {
+        // Filter Clients menu items to exclude "Create Sale"
+        if (item.label === 'Clients' && item.children) {
           return {
             ...item,
             children: item.children.filter(child => 
@@ -356,8 +367,8 @@ export function Sidebar() {
         return item
       })
   } else if (isCoordinator) {
-    // For Coordinator role, only show: Dashboard, DC, Users / Employees, Trainings & Services, Warehouse, Payments, Reports, Settings, Sign out
-    const allowedMenuItems = ['Dashboard', 'DC', 'Users / Employees', 'Trainings & Services', 'Warehouse', 'Payments', 'Reports', 'Settings', 'Sign out']
+    // For Coordinator role, only show: Dashboard, Clients, Users / Employees, Trainings & Services, Warehouse, Payments, Reports, Settings, Sign out
+    const allowedMenuItems = ['Dashboard', 'Clients', 'Users / Employees', 'Trainings & Services', 'Warehouse', 'Payments', 'Reports', 'Settings', 'Sign out']
     finalNav = NAV.filter(item => allowedMenuItems.includes(item.label))
       .map(item => {
         // Filter Users / Employees menu items to only show "Active Employees" for Coordinator
@@ -411,8 +422,8 @@ export function Sidebar() {
       })
   } else if (isSeniorCoordinator) {
     // For Senior Coordinator role, use the same menu as Coordinator
-    // Only show: Dashboard, DC, Users / Employees, Trainings & Services, Warehouse, Payments, Reports, Settings, Sign out
-    const allowedMenuItems = ['Dashboard', 'DC', 'Users / Employees', 'Trainings & Services', 'Warehouse', 'Payments', 'Reports', 'Settings', 'Sign out']
+    // Only show: Dashboard, Clients, Users / Employees, Trainings & Services, Warehouse, Payments, Reports, Settings, Sign out
+    const allowedMenuItems = ['Dashboard', 'Clients', 'Users / Employees', 'Trainings & Services', 'Warehouse', 'Payments', 'Reports', 'Settings', 'Sign out']
     finalNav = NAV.filter(item => allowedMenuItems.includes(item.label))
       .map(item => {
         // Filter Users / Employees menu items to only show "Active Employees" for Senior Coordinator

@@ -17,6 +17,7 @@ type WarehouseItem = {
   location?: string
   level?: string
   itemType?: string
+  currentStock?: number
 }
 
 export default function WarehouseInventoryItems() {
@@ -84,13 +85,14 @@ export default function WarehouseInventoryItems() {
               <TableHead>Category</TableHead>
               <TableHead>Level</TableHead>
               <TableHead>Item Type</TableHead>
+              <TableHead>Quantity</TableHead>
               <TableHead className="w-12"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {!loading && filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-neutral-500">No items found.</TableCell>
+                <TableCell colSpan={7} className="text-center text-neutral-500">No items found.</TableCell>
               </TableRow>
             )}
             {filtered.map((row, idx) => (
@@ -100,6 +102,7 @@ export default function WarehouseInventoryItems() {
                 <TableCell>{row.category || '-'}</TableCell>
                 <TableCell>{row.level || row.location || '-'}</TableCell>
                 <TableCell>{row.itemType || '—'}</TableCell>
+                <TableCell>{row.currentStock !== undefined && row.currentStock !== null ? row.currentStock : 0}</TableCell>
                 <TableCell>
                   <Link href={`/dashboard/warehouse/inventory-items/${row._id}`} aria-label="Edit">
                     <Pencil size={16} className="text-neutral-500 hover:text-neutral-700" />

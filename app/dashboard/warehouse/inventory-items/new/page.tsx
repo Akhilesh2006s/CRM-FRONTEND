@@ -49,7 +49,7 @@ export default function InventoryNewItemPage() {
   const [category, setCategory] = useState<string>('')
   const [level, setLevel] = useState<string>('')
   const [unit, setUnit] = useState<string>('pcs')
-  const [unitPrice, setUnitPrice] = useState<string>('')
+  const [quantity, setQuantity] = useState<string>('')
   const [itemType, setItemType] = useState<string>('')
   const [saving, setSaving] = useState(false)
   const [productOptions, setProductOptions] = useState<string[]>(DEFAULT_PRODUCT_OPTIONS)
@@ -73,10 +73,10 @@ export default function InventoryNewItemPage() {
     e.preventDefault()
     setSaving(true)
     try {
-      const price = parseFloat(unitPrice)
+      const qty = parseFloat(quantity) || 0
       await apiRequest('/warehouse', {
         method: 'POST',
-        body: JSON.stringify({ productName, category, level, unit, unitPrice: price, itemType }),
+        body: JSON.stringify({ productName, category, level, unit, currentStock: qty, itemType }),
       })
       toast.success('Item added')
       router.push('/dashboard/warehouse/inventory-items')
@@ -133,8 +133,8 @@ export default function InventoryNewItemPage() {
           </div>
 
           <div className="space-y-2">
-            <div className="text-sm font-medium">Price *</div>
-            <Input type="number" step="0.01" placeholder="Item Price" value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)} />
+            <div className="text-sm font-medium">Quantity *</div>
+            <Input type="number" step="1" placeholder="Item Quantity" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
           </div>
 
           <div className="space-y-2">
@@ -152,7 +152,7 @@ export default function InventoryNewItemPage() {
           </div>
 
           <div className="md:col-span-2">
-            <Button type="submit" disabled={saving || !productName || !category || !itemType || !unitPrice}>
+            <Button type="submit" disabled={saving || !productName || !category || !itemType || !quantity}>
               {saving ? 'Adding…' : 'Add Item'}
             </Button>
           </div>
