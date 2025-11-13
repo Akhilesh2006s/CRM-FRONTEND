@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useEffect } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
+import { useProducts } from '@/hooks/useProducts'
 
 type ProductSelection = {
   name: string
@@ -22,7 +23,7 @@ type ProductSelection = {
 
 export default function CreateDealPage() {
   const router = useRouter()
-  const availableProducts = ['Abacus', 'Vedic Maths', 'EELL', 'IIT', 'CodeChamp', 'Math Lab']
+  const { productNames: availableProducts } = useProducts()
   
   const [form, setForm] = useState({
     school_type: '',
@@ -44,9 +45,14 @@ export default function CreateDealPage() {
   })
   
   // Product selections with individual price/quantity
-  const [products, setProducts] = useState<ProductSelection[]>(
-    availableProducts.map(p => ({ name: p, checked: false, price: 0, quantity: 1, strength: 0 }))
-  )
+  const [products, setProducts] = useState<ProductSelection[]>([])
+  
+  // Initialize products when availableProducts are loaded
+  useEffect(() => {
+    if (availableProducts.length > 0 && products.length === 0) {
+      setProducts(availableProducts.map(p => ({ name: p, checked: false, price: 0, quantity: 1, strength: 0 })))
+    }
+  }, [availableProducts])
   
   const [employees, setEmployees] = useState<{ _id: string; name: string }[]>([])
   const [loadingEmployees, setLoadingEmployees] = useState(true)

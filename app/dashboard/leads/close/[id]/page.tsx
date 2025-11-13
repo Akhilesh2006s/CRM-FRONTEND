@@ -11,10 +11,11 @@ import { Textarea } from '@/components/ui/textarea'
 import { apiRequest, API_BASE_URL } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
-import { ArrowLeft, Package, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, Package, CheckCircle2, Upload, X, PlusCircle } from 'lucide-react'
 import Link from 'next/link'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Checkbox } from '@/components/ui/checkbox'
+import { useProducts } from '@/hooks/useProducts'
 
 type Lead = {
   _id: string
@@ -36,8 +37,6 @@ type Lead = {
   school_type?: string
 }
 
-const availableProducts = ['ABACUS', 'VedicMath', 'EELL', 'IIT', 'CODING', 'MathLab', 'CodeChamp', 'Math Lab']
-
 export default function CloseLeadPage() {
   const router = useRouter()
   const params = useParams()
@@ -58,11 +57,30 @@ export default function CloseLeadPage() {
     branches: '',
     delivery_date: '',
     year: '2025-26',
-    category: '',
   })
   
   const [selectedProducts, setSelectedProducts] = useState<string[]>([])
   const [productDialogOpen, setProductDialogOpen] = useState(false)
+  const [productDetails, setProductDetails] = useState<Array<{
+    id: string
+    product: string
+    class: string
+    category: string
+    quantity: number
+    strength: number
+    price: number
+    total: number
+    level: string
+    specs: string
+  }>>([])
+  const [poPhoto, setPoPhoto] = useState<File | null>(null)
+  const [poPhotoUrl, setPoPhotoUrl] = useState<string>('')
+  const [uploadingPO, setUploadingPO] = useState(false)
+  
+  const { productNames: availableProducts, getProductLevels, getDefaultLevel, getProductSpecs } = useProducts()
+  const availableClasses = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
+  const availableCategories = ['New Students', 'Existing Students', 'Both']
+  const availableDCCategories = ['Term 1', 'Term 2', 'Term 3', 'Full Year']
 
   useEffect(() => {
     if (leadId) {
@@ -85,6 +103,9 @@ export default function CloseLeadPage() {
       if (leadData) {
         setLead(leadData)
         // Pre-fill form with lead data
+        const deliveryDate = leadData.estimated_delivery_date 
+          ? new Date(leadData.estimated_delivery_date).toISOString().split('T')[0]
+          : ''
         setForm({
           contact_person2: leadData.contact_person2 || '',
           contact_mobile2: leadData.contact_mobile2 || '',
@@ -92,16 +113,24 @@ export default function CloseLeadPage() {
           address: leadData.address || leadData.location || '',
           strength: leadData.strength?.toString() || '',
           branches: leadData.branches?.toString() || '',
-          delivery_date: leadData.estimated_delivery_date 
-            ? new Date(leadData.estimated_delivery_date).toISOString().split('T')[0]
-            : '',
-          year: '2025-26',
-          category: leadData.schoolCategory || '',
+                delivery_date: deliveryDate,
+                year: '2025-26',
         })
         
-        // Pre-fill selected products - normalize product names to match availableProducts
+        // Pre-fill selected products and product details - normalize product names to match availableProducts
         // Only set products that exactly match availableProducts
         let validProducts: string[] = []
+        let initialProductDetails: Array<{
+          id: string
+          product: string
+          class: string
+          category: string
+          quantity: number
+          strength: number
+          price: number
+          total: number
+          level: string
+        }> = []
         
         if (leadData.products && Array.isArray(leadData.products) && leadData.products.length > 0) {
           validProducts = leadData.products
@@ -110,14 +139,36 @@ export default function CloseLeadPage() {
               if (typeof name === 'string') {
                 const normalized = name.trim()
                 // Map variations to exact names
-                if (normalized.toLowerCase() === 'mathlab' || normalized.toLowerCase() === 'math lab') {
-                  return 'MathLab'
+                const lower = normalized.toLowerCase()
+                if (lower === 'mathlab' || lower === 'math lab' || lower === 'maths lab') {
+                  return 'Maths lab'
                 }
-                if (normalized.toLowerCase() === 'codechamp') {
-                  return 'CodeChamp'
+                if (lower === 'codechamp' || lower === 'code champ') {
+                  return 'Codechamp'
                 }
-                if (normalized.toLowerCase() === 'vedicmath' || normalized.toLowerCase() === 'vedic math') {
-                  return 'VedicMath'
+                if (lower === 'vedicmath' || lower === 'vedic math') {
+                  return 'Vedic Maths'
+                }
+                if (lower === 'financial literacy' || lower === 'financialliteracy') {
+                  return 'Financial literacy'
+                }
+                if (lower === 'brain bytes' || lower === 'brainbytes') {
+                  return 'Brain bytes'
+                }
+                if (lower === 'spelling bee' || lower === 'spellingbee') {
+                  return 'Spelling bee'
+                }
+                if (lower === 'skill pro' || lower === 'skillpro') {
+                  return 'Skill pro'
+                }
+                if (lower === 'abacus') {
+                  return 'Abacus'
+                }
+                if (lower === 'eel' || lower === 'eell') {
+                  return 'EEL'
+                }
+                if (lower === 'iit') {
+                  return 'IIT'
                 }
                 return normalized
               }
@@ -132,14 +183,36 @@ export default function CloseLeadPage() {
             .map((p: string) => {
               const normalized = p.trim()
               // Normalize product names
-              if (normalized.toLowerCase() === 'mathlab' || normalized.toLowerCase() === 'math lab') {
-                return 'MathLab'
+              const lower = normalized.toLowerCase()
+              if (lower === 'mathlab' || lower === 'math lab' || lower === 'maths lab') {
+                return 'Maths lab'
               }
-              if (normalized.toLowerCase() === 'codechamp') {
-                return 'CodeChamp'
+              if (lower === 'codechamp' || lower === 'code champ') {
+                return 'Codechamp'
               }
-              if (normalized.toLowerCase() === 'vedicmath' || normalized.toLowerCase() === 'vedic math') {
-                return 'VedicMath'
+              if (lower === 'vedicmath' || lower === 'vedic math') {
+                return 'Vedic Maths'
+              }
+              if (lower === 'financial literacy' || lower === 'financialliteracy') {
+                return 'Financial literacy'
+              }
+              if (lower === 'brain bytes' || lower === 'brainbytes') {
+                return 'Brain bytes'
+              }
+              if (lower === 'spelling bee' || lower === 'spellingbee') {
+                return 'Spelling bee'
+              }
+              if (lower === 'skill pro' || lower === 'skillpro') {
+                return 'Skill pro'
+              }
+              if (lower === 'abacus') {
+                return 'Abacus'
+              }
+              if (lower === 'eel' || lower === 'eell') {
+                return 'EEL'
+              }
+              if (lower === 'iit') {
+                return 'IIT'
               }
               return normalized
             })
@@ -148,6 +221,29 @@ export default function CloseLeadPage() {
         
         // Only set products if we have valid matches
         setSelectedProducts(validProducts)
+        
+          // Initialize product details for valid products
+        if (validProducts.length > 0) {
+          const details = validProducts.map((product, idx) => {
+            const productData = leadData.products?.find((p: any) => 
+              (p.product_name || p.product || p) === product
+            )
+            const productSpecs = getProductSpecs(product)
+            return {
+              id: Date.now().toString() + idx,
+              product: product,
+              class: productData?.class || '1',
+              category: leadData.school_type === 'Existing' ? 'Existing Students' : 'New Students',
+              quantity: productData?.quantity || 1,
+              strength: productData?.strength || 0,
+              price: productData?.unit_price || productData?.price || 0,
+              total: (productData?.unit_price || productData?.price || 0) * (productData?.quantity || 1),
+              level: productData?.level || getDefaultLevel(product),
+              specs: productData?.specs || (productSpecs.length > 0 ? productSpecs[0] : 'Regular'),
+            }
+          })
+          setProductDetails(details)
+        }
       }
     } catch (err: any) {
       setError(err?.message || 'Failed to load lead')
@@ -157,24 +253,109 @@ export default function CloseLeadPage() {
     }
   }
 
-  const handleProductCheck = (product: string, checked: boolean) => {
-    if (checked) {
-      // Only add if not already in the array
-      if (!selectedProducts.includes(product)) {
-        setSelectedProducts([...selectedProducts, product])
+  const addProductWithSpec = (product: string, spec: string) => {
+    // Add product with specific spec - allows multiple instances of same product with different specs
+    setSelectedProducts([...selectedProducts, product])
+    setProductDetails([...productDetails, {
+      id: Date.now().toString() + Math.random().toString(),
+      product: product,
+      class: '1',
+        category: lead?.school_type === 'Existing' ? 'Existing Students' : 'New Students',
+      quantity: 1,
+      strength: 0,
+      price: 0,
+      total: 0,
+      level: getDefaultLevel(product),
+      specs: spec,
+    }])
+  }
+  
+  const updateProductDetail = (id: string, field: string, value: any) => {
+    setProductDetails(productDetails.map(p => {
+      if (p.id === id) {
+        const updated = { ...p, [field]: value }
+        // Auto-calculate total when price or quantity changes
+        if (field === 'price' || field === 'quantity') {
+          updated.total = (Number(updated.price) || 0) * (Number(updated.quantity) || 0)
+        }
+        return updated
       }
-    } else {
-      // Remove from array
-      setSelectedProducts(selectedProducts.filter(p => p !== product))
+      return p
+    }))
+  }
+  
+  const removeProductDetail = (id: string) => {
+    // Remove only this specific product instance (by ID)
+    // Don't remove from selectedProducts array - same product can appear multiple times with different specs
+    setProductDetails(productDetails.filter(p => p.id !== id))
+    // Update selectedProducts to match remaining productDetails
+    const remainingProducts = productDetails
+      .filter(p => p.id !== id)
+      .map(p => p.product)
+    setSelectedProducts(remainingProducts)
+  }
+  
+  const handlePOPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    
+    // Validate file type - allow images and PDFs
+    const isValidType = file.type.startsWith('image/') || file.type === 'application/pdf'
+    if (!isValidType) {
+      toast.error('Please upload an image file (JPG, PNG) or PDF')
+      return
+    }
+    
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('File size must be less than 5MB')
+      return
+    }
+    
+    setPoPhoto(file)
+    setUploadingPO(true)
+    
+    try {
+      // Create FormData for file upload
+      const formData = new FormData()
+      formData.append('poPhoto', file)
+      
+      // Upload to backend
+      const response = await fetch(`${API_BASE_URL}/api/dc/upload-po`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+        },
+        body: formData,
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to upload PO document')
+      }
+      
+      const data = await response.json()
+      setPoPhotoUrl(data.poPhotoUrl || data.url || '')
+      toast.success('PO document uploaded successfully')
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to upload PO document')
+      setPoPhoto(null)
+    } finally {
+      setUploadingPO(false)
     }
   }
-
 
   const handleTurnToClient = async () => {
     if (!lead) return
     
-    if (selectedProducts.length === 0) {
-      toast.error('Please select at least one product')
+    if (productDetails.length === 0) {
+      toast.error('Please add at least one product with details')
+      return
+    }
+    
+    // Validate product details
+    const invalidProducts = productDetails.filter(p => !p.product || !p.quantity || !p.strength)
+    if (invalidProducts.length > 0) {
+      toast.error('Please fill in Product, Quantity, and Strength for all products')
       return
     }
     
@@ -182,12 +363,16 @@ export default function CloseLeadPage() {
     setError(null)
     
     try {
-      // First, update the lead with close form data and mark as completed/closed
-      // Ensure the lead is assigned to the current user if not already assigned
-      const assignedEmployeeId = lead.assigned_to 
-        ? (typeof lead.assigned_to === 'object' ? lead.assigned_to._id : lead.assigned_to)
-        : currentUser?._id
+      // Always use current user's ID for the DC - the employee converting the lead owns the client
+      if (!currentUser?._id) {
+        toast.error('User not found. Please login again.')
+        setSubmitting(false)
+        return
+      }
       
+      const assignedEmployeeId = currentUser._id
+      
+      // First, update the lead with close form data and mark as completed/closed
       const updatePayload: any = {
         contact_person2: form.contact_person2 || undefined,
         contact_mobile2: form.contact_mobile2 || undefined,
@@ -196,48 +381,139 @@ export default function CloseLeadPage() {
         strength: form.strength ? Number(form.strength) : undefined,
         branches: form.branches ? Number(form.branches) : undefined,
         estimated_delivery_date: form.delivery_date ? new Date(form.delivery_date).toISOString() : undefined,
-        schoolCategory: form.category || undefined,
         status: 'saved', // Mark as saved so it appears in employee's My Clients page
-        assigned_to: assignedEmployeeId, // Ensure lead is assigned to employee
-        products: selectedProducts.map(product => ({
-          product_name: product,
-          quantity: 1,
-          unit_price: 0,
+        assigned_to: assignedEmployeeId,
+        products: productDetails.map(p => ({
+          product_name: p.product,
+          quantity: p.quantity,
+          unit_price: p.price,
         })),
       }
       
-      
       // Update the lead/dc-order
+      console.log('🔄 Updating DcOrder with payload:', {
+        leadId,
+        status: updatePayload.status,
+        assigned_to: updatePayload.assigned_to,
+        hasProducts: !!updatePayload.products
+      });
+      
       try {
-        await apiRequest(`/dc-orders/${leadId}`, {
+        const updated = await apiRequest(`/dc-orders/${leadId}`, {
           method: 'PUT',
           body: JSON.stringify(updatePayload),
         })
-      } catch {
-        await apiRequest(`/leads/${leadId}`, {
-          method: 'PUT',
-          body: JSON.stringify(updatePayload),
-        })
+        console.log('✅ DcOrder updated successfully:', {
+          id: updated._id,
+          status: updated.status,
+          assigned_to: updated.assigned_to
+        });
+      } catch (err: any) {
+        console.warn('⚠️ DcOrder update failed, trying leads API:', err?.message);
+        try {
+          const updated = await apiRequest(`/leads/${leadId}`, {
+            method: 'PUT',
+            body: JSON.stringify(updatePayload),
+          })
+          console.log('✅ Lead updated successfully (via leads API):', {
+            id: updated._id,
+            status: updated.status
+          });
+        } catch (leadErr: any) {
+          console.error('❌ Both update attempts failed:', leadErr);
+          throw leadErr; // Re-throw to be caught by outer catch
+        }
       }
       
-      // Now create DC automatically - this will make it appear in employee's My Clients page
+      // Prepare product details for DC
+      const dcProductDetails = productDetails.map(p => ({
+        product: p.product,
+        class: p.class || '1',
+        category: p.category || (lead?.school_type === 'Existing' ? 'Existing Students' : 'New Students'),
+        quantity: Number(p.quantity) || 0,
+        strength: Number(p.strength) || 0,
+        price: Number(p.price) || 0,
+        total: Number(p.total) || (Number(p.price) || 0) * (Number(p.quantity) || 0),
+        level: p.level || getDefaultLevel(p.product),
+        specs: p.specs || 'Regular', // Include specs
+      }))
+      
+      const totalQuantity = dcProductDetails.reduce((sum, p) => sum + (p.quantity || 0), 0)
+      
+      // Create DC with all details
       const dcPayload: any = {
         dcOrderId: leadId,
         dcDate: form.delivery_date || new Date().toISOString(),
         dcRemarks: `Lead converted to client - ${lead.school_name}`,
-        dcCategory: form.category || 'Standard',
-        requestedQuantity: selectedProducts.length,
-        employeeId: assignedEmployeeId, // Use the same assigned employee ID
+        dcCategory: lead.school_type === 'Existing' ? 'Existing School' : 'New School',
+        requestedQuantity: totalQuantity,
+        employeeId: assignedEmployeeId,
+        productDetails: dcProductDetails,
+        status: 'created', // Set to 'created' so it appears in "My Clients" page immediately
       }
+      
+      // Add PO photo if uploaded
+      if (poPhotoUrl) {
+        dcPayload.poPhotoUrl = poPhotoUrl
+        dcPayload.poDocument = poPhotoUrl
+      }
+      
+      console.log('🔄 Creating DC with payload:', {
+        dcOrderId: dcPayload.dcOrderId,
+        employeeId: dcPayload.employeeId,
+        status: dcPayload.status,
+        productDetailsCount: dcPayload.productDetails?.length
+      });
       
       const dc = await apiRequest('/dc/raise', {
         method: 'POST',
         body: JSON.stringify(dcPayload),
       })
       
-      toast.success('Lead converted to client! DC created successfully. It will appear in My Clients page.')
-      // Redirect to employee's DC page (My Clients)
-      router.push('/dashboard/dc/my')
+      console.log('✅ DC created:', {
+        dcId: dc._id,
+        status: dc.status,
+        customerName: dc.customerName
+      });
+      
+      // If PO photo is provided, also submit PO
+      if (poPhotoUrl && dc._id) {
+        try {
+          await apiRequest(`/dc/${dc._id}/submit-po`, {
+            method: 'POST',
+            body: JSON.stringify({ 
+              poPhotoUrl: poPhotoUrl,
+            }),
+          })
+        } catch (poErr) {
+          console.error('Failed to submit PO:', poErr)
+          // Don't fail the whole operation if PO submission fails
+        }
+      }
+      
+      // Verify the conversion worked by checking if DC exists
+      try {
+        const verifyDC = await apiRequest(`/dc/${dc._id}`)
+        console.log('✅ Verification - DC exists:', {
+          id: verifyDC._id,
+          status: verifyDC.status,
+          employeeId: verifyDC.employeeId,
+          dcOrderId: verifyDC.dcOrderId
+        });
+      } catch (verifyErr) {
+        console.warn('⚠️ Could not verify DC creation (this is okay if query times out):', verifyErr);
+      }
+      
+      toast.success('Lead converted to client! DC created and submitted to My Clients successfully.')
+      
+      // Store the DC ID in sessionStorage so the Client DC page can fetch it directly
+      if (dc._id) {
+        sessionStorage.setItem('newlyConvertedDCId', dc._id);
+        sessionStorage.setItem('newlyConvertedDC', JSON.stringify(dc));
+      }
+      
+      // Redirect to Client DC page
+      router.push('/dashboard/dc/client-dc')
     } catch (err: any) {
       setError(err?.message || 'Failed to convert lead to client')
       toast.error(err?.message || 'Failed to convert lead to client')
@@ -418,21 +694,56 @@ export default function CloseLeadPage() {
             </Select>
           </div>
 
-          {/* Categories */}
-          <div>
-            <Label className="text-sm font-semibold text-neutral-700">Categories</Label>
-            <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
-              <SelectTrigger className="mt-1">
-                <SelectValue placeholder="Select Category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Hot">Hot</SelectItem>
-                <SelectItem value="Warm">Warm</SelectItem>
-                <SelectItem value="Visit Again">Visit Again</SelectItem>
-                <SelectItem value="Not Met Management">Not Met Management</SelectItem>
-                <SelectItem value="Not Interested">Not Interested</SelectItem>
-              </SelectContent>
-            </Select>
+          {/* PO Document Upload */}
+          <div className="pt-4 border-t">
+            <Label className="text-sm font-semibold text-neutral-700">PO Document</Label>
+            <div className="mt-1 space-y-2">
+              {poPhotoUrl ? (
+                <div className="flex items-center gap-2">
+                  {poPhotoUrl.toLowerCase().endsWith('.pdf') ? (
+                    <div className="h-20 w-20 flex items-center justify-center bg-red-100 rounded border">
+                      <span className="text-xs font-semibold text-red-700">PDF</span>
+                    </div>
+                  ) : (
+                    <img src={poPhotoUrl} alt="PO" className="h-20 w-20 object-cover rounded border" />
+                  )}
+                  <div className="flex flex-col gap-2">
+                    <a
+                      href={poPhotoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-blue-600 hover:underline"
+                    >
+                      View Document
+                    </a>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setPoPhotoUrl('')
+                        setPoPhoto(null)
+                      }}
+                    >
+                      <X className="w-4 h-4 mr-1" />
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <Input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={handlePOPhotoUpload}
+                    disabled={uploadingPO}
+                    className="mt-1"
+                  />
+                  <p className="text-xs text-neutral-500 mt-1">Accepted: JPG, PNG, PDF (max 5MB)</p>
+                  {uploadingPO && <p className="text-xs text-neutral-500 mt-1">Uploading...</p>}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Add Products Button */}
@@ -444,7 +755,7 @@ export default function CloseLeadPage() {
               onClick={() => setProductDialogOpen(true)}
             >
               <Package className="w-4 h-4 mr-2" />
-              ADD PRODUCTS {selectedProducts.length > 0 && `(${selectedProducts.length})`}
+              ADD PRODUCTS {productDetails.length > 0 && `(${productDetails.length})`}
             </Button>
           </div>
 
@@ -481,32 +792,180 @@ export default function CloseLeadPage() {
 
       {/* Product Selection Dialog */}
       <Dialog open={productDialogOpen} onOpenChange={setProductDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Select Products</DialogTitle>
-            <DialogDescription>Choose the products for this lead</DialogDescription>
+            <DialogTitle>Add Products & Details</DialogTitle>
+            <DialogDescription>Select products and enter their details</DialogDescription>
           </DialogHeader>
           
-          <div className="space-y-3 py-4 max-h-[400px] overflow-y-auto">
-            {availableProducts.map((product) => {
-              const isChecked = selectedProducts.includes(product)
-              return (
-                <div key={product} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={`product-${product}`}
-                    checked={isChecked}
-                    onCheckedChange={(checked) => handleProductCheck(product, checked as boolean)}
-                  />
-                  <label
-                    htmlFor={`product-${product}`}
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
-                    onClick={() => handleProductCheck(product, !isChecked)}
-                  >
-                    {product}
-                  </label>
+          <div className="space-y-4 py-4">
+            {/* Product Selection */}
+            <div>
+              <Label className="text-sm font-semibold mb-2 block">Add Products</Label>
+              <p className="text-xs text-neutral-500 mb-2">You can add the same product multiple times with different specs</p>
+              <div className="space-y-2 max-h-[200px] overflow-y-auto border rounded p-3">
+                {availableProducts.map((product) => {
+                  const productSpecs = getProductSpecs(product)
+                  const hasSpecs = productSpecs.length > 0
+                  
+                  return (
+                    <div key={product} className="flex items-center justify-between p-2 border rounded hover:bg-neutral-50">
+                      <div className="flex items-center space-x-2 flex-1">
+                        <span className="text-sm font-medium">{product}</span>
+                        {hasSpecs && (
+                          <span className="text-xs text-neutral-500">(Has Specs)</span>
+                        )}
+                      </div>
+                      {hasSpecs ? (
+                        <div className="flex gap-1">
+                          {productSpecs.map(spec => (
+                            <Button
+                              key={spec}
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => addProductWithSpec(product, spec)}
+                              className="text-xs"
+                            >
+                              <PlusCircle className="w-3 h-3 mr-1" />
+                              {spec}
+                            </Button>
+                          ))}
+                        </div>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => addProductWithSpec(product, 'Regular')}
+                        >
+                          <PlusCircle className="w-3 h-3 mr-1" />
+                          Add
+                        </Button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Product Details Table */}
+            {productDetails.length > 0 && (
+              <div>
+                <Label className="text-sm font-semibold mb-2 block">Product Details</Label>
+                <div className="border rounded overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-neutral-100">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Product</th>
+                        <th className="px-3 py-2 text-left">Class</th>
+                        <th className="px-3 py-2 text-left">Category</th>
+                        <th className="px-3 py-2 text-left">Qty</th>
+                        <th className="px-3 py-2 text-left">Strength</th>
+                        <th className="px-3 py-2 text-left">Price</th>
+                        <th className="px-3 py-2 text-left">Total</th>
+                        <th className="px-3 py-2 text-left">Level</th>
+                        <th className="px-3 py-2 text-left">Specs</th>
+                        <th className="px-3 py-2 text-left">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {productDetails.map((pd) => (
+                        <tr key={pd.id} className="border-t">
+                          <td className="px-3 py-2">{pd.product}</td>
+                          <td className="px-3 py-2">
+                            <Select value={pd.class} onValueChange={(v) => updateProductDetail(pd.id, 'class', v)}>
+                              <SelectTrigger className="w-20 h-8">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {availableClasses.map(c => (
+                                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </td>
+                          <td className="px-3 py-2">
+                            <Select value={pd.category} onValueChange={(v) => updateProductDetail(pd.id, 'category', v)}>
+                              <SelectTrigger className="w-32 h-8">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {availableCategories.map(c => (
+                                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </td>
+                          <td className="px-3 py-2">
+                            <Input
+                              type="number"
+                              value={pd.quantity}
+                              onChange={(e) => updateProductDetail(pd.id, 'quantity', Number(e.target.value))}
+                              className="w-20 h-8"
+                              min="0"
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <Input
+                              type="number"
+                              value={pd.strength}
+                              onChange={(e) => updateProductDetail(pd.id, 'strength', Number(e.target.value))}
+                              className="w-20 h-8"
+                              min="0"
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <Input
+                              type="number"
+                              value={pd.price}
+                              onChange={(e) => updateProductDetail(pd.id, 'price', Number(e.target.value))}
+                              className="w-24 h-8"
+                              min="0"
+                            />
+                          </td>
+                          <td className="px-3 py-2">{pd.total.toFixed(2)}</td>
+                          <td className="px-3 py-2">
+                            <Select value={pd.level} onValueChange={(v) => updateProductDetail(pd.id, 'level', v)}>
+                              <SelectTrigger className="w-20 h-8">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {getProductLevels(pd.product).map(l => (
+                                  <SelectItem key={l} value={l}>{l}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </td>
+                          <td className="px-3 py-2">
+                            <Select value={pd.specs || 'Regular'} onValueChange={(v) => updateProductDetail(pd.id, 'specs', v)}>
+                              <SelectTrigger className="w-32 h-8">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {getProductSpecs(pd.product).map(spec => (
+                                  <SelectItem key={spec} value={spec}>{spec}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </td>
+                          <td className="px-3 py-2">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeProductDetail(pd.id)}
+                            >
+                              <X className="w-4 h-4 text-red-500" />
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              )
-            })}
+              </div>
+            )}
           </div>
           
           <DialogFooter>
@@ -514,7 +973,7 @@ export default function CloseLeadPage() {
               Cancel
             </Button>
             <Button onClick={() => setProductDialogOpen(false)}>
-              Done ({selectedProducts.length} selected)
+              Done ({productDetails.length} products)
             </Button>
           </DialogFooter>
         </DialogContent>

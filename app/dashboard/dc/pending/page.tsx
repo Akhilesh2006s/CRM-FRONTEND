@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useProducts } from '@/hooks/useProducts'
 
 type DcOrderData = {
   _id?: string
@@ -123,14 +124,16 @@ export default function PendingDCPage() {
   
   const availableClasses = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
   const availableCategories = ['New Students', 'Existing Students', 'Both']
-  const availableProducts = ['ABACUS', 'VedicMath', 'EELL', 'IIT', 'CODING', 'MathLab', 'CodeChamp']
+  const { productNames: availableProducts } = useProducts()
   const availableDCCategories = ['Term 1', 'Term 2', 'Term 3', 'Full Year']
 
   const load = async () => {
     setLoading(true)
     try {
       const data = await apiRequest<DC[]>(`/dc/sent-to-manager`)
-      setItems(data)
+      // Ensure data is an array before setting
+      const dataArray = Array.isArray(data) ? data : []
+      setItems(dataArray)
     } catch (e: any) {
       console.error('Failed to load DCs:', e)
       alert(`Error loading DCs: ${e?.message || 'Unknown error'}`)
@@ -206,13 +209,13 @@ export default function PendingDCPage() {
           ) || (rawProduct || 'ABACUS')
           
           return {
-            id: String(idx + 1),
+          id: String(idx + 1),
             product: matchedProduct, // Use matched product for dropdown
-            class: p.class || '1',
-            category: p.category || 'New Students',
+          class: p.class || '1',
+          category: p.category || 'New Students',
             productName: p.productName || matchedProduct, // Use productName or matched product
-            quantity: p.quantity || 0,
-            strength: p.strength || 0,
+          quantity: p.quantity || 0,
+          strength: p.strength || 0,
           }
         }))
       } else if (dcOrderData?.products && Array.isArray(dcOrderData.products) && dcOrderData.products.length > 0) {
@@ -227,13 +230,13 @@ export default function PendingDCPage() {
           ) || 'ABACUS'
           
           return {
-            id: String(idx + 1),
+          id: String(idx + 1),
             product: matchedProduct, // Use matched product for dropdown
-            class: '1',
-            category: 'New Students',
+          class: '1',
+          category: 'New Students',
             productName: matchedProduct, // Use matched product
-            quantity: p.quantity || 0,
-            strength: p.strength || 0,
+          quantity: p.quantity || 0,
+          strength: p.strength || 0,
           }
         }))
       } else {

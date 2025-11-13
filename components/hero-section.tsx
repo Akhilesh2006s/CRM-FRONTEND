@@ -41,10 +41,10 @@ export function HeroSection() {
 
         {/* Main Heading */}
         <h1 className="text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-bold text-balance mb-6 animate-fade-in-heading">
-          <span className="text-foreground">Supercharge your</span>
+          <span className="text-white">Supercharge your</span>
           <br />
           <span className="inline-flex items-center justify-center flex-wrap gap-2 mt-4 sm:mt-6 md:mt-8">
-            <span className="text-foreground">Customer Relationships</span>
+            <span className="text-white">Customer Relationships</span>
             <RotatingText
               texts={["Sales", "Service", "Retention", "Insights", "Revenue"]}
               mainClassName="px-2 sm:px-2 md:px-3 bg-white text-black overflow-hidden py-1 sm:py-1 md:py-2 justify-center rounded-lg shadow-lg"

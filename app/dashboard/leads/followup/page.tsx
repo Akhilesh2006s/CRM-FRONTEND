@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
-import { ArrowLeft, MapPin, Edit, History, X } from 'lucide-react'
+import { ArrowLeft, MapPin, Edit, History, X, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
@@ -38,6 +38,13 @@ export default function FollowupLeadsPage() {
   const [allLeads, setAllLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
   const [zones, setZones] = useState<string[]>([])
+  const [timeoutError, setTimeoutError] = useState(false)
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalItems, setTotalItems] = useState(0)
+  const itemsPerPage = 20 // Show 20 leads per page
   
   // Filters
   const [zone, setZone] = useState('')
@@ -61,31 +68,51 @@ export default function FollowupLeadsPage() {
 
   useEffect(() => {
     loadLeads()
-  }, [])
+  }, []) // Only load once on mount - pagination is handled in applyFilters
 
   useEffect(() => {
     applyFilters()
-  }, [allLeads, zone, schoolName, contactMobile])
+  }, [allLeads, zone, schoolName, contactMobile, currentPage])
 
   const loadLeads = async () => {
     setLoading(true)
+    setTimeoutError(false)
+    
+    // Set timeout for loading - reduced to 10 seconds for faster feedback
+    const timeoutId = setTimeout(() => {
+      setTimeoutError(true)
+      setLoading(false)
+      toast.error('Loading is taking longer than expected. Please check your connection or try refreshing.')
+    }, 10000) // 10 second timeout
+    
     try {
       if (!currentUser?._id) {
         toast.error('User not found')
+        clearTimeout(timeoutId)
         return
       }
 
-      // Fetch leads assigned to current employee
-      const allData = await apiRequest<Lead[]>(`/leads?employee=${currentUser._id}`)
+      // Fetch ALL leads assigned to current employee (not paginated) - we'll paginate after filtering
+      // Use Promise.all for parallel requests
+      const [leadsResponse, dcOrdersResponse] = await Promise.all([
+        apiRequest<any>(`/leads?employee=${currentUser._id}`).catch(err => {
+          console.warn('Failed to fetch leads:', err)
+          return { data: [], pagination: null }
+        }),
+        apiRequest<any>(`/dc-orders?assigned_to=${currentUser._id}`).catch(err => {
+          console.warn('Failed to fetch dc-orders:', err)
+          return { data: [], pagination: null }
+        })
+      ])
       
-      // Filter out closed/saved/completed leads from allData as well
-      const activeLeads = (allData || []).filter((lead: Lead) => {
+      const allData = Array.isArray(leadsResponse) ? leadsResponse : (leadsResponse?.data || [])
+      const dcOrders = Array.isArray(dcOrdersResponse) ? dcOrdersResponse : (dcOrdersResponse?.data || [])
+      
+      // Filter out closed/saved/completed leads from allData
+      const activeLeads = (Array.isArray(allData) ? allData : []).filter((lead: Lead) => {
         const status = lead.status?.toLowerCase()
         return status !== 'saved' && status !== 'completed' && status !== 'closed'
       })
-      
-      // Also fetch from dc-orders
-      const dcOrders = await apiRequest<any[]>(`/dc-orders?assigned_to=${currentUser._id}`)
       
       // Convert dc-orders to lead format and exclude closed/saved leads
       const leadsFromOrders: Lead[] = dcOrders
@@ -107,7 +134,7 @@ export default function FollowupLeadsPage() {
           createdAt: order.createdAt,
           remarks: order.remarks,
           school_type: order.school_type,
-          priority: order.priority || order.lead_status || 'Cold',
+          priority: order.priority || order.lead_status || 'Hot',
         }))
       
       // Combine and filter followup leads
@@ -135,11 +162,27 @@ export default function FollowupLeadsPage() {
       
       setAllLeads(uniqueLeads)
       
+      // Don't set pagination here - it will be set in applyFilters after filtering
+      // Reset to page 1 if current page would be empty
+      const totalFiltered = uniqueLeads.length
+      const totalPagesFiltered = Math.ceil(totalFiltered / itemsPerPage)
+      if (currentPage > totalPagesFiltered && totalPagesFiltered > 0) {
+        setCurrentPage(1)
+      }
+      
       // Extract unique zones
       const uniqueZones = Array.from(new Set(uniqueLeads.map(l => l.zone).filter(Boolean))) as string[]
       setZones(uniqueZones.sort())
+      
+      clearTimeout(timeoutId)
     } catch (err: any) {
-      toast.error('Failed to load followup leads')
+      clearTimeout(timeoutId)
+      if (err.message?.includes('timeout') || err.message?.includes('Connection')) {
+        setTimeoutError(true)
+        toast.error('Connection timeout. Please check your internet connection and try again.')
+      } else {
+        toast.error('Failed to load followup leads')
+      }
       console.error(err)
     } finally {
       setLoading(false)
@@ -190,6 +233,12 @@ export default function FollowupLeadsPage() {
         return 'bg-orange-100 text-orange-800'
       case 'cold':
         return 'bg-blue-100 text-blue-800'
+      case 'visit again':
+        return 'bg-yellow-100 text-yellow-800'
+      case 'not met management':
+        return 'bg-blue-100 text-blue-800'
+      case 'not interested':
+        return 'bg-gray-100 text-gray-800'
       default:
         return 'bg-gray-100 text-gray-800'
     }
@@ -197,10 +246,11 @@ export default function FollowupLeadsPage() {
 
   const openUpdateModal = (lead: Lead) => {
     setSelectedLead(lead)
+    // Clear form for creating a new follow-up entry (don't pre-fill with old data)
     setUpdateForm({
-      follow_up_date: lead.follow_up_date ? new Date(lead.follow_up_date).toISOString().split('T')[0] : '',
-      status: lead.priority || 'Cold',
-      remarks: lead.remarks || '',
+      follow_up_date: '',
+      status: lead.priority || 'Hot', // Pre-fill priority from current lead status
+      remarks: '',
     })
     setUpdateModalOpen(true)
   }
@@ -214,25 +264,27 @@ export default function FollowupLeadsPage() {
   const handleUpdateLead = async () => {
     if (!selectedLead) return
     
-    // Validate that at least one field is being updated
-    if (!updateForm.follow_up_date && !updateForm.remarks && !updateForm.status) {
-      toast.error('Please fill at least one field to update')
+    // Validate all required fields
+    if (!updateForm.follow_up_date || !updateForm.follow_up_date.trim()) {
+      toast.error('Next Follow-up Date is required')
+      return
+    }
+    if (!updateForm.status || !updateForm.status.trim()) {
+      toast.error('Lead Priority is required')
+      return
+    }
+    if (!updateForm.remarks || !updateForm.remarks.trim()) {
+      toast.error('Remarks is required')
       return
     }
     
     setUpdating(true)
     try {
-      const payload: any = {}
-      
-      // Only include fields that have values
-      if (updateForm.follow_up_date) {
-        payload.follow_up_date = new Date(updateForm.follow_up_date).toISOString()
-      }
-      if (updateForm.status) {
-        payload.priority = updateForm.status
-      }
-      if (updateForm.remarks !== undefined) {
-        payload.remarks = updateForm.remarks
+      // All fields are required, so include them all
+      const payload: any = {
+        follow_up_date: new Date(updateForm.follow_up_date).toISOString(),
+        priority: updateForm.status,
+        remarks: updateForm.remarks,
       }
       
       console.log('Updating lead with payload:', payload)
@@ -262,7 +314,7 @@ export default function FollowupLeadsPage() {
       }
       
       if (updated) {
-        toast.success('Lead updated successfully!')
+        toast.success('Follow-up created successfully!')
         closeUpdateModal()
         // Reload leads to get updated data
         await loadLeads()
@@ -338,7 +390,7 @@ export default function FollowupLeadsPage() {
         historyData.push({
           follow_up_date: lead.follow_up_date || null,
           remarks: lead.remarks || 'Lead created',
-          priority: lead.priority || 'Cold',
+          priority: lead.priority || 'Hot',
           updatedAt: lead.createdAt,
           updatedBy: { name: 'System' },
         })
@@ -360,7 +412,7 @@ export default function FollowupLeadsPage() {
         setHistory([{
           follow_up_date: lead.follow_up_date || null,
           remarks: lead.remarks || 'Lead created',
-          priority: lead.priority || 'Cold',
+          priority: lead.priority || 'Hot',
           updatedAt: lead.createdAt,
           updatedBy: { name: 'System' },
         }])
@@ -450,6 +502,29 @@ export default function FollowupLeadsPage() {
           </div>
         ) : (
           <div className="space-y-4">
+            {timeoutError && (
+              <Card className="p-6 bg-yellow-50 border-yellow-200">
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-yellow-600" />
+                  <div>
+                    <h3 className="font-semibold text-yellow-900">Loading Timeout</h3>
+                    <p className="text-sm text-yellow-700">The request is taking longer than expected. Please check your connection and try again.</p>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="mt-2"
+                      onClick={() => {
+                        setTimeoutError(false)
+                        loadLeads()
+                      }}
+                    >
+                      Retry
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            )}
+            
             {leads.map((lead) => (
               <Card key={lead._id} className="p-5 border border-neutral-200 hover:shadow-md transition-shadow">
                 <div className="space-y-4">
@@ -511,7 +586,7 @@ export default function FollowupLeadsPage() {
                     <div>
                       <span className="text-neutral-600">Lead Status:</span>
                       <span className={`ml-2 px-2 py-1 rounded text-xs font-medium ${getPriorityColor(lead.priority)}`}>
-                        {lead.priority || 'Cold'}
+                        {lead.priority || 'Hot'}
                       </span>
                     </div>
                   </div>
@@ -533,7 +608,7 @@ export default function FollowupLeadsPage() {
                       className="bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100"
                       onClick={() => openUpdateModal(lead)}
                     >
-                      Update Lead
+                      Create Follow-up
                     </Button>
                     <Button
                       variant="outline"
@@ -559,10 +634,10 @@ export default function FollowupLeadsPage() {
           <div className="bg-gradient-to-r from-purple-600 via-purple-700 to-indigo-700 px-6 py-5">
             <DialogHeader className="space-y-1">
               <DialogTitle className="text-white text-xl font-semibold tracking-tight">
-                Update Follow-up
+                Create Follow-up
               </DialogTitle>
               <DialogDescription className="text-purple-100 text-sm">
-                Record your interaction and schedule the next follow-up
+                Log a new interaction and track your visit history
               </DialogDescription>
             </DialogHeader>
           </div>
@@ -573,24 +648,26 @@ export default function FollowupLeadsPage() {
               <div className="space-y-2">
                 <Label className="text-sm font-semibold text-neutral-700 flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-purple-500"></span>
-                  Next Follow-up Date
+                  Follow-up Date *
                 </Label>
                 <Input
                   type="date"
                   className="h-11 bg-white border-neutral-300 focus:border-purple-500 focus:ring-purple-500/20 transition-all"
                   value={updateForm.follow_up_date}
                   onChange={(e) => setUpdateForm({ ...updateForm, follow_up_date: e.target.value })}
+                  required
                 />
               </div>
               
               <div className="space-y-2">
                 <Label className="text-sm font-semibold text-neutral-700 flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-purple-500"></span>
-                  Lead Priority
+                  Lead Priority *
                 </Label>
                 <Select 
                   value={updateForm.status} 
                   onValueChange={(v) => setUpdateForm({ ...updateForm, status: v })}
+                  required
                 >
                   <SelectTrigger className="h-11 bg-white border-neutral-300 focus:border-purple-500 focus:ring-purple-500/20">
                     <SelectValue placeholder="Select Priority" />
@@ -608,16 +685,22 @@ export default function FollowupLeadsPage() {
                         Warm
                       </span>
                     </SelectItem>
-                    <SelectItem value="Cold" className="focus:bg-blue-50">
+                    <SelectItem value="Visit Again" className="focus:bg-yellow-50">
                       <span className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                        Cold
+                        <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
+                        Visit Again
                       </span>
                     </SelectItem>
-                    <SelectItem value="Dropped" className="focus:bg-gray-50">
+                    <SelectItem value="Not Met Management" className="focus:bg-blue-50">
+                      <span className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                        Not Met Management
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="Not Interested" className="focus:bg-gray-50">
                       <span className="flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-gray-500"></span>
-                        Dropped
+                        Not Interested
                       </span>
                     </SelectItem>
                   </SelectContent>
@@ -627,11 +710,12 @@ export default function FollowupLeadsPage() {
               <div className="space-y-2">
                 <Label className="text-sm font-semibold text-neutral-700 flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-purple-500"></span>
-                  Remarks
+                  Remarks *
                 </Label>
                 <Textarea
                   className="min-h-[100px] bg-white border-neutral-300 focus:border-purple-500 focus:ring-purple-500/20 resize-none transition-all"
                   placeholder="Enter your remarks about this interaction..."
+                  required
                   value={updateForm.remarks}
                   onChange={(e) => setUpdateForm({ ...updateForm, remarks: e.target.value })}
                   rows={4}
@@ -661,10 +745,10 @@ export default function FollowupLeadsPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
-                  Updating...
+                  Creating...
                 </span>
               ) : (
-                'Save Update'
+                'Create Follow-up'
               )}
             </Button>
           </div>
@@ -720,24 +804,30 @@ export default function FollowupLeadsPage() {
                     {history.map((item, index) => {
                       // Use a unique key for each entry
                       const entryKey = item._id || item.updatedAt || `entry-${index}`;
-                      const priority = item.priority || 'Cold'
+                      const priority = item.priority || 'Hot'
                       const priorityColors = {
                         Hot: 'bg-red-100 text-red-700 border-red-200',
                         Warm: 'bg-orange-100 text-orange-700 border-orange-200',
                         Cold: 'bg-blue-100 text-blue-700 border-blue-200',
+                        'Visit Again': 'bg-yellow-100 text-yellow-700 border-yellow-200',
+                        'Not Met Management': 'bg-blue-100 text-blue-700 border-blue-200',
+                        'Not Interested': 'bg-gray-100 text-gray-700 border-gray-200',
                         Dropped: 'bg-gray-100 text-gray-700 border-gray-200',
                       }
                       const priorityDotColors = {
                         Hot: 'bg-red-500 ring-red-200',
                         Warm: 'bg-orange-500 ring-orange-200',
                         Cold: 'bg-blue-500 ring-blue-200',
+                        'Visit Again': 'bg-yellow-500 ring-yellow-200',
+                        'Not Met Management': 'bg-blue-500 ring-blue-200',
+                        'Not Interested': 'bg-gray-500 ring-gray-200',
                         Dropped: 'bg-gray-500 ring-gray-200',
                       }
                       
                       return (
                         <div key={entryKey} className="relative pl-12">
                           {/* Timeline Dot */}
-                          <div className={`absolute left-0 top-1.5 w-8 h-8 rounded-full ${priorityDotColors[priority as keyof typeof priorityDotColors] || priorityDotColors.Cold} ring-4 ring-white flex items-center justify-center shadow-lg`}>
+                          <div className={`absolute left-0 top-1.5 w-8 h-8 rounded-full ${priorityDotColors[priority as keyof typeof priorityDotColors] || priorityDotColors.Hot} ring-4 ring-white flex items-center justify-center shadow-lg`}>
                             <div className="w-2 h-2 rounded-full bg-white"></div>
                           </div>
                           
@@ -750,7 +840,7 @@ export default function FollowupLeadsPage() {
                                   <span className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">
                                     {formatDateTime(item.updatedAt)}
                                   </span>
-                                  <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${priorityColors[priority as keyof typeof priorityColors] || priorityColors.Cold}`}>
+                                  <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${priorityColors[priority as keyof typeof priorityColors] || priorityColors.Hot}`}>
                                     {priority}
                                   </span>
                                 </div>
@@ -816,6 +906,40 @@ export default function FollowupLeadsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Pagination Controls */}
+      {!timeoutError && totalPages > 1 && (
+        <Card className="p-4">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-neutral-600">
+              Showing page {currentPage} of {totalPages} ({totalItems} total leads)
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1 || loading}
+              >
+                <ChevronLeft className="w-4 h-4 mr-1" />
+                Previous
+              </Button>
+              <div className="text-sm text-neutral-600 px-3">
+                Page {currentPage} / {totalPages}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages || loading}
+              >
+                Next
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
     </div>
   )
 }

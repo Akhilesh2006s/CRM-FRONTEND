@@ -127,7 +127,6 @@ const NAV: NavItem[] = [
       { label: 'Saved DC', href: '/dashboard/dc/saved', icon: Save },
       { label: 'Pending DC', href: '/dashboard/dc/pending', icon: Clock },
       { label: 'EMP DC', href: '/dashboard/dc/emp', icon: UserCircle2 },
-      { label: 'My DC (Admin)', href: '/dashboard/dc/admin/my', icon: Shield },
     ],
   },
   {
@@ -138,6 +137,14 @@ const NAV: NavItem[] = [
       { label: 'Active Employees', href: '/dashboard/employees/active' },
       { label: 'Inactive Employees', href: '/dashboard/employees/inactive' },
       { label: 'Pending Leaves', href: '/dashboard/employees/leaves', icon: CalendarCheck2 },
+    ],
+  },
+  {
+    label: 'Executive Managers',
+    icon: Shield,
+    children: [
+      { label: 'All Managers', href: '/dashboard/executive-managers' },
+      { label: 'Create Manager', href: '/dashboard/executive-managers/new' },
     ],
   },
   {
@@ -217,6 +224,14 @@ const NAV: NavItem[] = [
     ],
   },
   {
+    label: 'Products',
+    icon: Package,
+    children: [
+      { label: 'All Products', href: '/dashboard/products', icon: Database },
+      { label: 'Add New Product', href: '/dashboard/products/new', icon: PlusCircle },
+    ],
+  },
+  {
     label: 'Settings',
     icon: Settings,
     children: [
@@ -233,7 +248,7 @@ export function Sidebar() {
   const router = useRouter()
   const pathname = usePathname()
   const [open, setOpen] = useState<Record<string, boolean>>({})
-  const [user, setUser] = useState<{ name?: string; email?: string; role?: string } | null>(null)
+  const [user, setUser] = useState<{ _id?: string; name?: string; email?: string; role?: string } | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [hoveredItem, setHoveredItem] = useState<string | null>(null)
 
@@ -266,10 +281,12 @@ export function Sidebar() {
     }
   }, [])
 
-  const isEmployee = user?.role === 'Employee'
+  const isEmployee = user?.role === 'Executive'
   const isManager = user?.role === 'Manager'
   const isCoordinator = user?.role === 'Coordinator'
   const isSeniorCoordinator = user?.role === 'Senior Coordinator'
+  const isExecutiveManager = user?.role === 'Executive Manager'
+  const isExecutive = user?.role === 'Executive'
 
   // Add employee leave menu if employee, replace admin Leave Management
   const employeeLeavesMenu: NavItem = {
@@ -295,12 +312,9 @@ export function Sidebar() {
         ],
       },
       {
-        label: 'Clients',
-        icon: Truck,
-        children: [
-          { label: 'My Clients', href: '/dashboard/dc/my', icon: UserCircle2 },
-          { label: 'Client DC', href: '/dashboard/dc/client-dc', icon: Package },
-        ],
+        label: 'My Clients',
+        icon: Users,
+        href: '/dashboard/dc/client-dc',
       },
       {
         label: 'Payments',
@@ -317,6 +331,11 @@ export function Sidebar() {
           { label: 'Create Expense', href: '/dashboard/expenses/create', icon: PlusCircle },
           { label: 'My Expenses', href: '/dashboard/expenses/my', icon: FileText },
         ],
+      },
+      {
+        label: 'Employee Sample',
+        icon: Package,
+        href: '/dashboard/samples/request',
       },
       employeeLeavesMenu,
       { label: 'Sign out', icon: LogOut, href: '/auth/login' },
@@ -475,6 +494,34 @@ export function Sidebar() {
         }
         return item
       })
+  } else if (isExecutiveManager) {
+    // For Executive Manager role, show Dashboard and Executive Manager menu
+    // Get the manager's own ID from user data (we'll need to store it in auth)
+    finalNav = [
+      { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
+      {
+        label: 'My Dashboard',
+        icon: LayoutDashboard,
+        href: `/dashboard/executive-managers/${user?._id || ''}/dashboard`,
+      },
+      {
+        label: 'Leave Management',
+        icon: CalendarCheck2,
+        href: `/dashboard/executive-managers/${user?._id || ''}/leaves`,
+      },
+      { label: 'Sign out', icon: LogOut, href: '/auth/login' },
+    ]
+  } else if (isExecutive) {
+    // For Executive role, show Dashboard and Assign Areas
+    finalNav = [
+      { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
+      {
+        label: 'Assign Areas',
+        icon: Building2,
+        href: '/dashboard/executives/assign-areas',
+      },
+      { label: 'Sign out', icon: LogOut, href: '/auth/login' },
+    ]
   } else {
     // For all other roles (Admin, Super Admin, etc.), show all menu items except "DC listed" (only for Manager and Coordinator)
     finalNav = NAV.map(item => {
@@ -620,8 +667,9 @@ export function Sidebar() {
                   onMouseEnter={() => !sidebarOpen && setHoveredItem(item.label)}
                   onMouseLeave={(e) => {
                     // Only close if not moving to tooltip
-                    const relatedTarget = e.relatedTarget as HTMLElement
-                    if (!relatedTarget?.closest('.hover-tooltip-container')) {
+                    const relatedTarget = e.relatedTarget as HTMLElement | null
+                    // Check if relatedTarget exists and has the closest method (is an HTMLElement)
+                    if (!relatedTarget || typeof relatedTarget.closest !== 'function' || !relatedTarget.closest('.hover-tooltip-container')) {
                       setHoveredItem(null)
                     }
                   }}

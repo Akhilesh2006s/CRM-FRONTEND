@@ -1,6 +1,6 @@
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
-  "https://crm-backend-production-2ffd.up.railway.app";
+  "http://localhost:5000";
 
 export async function apiRequest<T>(
   path: string,

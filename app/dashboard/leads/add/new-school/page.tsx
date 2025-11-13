@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { apiRequest } from '@/lib/api'
 import { Card } from '@/components/ui/card'
@@ -14,6 +14,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
+import { useProducts } from '@/hooks/useProducts'
 
 type ProductSelection = {
   name: string
@@ -23,7 +24,7 @@ type ProductSelection = {
 export default function NewSchoolPage() {
   const router = useRouter()
   const currentUser = getCurrentUser()
-  const availableProducts = ['Abacus', 'Vedic Maths', 'EELL', 'IIT', 'CodeChamp', 'Math Lab']
+  const { productNames: availableProducts, loading: productsLoading } = useProducts()
   
   const [form, setForm] = useState({
     school_type: 'New',
@@ -31,8 +32,8 @@ export default function NewSchoolPage() {
     contact_person: '',
     contact_mobile: '',
     email: '',
-    contact_person2: '',
-    contact_mobile2: '',
+    decision_maker_name: '',
+    decision_maker_mobile: '',
     location: '',
     city: '',
     address: '',
@@ -40,18 +41,50 @@ export default function NewSchoolPage() {
     state: '',
     region: '',
     area: '',
-    priority: 'Cold',
+    priority: 'Hot',
     zone: '',
     branches: '',
     strength: '',
     remarks: '',
+    average_fee: '',
     follow_up_date: '',
   })
   
   // Product selections - just checkboxes for interest
-  const [products, setProducts] = useState<ProductSelection[]>(
-    availableProducts.map(p => ({ name: p, checked: false }))
-  )
+  const [products, setProducts] = useState<ProductSelection[]>([])
+  
+  // Initialize products when availableProducts are loaded
+  useEffect(() => {
+    if (availableProducts.length > 0 && products.length === 0) {
+      setProducts(availableProducts.map(p => ({ name: p, checked: false })))
+    }
+  }, [availableProducts])
+
+  // Auto-fill zone from employee's assigned zone
+  useEffect(() => {
+    const loadUserZone = async () => {
+      if (currentUser?._id) {
+        try {
+          const userProfile = await apiRequest<{ assignedCity?: string; zone?: string }>(`/auth/me`)
+          const employeeZone = userProfile.assignedCity || userProfile.zone || ''
+          if (employeeZone) {
+            setForm((f) => {
+              // Only set if zone is not already set
+              if (!f.zone) {
+                return { ...f, zone: employeeZone }
+              }
+              return f
+            })
+          }
+        } catch (err) {
+          // Silently fail - zone will remain empty if fetch fails
+          console.error('Failed to load user zone:', err)
+        }
+      }
+    }
+    loadUserZone()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?._id])
   
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -82,10 +115,11 @@ export default function NewSchoolPage() {
         if (response.success && response.town) {
           setForm((f) => ({
             ...f,
-            location: response.town || '',
+            // Don't auto-fill location (landmark) - user should enter manually
             city: response.district || '',
             state: response.state || '',
             region: response.region || '',
+            // Don't auto-select area - user must select manually
           }))
           
           // Populate area dropdown with all post offices (exact areas)
@@ -96,14 +130,11 @@ export default function NewSchoolPage() {
               block: po.Block,
               branchType: po.BranchType,
             })))
-            // Auto-select first area if only one
-            if (response.postOffices.length === 1) {
-              setForm((f) => ({ ...f, area: response.postOffices![0].Name }))
-            }
+            // Don't auto-select - user must select manually
           } else {
-            // Fallback: use town as area
+            // Fallback: use town as area option
             setAreas([{ name: response.town, district: response.district || '' }])
-            setForm((f) => ({ ...f, area: response.town || '' }))
+            // Don't auto-select - user must select manually
           }
         }
       } catch (err: any) {
@@ -117,7 +148,8 @@ export default function NewSchoolPage() {
       // Clear fields if pincode is incomplete
       if (pincode.length < 6) {
         setAreas([])
-        setForm((f) => ({ ...f, location: '', city: '', state: '', region: '', area: '' }))
+        setForm((f) => ({ ...f, city: '', state: '', region: '', area: '' }))
+        // Don't clear location (landmark) - user may have entered it manually
       }
     }
   }
@@ -132,6 +164,44 @@ export default function NewSchoolPage() {
     e.preventDefault()
     setSubmitting(true)
     setError(null)
+    
+    // Validate required fields
+    if (!form.decision_maker_name || !form.decision_maker_name.trim()) {
+      setError('Decision Maker Name is required')
+      setSubmitting(false)
+      return
+    }
+    if (!form.decision_maker_mobile || !form.decision_maker_mobile.trim()) {
+      setError('Decision Maker Mobile Number is required')
+      setSubmitting(false)
+      return
+    }
+    if (!form.area || !form.area.trim()) {
+      setError('Area is required. Please enter pincode and select an area.')
+      setSubmitting(false)
+      return
+    }
+    if (!form.average_fee || !form.average_fee.trim()) {
+      setError('Average School Fee is required')
+      setSubmitting(false)
+      return
+    }
+    if (!form.branches || !form.branches.trim()) {
+      setError('No. of Branches is required')
+      setSubmitting(false)
+      return
+    }
+    if (!form.strength || !form.strength.trim()) {
+      setError('School Strength is required')
+      setSubmitting(false)
+      return
+    }
+    if (!form.remarks || !form.remarks.trim()) {
+      setError('Remarks is required')
+      setSubmitting(false)
+      return
+    }
+    
     try {
       const parseFollowUp = (s: string) => {
         if (!s) return undefined
@@ -159,17 +229,24 @@ export default function NewSchoolPage() {
       
       const payload: any = {
         school_name: form.school_name,
-        school_type: 'New', // Always New for new school
+        school_type: form.school_type || 'New', // Use selected school type (New or Employee)
         contact_person: form.contact_person,
         contact_mobile: form.contact_mobile,
-        contact_person2: form.contact_person2 || undefined,
-        contact_mobile2: form.contact_mobile2 || undefined,
-        location: form.location,
+        contact_person2: form.decision_maker_name || undefined,
+        contact_mobile2: form.decision_maker_mobile || undefined,
+        location: form.location || undefined,
         address: form.address || undefined,
-        zone: form.zone,
-        priority: form.priority || 'Cold',
+        pincode: form.pincode || undefined,
+        state: form.state || undefined,
+        city: form.city || undefined,
+        region: form.region || undefined,
+        area: form.area || undefined,
+        zone: form.zone || undefined,
+        priority: form.priority || 'Hot',
         branches: form.branches ? Number(form.branches) : undefined,
-        remarks: form.remarks,
+        strength: form.strength && form.strength.trim() ? Number(form.strength) : undefined,
+        remarks: form.remarks || undefined,
+        average_fee: form.average_fee ? Number(form.average_fee) : undefined,
         email: form.email,
         products: selectedProducts,
         estimated_delivery_date: parseFollowUp(form.follow_up_date),
@@ -219,11 +296,8 @@ export default function NewSchoolPage() {
                 <SelectValue placeholder="Select Type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Private">Private</SelectItem>
-                <SelectItem value="Public">Public</SelectItem>
-                <SelectItem value="Trust">Trust</SelectItem>
                 <SelectItem value="New">New</SelectItem>
-                <SelectItem value="Other">Other</SelectItem>
+                <SelectItem value="Employee">Employee</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -240,12 +314,12 @@ export default function NewSchoolPage() {
             <Input className="bg-white text-neutral-900" type="email" name="email" value={form.email} onChange={onChange} />
           </div>
           <div>
-            <Label>Contact Person 2</Label>
-            <Input className="bg-white text-neutral-900" name="contact_person2" value={form.contact_person2} onChange={onChange} />
+            <Label>Decision Maker Name *</Label>
+            <Input className="bg-white text-neutral-900" name="decision_maker_name" value={form.decision_maker_name} onChange={onChange} required />
           </div>
           <div>
-            <Label>Contact Mobile 2</Label>
-            <Input className="bg-white text-neutral-900" name="contact_mobile2" value={form.contact_mobile2} onChange={onChange} />
+            <Label>Decision Maker Mobile Number *</Label>
+            <Input className="bg-white text-neutral-900" name="decision_maker_mobile" value={form.decision_maker_mobile} onChange={onChange} required />
           </div>
           <div>
             <Label>Pincode *</Label>
@@ -265,15 +339,15 @@ export default function NewSchoolPage() {
             <Input className="bg-white text-neutral-900" name="state" value={form.state} onChange={onChange} />
           </div>
           <div>
-            <Label>City</Label>
+            <Label>District</Label>
             <Input className="bg-white text-neutral-900" name="city" value={form.city} onChange={onChange} />
           </div>
           <div>
-            <Label>Region</Label>
+            <Label>City/Town</Label>
             <Input className="bg-white text-neutral-900" name="region" value={form.region} onChange={onChange} />
           </div>
           <div>
-            <Label>Location/Town</Label>
+            <Label>Landmark</Label>
             <Input className="bg-white text-neutral-900" name="location" value={form.location} onChange={onChange} />
           </div>
           <div>
@@ -309,6 +383,58 @@ export default function NewSchoolPage() {
             <Textarea className="bg-white text-neutral-900" name="address" value={form.address} onChange={onChange} />
           </div>
           
+          {/* Average School Fee */}
+          <div>
+            <Label>Average School Fee *</Label>
+            <Input 
+              className="bg-white text-neutral-900" 
+              type="number" 
+              name="average_fee" 
+              value={form.average_fee} 
+              onChange={onChange} 
+              placeholder="Enter average school fee"
+              required
+            />
+          </div>
+          
+          {/* No. of Branches */}
+          <div>
+            <Label>No. of Branches *</Label>
+            <Input 
+              className="bg-white text-neutral-900" 
+              type="number" 
+              name="branches" 
+              value={form.branches} 
+              onChange={onChange} 
+              required
+            />
+          </div>
+          
+          {/* School Strength */}
+          <div>
+            <Label>School Strength (students) *</Label>
+            <Input 
+              className="bg-white text-neutral-900" 
+              type="number" 
+              name="strength" 
+              value={form.strength} 
+              onChange={onChange} 
+              required
+            />
+          </div>
+          
+          {/* Remarks */}
+          <div className="md:col-span-2">
+            <Label>Remarks *</Label>
+            <Textarea 
+              className="bg-white text-neutral-900" 
+              name="remarks" 
+              value={form.remarks} 
+              onChange={onChange} 
+              required
+            />
+          </div>
+          
           {/* Products Interested Section */}
           <div className="md:col-span-2">
             <Label>Products Interested *</Label>
@@ -338,31 +464,31 @@ export default function NewSchoolPage() {
                 <SelectValue placeholder="Select priority" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Cold">Cold</SelectItem>
-                <SelectItem value="Warm">Warm</SelectItem>
                 <SelectItem value="Hot">Hot</SelectItem>
+                <SelectItem value="Warm">Warm</SelectItem>
+                <SelectItem value="Visit Again">Visit Again</SelectItem>
+                <SelectItem value="Not Met Management">Not Met Management</SelectItem>
+                <SelectItem value="Not Interested">Not Interested</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div>
             <Label>Zone</Label>
-            <Input className="bg-white text-neutral-900" name="zone" value={form.zone} onChange={onChange} />
-          </div>
-          <div>
-            <Label>No. of Branches</Label>
-            <Input className="bg-white text-neutral-900" type="number" name="branches" value={form.branches} onChange={onChange} />
-          </div>
-          <div>
-            <Label>School strength (students)</Label>
-            <Input className="bg-white text-neutral-900" type="number" name="strength" value={form.strength} onChange={onChange} />
+            <Input 
+              className="bg-neutral-100 text-neutral-900 cursor-not-allowed" 
+              name="zone" 
+              value={form.zone} 
+              onChange={onChange}
+              readOnly
+              disabled
+            />
+            <p className="text-xs text-neutral-500 mt-1">
+              Zone is automatically set based on your assigned zone
+            </p>
           </div>
           <div>
             <Label>Follow-up date</Label>
             <Input className="bg-white text-neutral-900 placeholder:text-neutral-500" placeholder="dd-mm-yyyy" name="follow_up_date" value={form.follow_up_date} onChange={onChange} />
-          </div>
-          <div className="md:col-span-2">
-            <Label>Remarks</Label>
-            <Textarea className="bg-white text-neutral-900" name="remarks" value={form.remarks} onChange={onChange} />
           </div>
           {error && <div className="md:col-span-2 text-red-600 text-sm">{error}</div>}
           <div className="md:col-span-2">

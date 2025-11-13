@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Pencil, Package, Plus, Upload, X } from 'lucide-react'
 import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
+import { useProducts } from '@/hooks/useProducts'
 
 type DC = {
   _id: string
@@ -28,6 +29,8 @@ type DC = {
     contact_mobile?: string
     email?: string
     products?: any
+    status?: string // Status of the DcOrder (e.g., 'saved' for closed leads)
+    school_type?: string // 'Existing' for renewal leads, otherwise 'New School'
   }
   customerName?: string
   customerPhone?: string
@@ -36,6 +39,7 @@ type DC = {
   poPhotoUrl?: string
   createdAt?: string
   productDetails?: any[]
+  _isConvertedLead?: boolean // Flag to indicate this is a converted lead (saved DcOrder)
 }
 
 export default function ClientDCPage() {
@@ -51,7 +55,6 @@ export default function ClientDCPage() {
     product: string
     class: string
     category: string
-    productName: string
     quantity: number
     strength: number
     price: number
@@ -65,8 +68,12 @@ export default function ClientDCPage() {
   const [dcPoPhotoUrl, setDcPoPhotoUrl] = useState('')
   const [savingClientDC, setSavingClientDC] = useState(false)
   
-  const availableProducts = ['ABACUS', 'VedicMath', 'EELL', 'IIT', 'CODING', 'MathLab', 'CodeChamp']
-  const availableLevels = ['L1', 'L2', 'L3', 'L4', 'L5']
+  const { productNames: availableProducts, getProductLevels, getDefaultLevel } = useProducts()
+  
+  // Get available levels for a specific product, default to L1 if product not found
+  const getAvailableLevels = (product: string): string[] => {
+    return getProductLevels(product)
+  }
   const availableClasses = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
   const availableCategories = ['New Students', 'Existing Students', 'Both']
   const availableDCCategories = ['Term 1', 'Term 2', 'Term 3', 'Full Year']
@@ -74,15 +81,36 @@ export default function ClientDCPage() {
   const load = async () => {
     setLoading(true)
     try {
-      // Load all DCs (clients) for the employee
+      // Load all DCs (clients) for the employee - including closed leads (saved DcOrders)
       const data = await apiRequest<DC[]>(`/dc/employee/my`)
-      console.log('Loaded clients:', data)
+      console.log('Loaded clients (all):', data)
       
-      // Filter: Only show clients that have products added AND submitted
-      // Products are added via "Add Products" in My Clients, which sets status to 'sent_to_manager'
-      // Or if PO is submitted, status becomes 'po_submitted'
-      const filteredClients = data.filter((dc: DC) => {
-        // Check if client has productDetails with at least one valid product
+      // Ensure data is an array before filtering
+      const dataArray = Array.isArray(data) ? data : []
+      
+      // Filter: Show ALL closed leads (anything with dcOrderId) and clients with products
+      // The backend already filters for this employee's clients, so we show:
+      // 1. ALL items with dcOrderId (these are from closed leads) - show them all
+      // 2. Clients with products added and submitted (for backward compatibility)
+      const filteredClients = dataArray.filter((dc: DC) => {
+        // If it has a dcOrderId (either as object or string ID), it's from a closed lead - show it
+        const hasDcOrderId = dc.dcOrderId && (typeof dc.dcOrderId === 'object' || typeof dc.dcOrderId === 'string')
+        
+        if (hasDcOrderId) {
+          const schoolName = typeof dc.dcOrderId === 'object' 
+            ? dc.dcOrderId?.school_name 
+            : dc.customerName
+          console.log('Including closed lead:', schoolName || dc.customerName, {
+            _isConvertedLead: dc._isConvertedLead,
+            dcOrderIdStatus: typeof dc.dcOrderId === 'object' ? dc.dcOrderId?.status : 'unknown',
+            dcStatus: dc.status,
+            hasDcOrderId: true,
+            dcOrderIdType: typeof dc.dcOrderId
+          })
+          return true
+        }
+        
+        // For DCs without dcOrderId (from Sale), check if client has productDetails with at least one valid product
         // A valid product must have: product name, and either price or strength > 0
         const hasProducts = dc.productDetails && 
                            Array.isArray(dc.productDetails) && 
@@ -95,25 +123,64 @@ export default function ClientDCPage() {
                            })
         
         // Check if products have been submitted (status indicates submission after adding products)
+        // Status 'created' means DC was just created (from closed lead) - show it if it has products
         // Status 'sent_to_manager' means products were added and submitted
         // Status 'po_submitted' means PO was submitted (products should already be added)
         // Other statuses like 'pending_dc', 'warehouse_processing', 'completed' also indicate submission
-        const isSubmitted = dc.status === 'sent_to_manager' || 
+        const isSubmitted = dc.status === 'created' ||
+                           dc.status === 'sent_to_manager' || 
                            dc.status === 'po_submitted' || 
                            dc.status === 'pending_dc' ||
                            dc.status === 'warehouse_processing' ||
                            dc.status === 'completed'
         
-        // Only show if products exist AND have been submitted
-        // This ensures only clients where products were added via "Add Products" and then submitted appear
+        // Show if products exist AND have been submitted (or just created with products)
+        if (hasProducts && isSubmitted) {
+          console.log('Including client with products:', dc.customerName, { status: dc.status, hasProducts })
+        }
         return hasProducts && isSubmitted
       })
       
-      console.log('Filtered clients with products:', filteredClients)
-      setItems(filteredClients)
+      console.log('Filtered clients (closed leads + with products):', filteredClients)
+      
+      // Check for newly converted DC from sessionStorage
+      const newlyConvertedDCId = sessionStorage.getItem('newlyConvertedDCId');
+      const newlyConvertedDC = sessionStorage.getItem('newlyConvertedDC');
+      
+      let finalClients = [...filteredClients];
+      
+      // If there's a newly converted DC that's not in the filtered list, add it
+      if (newlyConvertedDCId && newlyConvertedDC) {
+        const isAlreadyIncluded = filteredClients.some(dc => dc._id === newlyConvertedDCId);
+        if (!isAlreadyIncluded) {
+          try {
+            const dc = JSON.parse(newlyConvertedDC);
+            finalClients = [dc, ...filteredClients];
+            console.log('Added newly converted DC from sessionStorage:', dc._id);
+          } catch (e) {
+            console.warn('Failed to parse newly converted DC from sessionStorage:', e);
+          }
+        }
+        // Clear sessionStorage after using it
+        sessionStorage.removeItem('newlyConvertedDCId');
+        sessionStorage.removeItem('newlyConvertedDC');
+      }
+      
+      setItems(finalClients)
     } catch (e: any) {
       console.error('Failed to load DCs:', e)
-      toast.error(`Error loading DCs: ${e?.message || 'Unknown error'}`)
+      const errorMessage = e?.message || 'Unknown error'
+      // Provide more context for database connection errors
+      if (errorMessage.includes('Database connection') || 
+          errorMessage.includes('MongoDB') ||
+          (errorMessage.includes('connection') && errorMessage.includes('timed out')) ||
+          errorMessage.includes('Service Unavailable')) {
+        toast.error('Database connection failed. Please check your server connection and try again.')
+      } else if (errorMessage.includes('filter is not a function')) {
+        toast.error('The API returned invalid data format. Please check the server response.')
+      } else {
+        toast.error(`Error loading DCs: ${errorMessage}`)
+      }
       setItems([])
     } finally {
       setLoading(false)
@@ -121,11 +188,113 @@ export default function ClientDCPage() {
   }
 
   useEffect(() => {
+    // FIRST: Check sessionStorage and add the DC immediately (before load() clears items)
+    console.log('🔍 Checking sessionStorage for newly converted DC...');
+    const newlyConvertedDCId = sessionStorage.getItem('newlyConvertedDCId');
+    const newlyConvertedDC = sessionStorage.getItem('newlyConvertedDC');
+    
+    console.log('📋 SessionStorage check result:', {
+      hasId: !!newlyConvertedDCId,
+      hasData: !!newlyConvertedDC,
+      id: newlyConvertedDCId
+    });
+    
+    if (newlyConvertedDCId && newlyConvertedDC) {
+      (async () => {
+        try {
+          const dc = JSON.parse(newlyConvertedDC);
+          console.log('📥 Found newly converted DC in sessionStorage:', {
+            id: dc._id,
+            hasDcOrderId: !!dc.dcOrderId,
+            dcOrderIdType: typeof dc.dcOrderId,
+            dcOrderIdValue: dc.dcOrderId
+          });
+          
+          // Try to fetch the full DC from API first (with populated fields)
+          // This ensures we have the correct structure even if sessionStorage data is incomplete
+          try {
+            const fullDC = await apiRequest<DC>(`/dc/${newlyConvertedDCId}`);
+            console.log('✅ Fetched full DC from API:', {
+              id: fullDC._id,
+              hasDcOrderId: !!fullDC.dcOrderId,
+              dcOrderIdType: typeof fullDC.dcOrderId,
+              customerName: fullDC.customerName || fullDC.dcOrderId?.school_name
+            });
+            
+            // Ensure the DC has the proper structure for the filter
+            const dcWithStructure: DC = {
+              ...fullDC,
+              _isConvertedLead: true,
+              // Ensure it has customerName for display
+              customerName: fullDC.customerName || fullDC.dcOrderId?.school_name || 'Unknown Client'
+            };
+            
+            // Add it to the list immediately
+            setItems(prevItems => {
+              const exists = prevItems.some(item => item._id === dcWithStructure._id);
+              if (!exists) {
+                console.log('➕ Adding newly converted DC to list (from API)');
+                return [dcWithStructure, ...prevItems];
+              }
+              console.log('ℹ️ DC already in list');
+              return prevItems;
+            });
+          } catch (apiErr) {
+            // If API fetch fails (timeout), use sessionStorage data as fallback
+            console.warn('⚠️ Could not fetch full DC from API, using sessionStorage data:', apiErr);
+            
+            // Ensure the DC has the proper structure for the filter
+            const dcWithStructure: DC = {
+              ...dc,
+              // Ensure dcOrderId is an object (required by the filter)
+              dcOrderId: dc.dcOrderId 
+                ? (typeof dc.dcOrderId === 'object' ? dc.dcOrderId : { _id: dc.dcOrderId, school_name: dc.customerName || 'Unknown' })
+                : undefined,
+              _isConvertedLead: true,
+              // Ensure it has customerName for display
+              customerName: dc.customerName || dc.dcOrderId?.school_name || 'Unknown Client'
+            };
+            
+            console.log('📦 Prepared DC for display (from sessionStorage):', {
+              id: dcWithStructure._id,
+              hasDcOrderId: !!dcWithStructure.dcOrderId,
+              dcOrderIdType: typeof dcWithStructure.dcOrderId,
+              customerName: dcWithStructure.customerName
+            });
+            
+            // Add it to the list immediately (even if query timed out)
+            setItems(prevItems => {
+              const exists = prevItems.some(item => item._id === dcWithStructure._id);
+              if (!exists) {
+                console.log('➕ Adding newly converted DC to list (from sessionStorage)');
+                return [dcWithStructure, ...prevItems];
+              }
+              console.log('ℹ️ DC already in list');
+              return prevItems;
+            });
+          }
+          
+          // Clear sessionStorage AFTER adding to list
+          sessionStorage.removeItem('newlyConvertedDCId');
+          sessionStorage.removeItem('newlyConvertedDC');
+        } catch (err) {
+          console.error('Failed to parse newly converted DC:', err);
+        }
+      })();
+    }
+    
+    // THEN: Load all DCs from API (this will merge with sessionStorage items if they exist)
     load()
   }, [])
 
   const openClientDCDialog = async (dc: DC) => {
     setSelectedDC(dc)
+    
+    // Determine category automatically based on school_type from dcOrderId
+    // If school_type is 'Existing', it's a renewal/existing school, otherwise it's a new school
+    const autoCategory = dc.dcOrderId && typeof dc.dcOrderId === 'object' && dc.dcOrderId.school_type === 'Existing'
+      ? 'Existing School'
+      : 'New School'
     
     // Load full DC details
     try {
@@ -150,14 +319,12 @@ export default function ClientDCPage() {
               id: String(idx + 1),
               product: p.product || '',
               class: p.class || '1',
-              category: p.category || 'New Students',
-              // Use productName if available, otherwise use product name
-              productName: p.productName || p.product || '',
+              category: autoCategory, // Use auto-determined category
               quantity: quantityNum,
               strength: strengthNum,
               price: priceNum,
               total: totalNum,
-              level: p.level || 'L2',
+              level: p.level || getDefaultLevel(p.product || 'Abacus'),
             }
             console.log(`Client DC Product ${idx + 1}:`, {
               raw: { price: p.price, total: p.total, strength: p.strength },
@@ -194,58 +361,33 @@ export default function ClientDCPage() {
     setClientDCDialogOpen(true)
   }
 
-  const saveClientDC = async () => {
+  const saveClientRequest = async () => {
+    // Save without submitting
     if (!selectedDC) return
-
-    // Allow saving even if no products - products should be added via "Add Products" in My Clients first
-    // But if products are present, validate them
-    if (dcProductRows.length > 0) {
-
-      // Validate products
-      const invalidProducts = dcProductRows.filter(p => !p.product || !p.quantity || !p.strength)
-      if (invalidProducts.length > 0) {
-        toast.error('Please fill in Product, Quantity, and Strength for all products')
-        return
-      }
-    }
 
     setSavingClientDC(true)
     try {
-      // Prepare product details - only include products that were added
-      // Save ALL fields exactly as entered by employee - this will appear in Closed Sales
+      // Prepare product details
       const productDetails = dcProductRows.length > 0 
-        ? dcProductRows.map(row => {
-            const savedProduct = {
-              product: row.product || '',
-              class: row.class || '1',
-              category: row.category || 'New Students',
-              productName: row.productName || row.product || '', // Use productName or fallback to product
-              quantity: Number(row.quantity) || 0,
-              strength: Number(row.strength) || 0,
-              price: Number(row.price) || 0,
-              total: Number(row.total) || (Number(row.price) || 0) * (Number(row.strength) || 0), // Calculate if missing
-              level: row.level || 'L2',
-            }
-            console.log('Saving product from Client DC:', savedProduct)
-            return savedProduct
-          })
-        : undefined // Don't update productDetails if no products in this dialog
+        ? dcProductRows.map(row => ({
+            product: row.product || '',
+            class: row.class || '1',
+            category: row.category || 'New School',
+            quantity: Number(row.quantity) || 0,
+            strength: Number(row.strength) || 0,
+            price: Number(row.price) || 0,
+            total: Number(row.total) || (Number(row.price) || 0) * (Number(row.strength) || 0),
+            level: row.level || getDefaultLevel(row.product || 'Abacus'),
+          }))
+        : undefined
 
       const totalQuantity = dcProductRows.length > 0 
         ? dcProductRows.reduce((sum, p) => sum + (p.quantity || 0), 0)
         : undefined
 
-      // Update DC with all details
-      const updatePayload: any = {
-        dcDate: dcDate || undefined,
-        dcRemarks: dcRemarks || undefined,
-        dcCategory: dcCategory || undefined,
-        dcNotes: dcNotes || undefined,
-        status: 'sent_to_manager', // Submit to closed sales for coordinator/admin verification
-      }
+      // Update DC without changing status
+      const updatePayload: any = {}
 
-      // Only update productDetails if products were modified in this dialog
-      // Otherwise, keep the existing productDetails from "Add Products"
       if (productDetails !== undefined) {
         updatePayload.productDetails = productDetails
       }
@@ -264,6 +406,120 @@ export default function ClientDCPage() {
         body: JSON.stringify(updatePayload),
       })
 
+      toast.success('Client Request saved successfully!')
+      setClientDCDialogOpen(false)
+      load()
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to save Client Request')
+    } finally {
+      setSavingClientDC(false)
+    }
+  }
+
+  const requestClientDC = async () => {
+    if (!selectedDC) return
+
+    // Validate products - must have at least one product
+    if (dcProductRows.length === 0) {
+      toast.error('Please add at least one product before requesting')
+      return
+    }
+
+    const invalidProducts = dcProductRows.filter(p => !p.product || !p.quantity || !p.strength)
+    if (invalidProducts.length > 0) {
+      toast.error('Please fill in Product, Quantity, and Strength for all products')
+      return
+    }
+
+    setSavingClientDC(true)
+    try {
+      // Prepare product details
+      const productDetails = dcProductRows.map(row => ({
+        product: row.product || '',
+        class: row.class || '1',
+        category: row.category || 'New School',
+        quantity: Number(row.quantity) || 0,
+        strength: Number(row.strength) || 0,
+        price: Number(row.price) || 0,
+        total: Number(row.total) || (Number(row.price) || 0) * (Number(row.strength) || 0),
+        level: row.level || getDefaultLevel(row.product || 'Abacus'),
+      }))
+
+      const totalQuantity = dcProductRows.reduce((sum, p) => sum + (p.quantity || 0), 0)
+
+      // Update DC but keep status as 'created' (or 'po_submitted' if PO provided)
+      // This keeps it in Closed Sales instead of going to Pending DC
+      // Only the DcOrder status will be updated to 'dc_requested' to appear in Closed Sales
+      const updatePayload: any = {
+        productDetails: productDetails,
+        requestedQuantity: totalQuantity,
+        // Don't change DC status to 'sent_to_manager' - keep it as 'created' so it stays in Closed Sales
+        // status: 'sent_to_manager', // Removed - this was sending it to Pending DC
+      }
+
+      // Update PO photo if provided
+      if (dcPoPhotoUrl) {
+        updatePayload.poPhotoUrl = dcPoPhotoUrl
+        updatePayload.poDocument = dcPoPhotoUrl
+        // If PO is provided, set status to 'po_submitted' instead of 'created'
+        updatePayload.status = 'po_submitted'
+      }
+
+      await apiRequest(`/dc/${selectedDC._id}`, {
+        method: 'PUT',
+        body: JSON.stringify(updatePayload),
+      })
+
+      // Update the related DcOrder status to 'dc_requested' and store request data
+      // This makes it appear in Closed Sales for Admin/Coordinator to review
+      if (selectedDC.dcOrderId) {
+        try {
+          const dcOrderId = typeof selectedDC.dcOrderId === 'object' 
+            ? selectedDC.dcOrderId._id 
+            : selectedDC.dcOrderId
+          
+          const currentUser = getCurrentUser()
+          
+          console.log('🔄 Updating DcOrder status to dc_requested with request data:', dcOrderId)
+          
+          // Store the request data in DcOrder so Admin/Coordinator can see it in Closed Sales
+          const updateResult = await apiRequest(`/dc-orders/${dcOrderId}`, {
+            method: 'PUT',
+            body: JSON.stringify({ 
+              status: 'dc_requested',
+              dcRequestData: {
+                // Store product details from the request
+                productDetails: productDetails,
+                requestedQuantity: totalQuantity,
+                // Store employee ID who made the request
+                employeeId: currentUser?._id || selectedDC.employeeId,
+                // Store any PO photo URL if provided
+                poPhotoUrl: dcPoPhotoUrl || undefined,
+                // Store timestamp
+                requestedAt: new Date().toISOString(),
+              }
+            }),
+          })
+          
+          console.log('✅ Updated DcOrder status to dc_requested:', {
+            dcOrderId,
+            newStatus: updateResult?.status,
+            schoolName: updateResult?.school_name
+          })
+        } catch (dcOrderErr: any) {
+          console.error('❌ Failed to update DcOrder status:', {
+            error: dcOrderErr?.message,
+            dcOrderId: typeof selectedDC.dcOrderId === 'object' 
+              ? selectedDC.dcOrderId._id 
+              : selectedDC.dcOrderId
+          })
+          // Continue even if DcOrder update fails, but show warning
+          toast.warning('DC updated but failed to update DcOrder status. Please check Closed Sales manually.')
+        }
+      } else {
+        console.warn('⚠️ No dcOrderId found on DC, cannot update DcOrder status')
+      }
+
       // If PO photo is provided and status is created, also submit PO
       if (dcPoPhotoUrl && selectedDC.status === 'created') {
         try {
@@ -271,7 +527,7 @@ export default function ClientDCPage() {
             method: 'POST',
             body: JSON.stringify({ 
               poPhotoUrl: dcPoPhotoUrl,
-              remarks: dcRemarks || 'PO submitted via Client DC'
+              remarks: 'PO submitted via Client Request'
             }),
           })
         } catch (poErr) {
@@ -280,11 +536,11 @@ export default function ClientDCPage() {
         }
       }
 
-      toast.success('Client DC saved successfully! It will be sent to Closed Sales for coordinator/admin verification.')
+      toast.success('Client Request submitted successfully! It will appear in Closed Sales for Admin/Coordinator to review and raise DC.')
       setClientDCDialogOpen(false)
       load()
     } catch (e: any) {
-      toast.error(e?.message || 'Failed to save Client DC')
+      toast.error(e?.message || 'Failed to submit Client Request')
     } finally {
       setSavingClientDC(false)
     }
@@ -294,8 +550,8 @@ export default function ClientDCPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Client DC</h1>
-          <p className="text-sm text-neutral-600 mt-1">Manage products, PO photos, and DC details for your clients</p>
+          <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Client Request</h1>
+          <p className="text-sm text-neutral-600 mt-1">Manage products, PO photos, and request details for your clients</p>
         </div>
         <Button variant="outline" onClick={load}>Refresh</Button>
       </div>
@@ -306,10 +562,10 @@ export default function ClientDCPage() {
           <div className="p-4">
             <p className="text-neutral-600">No clients found with products added.</p>
             <p className="text-sm text-neutral-500 mt-2">
-              Only clients that have products added via "Add Products" in "My Clients" page and then submitted will appear here.
+              Closed leads and clients with products added and submitted will appear here.
             </p>
             <p className="text-sm text-neutral-500 mt-1">
-              Go to "My Clients" page, add products, and submit them to see clients here.
+              Closed leads appear here automatically. You can add products and manage client details directly from this page.
             </p>
           </div>
         )}
@@ -379,9 +635,9 @@ export default function ClientDCPage() {
       <Dialog open={clientDCDialogOpen} onOpenChange={setClientDCDialogOpen}>
         <DialogContent className="sm:max-w-[95vw] lg:max-w-[1200px] max-h-[95vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Client DC - Manage Products & Details</DialogTitle>
+            <DialogTitle>Client Request - Manage Products & Details</DialogTitle>
             <DialogDescription>
-              Manage products, PO photo, and DC details for {selectedDC?.customerName || selectedDC?.dcOrderId?.school_name || 'this client'}
+              Manage products, PO photo, and request details for {selectedDC?.customerName || selectedDC?.dcOrderId?.school_name || 'this client'}
             </DialogDescription>
           </DialogHeader>
           
@@ -403,11 +659,65 @@ export default function ClientDCPage() {
               </div>
               {dcPoPhotoUrl ? (
                 <div className="relative">
-                  <img 
-                    src={dcPoPhotoUrl} 
-                    alt="PO Document" 
-                    className="w-full h-auto rounded border max-h-64 object-contain bg-neutral-50"
-                  />
+                  {dcPoPhotoUrl.toLowerCase().endsWith('.pdf') || 
+                   dcPoPhotoUrl.includes('application/pdf') || 
+                   dcPoPhotoUrl.includes('.pdf') ||
+                   (dcPoPhotoUrl.startsWith('data:') && dcPoPhotoUrl.includes('application/pdf')) ||
+                   (dcPoPhotoUrl.startsWith('http') && dcPoPhotoUrl.toLowerCase().includes('.pdf')) ? (
+                    <div className="border rounded-lg p-4 bg-neutral-50">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium">PO Document (PDF)</span>
+                        <a 
+                          href={dcPoPhotoUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 text-sm underline"
+                        >
+                          Open PDF in New Tab
+                        </a>
+                      </div>
+                      {dcPoPhotoUrl.startsWith('data:') ? (
+                        <iframe 
+                          src={dcPoPhotoUrl} 
+                          className="w-full h-96 rounded border"
+                          title="PO Document"
+                        />
+                      ) : (
+                        <iframe 
+                          src={`${dcPoPhotoUrl}#toolbar=0`} 
+                          className="w-full h-96 rounded border"
+                          title="PO Document"
+                        />
+                      )}
+                    </div>
+                  ) : (
+                    <img 
+                      src={dcPoPhotoUrl} 
+                      alt="PO Document" 
+                      className="w-full h-auto rounded border max-h-64 object-contain bg-neutral-50"
+                      onError={(e) => {
+                        // If image fails to load, try as PDF
+                        const target = e.target as HTMLImageElement
+                        if (!target.src.includes('.pdf') && !target.src.includes('application/pdf')) {
+                          target.style.display = 'none'
+                          const parent = target.parentElement
+                          if (parent) {
+                            parent.innerHTML = `
+                              <div class="border rounded-lg p-4 bg-neutral-50">
+                                <div class="flex items-center justify-between mb-2">
+                                  <span class="text-sm font-medium">PO Document</span>
+                                  <a href="${target.src}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 text-sm underline">
+                                    Open Document
+                                  </a>
+                                </div>
+                                <iframe src="${target.src}" class="w-full h-96 rounded border" title="PO Document"></iframe>
+                              </div>
+                            `
+                          }
+                        }
+                      }}
+                    />
+                  )}
                   <div className="mt-2">
                     <Input
                       type="text"
@@ -466,23 +776,27 @@ export default function ClientDCPage() {
                 <Label className="text-lg font-semibold">Products & Quantities</Label>
                 <div className="flex gap-2">
                   {dcProductRows.length === 0 && (
-                    <p className="text-sm text-neutral-500 mr-2">Add products via "Add Products" in My Clients page first</p>
+                    <p className="text-sm text-neutral-500 mr-2">Add products using the form below</p>
                   )}
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={() => {
+                      // Determine category automatically based on selectedDC's school_type
+                      const autoCategory = selectedDC?.dcOrderId && typeof selectedDC.dcOrderId === 'object' && selectedDC.dcOrderId.school_type === 'Existing'
+                        ? 'Existing School'
+                        : 'New School'
+                      
                       setDcProductRows([...dcProductRows, {
                         id: Date.now().toString(),
                         product: 'Abacus',
                         class: '1',
-                        category: 'New Students',
-                        productName: '',
+                        category: autoCategory,
                         quantity: 0,
                         strength: 0,
                         price: 0,
                         total: 0,
-                        level: 'L2',
+                        level: getDefaultLevel('Abacus'),
                       }])
                     }}
                   >
@@ -496,7 +810,7 @@ export default function ClientDCPage() {
                 <div className="text-center py-8 text-neutral-500">
                   <Package className="w-12 h-12 mx-auto mb-2 text-neutral-300" />
                   <p className="text-sm">No products added yet</p>
-                  <p className="text-xs mt-1">Go to "My Clients" page and use "Add Products" to add products first</p>
+                  <p className="text-xs mt-1">Use the "Add Product" button below to add products to this client</p>
                 </div>
               ) : (
               <div className="overflow-x-auto">
@@ -506,7 +820,6 @@ export default function ClientDCPage() {
                       <th className="py-3 px-4 text-left text-sm font-semibold border-r">Product</th>
                       <th className="py-3 px-4 text-left text-sm font-semibold border-r">Class</th>
                       <th className="py-3 px-4 text-left text-sm font-semibold border-r">Category</th>
-                      <th className="py-3 px-4 text-left text-sm font-semibold border-r">Product Name</th>
                       <th className="py-3 px-4 text-left text-sm font-semibold border-r">Qty</th>
                       <th className="py-3 px-4 text-left text-sm font-semibold border-r">Strength</th>
                       <th className="py-3 px-4 text-left text-sm font-semibold border-r">Price</th>
@@ -522,10 +835,8 @@ export default function ClientDCPage() {
                           <Select value={row.product} onValueChange={(v) => {
                             const updated = [...dcProductRows]
                             updated[idx].product = v
-                            // Auto-fill product name if empty
-                            if (!updated[idx].productName || updated[idx].productName.trim() === '') {
-                              updated[idx].productName = v
-                            }
+                            // Update level to default for the selected product
+                            updated[idx].level = getDefaultLevel(v)
                             setDcProductRows(updated)
                           }}>
                             <SelectTrigger className="h-10 text-sm">
@@ -555,32 +866,12 @@ export default function ClientDCPage() {
                           </Select>
                         </td>
                         <td className="py-3 px-4 border-r">
-                          <Select value={row.category} onValueChange={(v) => {
-                            const updated = [...dcProductRows]
-                            updated[idx].category = v
-                            setDcProductRows(updated)
-                          }}>
-                            <SelectTrigger className="h-10 text-sm">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {availableCategories.map(cat => (
-                                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </td>
-                        <td className="py-3 px-4 border-r">
                           <Input
                             type="text"
-                            className="h-10 text-sm"
-                            value={row.productName}
-                            onChange={(e) => {
-                              const updated = [...dcProductRows]
-                              updated[idx].productName = e.target.value
-                              setDcProductRows(updated)
-                            }}
-                            placeholder="Product Name"
+                            className="h-10 text-sm bg-neutral-50"
+                            value={row.category}
+                            readOnly
+                            disabled
                           />
                         </td>
                         <td className="py-3 px-4 border-r">
@@ -646,7 +937,7 @@ export default function ClientDCPage() {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              {availableLevels.map(level => (
+                              {getAvailableLevels(row.product).map(level => (
                                 <SelectItem key={level} value={level}>{level}</SelectItem>
                               ))}
                             </SelectContent>
@@ -674,60 +965,15 @@ export default function ClientDCPage() {
               )}
             </div>
 
-            {/* DC Details */}
-            <div className="border rounded-lg p-6 space-y-5">
-              <Label className="text-lg font-semibold">DC Details</Label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div>
-                  <Label className="text-sm font-medium mb-2 block">DC Date</Label>
-                  <Input
-                    type="date"
-                    value={dcDate}
-                    onChange={(e) => setDcDate(e.target.value)}
-                    className="h-11 text-sm"
-                  />
-                </div>
-                <div>
-                  <Label className="text-sm font-medium mb-2 block">DC Category</Label>
-                  <Select value={dcCategory} onValueChange={setDcCategory}>
-                    <SelectTrigger className="h-11 text-sm">
-                      <SelectValue placeholder="Select DC Category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableDCCategories.map(cat => (
-                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="md:col-span-2">
-                  <Label className="text-sm font-medium mb-2 block">DC Remarks</Label>
-                  <Textarea
-                    value={dcRemarks}
-                    onChange={(e) => setDcRemarks(e.target.value)}
-                    placeholder="Enter DC remarks..."
-                    rows={3}
-                    className="text-sm"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <Label className="text-sm font-medium mb-2 block">DC Notes</Label>
-                  <Textarea
-                    value={dcNotes}
-                    onChange={(e) => setDcNotes(e.target.value)}
-                    placeholder="Enter DC notes..."
-                    rows={3}
-                    className="text-sm"
-                  />
-                </div>
-              </div>
-            </div>
           </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setClientDCDialogOpen(false)}>Cancel</Button>
-            <Button onClick={saveClientDC} disabled={savingClientDC}>
-              {savingClientDC ? 'Saving...' : 'Save & Submit to Closed Sales'}
+            <Button variant="outline" onClick={saveClientRequest} disabled={savingClientDC}>
+              {savingClientDC ? 'Saving...' : 'Save'}
+            </Button>
+            <Button onClick={requestClientDC} disabled={savingClientDC}>
+              {savingClientDC ? 'Submitting...' : 'Request'}
             </Button>
           </DialogFooter>
         </DialogContent>

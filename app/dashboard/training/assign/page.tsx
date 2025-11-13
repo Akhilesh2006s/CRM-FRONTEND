@@ -142,7 +142,14 @@ export default function AssignTrainingServicePage() {
               <SelectContent>
                 <SelectItem value="Abacus">Abacus</SelectItem>
                 <SelectItem value="Vedic Maths">Vedic Maths</SelectItem>
-                <SelectItem value="EELL">EELL</SelectItem>
+                <SelectItem value="EEL">EEL</SelectItem>
+                <SelectItem value="IIT">IIT</SelectItem>
+                <SelectItem value="Financial literacy">Financial literacy</SelectItem>
+                <SelectItem value="Brain bytes">Brain bytes</SelectItem>
+                <SelectItem value="Spelling bee">Spelling bee</SelectItem>
+                <SelectItem value="Skill pro">Skill pro</SelectItem>
+                <SelectItem value="Maths lab">Maths lab</SelectItem>
+                <SelectItem value="Codechamp">Codechamp</SelectItem>
               </SelectContent>
             </Select>
           </div>

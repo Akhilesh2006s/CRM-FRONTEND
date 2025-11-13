@@ -21,7 +21,7 @@ export default function EmployeeApprovedLeavesPage() {
       router.push('/auth/login')
       return
     }
-    if (currentUser.role !== 'Employee') {
+    if (currentUser.role !== 'Executive') {
       toast.error('Access denied. This page is only for employees.')
       router.push('/dashboard')
     }

@@ -90,8 +90,8 @@ export default function WarehouseStock() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 w-full -mx-6 md:-mx-8">
+      <div className="flex items-center justify-between px-6 md:px-8">
         <div>
           <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Inventory Qty List</h1>
           <p className="text-neutral-500">Warehouse • Current stock</p>
@@ -101,47 +101,58 @@ export default function WarehouseStock() {
         </Link>
       </div>
 
-      <Card className="p-4">
+      <Card className="p-4 mx-6 md:mx-8">
         <div className="flex items-center justify-between gap-3 mb-4">
           <div className="text-sm text-neutral-600">Search</div>
           <Input className="max-w-xs" placeholder="Search by product, category, level" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
 
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-16">S.No</TableHead>
-              <TableHead>Product</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>Level</TableHead>
-              <TableHead>Item Type</TableHead>
-              <TableHead className="text-right">Available Qty</TableHead>
-              <TableHead className="w-32 text-right">Action</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {!loading && filtered.length === 0 && (
+        <div className="overflow-x-auto w-full">
+          <Table className="w-full table-fixed">
+            <colgroup>
+              <col className="w-[10%]" />
+              <col className="w-[18%]" />
+              <col className="w-[14%]" />
+              <col className="w-[10%]" />
+              <col className="w-[12%]" />
+              <col className="w-[18%]" />
+              <col className="w-[18%]" />
+            </colgroup>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-neutral-500">No items found.</TableCell>
+                <TableHead>S.No</TableHead>
+                <TableHead>Product</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead>Level</TableHead>
+                <TableHead className="whitespace-nowrap">Item Type</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Available Qty</TableHead>
+                <TableHead className="text-right">Action</TableHead>
               </TableRow>
-            )}
-            {filtered.map((row, idx) => (
-              <TableRow key={row._id}>
-                <TableCell>{idx + 1}</TableCell>
-                <TableCell className="text-blue-600 hover:underline cursor-default">{row.productName}</TableCell>
-                <TableCell>{row.category || '-'}</TableCell>
-                <TableCell>{row.level || '-'}</TableCell>
-                <TableCell>{row.itemType || '-'}</TableCell>
-                <TableCell className="text-right font-medium">{row.currentStock ?? 0}</TableCell>
-                <TableCell className="text-right">
-                  <Link href={`/dashboard/warehouse/stock/add?productId=${row._id}`}>
-                    <Button variant="destructive">Add Item Qty</Button>
-                  </Link>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {!loading && filtered.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center text-neutral-500">No items found.</TableCell>
+                </TableRow>
+              )}
+              {filtered.map((row, idx) => (
+                <TableRow key={row._id}>
+                  <TableCell>{idx + 1}</TableCell>
+                  <TableCell className="text-blue-600 hover:underline cursor-default truncate">{row.productName}</TableCell>
+                  <TableCell className="truncate">{row.category || '-'}</TableCell>
+                  <TableCell>{row.level || '-'}</TableCell>
+                  <TableCell className="whitespace-nowrap">{row.itemType || '-'}</TableCell>
+                  <TableCell className="text-right font-medium whitespace-nowrap">{row.currentStock ?? 0}</TableCell>
+                  <TableCell className="text-right">
+                    <Link href={`/dashboard/warehouse/stock/add?productId=${row._id}`}>
+                      <Button variant="destructive" size="sm">Add Item Qty</Button>
+                    </Link>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       </Card>
     </div>
   )

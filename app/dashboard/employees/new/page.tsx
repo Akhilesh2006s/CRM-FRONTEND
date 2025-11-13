@@ -27,7 +27,7 @@ export default function NewEmployeePage() {
     district: '',
     city: '',
     pincode: '',
-    role: 'Employee',
+    role: 'Executive',
   })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -44,7 +44,7 @@ export default function NewEmployeePage() {
     try {
       const payload: any = {
         ...form,
-        name: `${form.firstName} ${form.lastName}`.trim() || form.firstName || form.lastName || 'Employee',
+        name: `${form.firstName} ${form.lastName}`.trim() || form.firstName || form.lastName || 'Executive',
       }
       await apiRequest('/employees/create', {
         method: 'POST',
@@ -127,13 +127,12 @@ export default function NewEmployeePage() {
                 <SelectValue placeholder="Select Option" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Employee">Employee</SelectItem>
+                <SelectItem value="Executive">Executive</SelectItem>
                 <SelectItem value="Trainer">Trainer</SelectItem>
                 <SelectItem value="Finance Manager">Finance Manager</SelectItem>
                 <SelectItem value="Coordinator">Coordinator</SelectItem>
                 <SelectItem value="Senior Coordinator">Senior Coordinator</SelectItem>
                 <SelectItem value="Manager">Manager</SelectItem>
-                <SelectItem value="Executive">Executive</SelectItem>
                 <SelectItem value="Admin">Admin</SelectItem>
                 <SelectItem value="Super Admin">Super Admin</SelectItem>
               </SelectContent>

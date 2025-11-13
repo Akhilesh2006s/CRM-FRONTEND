@@ -14,25 +14,28 @@ import { Pencil, Package, Plus, Upload, X } from 'lucide-react'
 
 type DC = {
   _id: string
+  employeeId?: string | { _id: string }
   saleId?: {
     _id: string
     customerName?: string
     product?: string
     quantity?: number
   }
-  dcOrderId?: {
+  dcOrderId?: string | {
     _id: string
     school_name?: string
     contact_person?: string
     contact_mobile?: string
     email?: string
     products?: any
+    assigned_to?: string | { _id: string }
   }
   customerName?: string
   customerPhone?: string
   product?: string
   status?: string
   poPhotoUrl?: string
+  productDetails?: any[]
   createdAt?: string
 }
 
@@ -58,7 +61,7 @@ export default function MyDCPage() {
     level: string
   }>>([])
   
-  const availableProducts = ['ABACUS', 'VedicMath', 'EELL', 'IIT', 'CODING', 'MathLab', 'CodeChamp']
+  const { productNames: availableProducts } = useProducts()
   const availableLevels = ['L1', 'L2', 'L3', 'L4', 'L5']
 
   const load = async () => {
@@ -66,10 +69,22 @@ export default function MyDCPage() {
     try {
       // Load all DCs (clients) for the employee - including converted leads
       const data = await apiRequest<DC[]>(`/dc/employee/my`)
-      console.log('Loaded clients:', data)
+      console.log('Loaded clients (all):', data)
+      // Ensure data is an array before using array methods
+      const dataArray = Array.isArray(data) ? data : []
+      console.log('Total clients loaded:', dataArray.length)
       // Show DCs with 'created' status (ready for PO submission) and 'po_submitted' status (PO already submitted)
-      const clientDCs = data.filter(dc => dc.status === 'created' || dc.status === 'po_submitted')
-      console.log('Filtered clients:', clientDCs)
+      // Also include saved DcOrders (closed leads) that don't have a DC yet - these will have status 'created' from backend conversion
+      const clientDCs = dataArray.filter(dc => {
+        const status = dc.status
+        const isCreated = status === 'created'
+        const isPoSubmitted = status === 'po_submitted'
+        // Also include items that are converted from saved DcOrders (they will have status 'created' from backend)
+        const isConvertedLead = dc.dcOrderId && typeof dc.dcOrderId === 'object' && dc.dcOrderId.status === 'saved'
+        return isCreated || isPoSubmitted || isConvertedLead
+      })
+      console.log('Filtered clients (created/po_submitted/converted leads):', clientDCs)
+      console.log('Filtered count:', clientDCs.length)
       setItems(clientDCs)
     } catch (e: any) {
       console.error('Failed to load DCs:', e)
@@ -235,19 +250,42 @@ export default function MyDCPage() {
 
     setSubmitting(true)
     try {
+      // Check if this is a DcOrder that doesn't have a DC yet (converted lead)
+      // If dcOrderId exists but no actual DC was created, create it first
+      const isDcOrderOnly = selectedDC.dcOrderId && typeof selectedDC.dcOrderId === 'object' && !selectedDC._id?.startsWith('dc_');
+      
+      let dcId = selectedDC._id;
+      
+      // If this is a DcOrder without a DC, create the DC first
+      if (isDcOrderOnly && selectedDC.dcOrderId) {
+        const dcOrderId = typeof selectedDC.dcOrderId === 'object' ? selectedDC.dcOrderId._id : selectedDC.dcOrderId;
+        const dcPayload: any = {
+          dcOrderId: dcOrderId,
+          employeeId: selectedDC.employeeId || selectedDC.dcOrderId?.assigned_to?._id,
+          productDetails: selectedDC.productDetails || [],
+          status: 'created',
+        };
+        
+        const newDC = await apiRequest(`/dc/raise`, {
+          method: 'POST',
+          body: JSON.stringify(dcPayload),
+        });
+        dcId = newDC._id;
+      }
+      
       // For po_submitted status, we need to update the PO
       // The backend submit-po endpoint only works for 'created' status
       // So we'll use the update endpoint for editing
       if (selectedDC.status === 'po_submitted') {
         // Update existing PO - we'll need to check if backend supports this
         // For now, we'll use the same endpoint but handle it differently
-        await apiRequest(`/dc/${selectedDC._id}`, {
+        await apiRequest(`/dc/${dcId}`, {
           method: 'PUT',
           body: JSON.stringify({ poPhotoUrl, poDocument: poPhotoUrl, deliveryNotes: remarks }),
         })
         alert('PO updated successfully!')
       } else {
-      await apiRequest(`/dc/${selectedDC._id}/submit-po`, {
+        await apiRequest(`/dc/${dcId}/submit-po`, {
         method: 'POST',
         body: JSON.stringify({ poPhotoUrl, remarks }),
       })

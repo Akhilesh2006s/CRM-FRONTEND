@@ -14,6 +14,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
+import { useProducts } from '@/hooks/useProducts'
 
 type ProductSelection = {
   name: string
@@ -35,7 +36,7 @@ type ExistingSchool = {
 export default function RenewalPage() {
   const router = useRouter()
   const currentUser = getCurrentUser()
-  const availableProducts = ['Abacus', 'Vedic Maths', 'EELL', 'IIT', 'CodeChamp', 'Math Lab']
+  const { productNames: availableProducts } = useProducts()
   
   const [existingSchools, setExistingSchools] = useState<ExistingSchool[]>([])
   const [loadingSchools, setLoadingSchools] = useState(true)
@@ -66,9 +67,40 @@ export default function RenewalPage() {
   })
   
   // Product selections - just checkboxes for interest
-  const [products, setProducts] = useState<ProductSelection[]>(
-    availableProducts.map(p => ({ name: p, checked: false }))
-  )
+  const [products, setProducts] = useState<ProductSelection[]>([])
+  
+  // Initialize products when availableProducts are loaded
+  useEffect(() => {
+    if (availableProducts.length > 0 && products.length === 0) {
+      setProducts(availableProducts.map(p => ({ name: p, checked: false })))
+    }
+  }, [availableProducts])
+
+  // Auto-fill zone from employee's assigned zone
+  useEffect(() => {
+    const loadUserZone = async () => {
+      if (currentUser?._id) {
+        try {
+          const userProfile = await apiRequest<{ assignedCity?: string; zone?: string }>(`/auth/me`)
+          const employeeZone = userProfile.assignedCity || userProfile.zone || ''
+          if (employeeZone) {
+            setForm((f) => {
+              // Only set if zone is not already set
+              if (!f.zone) {
+                return { ...f, zone: employeeZone }
+              }
+              return f
+            })
+          }
+        } catch (err) {
+          // Silently fail - zone will remain empty if fetch fails
+          console.error('Failed to load user zone:', err)
+        }
+      }
+    }
+    loadUserZone()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?._id])
   
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -487,7 +519,17 @@ export default function RenewalPage() {
               </div>
               <div>
                 <Label>Zone</Label>
-                <Input className="bg-white text-neutral-900" name="zone" value={form.zone} onChange={onChange} />
+                <Input 
+                  className="bg-neutral-100 text-neutral-900 cursor-not-allowed" 
+                  name="zone" 
+                  value={form.zone} 
+                  onChange={onChange}
+                  readOnly
+                  disabled
+                />
+                <p className="text-xs text-neutral-500 mt-1">
+                  Zone is automatically set based on your assigned zone
+                </p>
               </div>
               <div>
                 <Label>No. of Branches</Label>

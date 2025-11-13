@@ -36,7 +36,9 @@ export default function AddTrainerPage() {
     setCheckingMobile(true)
     try {
       const trainers = await apiRequest<any[]>('/trainers')
-      const exists = trainers.some(t => t.mobile === mobile.trim())
+      // Ensure trainers is an array before using array methods
+      const trainersArray = Array.isArray(trainers) ? trainers : []
+      const exists = trainersArray.some(t => t.mobile === mobile.trim())
       if (exists) {
         setMobileError('Mobile number already exists. Please use a different mobile number.')
       } else {
@@ -160,7 +162,7 @@ export default function AddTrainerPage() {
           <div className="md:col-span-2">
             <Label className="mb-1">Products *</Label>
             <div className="flex flex-wrap gap-3 text-sm">
-              {['Abacus','Vedic Maths','EELL'].map(p=> (
+              {['Abacus', 'Vedic Maths', 'EEL', 'IIT', 'Financial literacy', 'Brain bytes', 'Spelling bee', 'Skill pro', 'Maths lab', 'Codechamp'].map(p=> (
                 <label key={p} className="inline-flex items-center gap-2">
                   <input type="checkbox" checked={form.trainerProducts.includes(p)} onChange={()=>toggleProduct(p)} />
                   {p}

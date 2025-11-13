@@ -57,7 +57,7 @@ export default function AddPaymentPage() {
 
         // For employees, only show their clients/schools
         // For admins/managers, show all schools
-        const isEmployee = currentUser.role === 'Employee' || currentUser.role === 'Sales BDE'
+        const isEmployee = currentUser.role === 'Executive' || currentUser.role === 'Sales BDE'
         
         if (isEmployee) {
           // Get schools from multiple sources for this employee

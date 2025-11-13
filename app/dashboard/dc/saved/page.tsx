@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useProducts } from '@/hooks/useProducts'
 
 type DcOrder = {
   _id: string
@@ -81,7 +82,7 @@ export default function SavedDCPage() {
   const isManager = currentUser?.role === 'Manager'
   const isSuperAdmin = currentUser?.role === 'Super Admin'
   const isCoordinator = currentUser?.role === 'Coordinator'
-  const isEmployee = currentUser?.role === 'Employee'
+  const isEmployee = currentUser?.role === 'Executive'
   const canUpdateDC = isSuperAdmin || isCoordinator || isEmployee
 
   // Form state for Raise DC modal
@@ -106,17 +107,19 @@ export default function SavedDCPage() {
 
   const availableClasses = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
   const availableCategories = ['New Students', 'Existing Students', 'Both']
-  const availableProducts = ['Abacus', 'Vedic Maths', 'EELL', 'IIT', 'CodeChamp', 'Math Lab']
+  const { productNames: availableProducts } = useProducts()
 
   const load = async () => {
     setLoading(true)
     try {
       const data = await apiRequest<DcOrder[]>(`/dc-orders?status=saved`)
+      // Ensure data is an array before using array methods
+      const dataArray = Array.isArray(data) ? data : []
 
       // Load existing DCs for all deals with poPhotoUrl
       const dcMap: Record<string, DC> = {}
       try {
-        const allDealIds = data.map((d: any) => d._id)
+        const allDealIds = dataArray.map((d: any) => d._id)
         for (const dealId of allDealIds) {
           try {
             const dcs = await apiRequest<DC[]>(`/dc?dcOrderId=${dealId}`)
@@ -130,7 +133,7 @@ export default function SavedDCPage() {
         setDealDCs(dcMap)
       } catch (_) {}
 
-      setItems(data as any)
+      setItems(dataArray as any)
     } catch (_) {}
     setLoading(false)
   }

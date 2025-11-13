@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { apiRequest } from '@/lib/api'
 import { toast } from 'sonner'
-import { Pencil, CreditCard, X } from 'lucide-react'
+import { Pencil, CreditCard, X, Upload, FileText } from 'lucide-react'
 
 type Row = {
   _id: string
@@ -53,6 +53,8 @@ export default function CompletedDCPage() {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
   const [pdfDC, setPdfDC] = useState<Row | null>(null)
   const [saving, setSaving] = useState(false)
+  const [uploadedPdf, setUploadedPdf] = useState<File | null>(null)
+  const [pdfPreview, setPdfPreview] = useState<string | null>(null)
   const [filters, setFilters] = useState({
     zone: '',
     employee: '',
@@ -82,32 +84,98 @@ export default function CompletedDCPage() {
       }
       
       try {
-        dcModelData = await apiRequest<any[]>(`/dc?status=completed`)
-        console.log('Loaded DC model data:', dcModelData?.length || 0, 'entries')
+        // Try dedicated endpoint first, fallback to filtered endpoint
+        try {
+          const response = await apiRequest<any>(`/dc/completed`)
+          console.log('🔍 Raw API response from /dc/completed:', {
+            type: typeof response,
+            isArray: Array.isArray(response),
+            hasData: response?.data !== undefined,
+            responseKeys: response && typeof response === 'object' ? Object.keys(response) : null
+          })
+          
+          // Handle paginated response or direct array
+          if (Array.isArray(response)) {
+            dcModelData = response
+          } else if (response?.data && Array.isArray(response.data)) {
+            dcModelData = response.data
+          } else {
+            console.warn('⚠️ Unexpected response format, treating as empty')
+            dcModelData = []
+          }
+          
+          console.log('✅ Loaded DC model data from /dc/completed:', dcModelData?.length || 0, 'entries')
+        } catch (dedicatedErr) {
+          // Fallback to filtered endpoint
+          console.warn('Dedicated endpoint failed, trying filtered endpoint:', dedicatedErr)
+          const fallbackResponse = await apiRequest<any>(`/dc?status=completed`)
+          
+          if (Array.isArray(fallbackResponse)) {
+            dcModelData = fallbackResponse
+          } else if (fallbackResponse?.data && Array.isArray(fallbackResponse.data)) {
+            dcModelData = fallbackResponse.data
+          } else {
+            dcModelData = []
+          }
+          
+          console.log('✅ Loaded DC model data from /dc?status=completed:', dcModelData?.length || 0, 'entries')
+        }
+        
+        if (dcModelData && dcModelData.length > 0) {
+          console.log('Sample completed DC:', {
+            id: dcModelData[0]._id,
+            customerName: dcModelData[0].customerName,
+            status: dcModelData[0].status,
+            completedAt: dcModelData[0].completedAt
+          })
+        } else {
+          console.warn('⚠️ No completed DCs found in API response')
+        }
       } catch (err: any) {
-        console.warn('Failed to load completed DCs:', err)
+        console.error('❌ Failed to load completed DCs:', {
+          error: err?.message,
+          status: err?.status,
+          details: err
+        })
         dcModelData = []
+        toast.error(`Failed to load completed DCs: ${err?.message || 'Unknown error'}`)
       }
 
+      // Ensure dcModelData is an array
+      if (!Array.isArray(dcModelData)) {
+        console.error('❌ dcModelData is not an array:', typeof dcModelData, dcModelData)
+        dcModelData = []
+      }
+      
       // Transform DC model entries to match Row format
+      console.log('🔄 Transforming DC model data to Row format...', {
+        dcModelDataLength: dcModelData?.length || 0,
+        isArray: Array.isArray(dcModelData),
+        firstItem: dcModelData?.[0] ? {
+          _id: dcModelData[0]._id,
+          status: dcModelData[0].status,
+          customerName: dcModelData[0].customerName,
+          dcOrderId: dcModelData[0].dcOrderId
+        } : null
+      })
       const transformedDCs: Row[] = (dcModelData || []).map((dc: any) => {
         const dcId = dc._id?.toString() || dc._id
         return {
           _id: dcId,
           dcId: dcId, // This is a DC entry
           isDcOrder: false,
-          dcNo: dc.createdAt 
+        dcNo: dc.createdAt 
             ? `${new Date(dc.createdAt).getFullYear().toString().slice(-2)}-${(new Date(dc.createdAt).getFullYear() + 1).toString().slice(-2)}/${dcId.slice(-4)}`
             : `DC-${dcId.slice(-6)}`,
-          dcDate: dc.dcDate || dc.createdAt,
-          dcCategory: dc.dcCategory || 'Term 2',
-          dcFinYear: dc.createdAt 
-            ? `${new Date(dc.createdAt).getFullYear()}-${new Date(dc.createdAt).getFullYear() + 1}`
-            : '',
-          schoolName: dc.dcOrderId?.school_name || dc.customerName || '',
-          schoolCode: dc.dcOrderId?.dc_code || '',
-          zone: dc.dcOrderId?.zone || '',
-          executive: dc.employeeId?.name || dc.dcOrderId?.assigned_to?.name || '',
+        dcDate: dc.dcDate || dc.createdAt,
+        dcCategory: dc.dcCategory || 'Term 2',
+        dcFinYear: dc.createdAt 
+          ? `${new Date(dc.createdAt).getFullYear()}-${new Date(dc.createdAt).getFullYear() + 1}`
+          : '',
+        schoolName: dc.dcOrderId?.school_name || dc.customerName || '',
+        schoolCode: dc.dcOrderId?.dc_code || '',
+        zone: dc.dcOrderId?.zone || '',
+        executive: dc.employeeId?.name || dc.dcOrderId?.assigned_to?.name || '',
           transport: dc.transport || '',
           lrNo: dc.lrNo || '',
           lrDate: dc.lrDate || '',
@@ -150,6 +218,9 @@ export default function CompletedDCPage() {
           })
           if (matchingDC) {
             row.dcId = matchingDC._id?.toString() || matchingDC._id
+            // Also copy PDF data from the matching DC
+            row.poDocument = matchingDC.poDocument || matchingDC.poPhotoUrl || row.poDocument
+            row.poPhotoUrl = matchingDC.poPhotoUrl || matchingDC.poDocument || row.poPhotoUrl
             console.log(`Found DC ${row.dcId} for DcOrder ${row._id}`)
           } else {
             console.warn(`No DC found for DcOrder ${row._id} - this entry cannot be updated`)
@@ -168,6 +239,8 @@ export default function CompletedDCPage() {
         allDataMap.set(dc._id, dc)
       })
       
+      console.log('📦 Added DC entries to map:', transformedDCs.length)
+      
       // Then add DcOrder entries only if they don't have a corresponding DC or if DC doesn't exist
       dcOrderRows.forEach(dcOrder => {
         if (dcOrder.dcId) {
@@ -184,6 +257,29 @@ export default function CompletedDCPage() {
       })
       
       const allData = Array.from(allDataMap.values())
+      
+      console.log('✅ Final data to display:', {
+        totalRows: allData.length,
+        dcEntries: transformedDCs.length,
+        dcOrderEntries: dcOrderRows.length,
+        sampleRow: allData[0] ? {
+          id: allData[0]._id,
+          schoolName: allData[0].schoolName,
+          isDcOrder: allData[0].isDcOrder,
+          dcNo: allData[0].dcNo,
+          completedDate: allData[0].completedDate
+        } : null,
+        allRowIds: allData.slice(0, 5).map(r => r._id)
+      })
+      
+      if (allData.length === 0) {
+        console.warn('⚠️ No data to display! Check:')
+        console.warn('  - dcModelData length:', dcModelData?.length || 0)
+        console.warn('  - dcOrderData length:', dcOrderData?.length || 0)
+        console.warn('  - transformedDCs length:', transformedDCs.length)
+        console.warn('  - dcOrderRows length:', dcOrderRows.length)
+      }
+      
       setRows(allData)
       
       if (allData.length === 0) {
@@ -256,9 +352,40 @@ export default function CompletedDCPage() {
         deliveryStatus: fullDC?.deliveryStatus || row.deliveryStatus || '',
         remarks: fullDC?.deliveryNotes || fullDC?.remarks || row.remarks || '',
       })
+      // Reset PDF upload state
+      setUploadedPdf(null)
+      setPdfPreview(null)
+      // Set preview if PDF exists
+      const existingPdf = fullDC?.poDocument || fullDC?.poPhotoUrl || row.poDocument || row.poPhotoUrl
+      if (existingPdf) {
+        setPdfPreview(existingPdf)
+      }
     } catch (err: any) {
       console.error('Error opening edit dialog:', err)
       toast.error(err?.message || 'Failed to load DC details')
+    }
+  }
+
+  const handlePdfUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      // Validate file type
+      if (file.type !== 'application/pdf') {
+        toast.error('Please upload a PDF file')
+        return
+      }
+      // Validate file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error('File size must be less than 10MB')
+        return
+      }
+      setUploadedPdf(file)
+      // Create preview URL
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setPdfPreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
     }
   }
 
@@ -295,7 +422,8 @@ export default function CompletedDCPage() {
         isDcOrder: editingDC.isDcOrder,
         originalId: editingDC._id,
         dcId: editingDC.dcId,
-        data: editForm
+        data: editForm,
+        hasPdf: !!uploadedPdf
       })
       
       const updateData: any = {
@@ -307,6 +435,21 @@ export default function CompletedDCPage() {
         lrDate: editForm.lrDate || undefined,
         deliveryStatus: editForm.deliveryStatus || undefined,
         deliveryNotes: editForm.remarks || undefined,
+      }
+      
+      // If PDF is uploaded, convert to base64 and include it
+      if (uploadedPdf) {
+        const base64Pdf = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onloadend = () => {
+            const result = reader.result as string
+            resolve(result)
+          }
+          reader.onerror = reject
+          reader.readAsDataURL(uploadedPdf)
+        })
+        updateData.poDocument = base64Pdf
+        updateData.poPhotoUrl = base64Pdf // Also update poPhotoUrl for backward compatibility
       }
       
       // Remove undefined and empty string values
@@ -324,6 +467,8 @@ export default function CompletedDCPage() {
       console.log('Update response:', response)
       toast.success('DC updated successfully')
       setEditingDC(null)
+      setUploadedPdf(null)
+      setPdfPreview(null)
       await load() // Reload to show updated data
     } catch (err: any) {
       console.error('Update error:', err)
@@ -334,14 +479,40 @@ export default function CompletedDCPage() {
     }
   }
 
-  const openPDF = (row: Row) => {
-    // Try to get PDF from poPhotoUrl or poDocument
-    const url = row.poPhotoUrl || row.poDocument
-    if (url) {
-      setPdfUrl(url)
-      setPdfDC(row)
-    } else {
-      toast.error('No PDF document available for this DC')
+  const openPDF = async (row: Row) => {
+    try {
+      // Determine which ID to use for fetching
+      const dcIdToFetch = row.dcId || row._id
+      
+      // Fetch the latest DC data to ensure we have the most recent PDF
+      let latestDC: any = null
+      try {
+        latestDC = await apiRequest<any>(`/dc/${dcIdToFetch}`)
+      } catch (err: any) {
+        console.warn('Failed to fetch latest DC data, using row data:', err)
+        // Fallback to row data if fetch fails
+        latestDC = row
+      }
+      
+      // Try to get PDF from the latest DC data, then fallback to row data
+      const url = latestDC?.poDocument || latestDC?.poPhotoUrl || row.poDocument || row.poPhotoUrl
+      
+      if (url) {
+        setPdfUrl(url)
+        setPdfDC(row)
+      } else {
+        toast.error('No PDF document available for this DC')
+      }
+    } catch (err: any) {
+      console.error('Error opening PDF:', err)
+      // Fallback to row data
+      const url = row.poPhotoUrl || row.poDocument
+      if (url) {
+        setPdfUrl(url)
+        setPdfDC(row)
+      } else {
+        toast.error('No PDF document available for this DC')
+      }
     }
   }
 
@@ -444,7 +615,13 @@ export default function CompletedDCPage() {
       </Card>
 
       {/* Edit Dialog */}
-      <Dialog open={!!editingDC} onOpenChange={(open) => !open && setEditingDC(null)}>
+      <Dialog open={!!editingDC} onOpenChange={(open) => {
+        if (!open) {
+          setEditingDC(null)
+          setUploadedPdf(null)
+          setPdfPreview(null)
+        }
+      }}>
         <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>DC Information Update</DialogTitle>
@@ -530,10 +707,76 @@ export default function CompletedDCPage() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="col-span-2">
+                <Label>Remarks</Label>
+                <Input
+                  value={editForm.remarks}
+                  onChange={(e) => setEditForm({ ...editForm, remarks: e.target.value })}
+                  placeholder="Remarks"
+                  className="mt-1"
+                />
+              </div>
+              <div className="col-span-2">
+                <Label>PDF Document</Label>
+                <div className="mt-1 space-y-2">
+                  {pdfPreview && (
+                    <div className="flex items-center gap-2 p-2 bg-neutral-50 rounded border">
+                      <FileText className="h-4 w-4 text-neutral-600" />
+                      <span className="text-sm text-neutral-700 flex-1">
+                        {uploadedPdf ? uploadedPdf.name : 'Current PDF document'}
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setUploadedPdf(null)
+                          setPdfPreview(null)
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="file"
+                      accept="application/pdf"
+                      onChange={handlePdfUpload}
+                      className="hidden"
+                      id="pdf-upload"
+                    />
+                    <Label
+                      htmlFor="pdf-upload"
+                      className="flex items-center gap-2 px-4 py-2 border border-neutral-300 rounded-md cursor-pointer hover:bg-neutral-50 transition-colors"
+                    >
+                      <Upload className="h-4 w-4" />
+                      <span className="text-sm">{uploadedPdf ? 'Change PDF' : pdfPreview ? 'Replace PDF' : 'Upload PDF'}</span>
+                    </Label>
+                    {pdfPreview && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          window.open(pdfPreview, '_blank')
+                        }}
+                      >
+                        View PDF
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-xs text-neutral-500">Upload a PDF file (max 10MB)</p>
+                </div>
+              </div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingDC(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => {
+              setEditingDC(null)
+              setUploadedPdf(null)
+              setPdfPreview(null)
+            }}>Cancel</Button>
             <Button onClick={handleSaveEdit} disabled={saving}>
               {saving ? 'Saving...' : 'Update'}
             </Button>
