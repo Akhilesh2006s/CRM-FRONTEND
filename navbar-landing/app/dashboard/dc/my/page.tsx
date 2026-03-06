@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Pencil, Package, Plus, Upload, X } from 'lucide-react'
+import { useProducts } from '@/hooks/useProducts'
 
 type DC = {
   _id: string

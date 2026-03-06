@@ -203,8 +203,17 @@ export default function CreateDealPage() {
       }
       
       await apiRequest('/dc-orders/create', { method: 'POST', body: JSON.stringify(payload) })
-      alert('Deal created successfully! DC entry has been automatically created. You can now submit PO in "My DCs" page.')
-      router.push('/dashboard/dc/my')
+      alert('Deal created successfully! DC entry has been automatically created. You can now submit PO in the DCs page.')
+      
+      // After creating a sale:
+      // - Admins should see it in the Admin "All Created DCs" view
+      // - Executives should see it in their own "My DCs" list
+      const redirectPath =
+        currentUser?.role === 'Admin' || currentUser?.role === 'Super Admin'
+          ? '/dashboard/dc/admin/my'
+          : '/dashboard/dc/my'
+
+      router.push(redirectPath)
     } catch (err: any) {
       setError(err?.message || 'Failed to create deal')
     } finally {

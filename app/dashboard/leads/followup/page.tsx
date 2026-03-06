@@ -219,6 +219,13 @@ export default function FollowupLeadsPage() {
     if (contactMobile) filtered = filtered.filter(l => l.contact_mobile?.includes(contactMobile))
     if (schoolName) filtered = filtered.filter(l => l.school_name?.toLowerCase().includes(schoolName.toLowerCase()))
 
+    // Sort by createdAt descending so latest leads appear on top
+    filtered.sort((a, b) => {
+      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0
+      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0
+      return bTime - aTime
+    })
+
     setLeads(filtered)
   }
 

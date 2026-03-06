@@ -152,6 +152,13 @@ export default function CompletedDCPage() {
       })
     }
     
+    // Sort by DC creation/delivery date descending so latest DC appears at the top
+    filtered.sort((a, b) => {
+      const aTime = a.dcDate ? new Date(a.dcDate).getTime() : 0
+      const bTime = b.dcDate ? new Date(b.dcDate).getTime() : 0
+      return bTime - aTime
+    })
+    
     setRows(filtered)
   }
 

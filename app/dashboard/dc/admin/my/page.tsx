@@ -51,6 +51,10 @@ export default function AdminMyDCPage() {
   const [filterEmployee, setFilterEmployee] = useState('')
   const [allEmployees, setAllEmployees] = useState<{ _id: string; name: string }[]>([])
 
+  const [raiseDialogOpen, setRaiseDialogOpen] = useState(false)
+  const [selectedForRaise, setSelectedForRaise] = useState<DC | null>(null)
+  const [raising, setRaising] = useState(false)
+
   const currentUser = getCurrentUser()
   const isAdmin = currentUser?.role === 'Admin' || currentUser?.role === 'Super Admin'
 
@@ -148,6 +152,40 @@ export default function AdminMyDCPage() {
     return 'Not Assigned'
   }
 
+  const openRaiseDialog = (dc: DC) => {
+    setSelectedForRaise(dc)
+    setRaiseDialogOpen(true)
+  }
+
+  const confirmRaiseDc = async () => {
+    if (!selectedForRaise) return
+
+    const dcOrderId =
+      typeof selectedForRaise.dcOrderId === 'object'
+        ? selectedForRaise.dcOrderId?._id
+        : selectedForRaise.dcOrderId
+
+    if (!dcOrderId) {
+      toast.error('No associated deal found for this DC.')
+      return
+    }
+
+    setRaising(true)
+    try {
+      await apiRequest(`/dc-orders/${dcOrderId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ status: 'saved' }),
+      })
+      toast.success('DC raised successfully. It will now appear in Closed Sales.')
+      setRaiseDialogOpen(false)
+      load()
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to raise DC')
+    } finally {
+      setRaising(false)
+    }
+  }
+
   if (!isAdmin) {
     return (
       <div className="space-y-6">
@@ -211,7 +249,8 @@ export default function AdminMyDCPage() {
                 <th className="py-2 px-3 text-left">Product</th>
                 <th className="py-2 px-3 text-left">Status</th>
                 <th className="py-2 px-3 text-left">PO Photo</th>
-                <th className="py-2 px-3">Action</th>
+                <th className="py-2 px-3 text-left">Action</th>
+                <th className="py-2 px-3 text-right">Raise DC</th>
               </tr>
             </thead>
             <tbody>
@@ -247,6 +286,11 @@ export default function AdminMyDCPage() {
                   <td className="py-2 px-3 text-right">
                     <Button size="sm" onClick={() => openSubmitDialog(d)}>
                       {d.poPhotoUrl ? 'Update Photo' : 'Add Photo'}
+                    </Button>
+                  </td>
+                  <td className="py-2 px-3 text-right">
+                    <Button size="sm" variant="default" onClick={() => openRaiseDialog(d)}>
+                      Raise DC
                     </Button>
                   </td>
                 </tr>
@@ -309,6 +353,67 @@ export default function AdminMyDCPage() {
             <Button variant="outline" onClick={() => setOpenDialog(false)}>Cancel</Button>
             <Button onClick={submitPO} disabled={submitting || !poPhotoUrl}>
               {submitting ? 'Updating...' : selectedDC?.poPhotoUrl ? 'Update Photo' : 'Add Photo'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={raiseDialogOpen} onOpenChange={setRaiseDialogOpen}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>Raise DC</DialogTitle>
+            <DialogDescription>
+              Review the summary below. Raising DC will move this deal into Closed Sales so DC details can be managed there.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-sm">
+            <div>
+              <Label className="font-medium">School / Customer</Label>
+              <div className="mt-1">
+                {selectedForRaise?.customerName ||
+                  (selectedForRaise?.dcOrderId as any)?.school_name ||
+                  (selectedForRaise?.saleId as any)?.customerName ||
+                  '-'}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="font-medium">Executive</Label>
+                <div className="mt-1">{selectedForRaise ? getExecutiveName(selectedForRaise) : '-'}</div>
+              </div>
+              <div>
+                <Label className="font-medium">Phone</Label>
+                <div className="mt-1">
+                  {selectedForRaise?.customerPhone ||
+                    (selectedForRaise?.dcOrderId as any)?.contact_mobile ||
+                    '-'}
+                </div>
+              </div>
+            </div>
+            <div>
+              <Label className="font-medium">Products</Label>
+              <div className="mt-1">
+                {selectedForRaise?.product ||
+                  (selectedForRaise?.saleId as any)?.product ||
+                  ((selectedForRaise?.dcOrderId as any)?.products &&
+                  Array.isArray((selectedForRaise as any).dcOrderId.products)
+                    ? (selectedForRaise as any).dcOrderId.products
+                        .map((p: any) => p.product_name || p.product)
+                        .join(', ')
+                    : '-')}
+              </div>
+            </div>
+            <div>
+              <Label className="font-medium">Current Status</Label>
+              <div className="mt-1 capitalize">{selectedForRaise?.status || 'created'}</div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRaiseDialogOpen(false)} disabled={raising}>
+              Cancel
+            </Button>
+            <Button onClick={confirmRaiseDc} disabled={raising}>
+              {raising ? 'Raising…' : 'Raise DC'}
             </Button>
           </DialogFooter>
         </DialogContent>

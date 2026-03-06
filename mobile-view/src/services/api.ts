@@ -34,16 +34,16 @@ const getApiUrl = (): string => {
   // Web (browser) or React Native Web - always use localhost
   const isWeb = Platform.OS === 'web' || (typeof window !== 'undefined' && typeof document !== 'undefined');
   if (isWeb) {
-    return 'http://localhost:5000/api';
+    return 'http://localhost:5001/api';
   }
 
   // Native (iOS/Android) - use Expo dev host IP so device can reach backend on same WiFi
   const envIp = typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_API_IP;
   const ip = envIp || getDevHostFromExpo();
-  if (ip) return `http://${ip}:5000/api`;
+  if (ip) return `http://${ip}:5001/api`;
 
   // Fallback - likely wrong; user should set EXPO_PUBLIC_API_URL
-  return 'http://localhost:5000/api';
+  return 'http://localhost:5001/api';
 };
 
 const DEV_API_URL = getApiUrl();
@@ -101,7 +101,7 @@ class ApiService {
       return response.data;
     } catch (error: any) {
       if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT' || error.message?.includes('Network Error') || error.message?.includes('timeout')) {
-        throw new Error(`Cannot connect to server. Make sure:\n1. Backend is running on port 5000\n2. API URL is correct (currently: ${this.baseURL})\n3. Device and computer are on same network\n4. Firewall allows port 5000`);
+        throw new Error(`Cannot connect to server. Make sure:\n1. Backend is running on port 5001\n2. API URL is correct (currently: ${this.baseURL})\n3. Device and computer are on same network\n4. Firewall allows port 5001`);
       }
       throw error;
     }
@@ -133,7 +133,7 @@ class ApiService {
       }
       
       if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT' || error.message?.includes('Network Error') || error.message?.includes('timeout')) {
-        throw new Error(`Cannot connect to server. Make sure:\n1. Backend is running on port 5000\n2. API URL is correct (currently: ${this.baseURL})\n3. Device and computer are on same network\n4. Firewall allows port 5000`);
+        throw new Error(`Cannot connect to server. Make sure:\n1. Backend is running on port 5001\n2. API URL is correct (currently: ${this.baseURL})\n3. Device and computer are on same network\n4. Firewall allows port 5001`);
       }
       // Throw with backend error message so UI can display it
       const backendMsg = error.response?.data?.message;

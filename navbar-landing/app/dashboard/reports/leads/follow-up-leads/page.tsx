@@ -113,6 +113,13 @@ export default function ReportsFollowUpLeadsPage() {
       filtered = filtered.filter(l => l.createdAt && new Date(l.createdAt) <= to)
     }
 
+    // Always show latest created leads at the top
+    filtered.sort((a, b) => {
+      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0
+      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0
+      return bTime - aTime
+    })
+
     setLeads(filtered)
   }
 

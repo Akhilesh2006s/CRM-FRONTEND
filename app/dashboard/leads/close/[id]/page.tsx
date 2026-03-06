@@ -111,10 +111,20 @@ export default function CloseLeadPage() {
     selectedSpecs?: string[] // Selected specs for parent row (multi-select)
     selectedCategories?: string[] // Selected categories for parent row (multi-select)
     selectedDeliverables?: string[] // Selected deliverables for parent row (multi-select)
+    term?: string
   }>>([])
   const [poPhoto, setPoPhoto] = useState<File | null>(null)
   const [poPhotoUrl, setPoPhotoUrl] = useState<string>('')
   const [uploadingPO, setUploadingPO] = useState(false)
+  const [splitModalOpen, setSplitModalOpen] = useState(false)
+  const [splitPreview, setSplitPreview] = useState<{
+    term1: { productName: string; strength: number }[]
+    term2: { productName: string; strength: number }[]
+  } | null>(null)
+  const [pendingSubmissionContext, setPendingSubmissionContext] = useState<{
+    dcProductDetails: any[]
+    totalQuantity: number
+  } | null>(null)
   
   const { productNames: availableProducts, getProductLevels, getDefaultLevel, getProductSpecs, getProductSubjects, hasProductSubjects, getProductCategories, hasProductCategories, getProductId } = useProducts()
   const [deliverablesByProduct, setDeliverablesByProduct] = useState<Record<string, string[]>>({})
@@ -298,6 +308,7 @@ export default function CloseLeadPage() {
               selectedCategories: hasProductCategories(product) 
                 ? getProductCategories(product) 
                 : undefined,
+              term: productData?.term || 'Term 1',
             }
           })
           setProductDetails(parentRows)
@@ -704,6 +715,110 @@ export default function CloseLeadPage() {
     }
   }
 
+  const handleProductTermChange = (parentId: string, term: string) => {
+    setProductDetails((current) =>
+      current.map((row) =>
+        row.id === parentId ? { ...row, term } : row
+      )
+    )
+  }
+
+  const proceedWithSubmission = async (dcProductDetails: any[], totalQuantity: number) => {
+    try {
+      const assignedEmployeeId = currentUser?._id
+      const leadId = params.id as string
+
+      const dcPayload: any = {
+        dcOrderId: leadId,
+        dcDate: form.delivery_date || new Date().toISOString(),
+        dcRemarks: `Lead converted to client - ${lead?.school_name}`,
+        dcCategory: lead?.school_type === 'Existing' ? 'Existing School' : 'New School',
+        requestedQuantity: totalQuantity,
+        employeeId: assignedEmployeeId,
+        productDetails: dcProductDetails,
+        status: 'created',
+      }
+
+      if (poPhotoUrl) {
+        dcPayload.poPhotoUrl = poPhotoUrl
+        dcPayload.poDocument = poPhotoUrl
+      }
+
+      console.log('🔄 Creating DC with payload:', {
+        dcOrderId: dcPayload.dcOrderId,
+        employeeId: dcPayload.employeeId,
+        status: dcPayload.status,
+        productDetailsCount: dcPayload.productDetails?.length,
+      })
+
+      const dc = await apiRequest('/dc/raise', {
+        method: 'POST',
+        body: JSON.stringify(dcPayload),
+      })
+
+      console.log('✅ DC created:', {
+        dcId: dc._id,
+        status: dc.status,
+        customerName: dc.customerName,
+      })
+
+      if (poPhotoUrl && dc._id) {
+        try {
+          await apiRequest(`/dc/${dc._id}/submit-po`, {
+            method: 'POST',
+            body: JSON.stringify({
+              poPhotoUrl: poPhotoUrl,
+            }),
+          })
+        } catch (poErr) {
+          console.error('Failed to submit PO:', poErr)
+        }
+      }
+
+      try {
+        const verifyDC = await apiRequest(`/dc/${dc._id}`)
+        console.log('✅ Verification - DC exists:', {
+          id: verifyDC._id,
+          status: verifyDC.status,
+          employeeId: verifyDC.employeeId,
+          dcOrderId: verifyDC.dcOrderId,
+        })
+      } catch (verifyErr) {
+        console.warn('⚠️ Could not verify DC creation (this is okay if query times out):', verifyErr)
+      }
+
+      toast.success('Lead converted to client! DC created and submitted to My Clients successfully.')
+
+      if (dc._id) {
+        sessionStorage.setItem('newlyConvertedDCId', dc._id)
+        sessionStorage.setItem('newlyConvertedDC', JSON.stringify(dc))
+      }
+
+      router.push('/dashboard/dc/client-dc')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleSplitConfirm = async () => {
+    if (!pendingSubmissionContext) return
+    setSubmitting(true)
+    setSplitModalOpen(false)
+    setSplitPreview(null)
+    await proceedWithSubmission(
+      pendingSubmissionContext.dcProductDetails,
+      pendingSubmissionContext.totalQuantity
+    )
+    setPendingSubmissionContext(null)
+  }
+
+  const handleSplitCancel = () => {
+    setSplitModalOpen(false)
+    setSplitPreview(null)
+    setPendingSubmissionContext(null)
+    setSubmitting(false)
+  }
+
   const handleTurnToClient = async () => {
     if (!lead) return
     
@@ -893,6 +1008,12 @@ export default function CloseLeadPage() {
       const dcProductDetails = actualProductDetails.map(p => {
         const parentRow = productDetails.find(parent => parent.isParentRow && p.id.startsWith(parent.id + '_'))
         const deliverables = parentRow?.selectedDeliverables || []
+        const levelValue = p.level || getDefaultLevel(p.product)
+        const levelKey = (levelValue || '').toString().toLowerCase().replace(/\s+/g, '')
+        let termFromLevel: string | null = null
+        if (levelKey.startsWith('term2')) termFromLevel = 'Term 2'
+        else if (levelKey.startsWith('term1')) termFromLevel = 'Term 1'
+        else if (levelKey.includes('both')) termFromLevel = 'Both'
         return {
           product: p.product,
           class: p.class || '1', // Use actual class value
@@ -913,95 +1034,46 @@ export default function CloseLeadPage() {
           strength: Number(p.strength) || 0,
           price: Number(p.price) || 0,
           total: Number(p.total) || (Number(p.strength) || 0) * (Number(p.price) || 0),
-          level: p.level || getDefaultLevel(p.product),
+          level: levelValue,
           specs: p.specs || 'Regular', // Include specs
           subject: p.subject || undefined, // Include subject if present
           deliverables,
+          term: termFromLevel || (p as any).term || (parentRow as any)?.term || 'Term 1',
         }
       })
       
       // Total requested quantity is based on groupedProductDetails (per product + class),
       // so having multiple specs for the same class does NOT multiply the strength.
       const totalQuantity = groupedProductDetails.reduce((sum, p) => sum + (p.strength || 0), 0)
-      
-      // Create DC with all details
-      const dcPayload: any = {
-        dcOrderId: leadId,
-        dcDate: form.delivery_date || new Date().toISOString(),
-        dcRemarks: `Lead converted to client - ${lead.school_name}`,
-        dcCategory: lead.school_type === 'Existing' ? 'Existing School' : 'New School',
-        requestedQuantity: totalQuantity,
-        employeeId: assignedEmployeeId,
-        productDetails: dcProductDetails,
-        status: 'created', // Set to 'created' so it appears in "My Clients" page immediately
+
+      const term1Items = dcProductDetails.filter(p =>
+        (p.term || 'Term 1') === 'Term 1' || (p.term || 'Term 1') === 'Both'
+      )
+      const term2Items = dcProductDetails.filter(p =>
+        (p.term || 'Term 1') === 'Term 2'
+      )
+
+      if (term1Items.length > 0 && term2Items.length > 0) {
+        setSubmitting(false)
+        setSplitPreview({
+          term1: term1Items.map((p: any) => ({
+            productName: p.productName || p.product,
+            strength: p.strength || p.quantity || 0,
+          })),
+          term2: term2Items.map((p: any) => ({
+            productName: p.productName || p.product,
+            strength: p.strength || p.quantity || 0,
+          })),
+        })
+        setPendingSubmissionContext({ dcProductDetails, totalQuantity })
+        setSplitModalOpen(true)
+        return
       }
-      
-      // Add PO photo if uploaded
-      if (poPhotoUrl) {
-        dcPayload.poPhotoUrl = poPhotoUrl
-        dcPayload.poDocument = poPhotoUrl
-      }
-      
-      console.log('🔄 Creating DC with payload:', {
-        dcOrderId: dcPayload.dcOrderId,
-        employeeId: dcPayload.employeeId,
-        status: dcPayload.status,
-        productDetailsCount: dcPayload.productDetails?.length
-      });
-      
-      const dc = await apiRequest('/dc/raise', {
-        method: 'POST',
-        body: JSON.stringify(dcPayload),
-      })
-      
-      console.log('✅ DC created:', {
-        dcId: dc._id,
-        status: dc.status,
-        customerName: dc.customerName
-      });
-      
-      // If PO photo is provided, also submit PO
-      if (poPhotoUrl && dc._id) {
-        try {
-          await apiRequest(`/dc/${dc._id}/submit-po`, {
-            method: 'POST',
-            body: JSON.stringify({ 
-              poPhotoUrl: poPhotoUrl,
-            }),
-          })
-        } catch (poErr) {
-          console.error('Failed to submit PO:', poErr)
-          // Don't fail the whole operation if PO submission fails
-        }
-      }
-      
-      // Verify the conversion worked by checking if DC exists
-      try {
-        const verifyDC = await apiRequest(`/dc/${dc._id}`)
-        console.log('✅ Verification - DC exists:', {
-          id: verifyDC._id,
-          status: verifyDC.status,
-          employeeId: verifyDC.employeeId,
-          dcOrderId: verifyDC.dcOrderId
-        });
-      } catch (verifyErr) {
-        console.warn('⚠️ Could not verify DC creation (this is okay if query times out):', verifyErr);
-      }
-      
-      toast.success('Lead converted to client! DC created and submitted to My Clients successfully.')
-      
-      // Store the DC ID in sessionStorage so the Client DC page can fetch it directly
-      if (dc._id) {
-        sessionStorage.setItem('newlyConvertedDCId', dc._id);
-        sessionStorage.setItem('newlyConvertedDC', JSON.stringify(dc));
-      }
-      
-      // Redirect to Client DC page
-      router.push('/dashboard/dc/client-dc')
+
+      await proceedWithSubmission(dcProductDetails, totalQuantity)
     } catch (err: any) {
       setError(err?.message || 'Failed to convert lead to client')
       toast.error(err?.message || 'Failed to convert lead to client')
-    } finally {
       setSubmitting(false)
     }
   }
@@ -1736,6 +1808,77 @@ export default function CloseLeadPage() {
             </Button>
             <Button onClick={() => setProductDialogOpen(false)}>
               Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Split Confirmation Dialog */}
+      <Dialog
+        open={splitModalOpen}
+        onOpenChange={(open) => {
+          if (!open) handleSplitCancel()
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>This lead will be split into 2 DCs</DialogTitle>
+            <DialogDescription>
+              Review how products will be divided before confirming.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* DC 1 */}
+            <div className="rounded-md border border-border p-3">
+              <p className="text-sm font-semibold mb-2 text-green-700">
+                DC 1 – My Clients (Term 1)
+              </p>
+              <ul className="space-y-1">
+                {splitPreview?.term1.map((p, i) => (
+                  <li
+                    key={i}
+                    className="flex justify-between text-sm text-muted-foreground"
+                  >
+                    <span>• {p.productName} (Term 1)</span>
+                    <span>Qty: {p.strength}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* DC 2 */}
+            <div className="rounded-md border border-border p-3">
+              <p className="text-sm font-semibold mb-2 text-blue-700">
+                DC 2 – Term Wise DC (Term 2)
+              </p>
+              <ul className="space-y-1">
+                {splitPreview?.term2.map((p, i) => (
+                  <li
+                    key={i}
+                    className="flex justify-between text-sm text-muted-foreground"
+                  >
+                    <span>• {p.productName} (Term 2)</span>
+                    <span>Qty: {p.strength}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={handleSplitCancel}
+              disabled={submitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSplitConfirm}
+              disabled={submitting}
+            >
+              {submitting ? 'Submitting...' : 'Confirm & Submit'}
             </Button>
           </DialogFooter>
         </DialogContent>

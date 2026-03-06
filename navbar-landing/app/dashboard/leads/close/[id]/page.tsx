@@ -77,10 +77,20 @@ export default function CloseLeadPage() {
     selectedSpecs?: string[] // Selected specs for parent row (multi-select)
     selectedCategories?: string[] // Selected categories for parent row (multi-select)
     selectedDeliverables?: string[] // Selected deliverables for parent row (multi-select)
+    term?: string
   }>>([])
   const [poPhoto, setPoPhoto] = useState<File | null>(null)
   const [poPhotoUrl, setPoPhotoUrl] = useState<string>('')
   const [uploadingPO, setUploadingPO] = useState(false)
+  const [splitModalOpen, setSplitModalOpen] = useState(false)
+  const [splitPreview, setSplitPreview] = useState<{
+    term1: { productName: string; strength: number }[]
+    term2: { productName: string; strength: number }[]
+  } | null>(null)
+  const [pendingSubmissionContext, setPendingSubmissionContext] = useState<{
+    dcProductDetails: any[]
+    totalQuantity: number
+  } | null>(null)
   
   const { productNames: availableProducts, getProductLevels, getDefaultLevel, getProductSpecs, getProductSubjects, hasProductSubjects, getProductCategories, hasProductCategories, getProductId } = useProducts()
   const [deliverablesByProduct, setDeliverablesByProduct] = useState<Record<string, string[]>>({})
@@ -260,6 +270,7 @@ export default function CloseLeadPage() {
               selectedCategories: hasProductCategories(product) 
                 ? getProductCategories(product) 
                 : undefined,
+              term: productData?.term || 'Term 1',
             }
           })
           setProductDetails(parentRows)
@@ -795,6 +806,12 @@ export default function CloseLeadPage() {
       const dcProductDetails = actualProductDetails.map(p => {
         const parentRow = productDetails.find(parent => parent.isParentRow && p.id.startsWith(parent.id + '_'))
         const deliverables = parentRow?.selectedDeliverables || []
+        const levelValue = p.level || getDefaultLevel(p.product)
+        const levelKey = (levelValue || '').toString().toLowerCase().replace(/\s+/g, '')
+        let termFromLevel: string | null = null
+        if (levelKey.startsWith('term2')) termFromLevel = 'Term 2'
+        else if (levelKey.startsWith('term1')) termFromLevel = 'Term 1'
+        else if (levelKey.includes('both')) termFromLevel = 'Both'
         return {
           product: p.product,
           class: p.class || '1', // Use actual class value
@@ -810,89 +827,17 @@ export default function CloseLeadPage() {
           strength: Number(p.strength) || 0,
           price: Number(p.price) || 0,
           total: Number(p.total) || (Number(p.strength) || 0) * (Number(p.price) || 0),
-          level: p.level || getDefaultLevel(p.product),
+          level: levelValue,
           specs: p.specs || 'Regular', // Include specs
           subject: p.subject || undefined, // Include subject if present
           deliverables,
+          term: termFromLevel || (p as any).term || (parentRow as any)?.term || 'Term 1',
         }
       })
       
       const totalQuantity = dcProductDetails.reduce((sum, p) => sum + (p.strength || 0), 0)
       
-      // Create DC with all details
-      const dcPayload: any = {
-        dcOrderId: leadId,
-        dcDate: form.delivery_date || new Date().toISOString(),
-        dcRemarks: `Lead converted to client - ${lead.school_name}`,
-        dcCategory: lead.school_type === 'Existing' ? 'Existing School' : 'New School',
-        requestedQuantity: totalQuantity,
-        employeeId: assignedEmployeeId,
-        productDetails: dcProductDetails,
-        status: 'created', // Set to 'created' so it appears in "My Clients" page immediately
-      }
-      
-      // Add PO photo if uploaded
-      if (poPhotoUrl) {
-        dcPayload.poPhotoUrl = poPhotoUrl
-        dcPayload.poDocument = poPhotoUrl
-      }
-      
-      console.log('🔄 Creating DC with payload:', {
-        dcOrderId: dcPayload.dcOrderId,
-        employeeId: dcPayload.employeeId,
-        status: dcPayload.status,
-        productDetailsCount: dcPayload.productDetails?.length
-      });
-      
-      const dc = await apiRequest('/dc/raise', {
-        method: 'POST',
-        body: JSON.stringify(dcPayload),
-      })
-      
-      console.log('✅ DC created:', {
-        dcId: dc._id,
-        status: dc.status,
-        customerName: dc.customerName
-      });
-      
-      // If PO photo is provided, also submit PO
-      if (poPhotoUrl && dc._id) {
-        try {
-          await apiRequest(`/dc/${dc._id}/submit-po`, {
-            method: 'POST',
-            body: JSON.stringify({ 
-              poPhotoUrl: poPhotoUrl,
-            }),
-          })
-        } catch (poErr) {
-          console.error('Failed to submit PO:', poErr)
-          // Don't fail the whole operation if PO submission fails
-        }
-      }
-      
-      // Verify the conversion worked by checking if DC exists
-      try {
-        const verifyDC = await apiRequest(`/dc/${dc._id}`)
-        console.log('✅ Verification - DC exists:', {
-          id: verifyDC._id,
-          status: verifyDC.status,
-          employeeId: verifyDC.employeeId,
-          dcOrderId: verifyDC.dcOrderId
-        });
-      } catch (verifyErr) {
-        console.warn('⚠️ Could not verify DC creation (this is okay if query times out):', verifyErr);
-      }
-      
-      toast.success('Lead converted to client! DC created and submitted to My Clients successfully.')
-      
-      // Store the DC ID in sessionStorage so the Client DC page can fetch it directly
-      if (dc._id) {
-        sessionStorage.setItem('newlyConvertedDCId', dc._id);
-        sessionStorage.setItem('newlyConvertedDC', JSON.stringify(dc));
-      }
-      
-      // Redirect to Client DC page
-      router.push('/dashboard/dc/client-dc')
+      await proceedWithSubmission(dcProductDetails, totalQuantity)
     } catch (err: any) {
       setError(err?.message || 'Failed to convert lead to client')
       toast.error(err?.message || 'Failed to convert lead to client')

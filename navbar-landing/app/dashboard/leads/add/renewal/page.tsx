@@ -19,6 +19,7 @@ import { useProducts } from '@/hooks/useProducts'
 type ProductSelection = {
   name: string
   checked: boolean
+  term?: string
 }
 
 type ExistingSchool = {
@@ -66,13 +67,13 @@ export default function RenewalPage() {
     follow_up_date: '',
   })
   
-  // Product selections - just checkboxes for interest
+  // Product selections - checkboxes + term selection
   const [products, setProducts] = useState<ProductSelection[]>([])
   
   // Initialize products when availableProducts are loaded
   useEffect(() => {
     if (availableProducts.length > 0 && products.length === 0) {
-      setProducts(availableProducts.map(p => ({ name: p, checked: false })))
+      setProducts(availableProducts.map(p => ({ name: p, checked: false, term: 'Term 1' })))
     }
   }, [availableProducts])
 
@@ -263,6 +264,12 @@ export default function RenewalPage() {
     setProducts(updated)
   }
 
+  const handleProductTermChange = (index: number, term: string) => {
+    const updated = [...products]
+    updated[index].term = term
+    setProducts(updated)
+  }
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSubmitting(true)
@@ -287,13 +294,14 @@ export default function RenewalPage() {
         return iso
       }
       
-      // Build products array from checked products - just product names
+      // Build products array from checked products - include term for backend splitting
       const selectedProducts = products
         .filter(p => p.checked)
         .map(p => ({
           product_name: p.name,
           quantity: 1,
           unit_price: 0,
+          term: p.term || 'Term 1',
         }))
       
       const payload: any = {
@@ -487,20 +495,37 @@ export default function RenewalPage() {
                 <Label>Products Interested *</Label>
                 <div className="space-y-2 mt-2 p-4 bg-white rounded border">
                   {products.map((product, index) => (
-                    <div key={product.name} className="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded">
-                      <Checkbox
-                        id={`product-${index}`}
-                        checked={product.checked}
-                        onCheckedChange={(checked) => handleProductCheck(index, checked as boolean)}
-                      />
-                      <Label htmlFor={`product-${index}`} className="font-medium cursor-pointer">
-                        {product.name}
-                      </Label>
+                    <div key={product.name} className="flex items-center justify-between space-x-2 p-2 hover:bg-gray-50 rounded">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`product-${index}`}
+                          checked={product.checked}
+                          onCheckedChange={(checked) => handleProductCheck(index, checked as boolean)}
+                        />
+                        <Label htmlFor={`product-${index}`} className="font-medium cursor-pointer">
+                          {product.name}
+                        </Label>
+                      </div>
+                      <div className="w-32">
+                        <Select
+                          value={product.term || 'Term 1'}
+                          onValueChange={(value) => handleProductTermChange(index, value)}
+                        >
+                          <SelectTrigger className="h-8 text-xs bg-white text-neutral-900">
+                            <SelectValue placeholder="Term" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Term 1">Term 1</SelectItem>
+                            <SelectItem value="Term 2">Term 2</SelectItem>
+                            <SelectItem value="Both">Both</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                   ))}
                 </div>
                 <p className="text-xs text-neutral-500 mt-2">
-                  Select the products the school is interested in.
+                  Select the products the school is interested in and their term.
                 </p>
               </div>
 
