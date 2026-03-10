@@ -1556,7 +1556,7 @@ export default function TermWiseDCPage() {
                     <TableRow>
                       <TableHead>Product Name</TableHead>
                       <TableHead>Term</TableHead>
-                      <TableHead>Quantity</TableHead>
+                      <TableHead>Strength</TableHead>
                       <TableHead>Unit Price</TableHead>
                       <TableHead>Total</TableHead>
                     </TableRow>
@@ -1584,9 +1584,20 @@ export default function TermWiseDCPage() {
                           <TableCell>
                             <Input
                               type="number"
+                              min={0}
                               value={row.quantity}
-                              readOnly
-                              className="h-9 bg-neutral-50"
+                              onChange={(e) => {
+                                const value = Number(e.target.value) || 0
+                                setRequestDCProductRows((rows) => {
+                                  const updated = [...rows]
+                                  updated[idx] = {
+                                    ...updated[idx],
+                                    quantity: value < 0 ? 0 : value,
+                                  }
+                                  return updated
+                                })
+                              }}
+                              className="h-9"
                             />
                           </TableCell>
                           <TableCell>
