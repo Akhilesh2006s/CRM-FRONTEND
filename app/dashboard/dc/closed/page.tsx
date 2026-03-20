@@ -142,11 +142,32 @@ export default function ClosedSalesPage() {
     unit_price: number
   }
   const [productRows, setProductRows] = useState<ProductRow[]>([
-    { id: '1', product: 'Abacus', class: '1', category: 'New Students', productCategory: undefined, specs: 'Regular', strength: 0, level: 'L1', term: 'Term 1', unit_price: 0 }
+    { id: '1', product: 'Abacus', class: '1', category: 'new Students', productCategory: undefined, specs: 'Regular', strength: 0, level: 'L1', term: 'Term 1', unit_price: 0 }
   ])
   
   const availableClasses = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
-  const defaultCategories = ['New Students', 'Existing Students', 'Both']
+  const categoryOptions = [
+    'NA',
+    'Training Mterial',
+    'new Students',
+    'Old Students',
+    'Excess',
+    'Exchange',
+    'Shortage',
+    'Excess-OldStudents',
+    'Excess NewStudents',
+  ]
+
+  const normalizeCategoryForDropdown = (raw: any, fallback: string) => {
+    const v = typeof raw === 'string' ? raw.trim() : ''
+    if (!v) return fallback
+    if (v === 'New Students') return 'new Students'
+    if (v === 'Existing Students') return 'Old Students'
+    if (v === 'Both') return 'NA'
+    if (v === 'New School') return 'new Students'
+    if (v === 'Existing School') return 'Old Students'
+    return categoryOptions.includes(v) ? v : fallback
+  }
   const { productNames: availableProducts, getProductLevels, getDefaultLevel, getProductSpecs, getProductSubjects, getProductCategories, hasProductCategories, hasProductSubjects } = useProducts()
   
   // Get available levels for a specific product, default to L1 if product not found
@@ -749,20 +770,50 @@ export default function ClosedSalesPage() {
         
         // Load product rows from request data
         if (dcRequestData.productDetails && Array.isArray(dcRequestData.productDetails) && dcRequestData.productDetails.length > 0) {
-          setProductRows(dcRequestData.productDetails.map((p: any, idx: number) => ({
-            id: String(idx + 1),
-            product: p.product || p.product_name || '', // Use original product name as entered
-            class: p.class || '1',
-            category: p.category || 'New Students',
-            specs: p.specs || 'Regular',
-            subject: p.subject || undefined,
-            strength: Number(p.strength) || Number(p.quantity) || 0,
-            level: p.level || getDefaultLevel(p.product || 'Abacus'),
-            term: p.term || 'Term 1',
-            unit_price: Number(p.unit_price) || Number(p.price) || 0,
-          })))
+          setProductRows(dcRequestData.productDetails.map((p: any, idx: number) => {
+            const productName: string = p.product || p.product_name || ''
+            const skuCategories = getProductCategories(productName)
+
+            const rawSku =
+              (typeof p.productCategory === 'string' ? p.productCategory : undefined) ??
+              (typeof p.category === 'string' ? p.category : undefined) ??
+              ''
+
+            const normalizedSku = rawSku.trim()
+            const matchedSku =
+              skuCategories.includes(normalizedSku)
+                ? normalizedSku
+                : skuCategories.find(c => c.toLowerCase() === normalizedSku.toLowerCase())
+
+            return {
+              id: String(idx + 1),
+              product: productName,
+              class: p.class || '1',
+              category: normalizeCategoryForDropdown(
+                p.category,
+                normalizedDeal.school_type === 'Existing' ? 'Old Students' : 'new Students'
+              ),
+              productCategory: matchedSku || undefined,
+              specs: p.specs || 'Regular',
+              subject: p.subject || undefined,
+              strength: Number(p.strength) || Number(p.quantity) || 0,
+              level: p.level || getDefaultLevel(productName || 'Abacus'),
+              term: p.term || 'Term 1',
+              unit_price: Number(p.unit_price) || Number(p.price) || 0,
+            }
+          }))
         } else {
-          setProductRows([{ id: '1', product: 'Abacus', class: '1', category: 'New Students', specs: 'Regular', strength: 0, level: 'L1', term: 'Term 1', unit_price: 0 }])
+          setProductRows([{
+            id: '1',
+            product: 'Abacus',
+            class: '1',
+            category: normalizedDeal.school_type === 'Existing' ? 'Old Students' : 'new Students',
+            specs: 'Regular',
+            strength: 0,
+            level: 'L1',
+            term: 'Term 1',
+            unit_price: 0,
+          }])
         }
       } else if (existingDCForDeal) {
         // Load full DC details to get all fields
@@ -812,12 +863,28 @@ export default function ClosedSalesPage() {
               
               // Use the original product name as entered (no matching/transformation)
               const originalProduct = p.product || p.product_name || 'ABACUS'
+              const skuCategories = getProductCategories(originalProduct)
+              const rawSku =
+                (typeof p.productCategory === 'string' ? p.productCategory : undefined) ??
+                (typeof p.category === 'string' ? p.category : undefined) ??
+                ''
+              const normalizedSku = rawSku.trim()
+              const matchedSku =
+                skuCategories.includes(normalizedSku)
+                  ? normalizedSku
+                  : skuCategories.find(c => c.toLowerCase() === normalizedSku.toLowerCase())
               
               const productRow = {
               id: String(idx + 1),
                 product: originalProduct, // Use original product name as entered
               class: p.class || '1',
-              category: p.category || 'New Students',
+              category: normalizeCategoryForDropdown(
+                p.category,
+                normalizedDeal.school_type === 'Existing' ? 'Old Students' : 'new Students'
+              ),
+                // Pre-fill SKU product category from DC.productDetails.
+                // Some older records may have it stored under `category`, so we fallback to that.
+                productCategory: matchedSku || undefined,
                 specs: p.specs || 'Regular',
                 subject: p.subject || undefined,
                 strength: strengthNum,
@@ -843,7 +910,18 @@ export default function ClosedSalesPage() {
               id: String(idx + 1),
                 product: originalProduct, // Use original product name as entered
               class: '1',
-              category: 'New Students',
+              category: normalizedDeal.school_type === 'Existing' ? 'Old Students' : 'new Students',
+              productCategory: (() => {
+                const originalProduct = p.product_name || p.product || 'ABACUS'
+                const skuCategories = getProductCategories(originalProduct)
+                const rawSku = (p as any).productCategory || (p as any).category || ''
+                const normalizedSku = rawSku.trim()
+                const matchedSku =
+                  skuCategories.includes(normalizedSku)
+                    ? normalizedSku
+                    : skuCategories.find(c => c.toLowerCase() === normalizedSku.toLowerCase())
+                return matchedSku || undefined
+              })(),
                 specs: 'Regular',
                 subject: undefined,
               strength: p.strength || p.quantity || 0,
@@ -853,7 +931,17 @@ export default function ClosedSalesPage() {
               }
             }))
           } else {
-            setProductRows([{ id: '1', product: 'ABACUS', class: '1', category: 'New Students', specs: 'Regular', strength: 0, level: 'L1', term: 'Term 1', unit_price: 0 }])
+            setProductRows([{
+              id: '1',
+              product: 'ABACUS',
+              class: '1',
+              category: normalizedDeal.school_type === 'Existing' ? 'Old Students' : 'new Students',
+              specs: 'Regular',
+              strength: 0,
+              level: 'L1',
+              term: 'Term 1',
+              unit_price: 0,
+            }])
           }
         } catch (e) {
           console.error('Failed to load existing DC:', e)
@@ -867,7 +955,18 @@ export default function ClosedSalesPage() {
               id: String(idx + 1),
               product: p.product_name || p.product || 'Abacus', // Use original product name as entered
               class: '1',
-              category: 'New Students',
+              category: normalizedDeal.school_type === 'Existing' ? 'Old Students' : 'new Students',
+              productCategory: (() => {
+                const originalProduct = p.product_name || p.product || 'ABACUS'
+                const skuCategories = getProductCategories(originalProduct)
+                const rawSku = (p as any).productCategory || (p as any).category || ''
+                const normalizedSku = rawSku.trim()
+                const matchedSku =
+                  skuCategories.includes(normalizedSku)
+                    ? normalizedSku
+                    : skuCategories.find(c => c.toLowerCase() === normalizedSku.toLowerCase())
+                return matchedSku || undefined
+              })(),
               specs: 'Regular',
               subject: undefined,
               strength: p.strength || p.quantity || 0,
@@ -876,7 +975,17 @@ export default function ClosedSalesPage() {
               unit_price: Number(p.unit_price) || Number(p.price) || 0,
             })))
           } else {
-            setProductRows([{ id: '1', product: 'Abacus', class: '1', category: 'New Students', specs: 'Regular', strength: 0, level: 'L1', term: 'Term 1', unit_price: 0 }])
+            setProductRows([{
+              id: '1',
+              product: 'Abacus',
+              class: '1',
+              category: normalizedDeal.school_type === 'Existing' ? 'Old Students' : 'new Students',
+              specs: 'Regular',
+              strength: 0,
+              level: 'L1',
+              term: 'Term 1',
+              unit_price: 0,
+            }])
           }
         }
       } else {
@@ -891,7 +1000,18 @@ export default function ClosedSalesPage() {
             id: String(idx + 1),
             product: p.product_name || p.product || 'Abacus', // Use original product name as entered
             class: '1',
-            category: 'New Students',
+              category: normalizedDeal.school_type === 'Existing' ? 'Old Students' : 'new Students',
+              productCategory: (() => {
+                const originalProduct = p.product_name || p.product || 'ABACUS'
+                const skuCategories = getProductCategories(originalProduct)
+                const rawSku = (p as any).productCategory || (p as any).category || ''
+                const normalizedSku = rawSku.trim()
+                const matchedSku =
+                  skuCategories.includes(normalizedSku)
+                    ? normalizedSku
+                    : skuCategories.find(c => c.toLowerCase() === normalizedSku.toLowerCase())
+                return matchedSku || undefined
+              })(),
             specs: 'Regular',
             subject: undefined,
             strength: p.strength || p.quantity || 0,
@@ -900,7 +1020,17 @@ export default function ClosedSalesPage() {
             unit_price: Number(p.unit_price) || Number(p.price) || 0,
           })))
         } else {
-          setProductRows([{ id: '1', product: 'Abacus', class: '1', category: 'New Students', specs: 'Regular', strength: 0, level: 'L1', term: 'Term 1', unit_price: 0 }])
+          setProductRows([{
+            id: '1',
+            product: 'Abacus',
+            class: '1',
+            category: normalizedDeal.school_type === 'Existing' ? 'Old Students' : 'new Students',
+            specs: 'Regular',
+            strength: 0,
+            level: 'L1',
+            term: 'Term 1',
+            unit_price: 0,
+          }])
         }
       }
       setOpenRaiseDCDialog(true)
@@ -923,7 +1053,18 @@ export default function ClosedSalesPage() {
           id: String(idx + 1),
           product: p.product_name || p.product || 'Abacus', // Use original product name as entered
           class: '1',
-          category: 'New Students',
+          category: deal.school_type === 'Existing' ? 'Old Students' : 'new Students',
+          productCategory: (() => {
+            const originalProduct = p.product_name || p.product || 'ABACUS'
+            const skuCategories = getProductCategories(originalProduct)
+            const rawSku = (p as any).productCategory || (p as any).category || ''
+            const normalizedSku = rawSku.trim()
+            const matchedSku =
+              skuCategories.includes(normalizedSku)
+                ? normalizedSku
+                : skuCategories.find(c => c.toLowerCase() === normalizedSku.toLowerCase())
+            return matchedSku || undefined
+          })(),
           specs: 'Regular',
           subject: undefined,
           strength: p.strength || p.quantity || 0,
@@ -932,7 +1073,17 @@ export default function ClosedSalesPage() {
           unit_price: Number(p.unit_price) || Number(p.price) || 0,
         })))
       } else {
-        setProductRows([{ id: '1', product: 'Abacus', class: '1', category: 'New Students', specs: 'Regular', strength: 0, level: 'L1', term: 'Term 1', unit_price: 0 }])
+        setProductRows([{
+          id: '1',
+          product: 'Abacus',
+          class: '1',
+          category: deal.school_type === 'Existing' ? 'Old Students' : 'new Students',
+          specs: 'Regular',
+          strength: 0,
+          level: 'L1',
+          term: 'Term 1',
+          unit_price: 0,
+        }])
       }
       
       const errorMessage = e?.message || 'Unknown error'
@@ -1001,6 +1152,7 @@ export default function ClosedSalesPage() {
         product: row.product,
         class: row.class,
         category: row.category,
+        productCategory: row.productCategory || undefined,
         specs: row.specs || 'Regular',
         subject: row.subject || undefined,
         strength: Number(row.strength) || 0,
@@ -1094,6 +1246,7 @@ export default function ClosedSalesPage() {
           product: row.product,
           class: row.class,
           category: row.category,
+          productCategory: row.productCategory || undefined,
           specs: row.specs || 'Regular',
           subject: row.subject || undefined,
           strength: Number(row.strength) || 0,
@@ -1146,6 +1299,7 @@ export default function ClosedSalesPage() {
         product: row.product,
         class: row.class,
         category: row.category,
+        productCategory: row.productCategory || undefined,
         specs: row.specs || 'Regular',
         subject: row.subject || undefined,
           strength: Number(row.strength) || 0,
@@ -1160,7 +1314,7 @@ export default function ClosedSalesPage() {
         finalProductDetails = selectedDeal.products.map((p: any) => ({
           product: p.product_name || p.product || 'Abacus', // Use original product name as entered
           class: '1',
-          category: 'New Students',
+          category: selectedDeal?.school_type === 'Existing' ? 'Old Students' : 'new Students',
           productName: p.product_name || 'Abacus',
           quantity: p.quantity || 1,
           strength: 0,
@@ -1300,7 +1454,7 @@ export default function ClosedSalesPage() {
           ? productRows.map(row => ({
               product: row.product || '',
               class: row.class || '1',
-              category: row.category || (selectedDeal?.school_type === 'Existing' ? 'Existing Students' : 'New Students'),
+              category: row.category || (selectedDeal?.school_type === 'Existing' ? 'Old Students' : 'new Students'),
               productCategory: row.productCategory || undefined,
           specs: row.specs || 'Regular',
           subject: row.subject || undefined,
@@ -1957,7 +2111,7 @@ export default function ClosedSalesPage() {
                         id: Date.now().toString(),
                         product: '',
                         class: '1',
-                        category: selectedDeal?.school_type === 'Existing' ? 'Existing Students' : 'New Students',
+                        category: selectedDeal?.school_type === 'Existing' ? 'Old Students' : 'new Students',
                         specs: 'Regular',
                         strength: 0,
                         level: 'L2',
@@ -1979,6 +2133,7 @@ export default function ClosedSalesPage() {
                       <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b-2 border-slate-300">
                         <th className="py-4 px-5 text-left text-slate-700 font-bold text-xs uppercase tracking-wider">Product</th>
                         <th className="py-4 px-5 text-left text-slate-700 font-bold text-xs uppercase tracking-wider">Class</th>
+                        <th className="py-4 px-5 text-left text-slate-700 font-bold text-xs uppercase tracking-wider">Category</th>
                         <th className="py-4 px-5 text-left text-slate-700 font-bold text-xs uppercase tracking-wider">Product Category</th>
                         <th className="py-4 px-5 text-left text-slate-700 font-bold text-xs uppercase tracking-wider">Specs</th>
                         <th className="py-4 px-5 text-left text-slate-700 font-bold text-xs uppercase tracking-wider">Subject</th>
@@ -2044,12 +2199,33 @@ export default function ClosedSalesPage() {
                             />
                           </td>
                           <td className="py-4 px-5">
+                            <Select
+                              value={row.category}
+                              onValueChange={(value) => {
+                                const updated = [...productRows]
+                                updated[idx].category = value
+                                setProductRows(updated)
+                              }}
+                            >
+                              <SelectTrigger className="h-9 text-sm bg-white border-slate-200 w-32">
+                                <SelectValue placeholder="Category" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {categoryOptions.map(cat => (
+                                  <SelectItem key={cat} value={cat}>
+                                    {cat}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </td>
+                          <td className="py-4 px-5">
                         {hasProductCategories(row.product) ? (
                           <Select
-                            value={row.productCategory || ''}
+                            value={row.productCategory?.trim() || ''}
                             onValueChange={(value) => {
                               const updated = [...productRows]
-                              updated[idx].productCategory = value
+                              updated[idx].productCategory = typeof value === 'string' ? value.trim() : value
                               setProductRows(updated)
                               }}
                           >

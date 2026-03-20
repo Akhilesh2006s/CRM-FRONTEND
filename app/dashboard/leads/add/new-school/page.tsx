@@ -310,14 +310,14 @@ export default function NewSchoolPage() {
       }
 
       const productsPayload = selectedProducts.map((p) => ({
-        product_name: p.name,
-        quantity: 1,
-        unit_price: 0,
-        term: p.term || 'Term 1',
+          product_name: p.name,
+          quantity: 1,
+          unit_price: 0,
+          term: p.term || 'Term 1',
         status: p.status,
         strength: p.strength || 0,
         chance: p.chance || 0,
-      }))
+        }))
       
       const payload: any = {
         school_name: form.school_name,
@@ -539,30 +539,30 @@ export default function NewSchoolPage() {
                     className="flex flex-col md:flex-row md:items-center justify-between gap-2 p-2 hover:bg-gray-50 rounded"
                   >
                     <div className="flex items-center space-x-2 min-w-[160px]">
-                      <Checkbox
-                        id={`product-${index}`}
-                        checked={product.checked}
-                        onCheckedChange={(checked) => handleProductCheck(index, checked as boolean)}
-                      />
-                      <Label htmlFor={`product-${index}`} className="font-medium cursor-pointer">
-                        {product.name}
-                      </Label>
-                    </div>
+                    <Checkbox
+                      id={`product-${index}`}
+                      checked={product.checked}
+                      onCheckedChange={(checked) => handleProductCheck(index, checked as boolean)}
+                    />
+                    <Label htmlFor={`product-${index}`} className="font-medium cursor-pointer">
+                      {product.name}
+                    </Label>
+                  </div>
                     <div className="flex flex-wrap gap-2 flex-1">
                       <div className="w-28">
-                        <Select
-                          value={product.term || 'Term 1'}
-                          onValueChange={(value) => handleProductTermChange(index, value)}
-                        >
-                          <SelectTrigger className="h-8 text-xs bg-white text-neutral-900">
-                            <SelectValue placeholder="Term" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Term 1">Term 1</SelectItem>
-                            <SelectItem value="Term 2">Term 2</SelectItem>
-                            <SelectItem value="Both">Both</SelectItem>
-                          </SelectContent>
-                        </Select>
+                    <Select
+                      value={product.term || 'Term 1'}
+                      onValueChange={(value) => handleProductTermChange(index, value)}
+                    >
+                      <SelectTrigger className="h-8 text-xs bg-white text-neutral-900">
+                        <SelectValue placeholder="Term" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Term 1">Term 1</SelectItem>
+                        <SelectItem value="Term 2">Term 2</SelectItem>
+                        <SelectItem value="Both">Both</SelectItem>
+                      </SelectContent>
+                    </Select>
                       </div>
                       <div className="w-40">
                         <Select
@@ -616,8 +616,8 @@ export default function NewSchoolPage() {
                         />
                         <span className="ml-1 text-xs text-neutral-500">%</span>
                       </div>
-                    </div>
                   </div>
+                </div>
                 )
               })}
             </div>

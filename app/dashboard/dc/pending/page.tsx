@@ -144,7 +144,17 @@ export default function PendingDCPage() {
   const [productRows, setProductRows] = useState<ProductRow[]>([])
   
   const availableClasses = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
-  const availableCategories = ['New Students', 'Existing Students', 'Both']
+  const categoryOptions = [
+    'NA',
+    'Training Mterial',
+    'new Students',
+    'Old Students',
+    'Excess',
+    'Exchange',
+    'Shortage',
+    'Excess-OldStudents',
+    'Excess NewStudents',
+  ]
   const { productNames: availableProducts, getProductLevels, getDefaultLevel, getProductSpecs, getProductSubjects, getProductCategories, hasProductCategories } = useProducts()
   const availableDCCategories = ['Term 1', 'Term 2', 'Term 3', 'Full Year']
 
@@ -258,7 +268,7 @@ export default function PendingDCPage() {
       if (validProductDetails.length > 0) {
         // Use existing productDetails from DC
         console.log('✅ Using DC.productDetails:', validProductDetails)
-        setProductRows(validProductDetails.map((p: any, idx: number) => {
+        const mappedProductRows = validProductDetails.map((p: any, idx: number) => {
           // Normalize product value to match dropdown options (case-insensitive matching)
           const rawProduct = (p.product || p.productName || '').trim()
           // Find matching product (case-insensitive)
@@ -267,13 +277,60 @@ export default function PendingDCPage() {
             rawProduct.toLowerCase().includes(ap.toLowerCase()) ||
             ap.toLowerCase().includes(rawProduct.toLowerCase())
           ) || (rawProduct || 'ABACUS')
-          
+
+          const rawProductCategory =
+            typeof p.productCategory === 'string' ? p.productCategory.trim() : ''
+          const rawCategory = typeof p.category === 'string' ? p.category.trim() : ''
+
+          const skuCategories = getProductCategories(matchedProduct)
+          const normalizeSku = (v: any) => String(v || '').trim().toLowerCase().replace(/\s+/g, '')
+          const studentCategoryValues = [
+            ...categoryOptions,
+            'New Students',
+            'Existing Students',
+            'Both',
+            'New School',
+            'Existing School',
+          ]
+          const isStudentCategory = (v: any) => studentCategoryValues.some(sc => normalizeSku(sc) === normalizeSku(v))
+
+          const normalizeCategory = (v: string) => {
+            if (!v) return ''
+            if (v === 'New Students') return 'new Students'
+            if (v === 'Existing Students') return 'Old Students'
+            if (v === 'Both') return 'NA'
+            if (v === 'New School') return 'new Students'
+            if (v === 'Existing School') return 'Old Students'
+            return v
+          }
+
+          const normalizedCategory = normalizeCategory(rawCategory)
+          const defaultCategory =
+            mergedDC.school_type === 'Existing' ? 'Old Students' : 'new Students'
+          const finalCategory = categoryOptions.includes(normalizedCategory)
+            ? normalizedCategory
+            : defaultCategory
+
+          const matchedSkuFromProductCategory = rawProductCategory
+            ? skuCategories.find(c => normalizeSku(c) === normalizeSku(rawProductCategory))
+            : undefined
+          const matchedSkuFromCategory =
+            !matchedSkuFromProductCategory && rawCategory && !isStudentCategory(rawCategory)
+              ? skuCategories.find(c => normalizeSku(c) === normalizeSku(rawCategory))
+              : undefined
+
+          // Backward compatibility:
+          // - newer records store SKU category in `productCategory`
+          // - older records sometimes stored SKU category in `category`
+          const finalProductCategory =
+            matchedSkuFromProductCategory || matchedSkuFromCategory || (!isStudentCategory(rawCategory) ? rawCategory : '')
+
           return {
             id: String(idx + 1),
             product: matchedProduct, // Use matched product for dropdown
             class: p.class || '1',
-            category: p.category || 'New Students',
-            productCategory: (p as any).productCategory || undefined,
+            category: finalCategory,
+            productCategory: finalProductCategory || undefined,
             productName: p.productName || p.product || matchedProduct, // Use productName or product or matched product
             quantity: Number(p.quantity) || Number(p.strength) || 0,
             strength: Number(p.strength) || Number(p.quantity) || 0,
@@ -284,7 +341,9 @@ export default function PendingDCPage() {
             total: Number(p.total) || 0,
             term: p.term || 'Term 1',
           }
-        }))
+        })
+
+        setProductRows(mappedProductRows)
       } else if (dcOrderData?.products && Array.isArray(dcOrderData.products) && dcOrderData.products.length > 0) {
         // Import from DcOrder.products (like closed sales page)
         // Filter to only Term 1 products (since this is Pending DC, which should only have Term 1)
@@ -319,6 +378,35 @@ export default function PendingDCPage() {
                     ap.toLowerCase().includes(String(rawProduct).toLowerCase())
                 ) || 'ABACUS'
 
+              const skuCategories = getProductCategories(matchedProduct)
+              const normalizeSku = (v: any) =>
+                String(v || '').trim().toLowerCase().replace(/\s+/g, '')
+
+              const rawProductCategory =
+                typeof p.productCategory === 'string' ? p.productCategory.trim() : ''
+              const rawCategory = typeof p.category === 'string' ? p.category.trim() : ''
+
+              const studentCategories = ['New Students', 'Existing Students', 'Both', 'New School', 'Existing School']
+              const isStudentCategory = (v: any) =>
+                studentCategories.some(sc => normalizeSku(sc) === normalizeSku(v))
+
+              // Use SKU productCategory if available; otherwise only use `category` if it isn't a student category.
+              const productCategoryCandidate =
+                rawProductCategory || (!isStudentCategory(rawCategory) ? rawCategory : '')
+
+              const matchedSkuFromProductCategory = rawProductCategory
+                ? skuCategories.find(c => normalizeSku(c) === normalizeSku(rawProductCategory))
+                : undefined
+
+              const matchedSkuFromCategory =
+                !matchedSkuFromProductCategory && rawCategory && !isStudentCategory(rawCategory)
+                  ? skuCategories.find(c => normalizeSku(c) === normalizeSku(rawCategory))
+                  : undefined
+
+              // Prefer matched SKU option string; otherwise show stored candidate to avoid empty UI.
+              const finalProductCategory =
+                matchedSkuFromProductCategory || matchedSkuFromCategory || productCategoryCandidate
+
               return {
                 id: String(idx + 1),
                 product: matchedProduct, // Use matched product for dropdown
@@ -328,7 +416,7 @@ export default function PendingDCPage() {
                   (mergedDC.school_type === 'Existing'
                     ? 'Existing Students'
                     : 'New Students'),
-                productCategory: (p as any).productCategory || undefined,
+                productCategory: finalProductCategory || undefined,
                 productName: matchedProduct, // Use matched product
                 quantity: Number(p.quantity) || 0,
                 strength: Number(p.strength) || Number(p.quantity) || 0,
@@ -367,7 +455,7 @@ export default function PendingDCPage() {
           id: '1',
           product: matchedProduct, // Use matched product for dropdown
           class: '1',
-          category: 'New Students',
+          category: mergedDC?.school_type === 'Existing' ? 'Old Students' : 'new Students',
           productCategory: undefined,
           productName: matchedProduct, // Use matched product
           quantity: fallbackQuantity,
@@ -833,7 +921,7 @@ export default function PendingDCPage() {
                     id: Date.now().toString(),
                     product: 'ABACUS',
                     class: '1',
-                    category: 'New Students',
+                    category: mergedDC?.school_type === 'Existing' ? 'Old Students' : 'new Students',
                     productName: 'ABACUS',
                     quantity: 0,
                     strength: 0,
@@ -852,7 +940,7 @@ export default function PendingDCPage() {
                     <th className="py-2 px-3 text-left border-r text-gray-900">Product</th>
                     <th className="py-2 px-3 text-left border-r text-gray-900">Class</th>
                     <th className="py-2 px-3 text-left border-r text-gray-900">Product Category</th>
-                    <th className="py-2 px-3 text-left border-r text-gray-900">Student Category</th>
+                    <th className="py-2 px-3 text-left border-r text-gray-900">Category</th>
                     <th className="py-2 px-3 text-left border-r text-gray-900">Specs</th>
                     <th className="py-2 px-3 text-left border-r text-gray-900">Subject</th>
                     <th className="py-2 px-3 text-left border-r text-gray-900">Strength</th>
@@ -924,9 +1012,15 @@ export default function PendingDCPage() {
                               <SelectValue placeholder="Prod Category" />
                             </SelectTrigger>
                             <SelectContent>
-                              {getProductCategories(row.product).map(cat => (
-                                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                              ))}
+                              {(() => {
+                                const opts = getProductCategories(row.product)
+                                const current = (row.productCategory || '').trim()
+                                const selectOpts =
+                                current && !opts.includes(current) ? [...opts, current] : opts
+                                return selectOpts.map(cat => (
+                                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                                ))
+                              })()}
                             </SelectContent>
                           </Select>
                         ) : (
@@ -934,20 +1028,7 @@ export default function PendingDCPage() {
                         )}
                       </td>
                       <td className="py-2 px-3 border-r">
-                        <Select value={row.category} onValueChange={(v) => {
-                          const updated = [...productRows]
-                          updated[idx].category = v
-                          setProductRows(updated)
-                        }}>
-                          <SelectTrigger className="h-8 text-xs bg-white">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {availableCategories.map(cat => (
-                              <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <span className="text-xs text-gray-900">{row.category || '-'}</span>
                       </td>
                       <td className="py-2 px-3 border-r">
                         <Select value={row.specs || 'Regular'} onValueChange={(v) => {

@@ -611,8 +611,16 @@ export default function ExecutiveStockReturnsPage() {
                           <td className="py-2 px-3">
                             <Input
                               type="number"
-                              value={row.soldQty}
-                              onChange={(e) => updateProductRow(row.id, 'soldQty', Number(e.target.value))}
+                              value={row.soldQty === 0 ? '' : row.soldQty}
+                              onChange={(e) => {
+                                const raw = e.target.value
+                                const cleaned = raw.replace(/^0+(?=\d)/, '')
+                                updateProductRow(
+                                  row.id,
+                                  'soldQty',
+                                  cleaned === '' ? 0 : Number(cleaned)
+                                )
+                              }}
                               className="w-24"
                               min="0"
                             />
