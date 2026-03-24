@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { apiRequest } from '@/lib/api'
+import { apiRequest, resolveUploadUrl } from '@/lib/api'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -49,6 +49,8 @@ export default function AdminMyDCPage() {
   const [submitting, setSubmitting] = useState(false)
   const [openDialog, setOpenDialog] = useState(false)
   const [filterEmployee, setFilterEmployee] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [backendSearching, setBackendSearching] = useState(false)
   const [allEmployees, setAllEmployees] = useState<{ _id: string; name: string }[]>([])
 
   const [raiseDialogOpen, setRaiseDialogOpen] = useState(false)
@@ -98,6 +100,63 @@ export default function AdminMyDCPage() {
     load()
     loadEmployees()
   }, [filterEmployee])
+
+  const filteredItems = items.filter((d) => {
+    const schoolCode = (typeof d.dcOrderId === 'object' && (d.dcOrderId as any)?.school_code) ? (d.dcOrderId as any).school_code : ''
+    const customerName = d.customerName || d.saleId?.customerName || d.dcOrderId?.school_name || ''
+    const query = searchQuery.toLowerCase()
+
+    const matchesSearch = !query ||
+      schoolCode.toLowerCase().includes(query) ||
+      customerName.toLowerCase().includes(query)
+
+    const empId = typeof d.employeeId === 'object' ? d.employeeId?._id : d.employeeId
+    const matchesEmployee = !filterEmployee || empId === filterEmployee || (d as any).assigned_to === filterEmployee
+
+    return matchesSearch && matchesEmployee
+  })
+
+  const searchBySchoolCode = async (code: string) => {
+    if (!code || code.length < 3) return
+    setBackendSearching(true)
+    try {
+      const results = await apiRequest<any[]>(`/dc-orders?school_code=${encodeURIComponent(code)}`)
+      if (results?.length) {
+        setItems((prev) => {
+          const existingIds = new Set(prev.map((i) => i._id))
+          const mapped: DC[] = results
+            .filter((r) => !existingIds.has(r._id))
+            .map((r) => ({
+              _id: r._id,
+              customerName: r.school_name || '',
+              customerPhone: r.contact_mobile || '',
+              status: r.status || 'created',
+              dcOrderId: {
+                _id: r._id,
+                school_name: r.school_name,
+                school_code: r.school_code,
+                contact_mobile: r.contact_mobile,
+                email: r.email,
+                products: r.products,
+              } as any,
+              employeeId: r.assigned_to || undefined,
+            }))
+          return [...prev, ...mapped]
+        })
+      }
+    } catch (e) {
+      // silently fail — local results still shown
+    } finally {
+      setBackendSearching(false)
+    }
+  }
+
+  useEffect(() => {
+    const isCodeLike = /^[a-zA-Z]{2,5}\d*/i.test(searchQuery)
+    if (!isCodeLike) return
+    const t = setTimeout(() => searchBySchoolCode(searchQuery), 500)
+    return () => clearTimeout(t)
+  }, [searchQuery])
 
   const openSubmitDialog = (dc: DC) => {
     setSelectedDC(dc)
@@ -204,6 +263,20 @@ export default function AdminMyDCPage() {
         <Button variant="outline" onClick={load}>Refresh</Button>
       </div>
 
+      <Card className="p-4 mb-3">
+        <div className="flex items-center gap-3">
+          <Label className="whitespace-nowrap">Search:</Label>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by school code or name..."
+            className="border border-gray-300 rounded px-3 py-1.5 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          {backendSearching && <span className="text-xs text-neutral-500">Searching backend...</span>}
+        </div>
+      </Card>
+
       {/* Filter by Employee */}
       <Card className="p-4">
         <div className="flex items-center gap-4">
@@ -230,7 +303,7 @@ export default function AdminMyDCPage() {
 
       <Card className="p-0 overflow-x-auto">
         {loading && <div className="p-4">Loading…</div>}
-        {!loading && items.length === 0 && (
+        {!loading && filteredItems.length === 0 && (
           <div className="p-4">
             <p className="text-neutral-600">No DCs found with status "created".</p>
             <p className="text-sm text-neutral-500 mt-2">
@@ -238,12 +311,13 @@ export default function AdminMyDCPage() {
             </p>
           </div>
         )}
-        {!loading && items.length > 0 && (
+        {!loading && filteredItems.length > 0 && (
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-sky-50/70 border-b text-neutral-700">
                 <th className="py-2 px-3 text-left">Created On</th>
                 <th className="py-2 px-3 text-left">Executive Name</th>
+                <th className="py-2 px-3 text-left">School Code</th>
                 <th className="py-2 px-3 text-left">Customer Name</th>
                 <th className="py-2 px-3 text-left">Customer Phone</th>
                 <th className="py-2 px-3 text-left">Product</th>
@@ -254,10 +328,13 @@ export default function AdminMyDCPage() {
               </tr>
             </thead>
             <tbody>
-              {items.map((d) => (
+              {filteredItems.map((d) => (
                 <tr key={d._id} className="border-b last:border-0 hover:bg-gray-50">
                   <td className="py-2 px-3">{d.createdAt ? new Date(d.createdAt).toLocaleDateString() : '-'}</td>
                   <td className="py-2 px-3 font-medium">{getExecutiveName(d)}</td>
+                  <td className="py-2 px-3 font-mono text-xs">
+                    {(typeof d.dcOrderId === 'object' && (d.dcOrderId as any)?.school_code) ? (d.dcOrderId as any).school_code : '-'}
+                  </td>
                   <td className="py-2 px-3">{d.customerName || d.saleId?.customerName || d.dcOrderId?.school_name || '-'}</td>
                   <td className="py-2 px-3">{d.customerPhone || d.dcOrderId?.contact_mobile || '-'}</td>
                   <td className="py-2 px-3">{d.product || d.saleId?.product || (d.dcOrderId?.products && Array.isArray(d.dcOrderId.products) ? d.dcOrderId.products.map((p: any) => p.product_name || p.product).join(', ') : '-')}</td>
@@ -273,10 +350,10 @@ export default function AdminMyDCPage() {
                   <td className="py-2 px-3">
                     {d.poPhotoUrl ? (
                       <img
-                        src={d.poPhotoUrl}
+                        src={resolveUploadUrl(d.poPhotoUrl)}
                         alt="PO"
                         className="w-12 h-12 object-cover rounded border cursor-pointer"
-                        onClick={() => window.open(d.poPhotoUrl, '_blank')}
+                        onClick={() => window.open(resolveUploadUrl(d.poPhotoUrl), '_blank')}
                         title="Click to view full size"
                       />
                     ) : (
@@ -327,15 +404,15 @@ export default function AdminMyDCPage() {
                 accept="image/*,application/pdf"
                 onChange={handleFileChange}
               />
-              {poPhotoUrl && poPhotoUrl.startsWith('data:') && (
+              {poPhotoUrl && (
                 <div className="mt-2">
-                  <img src={poPhotoUrl} alt="PO Preview" className="max-w-full h-auto max-h-48 rounded border" />
+                  <img src={resolveUploadUrl(poPhotoUrl)} alt="PO Preview" className="max-w-full h-auto max-h-48 rounded border" />
                 </div>
               )}
               {selectedDC?.poPhotoUrl && !poPhotoUrl.startsWith('data:') && poPhotoUrl === selectedDC.poPhotoUrl && (
                 <div className="mt-2">
                   <Label className="text-sm text-gray-600">Current Photo:</Label>
-                  <img src={selectedDC.poPhotoUrl} alt="Current PO" className="max-w-full h-auto max-h-48 rounded border mt-1" />
+                  <img src={resolveUploadUrl(selectedDC.poPhotoUrl)} alt="Current PO" className="max-w-full h-auto max-h-48 rounded border mt-1" />
                 </div>
               )}
             </div>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { apiRequest } from '@/lib/api'
+import { apiRequest, resolveUploadUrl } from '@/lib/api'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -155,10 +155,10 @@ export default function EditDCPage() {
               <Label>Purchase Order</Label>
               <div className="mt-2">
                 <img
-                  src={dc.poPhotoUrl}
+                  src={resolveUploadUrl(dc.poPhotoUrl)}
                   alt="PO"
                   className="max-w-full h-auto max-h-64 rounded border cursor-pointer"
-                  onClick={() => window.open(dc.poPhotoUrl, '_blank')}
+                  onClick={() => window.open(resolveUploadUrl(dc.poPhotoUrl), '_blank')}
                 />
               </div>
             </div>

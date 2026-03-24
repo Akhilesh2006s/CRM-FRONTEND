@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { apiRequest } from '@/lib/api'
+import { apiRequest, resolveUploadUrl } from '@/lib/api'
 import { toast } from 'sonner'
 import { Pencil, CreditCard, X, Upload, FileText, Download } from 'lucide-react'
 import jsPDF from 'jspdf'
@@ -42,6 +42,7 @@ type Row = {
 export default function CompletedDCPage() {
   const [rows, setRows] = useState<Row[]>([])
   const [allRows, setAllRows] = useState<Row[]>([]) // Store all data for filtering
+  const [backendSearching, setBackendSearching] = useState(false)
   const [loading, setLoading] = useState(true)
   const [editingDC, setEditingDC] = useState<Row | null>(null)
   const [editForm, setEditForm] = useState({
@@ -421,6 +422,50 @@ export default function CompletedDCPage() {
   }
 
   useEffect(() => { load() }, [])
+
+  const searchBySchoolCode = async (code: string) => {
+    if (!code || code.length < 3) return
+    setBackendSearching(true)
+    try {
+      const results = await apiRequest<any[]>(`/dc-orders?school_code=${encodeURIComponent(code)}`)
+      if (results?.length) {
+        setAllRows((prev) => {
+          const existingIds = new Set(prev.map((i) => i._id))
+          const mapped: Row[] = results
+            .filter((r) => !existingIds.has(r._id))
+            .map((r) => ({
+              _id: r._id,
+              dcNo: r.dc_code || '-',
+              dcDate: r.createdAt || undefined,
+              dcCategory: r.dcCategory || '',
+              schoolName: r.school_name || '',
+              schoolCode: r.school_code || '',
+              schoolType: r.school_type || '',
+              zone: r.zone || '',
+              executive: r.assigned_to?.name || '',
+              remarks: r.remarks || '',
+              completedDate: r.updatedAt || undefined,
+              poPhotoUrl: r.pod_proof_url || '',
+              poDocument: r.pod_proof_url || '',
+              isDcOrder: true,
+            }))
+          return [...prev, ...mapped]
+        })
+      }
+    } catch (e) {
+      // silently fail — local results still shown
+    } finally {
+      setBackendSearching(false)
+    }
+  }
+
+  useEffect(() => {
+    const code = filters.schoolCode
+    const isCodeLike = /^[a-zA-Z]{2,5}\d*/i.test(code)
+    if (!isCodeLike) return
+    const t = setTimeout(() => searchBySchoolCode(code), 500)
+    return () => clearTimeout(t)
+  }, [filters.schoolCode])
 
   function actionPlaceholder(msg: string) {
     toast.message(msg)
@@ -1006,7 +1051,7 @@ export default function CompletedDCPage() {
       const url = latestDC?.poDocument || latestDC?.poPhotoUrl || row.poDocument || row.poPhotoUrl
       
       if (url) {
-        setPdfUrl(url)
+        setPdfUrl(resolveUploadUrl(url))
         setPdfDC(row)
       } else {
         toast.error('No PDF document available for this DC')
@@ -1016,7 +1061,7 @@ export default function CompletedDCPage() {
       // Fallback to row data
       const url = row.poPhotoUrl || row.poDocument
       if (url) {
-        setPdfUrl(url)
+        setPdfUrl(resolveUploadUrl(url))
         setPdfDC(row)
       } else {
         toast.error('No PDF document available for this DC')
@@ -1136,6 +1181,7 @@ export default function CompletedDCPage() {
         </div>
         <div className="mt-3 flex items-center gap-3">
           <Button onClick={load}>Search</Button>
+          {backendSearching && <span className="text-xs text-neutral-500">Searching backend...</span>}
           <Button onClick={() => {
             setFilters({
               zone: '',

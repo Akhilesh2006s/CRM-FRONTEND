@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { Card } from '@/components/ui/card'
-import { apiRequest } from '@/lib/api'
+import { apiRequest, LOCAL_API_BASE_URL } from '@/lib/api'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -279,7 +279,7 @@ export default function ReportsClosedLeadsPage() {
       if (schoolName) qs.append('schoolName', schoolName)
 
       const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null
-      const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || "http://localhost:5000"
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || LOCAL_API_BASE_URL
 
       const response = await fetch(`${API_BASE_URL}/api/leads/export?${qs.toString()}`, {
         method: 'GET',

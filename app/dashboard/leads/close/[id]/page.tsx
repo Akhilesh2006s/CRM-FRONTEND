@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { apiRequest, API_BASE_URL } from '@/lib/api'
+import { apiRequest, API_BASE_URL, resolveUploadUrl } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
 import { ArrowLeft, Package, CheckCircle2, Upload, X, PlusCircle } from 'lucide-react'
@@ -1217,7 +1217,7 @@ export default function CloseLeadPage() {
                   </div>
                   <div className="flex flex-col gap-2">
                     <a
-                      href={poPhotoUrl}
+                      href={resolveUploadUrl(poPhotoUrl)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-sm text-blue-600 hover:underline"

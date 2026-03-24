@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
-import { apiRequest } from '@/lib/api'
+import { apiRequest, resolveUploadUrl } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -1753,7 +1753,7 @@ export default function ClosedSalesPage() {
                                 size="sm"
                                 className="text-xs"
                                 onClick={() => {
-                                  setSelectedPOPhotoUrl(poUrl)
+                                  setSelectedPOPhotoUrl(resolveUploadUrl(poUrl))
                                   setOpenPOPhotoDialog(true)
                                 }}
                               >
@@ -1766,11 +1766,11 @@ export default function ClosedSalesPage() {
                           return (
                             <div className="flex items-center justify-center">
                               <img
-                                src={poUrl}
+                                src={resolveUploadUrl(poUrl)}
                                 alt="PO Document"
                                 className="w-14 h-14 object-contain rounded border border-slate-200 cursor-pointer hover:opacity-75 hover:border-slate-400 transition-all shadow-sm bg-white p-1"
                                 onClick={() => {
-                                  setSelectedPOPhotoUrl(poUrl)
+                                  setSelectedPOPhotoUrl(resolveUploadUrl(poUrl))
                                   setOpenPOPhotoDialog(true)
                                 }}
                                 title="Click to view full size"
@@ -1785,7 +1785,7 @@ export default function ClosedSalesPage() {
                                     button.textContent = 'View PO'
                                     button.onclick = (ev) => {
                                       ev.preventDefault()
-                                      setSelectedPOPhotoUrl(poUrl)
+                                      setSelectedPOPhotoUrl(resolveUploadUrl(poUrl))
                                       setOpenPOPhotoDialog(true)
                                       return false
                                     }

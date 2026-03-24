@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { apiRequest } from '@/lib/api'
+import { apiRequest, LOCAL_API_BASE_URL } from '@/lib/api'
 import { toast } from 'sonner'
 
 type DC = {
@@ -42,6 +42,11 @@ export default function CreateExpensePage() {
     travelTo: '',
     approxKms: '',
     dcId: '',
+    hotelName: '',
+    hotelAddress: '',
+    accommodationDate: '',
+    checkInDate: '',
+    checkOutDate: '',
   })
 
   // Fetch employee's assigned DCs
@@ -130,6 +135,14 @@ export default function CreateExpensePage() {
         }
       }
 
+      // Add food/accommodation/others fields
+      if (form.hotelName) expenseData.hotelName = form.hotelName
+      if (form.hotelAddress) expenseData.hotelAddress = form.hotelAddress
+      if (form.accommodationDate) expenseData.accommodationDate = form.accommodationDate
+      if (form.checkInDate) expenseData.checkInDate = form.checkInDate
+      if (form.checkOutDate) expenseData.checkOutDate = form.checkOutDate
+      if (form.type === 'travel' && form.approxKms) expenseData.approxKms = parseFloat(form.approxKms)
+
       // Add bill URL if uploaded separately
       if (billUrl) {
         expenseData.receipt = billUrl
@@ -155,7 +168,7 @@ export default function CreateExpensePage() {
           headers["Authorization"] = `Bearer ${token}`
         }
 
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || "http://localhost:5000"}/api/expenses/create`, {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || LOCAL_API_BASE_URL}/api/expenses/create`, {
           method: 'POST',
           headers,
           body: formData,
@@ -189,6 +202,26 @@ export default function CreateExpensePage() {
   }
 
   const isTravelType = form.type === 'travel'
+  const isFoodType = form.type === 'food'
+  const isAccommodationType = form.type === 'accommodation'
+  const isOthersType = form.type === 'others'
+
+  // Auto-calculate amount for Bike/Car based on kms
+  const handleKmsChange = (kms: string) => {
+    const k = parseFloat(kms) || 0
+    let calculated = ''
+    if (form.transportType === 'Bike') calculated = (k * 2.8).toFixed(2)
+    else if (form.transportType === 'Car') calculated = (k * 8).toFixed(2)
+    setForm({ ...form, approxKms: kms, amount: calculated || form.amount })
+  }
+
+  const handleTransportChange = (value: string) => {
+    const k = parseFloat(form.approxKms) || 0
+    let calculated = ''
+    if (value === 'Bike') calculated = (k * 2.8).toFixed(2)
+    else if (value === 'Car') calculated = (k * 8).toFixed(2)
+    setForm({ ...form, transportType: value, amount: calculated || form.amount })
+  }
 
   return (
     <div className="space-y-6">
@@ -203,7 +236,12 @@ export default function CreateExpensePage() {
             <Label htmlFor="type">Type *</Label>
             <Select
               value={form.type}
-              onValueChange={(value) => setForm({ ...form, type: value, transportType: '', travelFrom: '', travelTo: '', approxKms: '' })}
+              onValueChange={(value) => setForm({ 
+                ...form, type: value, 
+                transportType: '', travelFrom: '', travelTo: '', approxKms: '',
+                hotelName: '', hotelAddress: '', accommodationDate: '',
+                checkInDate: '', checkOutDate: '',
+              })}
               required
             >
               <SelectTrigger className="bg-white">
@@ -286,74 +324,131 @@ export default function CreateExpensePage() {
             <p className="text-sm text-neutral-500 mt-1">Accepted formats: JPG, PNG, PDF (Max 5MB)</p>
           </div>
 
-          {/* Travel-specific fields - shown conditionally */}
+          {/* Food Fields */}
+          {isFoodType && (
+            <div className="space-y-4 p-4 border border-orange-200 rounded-lg bg-orange-50">
+              <h3 className="font-semibold text-orange-900">Food Details</h3>
+              <div>
+                <Label>Food Date</Label>
+                <Input type="date" value={form.accommodationDate}
+                  onChange={(e) => setForm({ ...form, accommodationDate: e.target.value })}
+                  className="bg-white" />
+              </div>
+              <div>
+                <Label>Hotel Name</Label>
+                <Input type="text" value={form.hotelName}
+                  onChange={(e) => setForm({ ...form, hotelName: e.target.value })}
+                  className="bg-white" placeholder="Enter hotel name" />
+              </div>
+              <div>
+                <Label>Hotel Address</Label>
+                <Input type="text" value={form.hotelAddress}
+                  onChange={(e) => setForm({ ...form, hotelAddress: e.target.value })}
+                  className="bg-white" placeholder="Enter hotel address" />
+              </div>
+            </div>
+          )}
+
+          {/* Accommodation Fields */}
+          {isAccommodationType && (
+            <div className="space-y-4 p-4 border border-purple-200 rounded-lg bg-purple-50">
+              <h3 className="font-semibold text-purple-900">Accommodation Details</h3>
+              <div>
+                <Label>Accommodation Date</Label>
+                <Input type="date" value={form.accommodationDate}
+                  onChange={(e) => setForm({ ...form, accommodationDate: e.target.value })}
+                  className="bg-white" />
+              </div>
+              <div>
+                <Label>Check In Date</Label>
+                <Input type="date" value={form.checkInDate}
+                  onChange={(e) => setForm({ ...form, checkInDate: e.target.value })}
+                  className="bg-white" />
+              </div>
+              <div>
+                <Label>Check Out Date</Label>
+                <Input type="date" value={form.checkOutDate}
+                  onChange={(e) => setForm({ ...form, checkOutDate: e.target.value })}
+                  className="bg-white" />
+              </div>
+              <div>
+                <Label>Hotel Name</Label>
+                <Input type="text" value={form.hotelName}
+                  onChange={(e) => setForm({ ...form, hotelName: e.target.value })}
+                  className="bg-white" placeholder="Enter hotel name" />
+              </div>
+              <div>
+                <Label>Hotel Address</Label>
+                <Input type="text" value={form.hotelAddress}
+                  onChange={(e) => setForm({ ...form, hotelAddress: e.target.value })}
+                  className="bg-white" placeholder="Enter hotel address" />
+              </div>
+            </div>
+          )}
+
+          {/* Others Fields */}
+          {isOthersType && (
+            <div className="space-y-4 p-4 border border-gray-200 rounded-lg bg-gray-50">
+              <h3 className="font-semibold text-gray-900">Other Details</h3>
+              <div>
+                <Label>Date</Label>
+                <Input type="date" value={form.accommodationDate}
+                  onChange={(e) => setForm({ ...form, accommodationDate: e.target.value })}
+                  className="bg-white" />
+              </div>
+            </div>
+          )}
+
+          {/* Travel Fields */}
           {isTravelType && (
             <div className="space-y-4 p-4 border border-blue-200 rounded-lg bg-blue-50">
               <h3 className="font-semibold text-blue-900">Travel Details</h3>
-              
-              {/* Transport Type */}
               <div>
-                <Label htmlFor="transportType">Transport Type *</Label>
-                <Select
-                  value={form.transportType}
-                  onValueChange={(value) => setForm({ ...form, transportType: value })}
-                  required
-                >
+                <Label>Transport Type *</Label>
+                <Select value={form.transportType} onValueChange={handleTransportChange} required>
                   <SelectTrigger className="bg-white">
                     <SelectValue placeholder="Select transport type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Auto">Auto</SelectItem>
                     <SelectItem value="Bike">Bike</SelectItem>
-                    <SelectItem value="Bus">Bus</SelectItem>
                     <SelectItem value="Car">Car</SelectItem>
-                    <SelectItem value="Flight">Flight</SelectItem>
+                    <SelectItem value="Bus">Bus</SelectItem>
                     <SelectItem value="Train">Train</SelectItem>
+                    <SelectItem value="Auto">Auto</SelectItem>
+                    <SelectItem value="Flight">Flight</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-
-              {/* From */}
               <div>
-                <Label htmlFor="travelFrom">From *</Label>
-                <Input
-                  id="travelFrom"
-                  type="text"
-                  value={form.travelFrom}
+                <Label>Travel Date</Label>
+                <Input type="date" value={form.accommodationDate}
+                  onChange={(e) => setForm({ ...form, accommodationDate: e.target.value })}
+                  className="bg-white" />
+              </div>
+              <div>
+                <Label>From *</Label>
+                <Input type="text" value={form.travelFrom}
                   onChange={(e) => setForm({ ...form, travelFrom: e.target.value })}
-                  required
-                  className="bg-white"
-                  placeholder="Enter origin location"
-                />
+                  required className="bg-white" placeholder="Enter origin location" />
               </div>
-
-              {/* To */}
               <div>
-                <Label htmlFor="travelTo">To *</Label>
-                <Input
-                  id="travelTo"
-                  type="text"
-                  value={form.travelTo}
+                <Label>To *</Label>
+                <Input type="text" value={form.travelTo}
                   onChange={(e) => setForm({ ...form, travelTo: e.target.value })}
-                  required
-                  className="bg-white"
-                  placeholder="Enter destination location"
-                />
+                  required className="bg-white" placeholder="Enter destination location" />
               </div>
-
-              {/* Approx Kms */}
-              <div>
-                <Label htmlFor="approxKms">Approx Kms</Label>
-                <Input
-                  id="approxKms"
-                  type="number"
-                  step="0.01"
-                  value={form.approxKms}
-                  onChange={(e) => setForm({ ...form, approxKms: e.target.value })}
-                  className="bg-white"
-                  placeholder="Enter approximate kilometers"
-                />
-              </div>
+              {/* Approx Kms — only for Bike/Car */}
+              {(form.transportType === 'Bike' || form.transportType === 'Car') && (
+                <div>
+                  <Label>Approx Kms</Label>
+                  <Input type="number" step="0.01" value={form.approxKms}
+                    onChange={(e) => handleKmsChange(e.target.value)}
+                    className="bg-white" placeholder="Enter kilometers" />
+                  <p className="text-xs text-blue-700 mt-1">
+                    Rate: {form.transportType === 'Bike' ? '₹2.8/km' : '₹8/km'} — amount auto-calculated
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

@@ -45,13 +45,13 @@ export default function NewSchoolPage() {
     state: '',
     region: '',
     area: '',
-    priority: 'Hot',
     zone: '',
     branches: '',
     strength: '',
     remarks: '',
     average_fee: '',
     follow_up_date: '',
+    cluster_code: '',
   })
   
   // Product selections - checkboxes + per-product status/term/strength
@@ -334,7 +334,6 @@ export default function NewSchoolPage() {
         region: form.region || undefined,
         area: form.area || undefined,
         zone: form.zone || undefined,
-        priority: form.priority || 'Hot',
         branches: form.branches ? Number(form.branches) : undefined,
         strength: form.strength && form.strength.trim() ? Number(form.strength) : undefined,
         remarks: form.remarks || undefined,
@@ -343,6 +342,7 @@ export default function NewSchoolPage() {
         products: productsPayload,
         follow_up_date: parseFollowUp(form.follow_up_date), // Save as follow_up_date, NOT estimated_delivery_date
         assigned_to: currentUser?._id, // Auto-assign to current employee
+        cluster_code: form.cluster_code || undefined,
       }
       
       if (selectedProducts.length === 0) {
@@ -629,21 +629,6 @@ export default function NewSchoolPage() {
           </div>
 
           <div>
-            <Label>Priority *</Label>
-            <Select value={form.priority} onValueChange={(v) => setForm((f) => ({ ...f, priority: v }))} required>
-              <SelectTrigger className="bg-white text-neutral-900">
-                <SelectValue placeholder="Select priority" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Hot">Hot</SelectItem>
-                <SelectItem value="Warm">Warm</SelectItem>
-                <SelectItem value="Visit Again">Visit Again</SelectItem>
-                <SelectItem value="Not Met Management">Not Met Management</SelectItem>
-                <SelectItem value="Not Interested">Not Interested</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
             <Label>Zone</Label>
             <Input 
               className="bg-neutral-100 text-neutral-900 cursor-not-allowed" 
@@ -656,6 +641,16 @@ export default function NewSchoolPage() {
             <p className="text-xs text-neutral-500 mt-1">
               Zone is automatically set based on your assigned zone
             </p>
+          </div>
+          <div>
+            <Label>Cluster Code</Label>
+            <Input
+              className="bg-white text-neutral-900"
+              name="cluster_code"
+              value={form.cluster_code}
+              onChange={onChange}
+              placeholder="Enter cluster code"
+            />
           </div>
           <div>
             <Label>Follow-up date *</Label>

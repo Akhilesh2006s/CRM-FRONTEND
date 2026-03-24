@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Pencil } from 'lucide-react'
-import { apiRequest } from '@/lib/api'
+import { apiRequest, resolveUploadUrl } from '@/lib/api'
 import { toast } from 'sonner'
 
 type Service = {
@@ -181,7 +181,7 @@ export default function ServicesListPage() {
                   </td>
                   <td className="py-2 px-3">
                     {s.poImageUrl ? (
-                      <a href={s.poImageUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">View</a>
+                      <a href={resolveUploadUrl(s.poImageUrl)} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">View</a>
                     ) : '-'}
                   </td>
                   <td className="py-2 px-3 text-center">

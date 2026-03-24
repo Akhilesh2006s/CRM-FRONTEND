@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
-import { apiRequest, API_BASE_URL } from '@/lib/api'
+import { apiRequest, API_BASE_URL, resolveUploadUrl } from '@/lib/api'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Pencil, Package, Plus, Upload, X, Search, CreditCard, FileText, PlusCircle, Filter, Calendar, RefreshCw } from 'lucide-react'
+import { Pencil, Package, Plus, Upload, X, Search, FileText, PlusCircle, Filter, Calendar, RefreshCw } from 'lucide-react'
 import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
 import { useProducts } from '@/hooks/useProducts'
@@ -53,6 +53,7 @@ export default function ClientDCPage() {
   const [loading, setLoading] = useState(true)
   const [selectedDC, setSelectedDC] = useState<DC | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [backendSearching, setBackendSearching] = useState(false)
   
   // Filter states
   const [selectedYear, setSelectedYear] = useState<string>('all')
@@ -84,8 +85,6 @@ export default function ClientDCPage() {
   const [dcNotes, setDcNotes] = useState('')
   const [dcPoPhotoUrl, setDcPoPhotoUrl] = useState('')
   const [savingClientDC, setSavingClientDC] = useState(false)
-  // Invoice view state
-  const [invoiceModalOpen, setInvoiceModalOpen] = useState(false)
   const [invoiceData, setInvoiceData] = useState<{
     schoolInfo: any
     paymentBreakdown: any[]
@@ -770,7 +769,6 @@ export default function ClientDCPage() {
         discountRemarks: (dcOrder as any)?.discountRemarks || '',
         financialYear,
       })
-      setInvoiceModalOpen(true)
     } catch (e: any) {
       console.error('Failed to load invoice:', e)
       toast.error('Failed to load invoice data: ' + (e?.message || 'Unknown error'))
@@ -1685,10 +1683,6 @@ export default function ClientDCPage() {
         toast.success('Client Request submitted successfully!')
       }
       setClientDCDialogOpen(false)
-      // Open invoice modal after a short delay
-      setTimeout(() => {
-        setInvoiceModalOpen(true)
-      }, 500)
       load()
     } catch (e: any) {
       toast.error(e?.message || 'Failed to submit Client Request')
@@ -2068,12 +2062,14 @@ export default function ClientDCPage() {
     const query = searchQuery.trim().toLowerCase()
     if (query) {
       filtered = filtered.filter((d) => {
+        const schoolCode = (typeof d.dcOrderId === 'object' && d.dcOrderId?.school_code) ? d.dcOrderId.school_code.toLowerCase() : ''
         const customerName = (d.customerName || d.saleId?.customerName || d.dcOrderId?.school_name || '').toLowerCase()
         const phone = (d.customerPhone || d.dcOrderId?.contact_mobile || '').toLowerCase()
         const product = (d.product || d.saleId?.product || (d.dcOrderId?.products && Array.isArray(d.dcOrderId.products) ? d.dcOrderId.products.map((p: any) => p.product_name || p.product).join(', ') : '')).toLowerCase()
         const status = (d.status || 'created').toLowerCase()
         
-        return customerName.includes(query) || 
+        return schoolCode.includes(query) ||
+               customerName.includes(query) || 
                phone.includes(query) || 
                product.includes(query) || 
                status.includes(query)
@@ -2146,6 +2142,50 @@ export default function ClientDCPage() {
       return dateB - dateA
     })
   }, [items, searchQuery, selectedStatus, selectedProduct, selectedYear, dateFrom, dateTo])
+
+  const searchBySchoolCode = async (code: string) => {
+    if (!code || code.length < 3) return
+    setBackendSearching(true)
+    try {
+      const results = await apiRequest<any[]>(`/dc-orders?school_code=${encodeURIComponent(code)}`)
+      if (results?.length) {
+        setItems((prev) => {
+          const existingIds = new Set(prev.map((i) => i._id))
+          const mapped: DC[] = results
+            .filter((r) => !existingIds.has(r._id))
+            .map((r) => ({
+              _id: r._id,
+              customerName: r.school_name || '',
+              customerPhone: r.contact_mobile || '',
+              status: r.status || 'created',
+              dcOrderId: {
+                _id: r._id,
+                school_name: r.school_name,
+                school_code: r.school_code,
+                contact_mobile: r.contact_mobile,
+                email: r.email,
+                products: r.products,
+                status: r.status,
+                school_type: r.school_type,
+                createdAt: r.createdAt,
+              },
+            }))
+          return [...prev, ...mapped]
+        })
+      }
+    } catch (e) {
+      // silently fail — local results still shown
+    } finally {
+      setBackendSearching(false)
+    }
+  }
+
+  useEffect(() => {
+    const isCodeLike = /^[a-zA-Z]{2,5}\d*/i.test(searchQuery)
+    if (!isCodeLike) return
+    const t = setTimeout(() => searchBySchoolCode(searchQuery), 500)
+    return () => clearTimeout(t)
+  }, [searchQuery])
   
   // Count active filters
   const activeFiltersCount = useMemo(() => {
@@ -2197,7 +2237,7 @@ export default function ClientDCPage() {
           <div className="relative flex-1 min-w-[300px]">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-neutral-400" />
             <Input
-              placeholder="Search by client name, phone, product, or status..."
+              placeholder="Search by school code or name..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-11 pr-10 h-11 border-neutral-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
@@ -2379,6 +2419,7 @@ export default function ClientDCPage() {
             Showing <span className="font-semibold text-neutral-900">{filteredItems.length}</span> of{' '}
             <span className="font-semibold text-neutral-900">{items.length}</span> clients
           </div>
+          {backendSearching && <span className="text-xs text-neutral-500">Searching backend...</span>}
         </div>
 
         {loading && (
@@ -2541,19 +2582,7 @@ export default function ClientDCPage() {
                             </Button>
                               )}
                           </div>
-                          ) : (
-                            <div className="flex items-center gap-2 justify-center">
-                              <Button 
-                                size="sm" 
-                                variant="outline"
-                                onClick={() => openInvoiceView(d)}
-                                className="border-neutral-200 hover:bg-neutral-50 shadow-sm"
-                              >
-                                <CreditCard className="w-4 h-4 mr-2" />
-                                View Invoice
-                              </Button>
-                            </div>
-                          )}
+                          ) : null}
                         </TableCell>
                       </TableRow>
                     )
@@ -2596,7 +2625,7 @@ export default function ClientDCPage() {
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium">PO Document (PDF)</span>
                       <a 
-                        href={viewingPoUrl} 
+                        href={resolveUploadUrl(viewingPoUrl)} 
                         target="_blank" 
                         rel="noopener noreferrer"
                         className="text-blue-600 hover:text-blue-800 text-sm underline"
@@ -2606,13 +2635,13 @@ export default function ClientDCPage() {
                     </div>
                     {viewingPoUrl.startsWith('data:') ? (
                       <iframe 
-                        src={viewingPoUrl} 
+                        src={resolveUploadUrl(viewingPoUrl)} 
                         className="w-full h-[70vh] rounded border"
                         title="PO Document"
                       />
                     ) : (
                       <iframe 
-                        src={`${viewingPoUrl}#toolbar=0`} 
+                        src={`${resolveUploadUrl(viewingPoUrl)}#toolbar=0`} 
                         className="w-full h-[70vh] rounded border"
                         title="PO Document"
                       />
@@ -2621,7 +2650,7 @@ export default function ClientDCPage() {
                 ) : (
                   <div className="relative">
                     <img 
-                      src={viewingPoUrl} 
+                      src={resolveUploadUrl(viewingPoUrl)} 
                       alt="PO Document" 
                       className="w-full h-auto rounded border max-h-[70vh] object-contain bg-neutral-50 mx-auto"
                       onError={(e) => {
@@ -2681,7 +2710,7 @@ export default function ClientDCPage() {
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-medium">PO Document (PDF)</span>
                         <a 
-                          href={dcPoPhotoUrl} 
+                          href={resolveUploadUrl(dcPoPhotoUrl)} 
                           target="_blank" 
                           rel="noopener noreferrer"
                           className="text-blue-600 hover:text-blue-800 text-sm underline"
@@ -2691,13 +2720,13 @@ export default function ClientDCPage() {
                       </div>
                       {dcPoPhotoUrl.startsWith('data:') ? (
                         <iframe 
-                          src={dcPoPhotoUrl} 
+                          src={resolveUploadUrl(dcPoPhotoUrl)} 
                           className="w-full h-96 rounded border"
                           title="PO Document"
                         />
                       ) : (
                         <iframe 
-                          src={`${dcPoPhotoUrl}#toolbar=0`} 
+                          src={`${resolveUploadUrl(dcPoPhotoUrl)}#toolbar=0`} 
                           className="w-full h-96 rounded border"
                           title="PO Document"
                         />
@@ -2705,7 +2734,7 @@ export default function ClientDCPage() {
                     </div>
                   ) : (
                     <img 
-                      src={dcPoPhotoUrl} 
+                      src={resolveUploadUrl(dcPoPhotoUrl)} 
                       alt="PO Document" 
                       className="w-full h-auto rounded border max-h-64 object-contain bg-neutral-50"
                       onError={(e) => {
@@ -3150,7 +3179,7 @@ export default function ClientDCPage() {
                       </div>
                       <div className="flex flex-col gap-2">
                         <a
-                          href={editFormData.pod_proof_url}
+                          href={resolveUploadUrl(editFormData.pod_proof_url)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-sm text-blue-600 hover:underline"
@@ -3778,142 +3807,6 @@ export default function ClientDCPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Invoice View Modal */}
-      <Dialog open={invoiceModalOpen} onOpenChange={setInvoiceModalOpen}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto p-0">
-          <DialogHeader className="bg-green-600 text-white p-4">
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-white hover:bg-green-700 p-0 h-auto"
-                onClick={() => setInvoiceModalOpen(false)}
-              >
-                ←
-              </Button>
-              <DialogTitle className="text-white">Payments Info [{invoiceData?.financialYear || '2025-26'}]</DialogTitle>
-            </div>
-          </DialogHeader>
-          
-          {invoiceData && (
-            <div className="bg-white">
-              {/* Payment Information List */}
-              <div className="divide-y divide-neutral-200">
-                {/* School Name */}
-                <div className="flex justify-between items-center p-4 bg-neutral-50">
-                  <span className="text-teal-600 font-medium">School Name:</span>
-                  <span className="text-black font-medium">{invoiceData.schoolInfo.customerName || '-'}</span>
-                </div>
-
-                {/* Previous Due */}
-                <div className="flex justify-between items-center p-4 bg-white">
-                  <span className="text-teal-600 font-medium">Previous Due:</span>
-                  <span className="text-black">Rs.{invoiceData.previousDue?.toFixed(2) || '0.00'}</span>
-                </div>
-
-                {/* Current Total Bill */}
-                <div className="flex justify-between items-center p-4 bg-neutral-50">
-                  <span className="text-teal-600 font-medium">Current Total Bill:</span>
-                  <span className="text-black">Rs.{invoiceData.totalAmount?.toFixed(2) || '0.00'}</span>
-                </div>
-
-                {/* TotalPaidAsOn */}
-                <div className="flex justify-between items-center p-4 bg-white">
-                  <span className="text-teal-600 font-medium">TotalPaidAsOn:</span>
-                  <span className="text-black">Rs.{invoiceData.totalPaidAsOn?.toFixed(2) || '0.00'}</span>
-                </div>
-
-                {/* TotalReturnValue */}
-                <div className="flex justify-between items-center p-4 bg-neutral-50">
-                  <span className="text-teal-600 font-medium">TotalReturnValue:</span>
-                  <span className="text-black">Rs.{invoiceData.totalReturnValue?.toFixed(2) || '0.00'}</span>
-                </div>
-
-                {/* TotalDue */}
-                <div className="flex justify-between items-center p-4 bg-white">
-                  <span className="text-teal-600 font-medium">TotalDue:</span>
-                  <span className="text-black">Rs.{invoiceData.totalDue?.toFixed(2) || '0.00'}</span>
-                </div>
-
-                {/* Products from Database */}
-                {invoiceData.paymentBreakdown && invoiceData.paymentBreakdown.length > 0 ? (
-                  invoiceData.paymentBreakdown.map((product: any, index: number) => {
-                    // Use strength as quantity (number of students/items), fallback to quantity field
-                    const quantity = product.strength !== undefined ? product.strength : (product.quantity !== undefined ? product.quantity : 0)
-                    // Get price from database - unitPrice comes from DcOrder or DC productDetails (both from database)
-                    const price = product.unitPrice !== undefined && product.unitPrice !== null 
-                      ? Number(product.unitPrice) 
-                      : (product.price !== undefined && product.price !== null 
-                          ? Number(product.price) 
-                          : 0)
-                    const productName = product.product || 'Product'
-                    const bgColor1 = (index * 2) % 2 === 0 ? 'bg-neutral-50' : 'bg-white'
-                    const bgColor2 = (index * 2 + 1) % 2 === 0 ? 'bg-neutral-50' : 'bg-white'
-                    
-                    return (
-                      <div key={index}>
-                        {/* Product Quantity - show 0 if quantity is 0 */}
-                        <div className={`flex justify-between items-center p-4 ${bgColor1}`}>
-                          <span className="text-teal-600 font-medium">{productName}:</span>
-                          <span className="text-black">{quantity}</span>
-                        </div>
-                        {/* Product Price - from database (DcOrder.unit_price or DC.productDetails.price) */}
-                        <div className={`flex justify-between items-center p-4 ${bgColor2}`}>
-                          <span className="text-teal-600 font-medium">{productName}Price:</span>
-                          <span className="text-black">{price > 0 ? `Rs.${price.toFixed(2)}` : '-'}</span>
-                        </div>
-                      </div>
-                    )
-                  })
-                ) : (
-                  <div className="flex justify-between items-center p-4 bg-neutral-50">
-                    <span className="text-teal-600 font-medium">No products found</span>
-                    <span className="text-black">-</span>
-                  </div>
-                )}
-
-                {/* OtherCharges */}
-                <div className="flex justify-between items-center p-4 bg-neutral-50">
-                  <span className="text-teal-600 font-medium">OtherCharges:</span>
-                  <span className="text-black">{invoiceData.otherCharges?.toFixed(2) || '0.00'}</span>
-                </div>
-
-                {/* OtherChargesRemarks */}
-                <div className="flex justify-between items-center p-4 bg-white">
-                  <span className="text-teal-600 font-medium">OtherChargesRemarks:</span>
-                  <span className="text-black">{invoiceData.otherChargesRemarks || '-'}</span>
-                </div>
-
-                {/* Discount */}
-                <div className="flex justify-between items-center p-4 bg-neutral-50">
-                  <span className="text-teal-600 font-medium">Discount:</span>
-                  <span className="text-black">{invoiceData.discount?.toFixed(2) || '0.00'}</span>
-                </div>
-
-                {/* DiscountRemarks */}
-                <div className="flex justify-between items-center p-4 bg-white">
-                  <span className="text-teal-600 font-medium">DiscountRemarks:</span>
-                  <div className="flex-1 max-w-[200px] ml-4">
-                    <Textarea
-                      value={invoiceData.discountRemarks || ''}
-                      readOnly
-                      disabled
-                      className="bg-neutral-100 rounded-lg text-sm min-h-[40px]"
-                      placeholder=""
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <DialogFooter className="p-4 border-t">
-            <Button variant="outline" onClick={() => setInvoiceModalOpen(false)}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
