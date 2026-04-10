@@ -1,6 +1,36 @@
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
-  "https://crm-backend-production-fc85.up.railway.app";
+export const LOCAL_API_BASE_URL = "http://localhost:5001";
+export const PROD_API_BASE_URL = "https://crm-backend-production-fc85.up.railway.app";
+
+function normalizeClientApiBase(): string {
+  const raw =
+    process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
+    PROD_API_BASE_URL;
+  try {
+    const u = new URL(raw);
+    const port = u.port || (u.protocol === "https:" ? "443" : "80");
+    const isLocalHost = u.hostname === "localhost" || u.hostname === "127.0.0.1";
+
+    if (process.env.NODE_ENV === "production" && isLocalHost) {
+      return PROD_API_BASE_URL;
+    }
+    if (isLocalHost && port === "5000") {
+      return LOCAL_API_BASE_URL;
+    }
+  } catch {
+    if (
+      process.env.NODE_ENV === "production" &&
+      (raw.includes("localhost") || raw.includes("127.0.0.1"))
+    ) {
+      return PROD_API_BASE_URL;
+    }
+    if (raw.includes("localhost:5000") || raw.includes("127.0.0.1:5000")) {
+      return LOCAL_API_BASE_URL;
+    }
+  }
+  return raw;
+}
+
+export const API_BASE_URL = normalizeClientApiBase();
 
 export async function apiRequest<T>(
   path: string,
