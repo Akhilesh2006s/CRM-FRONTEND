@@ -238,8 +238,8 @@ export default function TermWiseDCPage() {
       let dcOrder: any = null
       
       if (dc.dcOrderId) {
-        const dcOrderId = typeof dc.dcOrderId === 'object' 
-          ? dcOrderId._id 
+        const dcOrderId = typeof dc.dcOrderId === 'object'
+          ? dc.dcOrderId._id
           : dc.dcOrderId
         dcOrder = await apiRequest<any>(`/dc-orders/${dcOrderId}`)
         
@@ -545,93 +545,15 @@ export default function TermWiseDCPage() {
     setEditProductRows(editProductRows.filter(row => row.id !== id))
   }
 
-  const requestClientDC = async (
-    dc: DC,
-    formData: typeof requestDCFormData,
-    productRows: typeof requestDCProductRows
-  ) => {
-    const totalQuantity = productRows.reduce((sum, row) => sum + (row.quantity || 0), 0)
-    if (totalQuantity <= 0) {
-      toast.error('Please ensure at least one product with quantity > 0')
-      return
-    }
-
-    setSavingDC(true)
-    try {
-      const dcOrderId = typeof dc.dcOrderId === 'object' ? dc.dcOrderId._id : dc.dcOrderId
-      
-      if (!dcOrderId) {
-        toast.error('Cannot request DC: DC Order not found')
-        return
-      }
-
-      // Convert product rows to productDetails format (only Term 2 products)
-      // Include unit_price so it's preserved when DC goes to Closed Sales
-      const productDetails = productRows
-        .filter(row => (row.term || 'Term 1') === 'Term 2')
-        .map(row => ({
-          product: row.product_name,
-          class: '1',
-          category: formData.school_type === 'Existing' ? 'Existing School' : 'New School',
-          specs: 'Regular',
-          subject: undefined,
-          quantity: row.quantity,
-          strength: row.quantity,
-          level: 'L2',
-          term: 'Term 2',
-          unit_price: row.unit_price || 0,
-        }))
-
-      const dcPayload = {
-        dcOrderId,
-        customerName: formData.school_name || dc.customerName || '',
-        customerPhone: formData.contact_mobile || dc.customerPhone || '',
-        productDetails,
-        dcDate: new Date().toISOString().split('T')[0],
-        dcRemarks: formData.remarks,
-        dcCategory: formData.school_type === 'Existing' ? 'Existing School' : 'New School',
-        status: 'scheduled_for_later',
-      }
-
-      await apiRequest(`/dc/${dc._id}`, {
-        method: 'PUT',
-        body: JSON.stringify(dcPayload),
-      })
-
-      try {
-        const updateResponse = await apiRequest<any>(`/dc-orders/${dcOrderId}`, {
-          method: 'PUT',
-          body: JSON.stringify({
-            status: 'dc_requested',
-            dcRequestData: {
-              productDetails,
-              requestedQuantity: totalQuantity,
-              requestedAt: new Date().toISOString(),
-            },
-          }),
-        })
-        if (updateResponse?.status !== 'dc_requested') {
-          toast.warning('DC updated, but DcOrder status may not have been updated. Please check Closed Sales page.')
-        }
-      } catch (dcOrderError: any) {
-        toast.error(`Failed to update DcOrder status: ${dcOrderError?.message || 'Unknown error'}.`)
-      }
-
-      toast.success('DC requested successfully! It will appear in Closed Sales page.')
-      load()
-    } catch (e: any) {
-      toast.error(e?.message || 'Failed to request DC')
-    } finally {
-      setSavingDC(false)
-    }
-  }
-
   const openRequestDCDialog = async (dc: DC) => {
+    setSelectedDC(dc)
+
     const dcOrderId = typeof dc.dcOrderId === 'object' ? dc.dcOrderId._id : dc.dcOrderId
     if (!dcOrderId) {
       toast.error('Cannot request DC: DC Order not found')
       return
     }
+
     try {
       const fullDC = await apiRequest<any>(`/dc/${dc._id}`).catch(() => dc)
       const dcOrder = await apiRequest<any>(`/dc-orders/${dcOrderId}`)
@@ -656,20 +578,134 @@ export default function TermWiseDCPage() {
         pincode: dcOrder.pendingEdit?.pincode || dcOrder.pincode || '',
       }
 
-      const sourceProducts = fullDC?.productDetails || dcOrder?.products || []
-      const term2Products = sourceProducts.filter((p: any) => p.term === 'Term 2')
+      setRequestDCFormData(formData)
 
-      const productRows = term2Products.map((p: any, idx: number) => ({
-        id: String(idx + 1),
-        product_name: p.product_name || p.product || '',
-        quantity: p.quantity || 0,
-        unit_price: p.unit_price || 0,
-        term: p.term || 'Term 2',
-      }))
+      let term2Products: any[] = []
 
-      await requestClientDC(dc, formData, productRows)
+      if (fullDC.productDetails && Array.isArray(fullDC.productDetails) && fullDC.productDetails.length > 0) {
+        const dcTerm2Products = fullDC.productDetails.filter((p: any) => (p.term || 'Term 1') === 'Term 2')
+        if (dcTerm2Products.length > 0) {
+          term2Products = dcTerm2Products.map((p: any) => {
+            const matchingDcOrderProduct = (dcOrder.products || []).find((op: any) => {
+              const orderProductName = (op.product_name || '').toLowerCase().trim()
+              const dcProductName = (p.product || p.product_name || '').toLowerCase().trim()
+              return orderProductName === dcProductName && (op.term || 'Term 1') === 'Term 2'
+            })
+
+            return {
+              product_name: p.product || p.product_name || '',
+              quantity: p.quantity || p.strength || 0,
+              unit_price: matchingDcOrderProduct?.unit_price || p.unit_price || p.price || 0,
+              term: p.term || 'Term 2',
+            }
+          })
+        }
+      }
+
+      if (term2Products.length === 0) {
+        const dcOrderTerm2Products = (dcOrder.products || []).filter((p: any) => (p.term || 'Term 1') === 'Term 2')
+        term2Products = dcOrderTerm2Products.map((p: any) => ({
+          product_name: p.product_name || '',
+          quantity: p.quantity || 0,
+          unit_price: p.unit_price || 0,
+          term: p.term || 'Term 2',
+        }))
+      }
+
+      setRequestDCProductRows(
+        term2Products.map((p: any, idx: number) => ({
+          id: String(idx + 1),
+          product_name: p.product_name || '',
+          quantity: p.quantity || 0,
+          unit_price: p.unit_price || 0,
+          term: p.term || 'Term 2',
+        }))
+      )
+
+      setRequestDCDialogOpen(true)
     } catch (e: any) {
       toast.error(e?.message || 'Failed to load DC Order details')
+    }
+  }
+
+  const requestClientDC = async () => {
+    if (!selectedDC) return
+
+    const totalQuantity = requestDCProductRows.reduce((sum, row) => sum + (row.quantity || 0), 0)
+    if (totalQuantity <= 0) {
+      toast.error('Please ensure at least one product with quantity > 0')
+      return
+    }
+
+    setSavingDC(true)
+    try {
+      const dcOrderId =
+        typeof selectedDC.dcOrderId === 'object' ? selectedDC.dcOrderId._id : selectedDC.dcOrderId
+
+      if (!dcOrderId) {
+        toast.error('Cannot request DC: DC Order not found')
+        return
+      }
+
+      const productDetails = requestDCProductRows
+        .filter((row) => (row.term || 'Term 1') === 'Term 2')
+        .map((row) => ({
+          product: row.product_name,
+          class: '1',
+          category: requestDCFormData.school_type === 'Existing' ? 'Existing School' : 'New School',
+          specs: 'Regular',
+          subject: undefined,
+          quantity: row.quantity,
+          strength: row.quantity,
+          level: 'L2',
+          term: 'Term 2',
+          unit_price: row.unit_price || 0,
+        }))
+
+      const dcPayload = {
+        dcOrderId,
+        customerName: requestDCFormData.school_name || selectedDC.customerName || '',
+        customerPhone: requestDCFormData.contact_mobile || selectedDC.customerPhone || '',
+        productDetails,
+        dcDate: new Date().toISOString().split('T')[0],
+        dcRemarks: requestDCFormData.remarks,
+        dcCategory: requestDCFormData.school_type === 'Existing' ? 'Existing School' : 'New School',
+        status: 'scheduled_for_later',
+      }
+
+      await apiRequest(`/dc/${selectedDC._id}`, {
+        method: 'PUT',
+        body: JSON.stringify(dcPayload),
+      })
+
+      try {
+        const updateResponse = await apiRequest<any>(`/dc-orders/${dcOrderId}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            status: 'dc_requested',
+            dcRequestData: {
+              productDetails,
+              requestedQuantity: totalQuantity,
+              requestedAt: new Date().toISOString(),
+            },
+          }),
+        })
+        if (updateResponse?.status !== 'dc_requested') {
+          toast.warning('DC updated, but DcOrder status may not have been updated. Please check Closed Sales page.')
+        }
+      } catch (dcOrderError: any) {
+        toast.error(
+          `Failed to update DcOrder status: ${dcOrderError?.message || 'Unknown error'}. Please refresh Closed Sales page manually.`
+        )
+      }
+
+      toast.success('DC requested successfully! It will appear in Closed Sales page.')
+      setRequestDCDialogOpen(false)
+      load()
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to request DC')
+    } finally {
+      setSavingDC(false)
     }
   }
 
@@ -1341,7 +1377,6 @@ export default function TermWiseDCPage() {
         </DialogContent>
       </Dialog>
 
-<<<<<<< HEAD
       {/* Request DC Dialog */}
       <Dialog open={requestDCDialogOpen} onOpenChange={setRequestDCDialogOpen}>
         <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
@@ -1568,8 +1603,6 @@ export default function TermWiseDCPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-=======
->>>>>>> 93f86bc3de588cf1a9bf985579511f864d2dc43c
     </div>
   )
 }
