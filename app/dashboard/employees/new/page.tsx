@@ -37,17 +37,41 @@ export default function NewEmployeePage() {
 
   const loadZones = async () => {
     try {
-      const data = await apiRequest<any[]>('/zones-clusters')
+      // Zone–cluster pairs (optional). The Clusters / Zones admin pages only hit
+      // /clusters and /zones, so this collection is often empty unless someone
+      // POSTs to /zones-clusters — without a merge, the employee form shows no clusters.
+      const [pairsRaw, zonesRaw, clustersRaw] = await Promise.all([
+        apiRequest<{ zone?: string; cluster?: string }[]>('/zones-clusters').catch(() => []),
+        apiRequest<{ name?: string }[]>('/zones').catch(() => []),
+        apiRequest<{ name?: string }[]>('/clusters').catch(() => []),
+      ])
+      const pairs = Array.isArray(pairsRaw) ? pairsRaw : []
+      const zoneDocs = Array.isArray(zonesRaw) ? zonesRaw : []
+      const clusterDocs = Array.isArray(clustersRaw) ? clustersRaw : []
+
       const zoneMap: Record<string, string[]> = {}
-      data.forEach((zc) => {
+      pairs.forEach((zc) => {
         const zone = (zc.zone || '').trim()
         if (!zone) return
         if (!zoneMap[zone]) zoneMap[zone] = []
-        if (zc.cluster && !zoneMap[zone].includes(zc.cluster)) {
-          zoneMap[zone].push(zc.cluster)
-        }
+        const cl = (zc.cluster || '').trim()
+        if (cl && !zoneMap[zone].includes(cl)) zoneMap[zone].push(cl)
       })
-      setZones(Object.keys(zoneMap).sort())
+
+      const zoneNamesFromApi = zoneDocs.map((z) => (z.name || '').trim()).filter(Boolean)
+      const clusterNames = clusterDocs.map((c) => (c.name || '').trim()).filter(Boolean)
+
+      const allZones = [...new Set([...Object.keys(zoneMap), ...zoneNamesFromApi])].sort((a, b) =>
+        a.localeCompare(b)
+      )
+
+      for (const z of allZones) {
+        if (!zoneMap[z]?.length && clusterNames.length) {
+          zoneMap[z] = [...clusterNames]
+        }
+      }
+
+      setZones(allZones)
       setClustersByZone(zoneMap)
     } catch (e) {
       console.error('Failed to load zones & clusters', e)
