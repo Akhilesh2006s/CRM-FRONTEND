@@ -333,6 +333,7 @@ export function Sidebar() {
         icon: TrendingUp,
         children: [
           { label: 'Add Lead', href: '/dashboard/leads/add', icon: PlusCircle },
+          { label: 'Renewal Leads', href: '/dashboard/leads/renewal', icon: Building2 },
           { label: 'Followup Leads', href: '/dashboard/leads/followup', icon: Phone },
         ],
       },

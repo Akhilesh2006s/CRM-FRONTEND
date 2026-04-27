@@ -11,8 +11,43 @@ const productSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const followUpProductSchema = new mongoose.Schema(
+  {
+    product_name: { type: String, required: true, trim: true },
+    term: { type: String, enum: ['Term 1', 'Term 2', 'Both'], default: 'Term 1' },
+    status: {
+      type: String,
+      enum: ['Hot', 'Warm', 'Visit Again', 'Not Met Management', 'Not Interested'],
+      default: 'Warm',
+    },
+    strength: { type: Number, default: 0, min: 0 },
+    chance: { type: Number, default: 0, min: 0, max: 100 },
+  },
+  { _id: false }
+);
+
 const leadSchema = new mongoose.Schema(
   {
+    // Segmentation: new school vs existing school (DcOrder) renewal
+    lead_type: {
+      type: String,
+      enum: ['new', 'renewal'],
+      default: 'new',
+      index: true,
+    },
+    // Existing client / school record (DcOrder) — required for renewal leads
+    school_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'DcOrder',
+      index: true,
+    },
+    // Audit snapshot when renewal lead was created
+    renewalSource: {
+      snapshotAt: { type: Date },
+      sourceSchoolName: { type: String, trim: true },
+      sourceSchoolCode: { type: String, trim: true },
+    },
+
     // Core school/deal info
     school_name: {
       type: String,
@@ -87,6 +122,10 @@ const leadSchema = new mongoose.Schema(
     follow_up_date: {
       type: Date,
     },
+    year: {
+      type: String,
+      trim: true,
+    },
     remarks: {
       type: String,
       default: '',
@@ -109,6 +148,14 @@ const leadSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    updateHistory: [{
+      follow_up_date: { type: Date },
+      remarks: { type: String },
+      priority: { type: String, enum: ['Hot', 'Warm', 'Cold', 'Visit Again', 'Not Met Management', 'Not Interested'] },
+      productsInterested: { type: [followUpProductSchema], default: [] },
+      updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      updatedAt: { type: Date, default: Date.now },
+    }],
 
     // Ownership
     createdBy: {
@@ -126,6 +173,9 @@ const leadSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+leadSchema.index({ lead_type: 1, status: 1 });
+leadSchema.index({ school_id: 1, lead_type: 1 });
 
 module.exports = mongoose.model('Lead', leadSchema);
 

@@ -5,6 +5,7 @@ const ctrl = require('../controllers/dcOrderController');
 
 // Static path first so it is not matched by /:id (would 404 as invalid ObjectId)
 router.get('/po-change-requests/list', authMiddleware, ctrl.listPoChangeRequests);
+router.get('/renewal-search', authMiddleware, ctrl.renewalSearch);
 router.get('/', authMiddleware, ctrl.list);
 router.post('/create', authMiddleware, ctrl.create);
 // Specific routes must come before parameterized routes

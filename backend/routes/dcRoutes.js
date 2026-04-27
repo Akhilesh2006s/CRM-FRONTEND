@@ -24,6 +24,7 @@ const {
   getSentToManagerDCs,
   getPendingWarehouseDCs,
   getMyDCs,
+  recordShortageDC,
   updateDC,
   submitDCToManager,
   exportSalesVisit,
@@ -76,6 +77,7 @@ router.post('/:id/admin-review', authMiddleware, adminReviewPO);
 router.post('/:id/manager-request', authMiddleware, managerRequestWarehouse);
 router.post('/:id/warehouse-process', authMiddleware, warehouseProcess);
 router.post('/:id/submit-to-manager', authMiddleware, submitDCToManager);
+router.post('/:id/record-shortage', authMiddleware, recordShortageDC);
 
 // Legacy actions
 router.post('/raise', authMiddleware, raiseDC);

@@ -4,6 +4,41 @@ const ExcelJS = require('exceljs');
 const mongoose = require('mongoose');
 const { generateSchoolCode } = require('../utils/schoolCodeGenerator');
 
+const VALID_PRODUCT_TERMS = ['Term 1', 'Term 2', 'Both'];
+
+function mapProductsFromInterested(productsInput) {
+  if (!Array.isArray(productsInput)) return [];
+  return productsInput
+    .filter((p) => p && (p.product_name || p.product))
+    .map((p) => ({
+      product_name: String(p.product_name || p.product || '').trim(),
+      quantity: Math.max(0, Number(p.quantity ?? p.strength) || 1),
+      unit_price: Number(p.unit_price) || 0,
+      term: ['Term 1', 'Term 2', 'Both'].includes(p.term) ? p.term : 'Term 1',
+      deliverables: Array.isArray(p.deliverables) ? p.deliverables : [],
+    }));
+}
+
+function normalizeLeadProducts(products) {
+  if (!Array.isArray(products)) return products;
+
+  return products.map((p) => {
+    const product = { ...p };
+
+    // Backwards compatibility: if term is missing, default to 'Term 1'
+    if (product.term == null || product.term === '') {
+      product.term = 'Term 1';
+      return product;
+    }
+
+    if (!VALID_PRODUCT_TERMS.includes(product.term)) {
+      throw new Error('Invalid product term. Allowed values are: Term 1, Term 2, Both.');
+    }
+
+    return product;
+  });
+}
+
 // @desc    Get all leads
 // @route   GET /api/leads
 // @access  Private
@@ -26,9 +61,18 @@ const getLeads = async (req, res) => {
       schoolName, 
       contactMobile, 
       fromDate, 
-      toDate 
+      toDate,
+      lead_type: leadType,
     } = req.query;
     const filter = {};
+
+    if (leadType) {
+      if (String(leadType).includes(',')) {
+        filter.lead_type = { $in: String(leadType).split(',').map((s) => s.trim()) };
+      } else {
+        filter.lead_type = leadType;
+      }
+    }
 
     if (status) {
       // Handle multiple statuses (comma-separated)
@@ -106,7 +150,9 @@ const getLeads = async (req, res) => {
     // Query with pagination - optimized for performance
     // Only populate essential fields for list view
     let query = Lead.find(filter)
-      .select('school_name school_code contact_person contact_mobile zone status follow_up_date location strength createdAt remarks priority managed_by assigned_by createdBy') // Only select needed fields
+      .select(
+        'school_name school_code contact_person contact_mobile zone status follow_up_date location strength createdAt remarks priority managed_by assigned_by createdBy lead_type school_id renewalSource'
+      ) // Only select needed fields
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
@@ -129,6 +175,12 @@ const getLeads = async (req, res) => {
           path: 'createdBy',
           select: 'name email',
           strictPopulate: false
+        })
+        .populate({
+          path: 'school_id',
+          select:
+            'school_name school_code dc_code contact_person contact_mobile zone location city state region area pincode strength address school_type status',
+          strictPopulate: false,
         });
     } catch (populateError) {
       console.warn('Error setting up populate:', populateError);
@@ -165,7 +217,11 @@ const getLeads = async (req, res) => {
 const getLead = async (req, res) => {
   try {
     const lead = await Lead.findById(req.params.id)
-      .populate('createdBy', 'name email');
+      .populate('createdBy', 'name email')
+      .populate(
+        'school_id',
+        'school_name school_code dc_code contact_person contact_mobile zone location city state region area pincode strength address school_type products status remarks'
+      );
 
     if (!lead) {
       return res.status(404).json({ message: 'Lead not found' });
@@ -182,17 +238,35 @@ const getLead = async (req, res) => {
 // @access  Private
 const createLead = async (req, res) => {
   try {
+    if (req.body && req.body.lead_type === 'renewal') {
+      return createRenewalLead(req, res);
+    }
+
     const leadData = {
       ...req.body,
       createdBy: req.user._id,
     };
+    if (leadData.lead_type == null || leadData.lead_type === '') {
+      leadData.lead_type = 'new';
+    }
+    delete leadData.school_id;
+    delete leadData.renewalSource;
+
+    // Normalize product terms (adds default Term 1 when missing, validates when provided)
+    try {
+      leadData.products = normalizeLeadProducts(leadData.products);
+    } catch (termError) {
+      return res.status(400).json({ message: termError.message || 'Invalid product term' });
+    }
     
     // Auto-generate school code if not provided
     // Use managed_by or assigned_by if available, otherwise use the creator
     if (!leadData.school_code) {
-      const executiveId = leadData.managed_by || leadData.assigned_by || req.user._id;
       try {
-        const schoolCode = await generateSchoolCode(executiveId);
+        const schoolCode = await generateSchoolCode({
+          region: leadData.region || '',
+          city: leadData.city || '',
+        });
         if (schoolCode) {
           leadData.school_code = schoolCode;
         }
@@ -214,6 +288,95 @@ const createLead = async (req, res) => {
   }
 };
 
+// Renewal: link to existing DcOrder (school_id), minimal payload; autofill from order
+const createRenewalLead = async (req, res) => {
+  try {
+    const schoolId = req.body.school_id;
+    if (!schoolId || !mongoose.Types.ObjectId.isValid(schoolId)) {
+      return res.status(400).json({
+        message: 'Renewal lead requires school_id (select an existing school from search).',
+      });
+    }
+
+    const order = await DcOrder.findById(schoolId).lean();
+    if (!order) {
+      return res.status(404).json({
+        message: 'School not found in clients. Use Add Lead for new schools.',
+      });
+    }
+
+    const code = String(order.school_code || order.dc_code || '').trim();
+    const productsFromBody = mapProductsFromInterested(req.body.products || req.body.productsInterested);
+    if (productsFromBody.length === 0) {
+      return res.status(400).json({ message: 'Add at least one product interested for this renewal.' });
+    }
+    let productsNormalized;
+    try {
+      productsNormalized = normalizeLeadProducts(productsFromBody);
+    } catch (termError) {
+      return res.status(400).json({ message: termError.message || 'Invalid product term' });
+    }
+
+    const userId = req.user._id;
+    const contactPerson =
+      (req.body.contact_person != null && String(req.body.contact_person).trim() !== '')
+        ? String(req.body.contact_person).trim()
+        : (order.contact_person || '');
+    const contactMobile =
+      (req.body.contact_mobile != null && String(req.body.contact_mobile).trim() !== '')
+        ? String(req.body.contact_mobile).trim()
+        : (order.contact_mobile || '');
+
+    if (!contactPerson || !contactMobile) {
+      return res.status(400).json({
+        message: 'Contact person and mobile are required (prefilled from school; edit if needed).',
+      });
+    }
+
+    const leadData = {
+      lead_type: 'renewal',
+      school_id: schoolId,
+      school_name: order.school_name,
+      school_code: code || undefined,
+      contact_person: contactPerson,
+      contact_mobile: contactMobile,
+      products: productsNormalized,
+      location: order.location || order.address || '',
+      pincode: order.pincode,
+      state: order.state,
+      city: order.city,
+      region: order.region,
+      area: order.area,
+      zone: order.zone || '',
+      strength: order.strength != null ? order.strength : 0,
+      remarks: req.body.remarks != null ? String(req.body.remarks) : '',
+      priority: ['Hot', 'Warm', 'Cold'].includes(req.body.priority) ? req.body.priority : 'Warm',
+      status: 'Pending',
+      follow_up_date: req.body.follow_up_date ? new Date(req.body.follow_up_date) : undefined,
+      createdBy: userId,
+      managed_by: userId,
+      assigned_by: userId,
+      renewalSource: {
+        snapshotAt: new Date(),
+        sourceSchoolName: order.school_name,
+        sourceSchoolCode: code,
+      },
+    };
+
+    const lead = await Lead.create(leadData);
+    const populatedLead = await Lead.findById(lead._id)
+      .populate('createdBy', 'name email')
+      .populate(
+        'school_id',
+        'school_name school_code dc_code contact_person contact_mobile zone location status'
+      );
+    return res.status(201).json(populatedLead);
+  } catch (error) {
+    console.error('createRenewalLead error:', error);
+    return res.status(500).json({ message: error.message || 'Failed to create renewal lead' });
+  }
+};
+
 // @desc    Update lead
 // @route   PUT /api/leads/:id
 // @access  Private
@@ -225,15 +388,89 @@ const updateLead = async (req, res) => {
       return res.status(404).json({ message: 'Lead not found' });
     }
 
-    // For leads, we'll store history in a simple format
-    // Since Lead model doesn't have updateHistory, we'll update directly
-    // History can be tracked via timestamps and status changes
+    // Never allow client to retag lead or re-link school via generic update
+    delete req.body.school_id;
+    delete req.body.lead_type;
+    delete req.body.renewalSource;
+
+    const hasFollowUpDate = req.body.follow_up_date !== undefined;
+    const hasRemarks = req.body.remarks !== undefined;
+    const hasPriority = req.body.priority !== undefined;
+    const hasProductsInterested = Array.isArray(req.body.productsInterested);
+    const normalizeProductsInterested = (rows = []) =>
+      rows
+        .filter((row) => row && (row.product_name || row.product))
+        .map((row) => ({
+          product_name: String(row.product_name || row.product || '').trim(),
+          term: ['Term 1', 'Term 2', 'Both'].includes(row.term) ? row.term : 'Term 1',
+          status: ['Hot', 'Warm', 'Visit Again', 'Not Met Management', 'Not Interested'].includes(row.status)
+            ? row.status
+            : 'Warm',
+          strength: Number(row.strength) || 0,
+          chance: Math.max(0, Math.min(100, Number(row.chance) || 0)),
+          quantity: Number(row.strength) || 0,
+          unit_price: 0,
+        }));
+    const normalizedProductsInterested = hasProductsInterested
+      ? normalizeProductsInterested(req.body.productsInterested)
+      : [];
+
+    // Normalize product terms if products are being updated
+    if (req.body && Array.isArray(req.body.products)) {
+      try {
+        req.body.products = normalizeLeadProducts(req.body.products);
+      } catch (termError) {
+        return res.status(400).json({ message: termError.message || 'Invalid product term' });
+      }
+    }
+    if (hasProductsInterested) {
+      req.body.products = normalizeLeadProducts(normalizedProductsInterested);
+    }
+
+    // Remove transient payload key, not a Lead top-level field
+    if (req.body.productsInterested !== undefined) {
+      delete req.body.productsInterested;
+    }
+
+    const shouldTrackHistory = hasFollowUpDate || hasRemarks || hasPriority || hasProductsInterested;
+
+    if (shouldTrackHistory) {
+      req.body.$push = {
+        updateHistory: {
+          follow_up_date: hasFollowUpDate && req.body.follow_up_date
+            ? new Date(req.body.follow_up_date)
+            : null,
+          remarks: hasRemarks ? (req.body.remarks || '') : '',
+          priority: hasPriority ? (req.body.priority || 'Cold') : 'Cold',
+          productsInterested: normalizedProductsInterested,
+          updatedBy: req.user?._id || lead.createdBy,
+          updatedAt: new Date(),
+        },
+      };
+    }
+
+    const updateData = { ...req.body };
+    const pushData = updateData.$push;
+    delete updateData.$push;
+
+    const mongoUpdate = {};
+    if (Object.keys(updateData).length > 0) {
+      mongoUpdate.$set = updateData;
+    }
+    if (pushData) {
+      mongoUpdate.$push = pushData;
+    }
+
     const updatedLead = await Lead.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      mongoUpdate,
       { new: true, runValidators: true }
     )
-      .populate('createdBy', 'name email');
+      .populate('createdBy', 'name email')
+      .populate(
+        'school_id',
+        'school_name school_code dc_code contact_person contact_mobile zone location status'
+      );
 
     res.json(updatedLead);
   } catch (error) {
@@ -271,9 +508,18 @@ const exportLeads = async (req, res) => {
       schoolName, 
       contactMobile, 
       fromDate, 
-      toDate 
+      toDate,
+      lead_type: leadTypeExport,
     } = req.query;
     const filter = {};
+
+    if (leadTypeExport) {
+      if (String(leadTypeExport).includes(',')) {
+        filter.lead_type = { $in: String(leadTypeExport).split(',').map((s) => s.trim()) };
+      } else {
+        filter.lead_type = leadTypeExport;
+      }
+    }
 
     if (status) {
       // Handle multiple statuses (comma-separated)
@@ -396,6 +642,49 @@ const convertToClient = async (req, res) => {
             }))
           : [{ product_name: 'Abacus', quantity: 1, unit_price: 0 }]);
 
+    // Renewal: school already exists as DcOrder — merge interest into it, do not duplicate client
+    if (lead.lead_type === 'renewal' && lead.school_id) {
+      const existing = await DcOrder.findById(lead.school_id);
+      if (!existing) {
+        return res.status(404).json({ message: 'Linked school (client) record not found' });
+      }
+      const mergedProducts = [...(existing.products || [])];
+      for (const p of products) {
+        const idx = mergedProducts.findIndex(
+          (x) =>
+            (x.product_name || '').toLowerCase().trim() === (p.product_name || '').toLowerCase().trim() &&
+            (x.term || 'Term 1') === (p.term || 'Term 1')
+        );
+        if (idx >= 0) {
+          mergedProducts[idx] = {
+            ...mergedProducts[idx],
+            quantity: (Number(mergedProducts[idx].quantity) || 0) + (Number(p.quantity) || 0),
+            unit_price: Number(p.unit_price) || mergedProducts[idx].unit_price || 0,
+          };
+        } else {
+          mergedProducts.push({
+            product_name: p.product_name,
+            quantity: Number(p.quantity) || 1,
+            unit_price: Number(p.unit_price) || 0,
+            term: p.term || 'Term 1',
+          });
+        }
+      }
+      existing.products = mergedProducts;
+      existing.contact_person = body.contact_person || lead.contact_person || existing.contact_person;
+      existing.contact_mobile = body.contact_mobile || lead.contact_mobile || existing.contact_mobile;
+      if (body.remarks || lead.remarks) {
+        const note = [existing.remarks, body.remarks || lead.remarks].filter(Boolean).join('\n---\n');
+        existing.remarks = note.slice(-8000);
+      }
+      await existing.save();
+      await Lead.findByIdAndUpdate(req.params.id, { status: 'Closed' });
+      const populated = await DcOrder.findById(existing._id)
+        .populate('assigned_to', 'name email')
+        .populate('created_by', 'name email');
+      return res.status(200).json(populated);
+    }
+
     const dcOrderPayload = {
       school_name: body.school_name || lead.school_name,
       contact_person: body.contact_person || lead.contact_person,
@@ -404,6 +693,8 @@ const convertToClient = async (req, res) => {
       address: body.address || lead.address,
       location: body.location || lead.location,
       zone: body.zone || lead.zone,
+      region: body.region || lead.region || '',
+      city: body.city || lead.city || '',
       school_type: body.school_type || lead.school_type || 'New',
       products,
       status: 'saved',
@@ -437,4 +728,3 @@ module.exports = {
   exportLeads,
   convertToClient,
 };
-

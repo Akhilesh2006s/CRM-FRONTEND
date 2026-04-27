@@ -43,6 +43,61 @@ const upload = multer({
   fileFilter: fileFilter
 });
 
+const ALLOWED_SHORTAGE_ROLES = new Set(['Admin', 'Super Admin', 'Executive', 'Sales Executive']);
+
+const getRowKey = (row = {}) => {
+  const product = String(row.product || row.productName || '').trim().toLowerCase();
+  const cls = String(row.class || '').trim().toLowerCase();
+  const category = String(row.category || '').trim().toLowerCase();
+  const term = String(row.term || 'Term 1').trim().toLowerCase();
+  return `${product}::${cls}::${category}::${term}`;
+};
+
+const qtyFromRow = (row = {}) => {
+  const quantity = Number(row.quantity);
+  const strength = Number(row.strength);
+  return Number.isFinite(quantity) && quantity > 0
+    ? quantity
+    : (Number.isFinite(strength) && strength > 0 ? strength : 0);
+};
+
+const normalizeProductDetails = (rows = [], { isShortage = false } = {}) =>
+  (Array.isArray(rows) ? rows : []).map((p) => {
+    const quantity = qtyFromRow(p);
+    const deliveredQuantity = Number.isFinite(Number(p.deliveredQuantity)) ? Number(p.deliveredQuantity) : 0;
+    const shortageQuantity = Number.isFinite(Number(p.shortageQuantity))
+      ? Number(p.shortageQuantity)
+      : (isShortage ? quantity : 0);
+    const strength = Number.isFinite(Number(p.strength)) && Number(p.strength) > 0 ? Number(p.strength) : quantity;
+    const price = Number(p.price) || 0;
+    return {
+      product: p.product || p.productName || '',
+      class: p.class || '1',
+      category: p.category || 'new Students',
+      productName: p.productName || p.product || '',
+      productCategory: p.productCategory || undefined,
+      quantity,
+      deliveredQuantity,
+      shortageQuantity,
+      strength,
+      price,
+      total: Number(p.total) || (price * strength),
+      level: p.level || 'L2',
+      specs: p.specs || 'Regular',
+      subject: p.subject || undefined,
+      term: p.term || 'Term 1',
+    };
+  });
+
+const calculateTotalQuantity = (rows = []) =>
+  (Array.isArray(rows) ? rows : []).reduce((sum, row) => sum + qtyFromRow(row), 0);
+
+const hasQuantityFieldsInUpdate = (body = {}) =>
+  body.requestedQuantity !== undefined ||
+  body.productDetails !== undefined ||
+  body.availableQuantity !== undefined ||
+  body.deliverableQuantity !== undefined;
+
 
 // @desc    Get all DCs with filtering
 // @route   GET /api/dc
@@ -71,7 +126,7 @@ const getDCs = async (req, res) => {
 
     // Optimize query - fetch without populate first, then populate if needed
     let dcs = await DC.find(filter)
-      .select('_id saleId dcOrderId employeeId customerName customerPhone customerEmail customerAddress product requestedQuantity availableQuantity deliverableQuantity status poPhotoUrl poDocument productDetails dcDate dcRemarks dcCategory dcNotes transport lrNo lrDate lrCost boxes transportArea deliveryStatus financeRemarks splApproval smeRemarks warehouseProcessedAt warehouseProcessedBy completedAt completedBy createdAt updatedAt')
+      .select('_id saleId dcOrderId parentDcId clusterId dcType fulfillmentStatus employeeId customerName customerPhone customerEmail customerAddress product requestedQuantity availableQuantity deliverableQuantity status poPhotoUrl poDocument productDetails dcDate dcRemarks dcCategory dcNotes transport lrNo lrDate lrCost boxes transportArea deliveryStatus financeRemarks splApproval smeRemarks warehouseProcessedAt warehouseProcessedBy completedAt completedBy createdAt updatedAt')
       .sort({ createdAt: -1 })
       .lean()
       .maxTimeMS(20000); // 20 second timeout
@@ -81,7 +136,7 @@ const getDCs = async (req, res) => {
       try {
         const populatedPromise = DC.find({ _id: { $in: dcs.map(dc => dc._id) } })
           .populate('saleId', 'customerName product quantity status poDocument')
-          .populate('dcOrderId', 'school_name school_type contact_person contact_mobile email address location zone products dc_code')
+          .populate('dcOrderId', 'school_name school_code school_type contact_person contact_mobile email address location zone products dc_code')
           .populate('employeeId', 'name email')
           .populate('createdBy', 'name email')
           .populate('submittedBy', 'name email')
@@ -124,9 +179,12 @@ const getDCs = async (req, res) => {
     }
     
     if (schoolCode) {
-      filteredDCs = filteredDCs.filter(dc => 
-        dc.dcOrderId && dc.dcOrderId.dc_code && dc.dcOrderId.dc_code.toLowerCase().includes(schoolCode.toLowerCase())
-      );
+      const q = schoolCode.toLowerCase();
+      filteredDCs = filteredDCs.filter(dc => {
+        if (!dc.dcOrderId) return false;
+        const code = (dc.dcOrderId.school_code || dc.dcOrderId.dc_code || '').toLowerCase();
+        return code.includes(q);
+      });
     }
     
     if (contactMobile) {
@@ -149,7 +207,8 @@ const getDC = async (req, res) => {
   try {
     const dc = await DC.findById(req.params.id)
       .populate('saleId', 'customerName product quantity status poDocument poSubmittedAt poSubmittedBy')
-      .populate('dcOrderId', 'school_name contact_person contact_mobile email address location zone products due_amount due_percentage transport_name transport_location transportation_landmark pincode')
+      .populate('dcOrderId', 'school_name school_code dc_code contact_person contact_mobile email address location zone products due_amount due_percentage transport_name transport_location transportation_landmark pincode')
+      .populate('parentDcId', '_id dc_code status requestedQuantity deliverableQuantity fulfillmentStatus dcType')
       .populate('employeeId', 'name email')
       .populate('adminId', 'name email')
       .populate('managerId', 'name email')
@@ -249,6 +308,96 @@ const raiseDC = async (req, res) => {
       return res.status(400).json({ message: 'Deal must be assigned to an employee before raising DC.' });
     }
 
+    const requestedDcType = req.body.dcType === 'shortage' ? 'shortage' : 'normal';
+    const parentDcId = req.body.parentDcId || null;
+
+    if (requestedDcType === 'shortage') {
+      if (!parentDcId) {
+        return res.status(400).json({ message: 'parentDcId is required for shortage DC' });
+      }
+      const parentDc = await DC.findById(parentDcId).lean();
+      if (!parentDc) {
+        return res.status(404).json({ message: 'Parent DC not found' });
+      }
+      if (String(parentDc.dcOrderId) !== String(dcOrder._id)) {
+        return res.status(400).json({ message: 'Shortage DC must use the same dcOrderId as parent DC' });
+      }
+      if (parentDc.status !== 'completed') {
+        return res.status(400).json({ message: 'Shortage DC can only be raised for a completed parent DC' });
+      }
+
+      const shortageRows = normalizeProductDetails(productDetailsFromBody || [], { isShortage: true });
+      if (!shortageRows.length) {
+        return res.status(400).json({ message: 'At least one shortage product line is required' });
+      }
+
+      const siblingShortages = await DC.find({ parentDcId: parentDc._id, dcType: 'shortage', status: { $ne: 'hold' } })
+        .select('productDetails')
+        .lean();
+      const consumedByRow = new Map();
+      siblingShortages.forEach((dcRow) => {
+        (dcRow.productDetails || []).forEach((p) => {
+          const key = getRowKey(p);
+          const current = consumedByRow.get(key) || 0;
+          consumedByRow.set(key, current + qtyFromRow(p));
+        });
+      });
+
+      for (const row of shortageRows) {
+        const key = getRowKey(row);
+        const parentRow = (parentDc.productDetails || []).find((p) => getRowKey(p) === key);
+        if (!parentRow) {
+          return res.status(400).json({ message: `Shortage item "${row.product}" not found on parent DC` });
+        }
+        const parentQty = qtyFromRow(parentRow);
+        const alreadyShortaged = consumedByRow.get(key) || 0;
+        const remaining = parentQty - alreadyShortaged;
+        if (qtyFromRow(row) <= 0 || qtyFromRow(row) > remaining) {
+          return res.status(400).json({
+            message: `Invalid shortage quantity for "${row.product}". Remaining allowed: ${Math.max(remaining, 0)}`,
+          });
+        }
+      }
+
+      const shortageQty = requestedQuantity != null ? Number(requestedQuantity) : calculateTotalQuantity(shortageRows);
+      const shortageDc = await DC.create({
+        dcOrderId: dcOrder._id,
+        employeeId,
+        customerName: dcOrder.school_name,
+        customerEmail: dcOrder.email || undefined,
+        customerAddress: dcOrder.address || dcOrder.location || 'N/A',
+        customerPhone: dcOrder.contact_mobile || dcOrder.contact_person || 'N/A',
+        product: (shortageRows[0] && (shortageRows[0].product || shortageRows[0].productName)) || 'Abacus',
+        requestedQuantity: shortageQty || 1,
+        deliverableQuantity: 0,
+        status: req.body.status || 'pending_dc',
+        createdBy: req.user._id,
+        productDetails: shortageRows,
+        dcType: 'shortage',
+        parentDcId: parentDc._id,
+        clusterId: parentDc.clusterId || parentDc._id.toString(),
+        fulfillmentStatus: 'partial',
+        ...(req.body.dcDate && { dcDate: new Date(req.body.dcDate) }),
+        ...(req.body.dcRemarks && { dcRemarks: req.body.dcRemarks }),
+        ...(req.body.dcCategory && { dcCategory: req.body.dcCategory }),
+        ...(req.body.dcNotes && { dcNotes: req.body.dcNotes }),
+      });
+
+      await DC.findByIdAndUpdate(parentDc._id, {
+        $set: {
+          fulfillmentStatus: 'partial',
+          clusterId: parentDc.clusterId || parentDc._id.toString(),
+        },
+      });
+
+      const populatedShortageDc = await DC.findById(shortageDc._id)
+        .populate('dcOrderId', 'school_name school_code contact_person contact_mobile email address location zone products dc_code')
+        .populate('parentDcId', '_id dc_code status requestedQuantity deliverableQuantity fulfillmentStatus dcType')
+        .populate('employeeId', 'name email')
+        .populate('createdBy', 'name email');
+      return res.status(200).json(populatedShortageDc);
+    }
+
     // --- Term split: do it in backend from full productDetails ---
     const terms = (productDetailsFromBody || []).map(p => (p.term || 'Term 1').trim());
     const hasTerm1 = terms.includes('Term 1');
@@ -263,6 +412,7 @@ const raiseDC = async (req, res) => {
 
     const buildDcPayload = (details, status, qty) => {
       const productName = (details && details[0] && (details[0].product || details[0].productName)) || (dcOrder.products && dcOrder.products[0] && dcOrder.products[0].product_name) || 'Abacus';
+      const normalizedDetails = normalizeProductDetails(details || []);
       const payload = {
         dcOrderId: dcOrder._id,
         employeeId,
@@ -275,7 +425,9 @@ const raiseDC = async (req, res) => {
         deliverableQuantity: 0,
         status,
         createdBy: req.user._id,
-        productDetails: details,
+        productDetails: normalizedDetails,
+        dcType: 'normal',
+        fulfillmentStatus: 'full',
         ...(req.body.dcDate && { dcDate: new Date(req.body.dcDate) }),
         ...(req.body.dcRemarks && { dcRemarks: req.body.dcRemarks }),
         ...(req.body.dcCategory && { dcCategory: req.body.dcCategory }),
@@ -301,9 +453,11 @@ const raiseDC = async (req, res) => {
 
       // Term 1 DC (pending_dc)
       if (dcPending) {
-        dcPending.productDetails = term1Products;
+        dcPending.productDetails = normalizeProductDetails(term1Products);
         dcPending.requestedQuantity = term1Qty;
         dcPending.status = 'pending_dc';
+        dcPending.dcType = 'normal';
+        dcPending.fulfillmentStatus = 'full';
         if (req.body.dcDate) dcPending.deliveryDate = new Date(req.body.dcDate);
         if (req.body.dcRemarks) dcPending.deliveryNotes = req.body.dcRemarks;
         if (req.body.dcNotes) dcPending.deliveryNotes = req.body.dcNotes ? (dcPending.deliveryNotes ? dcPending.deliveryNotes + '\n' + req.body.dcNotes : req.body.dcNotes) : dcPending.deliveryNotes;
@@ -317,9 +471,11 @@ const raiseDC = async (req, res) => {
 
       // Term 2 DC (scheduled_for_later)
       if (dcTerm2) {
-        dcTerm2.productDetails = term2Products;
+        dcTerm2.productDetails = normalizeProductDetails(term2Products);
         dcTerm2.requestedQuantity = term2Qty;
         dcTerm2.status = 'scheduled_for_later';
+        dcTerm2.dcType = 'normal';
+        dcTerm2.fulfillmentStatus = 'full';
         if (req.body.dcDate) dcTerm2.deliveryDate = new Date(req.body.dcDate);
         if (req.body.poPhotoUrl) { dcTerm2.poPhotoUrl = req.body.poPhotoUrl; dcTerm2.poDocument = req.body.poPhotoUrl; }
         await dcTerm2.save();
@@ -349,8 +505,10 @@ const raiseDC = async (req, res) => {
       if (req.body.employeeId || req.body.assignedTo) dc.employeeId = req.body.employeeId || req.body.assignedTo;
       if (!dc.poPhotoUrl && dcOrder.pod_proof_url) { dc.poPhotoUrl = dcOrder.pod_proof_url; dc.poDocument = dcOrder.pod_proof_url; }
       if (req.body.poPhotoUrl) { dc.poPhotoUrl = req.body.poPhotoUrl; dc.poDocument = req.body.poPhotoUrl; }
-      if (productDetailsFromBody && Array.isArray(productDetailsFromBody)) dc.productDetails = productDetailsFromBody;
+      if (productDetailsFromBody && Array.isArray(productDetailsFromBody)) dc.productDetails = normalizeProductDetails(productDetailsFromBody);
       dc.status = requestedStatus;
+      dc.dcType = 'normal';
+      dc.fulfillmentStatus = 'full';
       if (req.body.requestedQuantity !== undefined) dc.requestedQuantity = req.body.requestedQuantity;
     }
     if (isTerm2Only) dc = null;
@@ -372,7 +530,9 @@ const raiseDC = async (req, res) => {
         deliverableQuantity: 0,
         status: requestedStatus,
         createdBy: req.user._id,
-        productDetails: productDetailsFromBody || undefined,
+        productDetails: productDetailsFromBody ? normalizeProductDetails(productDetailsFromBody) : undefined,
+        dcType: 'normal',
+        fulfillmentStatus: 'full',
       });
       if (!dcOrder.assigned_to && employeeId) await DcOrder.findByIdAndUpdate(dcOrder._id, { assigned_to: employeeId });
       if (dcOrder.pod_proof_url) { dc.poPhotoUrl = dcOrder.pod_proof_url; dc.poDocument = dcOrder.pod_proof_url; }
@@ -383,7 +543,7 @@ const raiseDC = async (req, res) => {
     if (req.body.dcRemarks) dc.deliveryNotes = req.body.dcRemarks;
     if (req.body.dcNotes) dc.deliveryNotes = dc.deliveryNotes ? `${dc.deliveryNotes}\n${req.body.dcNotes}` : req.body.dcNotes;
     if (productDetailsFromBody && Array.isArray(productDetailsFromBody)) {
-      dc.productDetails = productDetailsFromBody;
+      dc.productDetails = normalizeProductDetails(productDetailsFromBody);
       if (req.body.requestedQuantity == null && productDetailsFromBody.length > 0) {
         const totalQty = productDetailsFromBody.reduce((sum, p) => sum + (Number(p.quantity) || Number(p.strength) || 0), 0);
         if (totalQty > 0) dc.requestedQuantity = totalQty;
@@ -701,7 +861,7 @@ const getCompletedDCs = async (req, res) => {
     // Use lowercase 'completed' to match the DC model enum
     // Optimize query - fetch without populate first
     let dcs = await DC.find({ status: 'completed' })
-      .select('_id saleId dcOrderId employeeId customerName customerPhone customerEmail customerAddress product requestedQuantity availableQuantity deliverableQuantity status poPhotoUrl poDocument productDetails dcDate dcRemarks dcCategory dcNotes transport lrNo lrDate lrCost boxes transportArea deliveryStatus financeRemarks splApproval smeRemarks warehouseProcessedAt warehouseProcessedBy completedAt completedBy createdAt updatedAt')
+      .select('_id saleId dcOrderId parentDcId clusterId dcType fulfillmentStatus employeeId customerName customerPhone customerEmail customerAddress product requestedQuantity availableQuantity deliverableQuantity status poPhotoUrl poDocument productDetails dcDate dcRemarks dcCategory dcNotes transport lrNo lrDate lrCost boxes transportArea deliveryStatus financeRemarks splApproval smeRemarks warehouseProcessedAt warehouseProcessedBy completedAt completedBy createdAt updatedAt')
       .sort({ completedAt: -1, createdAt: -1 }) // Sort by completedAt first, then createdAt as fallback
       .lean()
       .maxTimeMS(20000);
@@ -710,9 +870,10 @@ const getCompletedDCs = async (req, res) => {
     if (dcs && dcs.length > 0) {
       try {
         const populatedPromise = DC.find({ _id: { $in: dcs.map(dc => dc._id) }, status: 'completed' })
-          .select('_id saleId dcOrderId employeeId customerName customerPhone customerEmail customerAddress product requestedQuantity availableQuantity deliverableQuantity status poPhotoUrl poDocument productDetails dcDate dcRemarks dcCategory dcNotes transport lrNo lrDate lrCost boxes transportArea deliveryStatus financeRemarks splApproval smeRemarks warehouseProcessedAt warehouseProcessedBy completedAt completedBy createdAt updatedAt')
+          .select('_id saleId dcOrderId parentDcId clusterId dcType fulfillmentStatus employeeId customerName customerPhone customerEmail customerAddress product requestedQuantity availableQuantity deliverableQuantity status poPhotoUrl poDocument productDetails dcDate dcRemarks dcCategory dcNotes transport lrNo lrDate lrCost boxes transportArea deliveryStatus financeRemarks splApproval smeRemarks warehouseProcessedAt warehouseProcessedBy completedAt completedBy createdAt updatedAt')
           .populate('saleId', 'customerName product quantity status')
-          .populate('dcOrderId', 'school_name school_type contact_person contact_mobile email address location zone products dc_code')
+          .populate('dcOrderId', 'school_name school_code school_type contact_person contact_mobile email address location zone products dc_code')
+          .populate('parentDcId', '_id dc_code status requestedQuantity deliverableQuantity fulfillmentStatus dcType')
           .populate('employeeId', 'name email')
           .populate('completedBy', 'name email')
           .populate('warehouseProcessedBy', 'name email')
@@ -760,7 +921,7 @@ const getHoldDCs = async (req, res) => {
   try {
     const dcs = await DC.find({ status: 'hold' })
       .populate('saleId', 'customerName product quantity status')
-      .populate('dcOrderId', 'school_name school_type contact_person contact_mobile email address location zone products dc_code')
+      .populate('dcOrderId', 'school_name school_code school_type contact_person contact_mobile email address location zone products dc_code')
       .populate('employeeId', 'name email')
       .populate('managerId', 'name email')
       .populate('warehouseId', 'name email')
@@ -1401,6 +1562,8 @@ const getMyDCs = async (req, res) => {
         dcOrderId: {
           _id: order._id,
           school_name: order.school_name,
+          school_code: order.school_code,
+          dc_code: order.dc_code,
           contact_person: order.contact_person,
           contact_mobile: order.contact_mobile,
           email: order.email,
@@ -1486,6 +1649,39 @@ const getMyDCs = async (req, res) => {
   }
 };
 
+// @desc    Record shortage DC against a completed parent DC
+// @route   POST /api/dc/:id/record-shortage
+// @access  Private (Executive/Admin)
+const recordShortageDC = async (req, res) => {
+  try {
+    if (!ALLOWED_SHORTAGE_ROLES.has(req.user?.role)) {
+      return res.status(403).json({ message: 'You are not authorized to record shortage DCs' });
+    }
+
+    const parentDc = await DC.findById(req.params.id);
+    if (!parentDc) {
+      return res.status(404).json({ message: 'Parent DC not found' });
+    }
+    if (parentDc.status !== 'completed') {
+      return res.status(400).json({ message: 'Shortage can only be recorded for completed DCs' });
+    }
+
+    req.body = {
+      ...req.body,
+      dcOrderId: String(parentDc.dcOrderId),
+      parentDcId: parentDc._id,
+      dcType: 'shortage',
+      status: req.body.status || 'pending_dc',
+      dcCategory: req.body.dcCategory || 'Shortage',
+    };
+
+    return raiseDC(req, res);
+  } catch (error) {
+    console.error('Error recording shortage DC:', error);
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 // @desc    Update DC (for editing)
 // @route   PUT /api/dc/:id
 // @access  Private
@@ -1494,6 +1690,15 @@ const updateDC = async (req, res) => {
     const dc = await DC.findById(req.params.id);
     if (!dc) {
       return res.status(404).json({ message: 'DC not found' });
+    }
+
+    if (dc.status === 'completed' && hasQuantityFieldsInUpdate(req.body)) {
+      const childShortageCount = await DC.countDocuments({ parentDcId: dc._id, dcType: 'shortage' });
+      if (childShortageCount > 0) {
+        return res.status(400).json({
+          message: 'Quantity fields on a completed parent DC cannot be edited after shortage DC is raised.',
+        });
+      }
     }
 
     // Update fields from request body - only update provided fields
@@ -1509,31 +1714,10 @@ const updateDC = async (req, res) => {
     if (req.body.productDetails !== undefined) {
       // Ensure productDetails is properly formatted with all fields
       if (Array.isArray(req.body.productDetails)) {
-        dc.productDetails = req.body.productDetails.map((p) => ({
-          product: p.product || '',
-          class: p.class || '1',
-          category: p.category || 'New Students',
-          productName: p.productName || '',
-          quantity: Number(p.quantity) || Number(p.strength) || 0,
-          strength: Number(p.strength) || 0,
-          price: Number(p.price) || 0,
-          total: Number(p.total) || (Number(p.price) || 0) * (Number(p.strength) || 0),
-          level: p.level || 'L2',
-          specs: p.specs || 'Regular', // Preserve specs
-          subject: p.subject || undefined, // Preserve subject
-          term: p.term || 'Term 1', // Preserve term
-          availableQuantity: p.availableQuantity !== undefined && p.availableQuantity !== null ? Number(p.availableQuantity) : undefined,
-          deliverableQuantity: p.deliverableQuantity !== undefined && p.deliverableQuantity !== null ? Number(p.deliverableQuantity) : undefined,
-          remainingQuantity: p.remainingQuantity !== undefined && p.remainingQuantity !== null ? Number(p.remainingQuantity) : undefined,
-        }));
+        dc.productDetails = normalizeProductDetails(req.body.productDetails, { isShortage: dc.dcType === 'shortage' });
         // Also update requestedQuantity if productDetails are provided
         if (dc.productDetails.length > 0) {
-          const totalQuantity = dc.productDetails.reduce((sum, p) => {
-            // Use the larger of quantity or strength (sometimes quantity is 1 but strength is the actual value)
-            const qty = Number(p.quantity) || 0;
-            const str = Number(p.strength) || 0;
-            return sum + Math.max(qty, str);
-          }, 0);
+          const totalQuantity = calculateTotalQuantity(dc.productDetails);
           if (totalQuantity > 0) {
             dc.requestedQuantity = totalQuantity;
           }
@@ -1630,7 +1814,7 @@ const exportSalesVisit = async (req, res) => {
 
     const dcs = await DC.find(filter)
       .populate('saleId', 'customerName product quantity status')
-      .populate('dcOrderId', 'school_name school_type contact_person contact_mobile email address location zone products dc_code')
+      .populate('dcOrderId', 'school_name school_code school_type contact_person contact_mobile email address location zone products dc_code')
       .populate('employeeId', 'name email')
       .populate('createdBy', 'name email')
       .sort({ createdAt: -1 });
@@ -1653,9 +1837,12 @@ const exportSalesVisit = async (req, res) => {
     }
     
     if (schoolCode) {
-      filteredDCs = filteredDCs.filter(dc => 
-        dc.dcOrderId && dc.dcOrderId.dc_code && dc.dcOrderId.dc_code.toLowerCase().includes(schoolCode.toLowerCase())
-      );
+      const q = schoolCode.toLowerCase();
+      filteredDCs = filteredDCs.filter(dc => {
+        if (!dc.dcOrderId) return false;
+        const code = (dc.dcOrderId.school_code || dc.dcOrderId.dc_code || '').toLowerCase();
+        return code.includes(q);
+      });
     }
     
     if (contactMobile) {
@@ -1781,6 +1968,7 @@ module.exports = {
   getSentToManagerDCs,
   getPendingWarehouseDCs,
   getMyDCs,
+  recordShortageDC,
   updateDC,
   submitDCToManager,
   exportSalesVisit,

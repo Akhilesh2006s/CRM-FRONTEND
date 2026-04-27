@@ -1011,6 +1011,18 @@ export default function ClosedSalesPage() {
       // Set status to pending_dc when raising from Closed Sales
       // Status will only change to sent_to_manager when "Submit to Warehouse" is pressed in Pending DC page
       raisePayload.status = 'pending_dc'
+      const isShortageCategory = (dcCategory || '').toLowerCase() === 'shortage'
+      if (isShortageCategory) {
+        raisePayload.dcType = 'shortage'
+        raisePayload.parentDcId = existingDC?._id
+        raisePayload.productDetails = raisePayload.productDetails
+          .filter((p: any) => Number(p.quantity || p.strength || 0) > 0)
+          .map((p: any) => ({
+            ...p,
+            shortageQuantity: Number(p.quantity || p.strength || 0),
+            deliveredQuantity: 0,
+          }))
+      }
 
       let dc: DC
       

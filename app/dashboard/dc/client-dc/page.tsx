@@ -18,6 +18,10 @@ import { useRouter } from 'next/navigation'
 
 type DC = {
   _id: string
+  parentDcId?: string | { _id: string; dc_code?: string }
+  clusterId?: string
+  dcType?: 'normal' | 'shortage'
+  fulfillmentStatus?: 'full' | 'partial' | 'completed_via_shortage'
   saleId?: {
     _id: string
     customerName?: string
@@ -28,6 +32,7 @@ type DC = {
     _id: string
     school_name?: string
     school_code?: string
+    dc_code?: string
     contact_person?: string
     contact_mobile?: string
     email?: string
@@ -85,6 +90,20 @@ export default function ClientDCPage() {
   const [dcNotes, setDcNotes] = useState('')
   const [dcPoPhotoUrl, setDcPoPhotoUrl] = useState('')
   const [savingClientDC, setSavingClientDC] = useState(false)
+  const [shortageDialogOpen, setShortageDialogOpen] = useState(false)
+  const [shortageParentDC, setShortageParentDC] = useState<DC | null>(null)
+  const [shortageNotes, setShortageNotes] = useState('')
+  const [savingShortage, setSavingShortage] = useState(false)
+  const [shortageRows, setShortageRows] = useState<Array<{
+    id: string
+    product: string
+    class: string
+    category: string
+    term: string
+    orderedQuantity: number
+    deliveredQuantity: number
+    shortageQuantity: number
+  }>>([])
   const [invoiceData, setInvoiceData] = useState<{
     schoolInfo: any
     paymentBreakdown: any[]
@@ -996,6 +1015,95 @@ export default function ClientDCPage() {
     }
     
     setClientDCDialogOpen(true)
+  }
+
+  const openRecordShortageDialog = (dc: DC) => {
+    const dcOrderId = typeof dc.dcOrderId === 'object' ? dc.dcOrderId?._id : dc.dcOrderId
+    const loadRows = async () => {
+      const consumed = new Map<string, number>()
+      if (dcOrderId) {
+        const related = await apiRequest<any[]>(`/dc?dcOrderId=${encodeURIComponent(dcOrderId)}`)
+        ;(Array.isArray(related) ? related : [])
+          .filter((x: any) => x?.dcType === 'shortage')
+          .filter((x: any) => {
+            const parentId = typeof x?.parentDcId === 'object' ? x?.parentDcId?._id : x?.parentDcId
+            return String(parentId || '') === String(dc._id)
+          })
+          .forEach((x: any) => {
+            ;(x.productDetails || []).forEach((p: any) => {
+              const key = `${(p.product || p.productName || '').toLowerCase()}::${(p.class || '').toLowerCase()}::${(p.category || '').toLowerCase()}::${(p.term || 'term 1').toLowerCase()}`
+              const qty = Number(p.quantity || p.strength || 0)
+              consumed.set(key, (consumed.get(key) || 0) + qty)
+            })
+          })
+      }
+
+      const rows = (Array.isArray(dc.productDetails) ? dc.productDetails : []).map((p: any, idx: number) => {
+      const orderedQuantity = Number(p.quantity || p.strength || 0)
+      const deliveredQuantity = Number(p.deliveredQuantity ?? orderedQuantity)
+      const key = `${(p.product || p.productName || '').toLowerCase()}::${(p.class || '').toLowerCase()}::${(p.category || '').toLowerCase()}::${(p.term || 'term 1').toLowerCase()}`
+      const alreadyRaised = Number(consumed.get(key) || 0)
+      const calculatedShortage = Math.max(orderedQuantity - deliveredQuantity - alreadyRaised, 0)
+      return {
+        id: `${idx}-${p.product || p.productName || 'product'}`,
+        product: p.product || p.productName || '',
+        class: p.class || '1',
+        category: p.category || 'new Students',
+        term: p.term || 'Term 1',
+        orderedQuantity,
+        deliveredQuantity,
+        shortageQuantity: Number(p.shortageQuantity ?? calculatedShortage),
+      }
+    })
+      setShortageParentDC(dc)
+      setShortageRows(rows)
+      setShortageNotes('')
+      setShortageDialogOpen(true)
+    }
+    loadRows().catch((e: any) => {
+      toast.error(e?.message || 'Failed to load shortage details')
+    })
+  }
+
+  const handleCreateShortageDC = async () => {
+    if (!shortageParentDC) return
+    const payloadRows = shortageRows
+      .filter((r) => Number(r.shortageQuantity) > 0)
+      .map((r) => ({
+        product: r.product,
+        class: r.class,
+        category: r.category,
+        term: r.term,
+        quantity: Number(r.shortageQuantity),
+        deliveredQuantity: Number(r.deliveredQuantity),
+        shortageQuantity: Number(r.shortageQuantity),
+        strength: Number(r.shortageQuantity),
+      }))
+
+    if (payloadRows.length === 0) {
+      toast.error('Enter shortage quantity for at least one product')
+      return
+    }
+
+    setSavingShortage(true)
+    try {
+      await apiRequest(`/dc/${shortageParentDC._id}/record-shortage`, {
+        method: 'POST',
+        body: JSON.stringify({
+          productDetails: payloadRows,
+          dcCategory: 'Shortage',
+          dcRemarks: shortageNotes || undefined,
+        }),
+      })
+      toast.success('Shortage DC created successfully')
+      setShortageDialogOpen(false)
+      setShortageParentDC(null)
+      await load()
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to create shortage DC')
+    } finally {
+      setSavingShortage(false)
+    }
   }
 
   const saveClientRequest = async () => {
@@ -2062,7 +2170,9 @@ export default function ClientDCPage() {
     const query = searchQuery.trim().toLowerCase()
     if (query) {
       filtered = filtered.filter((d) => {
-        const schoolCode = (typeof d.dcOrderId === 'object' && d.dcOrderId?.school_code) ? d.dcOrderId.school_code.toLowerCase() : ''
+        const schoolCode = (typeof d.dcOrderId === 'object')
+          ? (d.dcOrderId?.school_code || d.dcOrderId?.dc_code || '').toLowerCase()
+          : ''
         const customerName = (d.customerName || d.saleId?.customerName || d.dcOrderId?.school_name || '').toLowerCase()
         const phone = (d.customerPhone || d.dcOrderId?.contact_mobile || '').toLowerCase()
         const product = (d.product || d.saleId?.product || (d.dcOrderId?.products && Array.isArray(d.dcOrderId.products) ? d.dcOrderId.products.map((p: any) => p.product_name || p.product).join(', ') : '')).toLowerCase()
@@ -2501,9 +2611,9 @@ export default function ClientDCPage() {
                     const turnedDate = (typeof d.dcOrderId === 'object' && d.dcOrderId?.createdAt)
                       ? new Date(d.dcOrderId.createdAt).toLocaleDateString()
                       : (d.createdAt ? new Date(d.createdAt).toLocaleDateString() : '-')
-                    // Get school code from dcOrderId
-                    const schoolCode = (typeof d.dcOrderId === 'object' && d.dcOrderId?.school_code) 
-                      ? d.dcOrderId.school_code 
+                    // Prefer school_code, fallback to dc_code for older records
+                    const schoolCode = (typeof d.dcOrderId === 'object')
+                      ? (d.dcOrderId?.school_code || d.dcOrderId?.dc_code || '-')
                       : '-'
                     
                     return (
@@ -2524,6 +2634,16 @@ export default function ClientDCPage() {
                           }`}>
                             {status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
                           </span>
+                          {d.dcType === 'shortage' && (
+                            <span className="ml-2 px-2 py-1 rounded-full text-[10px] font-semibold bg-orange-100 text-orange-700 border border-orange-200">
+                              Shortage DC
+                            </span>
+                          )}
+                          {d.fulfillmentStatus === 'partial' && (
+                            <span className="ml-2 px-2 py-1 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200">
+                              Partial
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell className="text-neutral-600">{createdDate}</TableCell>
                         <TableCell className="text-neutral-600 font-medium">{turnedDate}</TableCell>
@@ -2582,7 +2702,20 @@ export default function ClientDCPage() {
                             </Button>
                               )}
                           </div>
-                          ) : null}
+                          ) : (
+                            <div className="flex items-center gap-2 justify-center">
+                              {status === 'completed' && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => openRecordShortageDialog(d)}
+                                  className="border-orange-200 text-orange-700 hover:bg-orange-50 shadow-sm"
+                                >
+                                  Record Shortage
+                                </Button>
+                              )}
+                            </div>
+                          )}
                         </TableCell>
                       </TableRow>
                     )
@@ -2680,6 +2813,75 @@ export default function ClientDCPage() {
               </div>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={shortageDialogOpen} onOpenChange={setShortageDialogOpen}>
+        <DialogContent className="sm:max-w-[820px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Record Shortage DC</DialogTitle>
+            <DialogDescription>
+              Original DC is read-only. Enter shortage quantities to create a linked shortage DC.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-md border p-3 text-sm bg-neutral-50">
+              <div><span className="font-medium">Parent DC:</span> {shortageParentDC?._id || '-'}</div>
+              <div><span className="font-medium">Client:</span> {shortageParentDC?.customerName || shortageParentDC?.dcOrderId?.school_name || '-'}</div>
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Product</TableHead>
+                  <TableHead>Class</TableHead>
+                  <TableHead>Ordered</TableHead>
+                  <TableHead>Delivered</TableHead>
+                  <TableHead>Shortage</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {shortageRows.map((row, idx) => (
+                  <TableRow key={row.id}>
+                    <TableCell>{row.product || '-'}</TableCell>
+                    <TableCell>{row.class}</TableCell>
+                    <TableCell>{row.orderedQuantity}</TableCell>
+                    <TableCell>{row.deliveredQuantity}</TableCell>
+                    <TableCell>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={Math.max(row.orderedQuantity, 0)}
+                        value={row.shortageQuantity}
+                        onChange={(e) => {
+                          const value = Number(e.target.value || 0)
+                          const capped = Math.max(0, Math.min(value, row.orderedQuantity))
+                          setShortageRows((prev) => {
+                            const updated = [...prev]
+                            updated[idx] = { ...updated[idx], shortageQuantity: capped }
+                            return updated
+                          })
+                        }}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <div>
+              <Label className="mb-2 block">Remarks</Label>
+              <Textarea
+                value={shortageNotes}
+                onChange={(e) => setShortageNotes(e.target.value)}
+                placeholder="Optional shortage remarks"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShortageDialogOpen(false)} disabled={savingShortage}>Cancel</Button>
+            <Button onClick={handleCreateShortageDC} disabled={savingShortage}>
+              {savingShortage ? 'Creating...' : 'Create Shortage DC'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

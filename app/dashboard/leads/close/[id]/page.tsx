@@ -71,11 +71,17 @@ const groupProductDetailsByProductAndClass = (details: any[]) => {
   return Array.from(map.values())
 }
 
+const getCurrentAcademicYear = () => {
+  const currentYear = new Date().getFullYear()
+  return `${currentYear}-${currentYear + 1}`
+}
+
 export default function CloseLeadPage() {
   const router = useRouter()
   const params = useParams()
   const leadId = params.id as string
   const currentUser = getCurrentUser()
+  const currentAcademicYear = getCurrentAcademicYear()
   
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -86,7 +92,7 @@ export default function CloseLeadPage() {
     contact_person2: '',
     contact_mobile2: '',
     delivery_date: '',
-    year: '2025-26',
+    year: currentAcademicYear,
   })
   
   const [selectedProducts, setSelectedProducts] = useState<string[]>([])
@@ -165,7 +171,7 @@ export default function CloseLeadPage() {
           contact_person2: leadData.decision_maker || leadData.contact_person2 || leadData.contact_person || '',
           contact_mobile2: leadData.email || leadData.contact_mobile2 || '',
                 delivery_date: deliveryDate, // Do NOT use follow_up_date here
-                year: '2025-26',
+                year: currentAcademicYear,
         })
         
         // Pre-fill selected products and product details - normalize product names to match availableProducts
@@ -908,6 +914,7 @@ export default function CloseLeadPage() {
         contact_mobile2: form.contact_mobile2 || undefined, // Decision Maker email
         decision_maker: form.contact_person2 || undefined, // Also set decision_maker field
         estimated_delivery_date: form.delivery_date ? new Date(form.delivery_date).toISOString() : undefined,
+        year: currentAcademicYear,
         assigned_to: assignedEmployeeId,
         products: groupedProductDetails.map(p => {
           const parentRow = productDetails.find(parent => parent.isParentRow && p.id.startsWith(parent.id + '_'))
@@ -959,7 +966,7 @@ export default function CloseLeadPage() {
               // Update existing lead to Closed
               await apiRequest(`/leads/${existingLead._id}`, {
                 method: 'PUT',
-                body: JSON.stringify({ status: 'Closed' }),
+                body: JSON.stringify({ status: 'Closed', year: currentAcademicYear }),
               })
               console.log('✅ Lead record updated to Closed for reporting')
             } else {
@@ -973,6 +980,7 @@ export default function CloseLeadPage() {
                   zone: lead?.zone || updated.zone,
                   location: lead?.location || updated.location,
                   priority: lead?.priority || updated.priority || 'Hot',
+                  year: currentAcademicYear,
                   status: 'Closed',
                   createdBy: assignedEmployeeId,
                 }),
@@ -1193,17 +1201,11 @@ export default function CloseLeadPage() {
           {/* Select Year */}
           <div>
             <Label className="text-sm font-semibold text-neutral-700">Select Year</Label>
-            <Select value={form.year} onValueChange={(v) => setForm({ ...form, year: v })}>
-              <SelectTrigger className="mt-1">
-                <SelectValue placeholder="Select Year" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="2024-25">2024-25</SelectItem>
-                <SelectItem value="2025-26">2025-26</SelectItem>
-                <SelectItem value="2026-27">2026-27</SelectItem>
-                <SelectItem value="2027-28">2027-28</SelectItem>
-              </SelectContent>
-            </Select>
+            <Input
+              value={form.year}
+              readOnly
+              className="mt-1 bg-neutral-100 cursor-not-allowed"
+            />
           </div>
 
           {/* PO Document Upload */}

@@ -16,6 +16,7 @@ import { useProducts } from '@/hooks/useProducts'
 type DcOrderData = {
   _id?: string
   school_name?: string
+  school_code?: string
   school_type?: string
   dc_code?: string
   contact_person?: string
@@ -540,6 +541,15 @@ export default function PendingDCPage() {
     return `DC-${dc._id.slice(-6)}`
   }
 
+  const getSchoolCode = (dc: DC) => {
+    const order = dc.dcOrderId
+    if (order && typeof order === 'object') {
+      const code = (order.school_code || order.dc_code || '').trim()
+      return code || '-'
+    }
+    return '-'
+  }
+
   if (selectedDC) {
     // Show detailed form view
     return (
@@ -1053,6 +1063,7 @@ export default function PendingDCPage() {
               <tr className="bg-sky-50/70 border-b text-gray-900">
                 <th className="py-2 px-3 text-left">S.No</th>
                 <th className="py-2 px-3 text-left">DC No</th>
+                <th className="py-2 px-3 text-left">School Code</th>
                 <th className="py-2 px-3 text-left">Customer Name</th>
                 <th className="py-2 px-3 text-left">Customer Phone</th>
                 <th className="py-2 px-3 text-left">Products</th>
@@ -1065,6 +1076,7 @@ export default function PendingDCPage() {
                 <tr key={d._id} className="border-b last:border-0 hover:bg-gray-50">
                   <td className="py-2 px-3">{idx + 1}</td>
                   <td className="py-2 px-3 font-medium">{getDCNumber(d)}</td>
+                  <td className="py-2 px-3 font-medium text-blue-700">{getSchoolCode(d)}</td>
                   <td className="py-2 px-3 font-medium">
                     <button 
                       className="text-blue-600 hover:underline"

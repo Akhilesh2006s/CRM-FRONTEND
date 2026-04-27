@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { getCurrentUser } from '@/lib/auth'
+import { useProducts } from '@/hooks/useProducts'
 import { toast } from 'sonner'
 import { ArrowLeft, MapPin, Edit, History, X, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
@@ -30,11 +31,29 @@ type Lead = {
   createdAt?: string
   remarks?: string
   school_type?: string
+  products?: Array<{
+    product_name?: string
+    product?: string
+    term?: string
+    status?: string
+    strength?: number
+    chance?: number
+    quantity?: number
+  }> | string
+}
+
+type ProductInterested = {
+  product_name: string
+  term: string
+  status: string
+  strength: number
+  chance: number
 }
 
 export default function FollowupLeadsPage() {
   const router = useRouter()
   const currentUser = getCurrentUser()
+  const { productNames: availableProductNames } = useProducts()
   const [leads, setLeads] = useState<Lead[]>([])
   const [allLeads, setAllLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
@@ -59,6 +78,7 @@ export default function FollowupLeadsPage() {
     follow_up_date: '',
     status: '',
     remarks: '',
+    productsInterested: [] as ProductInterested[],
   })
   const [updating, setUpdating] = useState(false)
   
@@ -281,6 +301,33 @@ export default function FollowupLeadsPage() {
       follow_up_date: '',
       status: lead.priority || 'Hot', // Pre-fill priority from current lead status
       remarks: '',
+      productsInterested: (() => {
+        if (Array.isArray(lead.products) && lead.products.length > 0) {
+          return lead.products.map((p: any) => ({
+            product_name: p.product_name || p.product || '',
+            term: p.term || 'Term 1',
+            status: p.status || lead.priority || 'Warm',
+            strength: Number(p.strength ?? p.quantity ?? 0) || 0,
+            chance: Number(p.chance ?? 0) || 0,
+          }))
+        }
+
+        if (typeof lead.products === 'string' && lead.products.trim()) {
+          return lead.products
+            .split(',')
+            .map((name: string) => name.trim())
+            .filter(Boolean)
+            .map((name: string) => ({
+              product_name: name,
+              term: 'Term 1',
+              status: lead.priority || 'Warm',
+              strength: 0,
+              chance: 0,
+            }))
+        }
+
+        return []
+      })(),
     })
     setUpdateModalOpen(true)
   }
@@ -288,7 +335,7 @@ export default function FollowupLeadsPage() {
   const closeUpdateModal = () => {
     setUpdateModalOpen(false)
     setSelectedLead(null)
-    setUpdateForm({ follow_up_date: '', status: '', remarks: '' })
+    setUpdateForm({ follow_up_date: '', status: '', remarks: '', productsInterested: [] })
   }
 
   const handleUpdateLead = async () => {
@@ -315,6 +362,22 @@ export default function FollowupLeadsPage() {
         follow_up_date: new Date(updateForm.follow_up_date).toISOString(),
         priority: updateForm.status,
         remarks: updateForm.remarks,
+      }
+
+      const validProducts = updateForm.productsInterested
+        .filter((p) => p.product_name && p.product_name.trim())
+        .map((p) => ({
+          product_name: p.product_name.trim(),
+          term: p.term || 'Term 1',
+          status: p.status || 'Warm',
+          strength: Number(p.strength) || 0,
+          chance: Number(p.chance) || 0,
+          quantity: Number(p.strength) || 0,
+          unit_price: 0,
+        }))
+
+      if (validProducts.length > 0) {
+        payload.productsInterested = validProducts
       }
       
       console.log('Updating lead with payload:', payload)
@@ -462,6 +525,36 @@ export default function FollowupLeadsPage() {
     // Navigate to edit page or open edit modal
     // For now, we'll navigate to a edit page
     router.push(`/dashboard/leads/edit/${lead._id}`)
+  }
+
+  const addInterestedProduct = () => {
+    setUpdateForm((prev) => ({
+      ...prev,
+      productsInterested: [
+        ...prev.productsInterested,
+        { product_name: '', term: 'Term 1', status: 'Warm', strength: 0, chance: 0 },
+      ],
+    }))
+  }
+
+  const removeInterestedProduct = (index: number) => {
+    setUpdateForm((prev) => ({
+      ...prev,
+      productsInterested: prev.productsInterested.filter((_, i) => i !== index),
+    }))
+  }
+
+  const updateInterestedProduct = (
+    index: number,
+    field: keyof ProductInterested,
+    value: string | number
+  ) => {
+    setUpdateForm((prev) => ({
+      ...prev,
+      productsInterested: prev.productsInterested.map((item, i) =>
+        i === index ? { ...item, [field]: value } : item
+      ),
+    }))
   }
 
   return (
@@ -737,6 +830,113 @@ export default function FollowupLeadsPage() {
                     </SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-semibold text-neutral-700 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                    Products Interested
+                  </Label>
+                  <Button type="button" size="sm" variant="outline" onClick={addInterestedProduct}>
+                    Add Product
+                  </Button>
+                </div>
+
+                <div className="rounded-md border border-neutral-200 bg-white p-3 space-y-2">
+                  {updateForm.productsInterested.length === 0 ? (
+                    <p className="text-xs text-neutral-500">No products added yet.</p>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-[2fr_1.3fr_1.5fr_1fr_1fr_auto] gap-2 text-xs font-medium text-neutral-500 px-1">
+                        <span>Product</span>
+                        <span>Term</span>
+                        <span>Status</span>
+                        <span className="text-center">Strength</span>
+                        <span className="text-center">Chance %</span>
+                        <span></span>
+                      </div>
+
+                      {updateForm.productsInterested.map((product, index) => (
+                        <div key={`product-${index}`} className="grid grid-cols-[2fr_1.3fr_1.5fr_1fr_1fr_auto] gap-2 items-center">
+                          <Select
+                            value={product.product_name || undefined}
+                            onValueChange={(v) => updateInterestedProduct(index, 'product_name', v)}
+                          >
+                            <SelectTrigger className="h-9">
+                              <SelectValue placeholder="Select product" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {availableProductNames.map((name) => (
+                                <SelectItem key={name} value={name}>
+                                  {name}
+                                </SelectItem>
+                              ))}
+                              {product.product_name && !availableProductNames.includes(product.product_name) && (
+                                <SelectItem value={product.product_name}>{product.product_name}</SelectItem>
+                              )}
+                            </SelectContent>
+                          </Select>
+                          <Select
+                            value={product.term}
+                            onValueChange={(v) => updateInterestedProduct(index, 'term', v)}
+                          >
+                            <SelectTrigger className="h-9">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Term 1">Term 1</SelectItem>
+                              <SelectItem value="Term 2">Term 2</SelectItem>
+                              <SelectItem value="Both">Both</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Select
+                            value={product.status}
+                            onValueChange={(v) => updateInterestedProduct(index, 'status', v)}
+                          >
+                            <SelectTrigger className="h-9">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Hot">Hot</SelectItem>
+                              <SelectItem value="Warm">Warm</SelectItem>
+                              <SelectItem value="Visit Again">Visit Again</SelectItem>
+                              <SelectItem value="Not Met Management">Not Met Management</SelectItem>
+                              <SelectItem value="Not Interested">Not Interested</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            type="number"
+                            min="0"
+                            className="h-9 text-center"
+                            value={product.strength}
+                            onChange={(e) => updateInterestedProduct(index, 'strength', Number(e.target.value) || 0)}
+                          />
+                          <Input
+                            type="number"
+                            min="0"
+                            max="100"
+                            className="h-9 text-center"
+                            value={product.chance}
+                            onChange={(e) => updateInterestedProduct(index, 'chance', Number(e.target.value) || 0)}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-9 w-9 text-neutral-500 hover:text-red-600"
+                            onClick={() => removeInterestedProduct(index)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </div>
+                <p className="text-xs text-neutral-500">
+                  Select products, then set Term, Status, Strength, and Chance % for each.
+                </p>
               </div>
               
               <div className="space-y-2">

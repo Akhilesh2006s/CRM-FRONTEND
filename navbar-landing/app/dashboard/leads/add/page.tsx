@@ -31,16 +31,16 @@ export default function AddLeadPage() {
         </Card>
 
         {/* Renewal Cross Sale Button */}
-        <Card className="p-6 cursor-pointer hover:shadow-lg transition-shadow border-2 hover:border-green-500" onClick={() => router.push('/dashboard/leads/add/renewal')}>
+        <Card className="p-6 cursor-pointer hover:shadow-lg transition-shadow border-2 hover:border-green-500" onClick={() => router.push('/dashboard/leads/renewal')}>
           <div className="flex flex-col items-center text-center space-y-4">
             <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
               <RefreshCw className="w-8 h-8 text-green-600" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-neutral-900">Renewal Cross Sale</h3>
-              <p className="text-sm text-neutral-600 mt-1">Add renewal or cross-sale lead for existing schools</p>
+              <h3 className="text-lg font-semibold text-neutral-900">Renewal (existing school)</h3>
+              <p className="text-sm text-neutral-600 mt-1">Search a client school, minimal input — same Lead model & pipeline</p>
             </div>
-            <Button className="w-full" variant="outline">Add Renewal</Button>
+            <Button className="w-full" variant="outline">Renewal Leads</Button>
           </div>
         </Card>
 

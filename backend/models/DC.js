@@ -236,6 +236,14 @@ const dcSchema = new mongoose.Schema({
       type: Number,
       default: 0,
     },
+    deliveredQuantity: {
+      type: Number,
+      default: 0,
+    },
+    shortageQuantity: {
+      type: Number,
+      default: 0,
+    },
     strength: {
       type: Number,
       default: 0,
@@ -287,6 +295,26 @@ const dcSchema = new mongoose.Schema({
   clusterId: {
     type: String,
   },
+  // Explicit parent-child linking for shortage/re-issue flows
+  parentDcId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'DC',
+    index: true,
+  },
+  // Distinguish regular DCs from shortage follow-ups
+  dcType: {
+    type: String,
+    enum: ['normal', 'shortage'],
+    default: 'normal',
+    index: true,
+  },
+  // Tracks whether fulfillment needed/used shortage follow-up DCs
+  fulfillmentStatus: {
+    type: String,
+    enum: ['full', 'partial', 'completed_via_shortage'],
+    default: 'full',
+    index: true,
+  },
 }, {
   timestamps: true,
 });
@@ -298,6 +326,8 @@ dcSchema.index({ saleId: 1 });
 dcSchema.index({ dcOrderId: 1 });
 dcSchema.index({ employeeId: 1, createdAt: -1 }); // Compound index for sorting by createdAt
 dcSchema.index({ clusterId: 1 }); // Index for cluster ID queries
+dcSchema.index({ parentDcId: 1 });
+dcSchema.index({ dcType: 1, status: 1 });
 
 // Pre-save hook to generate DC code if not provided
 dcSchema.pre('save', async function (next) {
