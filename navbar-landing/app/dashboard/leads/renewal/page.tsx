@@ -111,6 +111,7 @@ export default function RenewalLeadsPage() {
   const [searchLoading, setSearchLoading] = useState(false)
   const [searchResults, setSearchResults] = useState<DcOrderSearchRow[]>([])
   const [selectedSchool, setSelectedSchool] = useState<DcOrderSearchRow | null>(null)
+  const [schoolDetailLoading, setSchoolDetailLoading] = useState(false)
   const [renewContactPerson, setRenewContactPerson] = useState('')
   const [renewContactMobile, setRenewContactMobile] = useState('')
   const [renewRemarks, setRenewRemarks] = useState('')
@@ -204,12 +205,61 @@ export default function RenewalLeadsPage() {
     return () => clearTimeout(t)
   }, [schoolQuery, runSchoolSearch])
 
-  const selectSchool = (row: DcOrderSearchRow) => {
+  const displayField = (v?: string | number | null) => {
+    if (v === undefined || v === null) return '—'
+    const s = String(v).trim()
+    return s || '—'
+  }
+
+  const mergeDcOrderIntoRow = (row: DcOrderSearchRow, full: Record<string, unknown>): DcOrderSearchRow => ({
+    _id: row._id,
+    school_name: (full.school_name as string) ?? row.school_name,
+    school_code: (full.school_code as string) ?? row.school_code,
+    dc_code: (full.dc_code as string) ?? row.dc_code,
+    contact_person: (full.contact_person as string) ?? row.contact_person,
+    contact_mobile: (full.contact_mobile as string) ?? row.contact_mobile,
+    zone: (full.zone as string) ?? row.zone,
+    location: (full.location as string) ?? row.location,
+    city: (full.city as string) ?? row.city,
+    state: (full.state as string) ?? row.state,
+    region: (full.region as string) ?? row.region,
+    area: (full.area as string) ?? row.area,
+    pincode: (full.pincode as string) ?? row.pincode,
+    strength: (full.strength as number) ?? row.strength,
+    address: (full.address as string) ?? row.address,
+    school_type: (full.school_type as string) ?? row.school_type,
+    products: Array.isArray(full.products) ? (full.products as DcOrderSearchRow['products']) : row.products,
+    status: (full.status as string) ?? row.status,
+  })
+
+  const selectSchool = async (row: DcOrderSearchRow) => {
+    setSearchResults([])
+    setSchoolQuery(row.school_name || '')
     setSelectedSchool(row)
     setRenewContactPerson(row.contact_person || '')
     setRenewContactMobile(row.contact_mobile || '')
-    setSearchResults([])
-    setSchoolQuery(row.school_name || '')
+    setSchoolDetailLoading(true)
+    try {
+      const full = await apiRequest<Record<string, unknown>>(`/dc-orders/${row._id}`)
+      if (full && typeof full === 'object' && (full as { _id?: string })._id) {
+        const merged = mergeDcOrderIntoRow(row, full)
+        setSelectedSchool(merged)
+        setRenewContactPerson(
+          String((full as { contact_person?: string }).contact_person || '').trim() ||
+            row.contact_person ||
+            ''
+        )
+        setRenewContactMobile(
+          String((full as { contact_mobile?: string }).contact_mobile || '').trim() ||
+            row.contact_mobile ||
+            ''
+        )
+      }
+    } catch {
+      toast.error('Could not load full school record; showing search summary.')
+    } finally {
+      setSchoolDetailLoading(false)
+    }
   }
 
   const schoolDisplayCode = (row: DcOrderSearchRow | null) => {
@@ -528,7 +578,12 @@ export default function RenewalLeadsPage() {
 
             {selectedSchool && (
               <div className="rounded-md border bg-white p-3 text-sm space-y-2">
-                <div className="font-semibold text-emerald-800">Selected school</div>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-semibold text-emerald-800">Selected school</div>
+                  {schoolDetailLoading && (
+                    <span className="text-xs text-neutral-500">Loading full record…</span>
+                  )}
+                </div>
                 <div>
                   <span className="text-neutral-500">Name:</span>{' '}
                   <span className="font-medium">{selectedSchool.school_name}</span>
@@ -538,10 +593,32 @@ export default function RenewalLeadsPage() {
                   <span className="font-mono text-blue-700">{schoolDisplayCode(selectedSchool)}</span>
                 </div>
                 <div>
-                  <span className="text-neutral-500">Zone:</span> {selectedSchool.zone || '—'}
+                  <span className="text-neutral-500">Zone:</span> {displayField(selectedSchool.zone)}
                 </div>
                 <div>
-                  <span className="text-neutral-500">Location:</span> {selectedSchool.location || selectedSchool.address || '—'}
+                  <span className="text-neutral-500">Address:</span>{' '}
+                  <span className="whitespace-pre-wrap">{displayField(selectedSchool.address)}</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
+                  <div>
+                    <span className="text-neutral-500">Pincode:</span>{' '}
+                    {displayField(selectedSchool.pincode)}
+                  </div>
+                  <div>
+                    <span className="text-neutral-500">City:</span> {displayField(selectedSchool.city)}
+                  </div>
+                  <div>
+                    <span className="text-neutral-500">State:</span> {displayField(selectedSchool.state)}
+                  </div>
+                  <div>
+                    <span className="text-neutral-500">Region:</span> {displayField(selectedSchool.region)}
+                  </div>
+                  <div className="sm:col-span-2">
+                    <span className="text-neutral-500">Area:</span> {displayField(selectedSchool.area)}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-neutral-500">Location:</span> {displayField(selectedSchool.location)}
                 </div>
                 {pastProductsPreview && pastProductsPreview.length > 0 && (
                   <div>

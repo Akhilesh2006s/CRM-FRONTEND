@@ -368,7 +368,7 @@ const createRenewalLead = async (req, res) => {
       .populate('createdBy', 'name email')
       .populate(
         'school_id',
-        'school_name school_code dc_code contact_person contact_mobile zone location status'
+        'school_name school_code dc_code contact_person contact_mobile zone location city state region area pincode address strength school_type status remarks'
       );
     return res.status(201).json(populatedLead);
   } catch (error) {

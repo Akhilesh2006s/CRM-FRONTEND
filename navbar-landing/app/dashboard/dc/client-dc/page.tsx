@@ -2,6 +2,13 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { apiRequest, API_BASE_URL } from '@/lib/api'
+import {
+  STUDENT_TYPE_OPTIONS,
+  STUDENT_TYPE_PLACEHOLDER,
+  followUpStudentTypeSelectValue,
+  parseFollowUpStudentTypeSelectValue,
+  isShortageStudentType,
+} from '@/lib/dcStudentTypeOptions'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -103,6 +110,7 @@ export default function ClientDCPage() {
     deliveredQuantity: number
     shortageQuantity: number
   }>>([])
+  const [followUpStudentTypeByDcId, setFollowUpStudentTypeByDcId] = useState<Record<string, string>>({})
   // Invoice view state
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false)
   const [invoiceData, setInvoiceData] = useState<{
@@ -1042,6 +1050,20 @@ export default function ClientDCPage() {
     })
   }
 
+  const handleFollowUpStudentTypeContinue = (dc: DC) => {
+    const id = dc._id
+    const sel = followUpStudentTypeByDcId[id]
+    if (!sel) {
+      toast.error('Select a student type first')
+      return
+    }
+    if (isShortageStudentType(sel)) {
+      openRecordShortageDialog(dc)
+      return
+    }
+    toast.info('This student type is not available yet. Only Shortage is supported today.')
+  }
+
   const handleCreateShortageDC = async () => {
     if (!shortageParentDC) return
     const payloadRows = shortageRows
@@ -1074,7 +1096,14 @@ export default function ClientDCPage() {
       })
       toast.success('Shortage DC created successfully')
       setShortageDialogOpen(false)
+      const parentId = shortageParentDC._id
       setShortageParentDC(null)
+      setFollowUpStudentTypeByDcId((p) => {
+        if (!parentId) return p
+        const next = { ...p }
+        delete next[parentId]
+        return next
+      })
       await load()
     } catch (e: any) {
       toast.error(e?.message || 'Failed to create shortage DC')
@@ -2601,14 +2630,37 @@ export default function ClientDCPage() {
                                 View Invoice
                               </Button>
                               {status === 'completed' && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => openRecordShortageDialog(d)}
-                                  className="border-orange-200 text-orange-700 hover:bg-orange-50 shadow-sm"
-                                >
-                                  Record Shortage
-                                </Button>
+                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                                  <Select
+                                    value={followUpStudentTypeSelectValue(followUpStudentTypeByDcId[d._id])}
+                                    onValueChange={(v) =>
+                                      setFollowUpStudentTypeByDcId((p) => ({
+                                        ...p,
+                                        [d._id]: parseFollowUpStudentTypeSelectValue(v),
+                                      }))
+                                    }
+                                  >
+                                    <SelectTrigger className="h-8 w-full sm:w-[200px] text-xs border-orange-200">
+                                      <SelectValue placeholder="Student type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value={STUDENT_TYPE_PLACEHOLDER}>Select student type</SelectItem>
+                                      {STUDENT_TYPE_OPTIONS.map((opt) => (
+                                        <SelectItem key={opt} value={opt}>
+                                          {opt}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleFollowUpStudentTypeContinue(d)}
+                                    className="border-orange-200 text-orange-700 hover:bg-orange-50 shadow-sm shrink-0"
+                                  >
+                                    Continue
+                                  </Button>
+                                </div>
                               )}
                             </div>
                           )}

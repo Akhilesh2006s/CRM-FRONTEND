@@ -7,6 +7,15 @@ const productSchema = new mongoose.Schema(
     unit_price: { type: Number, default: 0, min: 0 },
     expiry_date: { type: Date },
     deliverables: { type: [String], default: [] }, // Transaction-level: deliverables selected when closing lead
+    term: {
+      type: String,
+      enum: ['Term 1', 'Term 2', 'Both'],
+      default: 'Term 1',
+    },
+    level: { type: String, trim: true },
+    subject: { type: String, trim: true },
+    selected_subjects: { type: [String], default: [] },
+    levels_snapshot: { type: [String], default: [] },
   },
   { _id: false }
 );

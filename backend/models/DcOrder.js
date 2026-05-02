@@ -5,9 +5,38 @@ const productSchema = new mongoose.Schema(
     product_name: { type: String, required: true },
     quantity: { type: Number, default: 1, min: 0 },
     unit_price: { type: Number, default: 0, min: 0 },
+    // SKU category for the product (e.g. EduApt, Risers+, etc.)
+    // Needed so "Raise DC" can prefill productCategory based on Close Lead selections.
+    productCategory: { type: String },
+    // Legacy / compatibility field (some older flows stored category-like values here)
+    category: { type: String },
     expiry_date: { type: Date },
     term: { type: String, enum: ['Term 1', 'Term 2', 'Both'], default: 'Term 1' },
+    // Per-product lead metadata
+    status: {
+      type: String,
+      enum: ['Hot', 'Warm', 'Not Interested', 'Management Not Met', 'Visit Again'],
+      default: 'Warm',
+    },
+    chance: {
+      // Percentage chance (0–100) for this product
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100,
+    },
+    strength: {
+      // Student strength for this specific product
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     deliverables: { type: [String], default: [] }, // Transaction-level: deliverables selected when closing lead
+    // Snapshot of enrollment shape for payment divisor / reporting (optional)
+    level: { type: String, trim: true },
+    subject: { type: String, trim: true },
+    selected_subjects: { type: [String], default: [] },
+    levels_snapshot: { type: [String], default: [] }, // distinct levels in bucket at close
   },
   { _id: false }
 );
@@ -80,6 +109,11 @@ const dcOrderSchema = new mongoose.Schema(
     school_code: {
       type: String,
       trim: true,
+    },
+    cluster_code: {
+      type: String,
+      trim: true,
+      index: true,
     },
     schoolCategory: {
       type: String,

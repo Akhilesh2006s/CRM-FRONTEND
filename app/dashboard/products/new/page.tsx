@@ -12,14 +12,16 @@ import { Badge } from '@/components/ui/badge'
 import { apiRequest } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
-import { ArrowLeft, Save } from 'lucide-react'
+import { ArrowLeft, Save, SlidersHorizontal } from 'lucide-react'
 import Link from 'next/link'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 export default function NewProductPage() {
   const router = useRouter()
   const currentUser = getCurrentUser()
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [paymentLogicOpen, setPaymentLogicOpen] = useState(false)
 
   const [form, setForm] = useState({
     productName: '',
@@ -35,6 +37,7 @@ export default function NewProductPage() {
     categories: [] as string[],
     newCategory: '',
     prodStatus: 1,
+    calculationType: 'none' as 'none' | 'level_based' | 'subject_based',
   })
 
   const addLevel = () => {
@@ -131,6 +134,16 @@ export default function NewProductPage() {
       setSubmitting(false)
       return
     }
+    if (form.calculationType === 'level_based' && form.productLevels.length === 0) {
+      setError('Level-based payment requires at least one term/level above')
+      setSubmitting(false)
+      return
+    }
+    if (form.calculationType === 'subject_based' && !form.hasSubjects) {
+      setError('Subject-based payment requires Special Notes / subjects to be enabled with at least one entry')
+      setSubmitting(false)
+      return
+    }
 
     try {
       const payload: any = {
@@ -143,6 +156,7 @@ export default function NewProductPage() {
         hasCategory: form.hasCategory,
         categories: form.hasCategory ? form.categories : [],
         prodStatus: form.prodStatus,
+        calculationType: form.calculationType,
       }
 
       await apiRequest('/products', {
@@ -196,6 +210,60 @@ export default function NewProductPage() {
               required
             />
           </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-lg border border-neutral-200 bg-white p-4">
+            <div>
+              <p className="text-sm font-medium text-neutral-900">Payment logic</p>
+              <p className="text-xs text-neutral-600 mt-1">
+                {form.calculationType === 'none' && 'Standard: line amount = strength × unit price.'}
+                {form.calculationType === 'level_based' &&
+                  'Level-based: amount = (total students × price) ÷ distinct levels in the sale (per class).'}
+                {form.calculationType === 'subject_based' &&
+                  'Subject-based: amount = (total students × price) ÷ distinct subjects in the sale (per class).'}
+              </p>
+            </div>
+            <Button type="button" variant="outline" onClick={() => setPaymentLogicOpen(true)} className="shrink-0">
+              <SlidersHorizontal className="w-4 h-4 mr-2" />
+              Manage payment logic
+            </Button>
+          </div>
+
+          <Dialog open={paymentLogicOpen} onOpenChange={setPaymentLogicOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Manage payment logic</DialogTitle>
+                <DialogDescription>
+                  Choose how the payable amount is divided. Configure terms/levels and special notes/subjects on the main form.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-2 py-2">
+                <Label>Calculation type</Label>
+                <Select
+                  value={form.calculationType}
+                  onValueChange={(v: 'none' | 'level_based' | 'subject_based') =>
+                    setForm({ ...form, calculationType: v })
+                  }
+                >
+                  <SelectTrigger className="bg-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None (standard per line)</SelectItem>
+                    <SelectItem value="level_based">Level-based (divide by distinct levels)</SelectItem>
+                    <SelectItem value="subject_based">Subject-based (divide by distinct subjects)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-neutral-500">
+                  Divisor uses distinct levels or subjects on each DC row for that product and class. Catalog lists are used only as a fallback when rows omit level/subject.
+                </p>
+              </div>
+              <DialogFooter>
+                <Button type="button" onClick={() => setPaymentLogicOpen(false)}>
+                  Done
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           <div>
             <Label>Term</Label>

@@ -37,6 +37,7 @@ export default function ProductEditScreen({ navigation, route }: any) {
     specs: [] as string[],
     newSpec: '',
     prodStatus: 1,
+    calculationType: 'none' as 'none' | 'level_based' | 'subject_based',
   });
 
   useEffect(() => {
@@ -58,6 +59,7 @@ export default function ProductEditScreen({ navigation, route }: any) {
         specs: Array.isArray(product.specs) ? product.specs : (product.specs ? [product.specs] : []),
         newSpec: '',
         prodStatus: product.prodStatus || 1,
+        calculationType: product.calculationType || 'none',
       });
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to load product');
@@ -140,6 +142,16 @@ export default function ProductEditScreen({ navigation, route }: any) {
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
+    if (form.calculationType === 'level_based' && form.productLevels.length === 0) {
+      setErrorMessage('Level-based payment requires at least one product level');
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+      return;
+    }
+    if (form.calculationType === 'subject_based' && !form.hasSubjects) {
+      setErrorMessage('Subject-based payment requires subjects to be enabled');
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+      return;
+    }
 
     setSaving(true);
     try {
@@ -151,6 +163,7 @@ export default function ProductEditScreen({ navigation, route }: any) {
         hasSpecs: form.hasSpecs,
         specs: form.hasSpecs ? form.specs : [],
         prodStatus: form.prodStatus,
+        calculationType: form.calculationType,
       });
       setSuccessMessage('Product updated successfully.');
       setErrorMessage(null);
@@ -217,6 +230,38 @@ export default function ProductEditScreen({ navigation, route }: any) {
               value={form.productName}
               onChangeText={(text) => setForm({ ...form, productName: text })}
             />
+          </View>
+
+          <View style={styles.formSection}>
+            <Text style={styles.label}>Payment logic</Text>
+            <Text style={styles.hint}>How payable amount is divided per sale</Text>
+            <View style={styles.chipRow}>
+              {(
+                [
+                  { key: 'none' as const, label: 'Standard' },
+                  { key: 'level_based' as const, label: 'By level' },
+                  { key: 'subject_based' as const, label: 'By subject' },
+                ]
+              ).map(({ key, label }) => (
+                <TouchableOpacity
+                  key={key}
+                  style={[
+                    styles.chip,
+                    form.calculationType === key && styles.chipActive,
+                  ]}
+                  onPress={() => setForm({ ...form, calculationType: key })}
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      form.calculationType === key && styles.chipTextActive,
+                    ]}
+                  >
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
 
           <View style={styles.formSection}>
@@ -416,6 +461,18 @@ const styles = StyleSheet.create({
   statusButtonActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   statusButtonText: { ...typography.body.medium, color: colors.textPrimary },
   statusButtonTextActive: { color: colors.textLight, fontWeight: '600' },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipText: { ...typography.body.small, color: colors.textPrimary },
+  chipTextActive: { color: colors.textLight, fontWeight: '600' },
   buttonRow: { flexDirection: 'row', gap: 12, marginTop: 8 },
   button: { flex: 1, padding: 16, borderRadius: 12, alignItems: 'center' },
   buttonCancel: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },

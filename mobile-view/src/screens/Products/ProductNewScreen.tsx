@@ -39,6 +39,7 @@ export default function ProductNewScreen({ navigation }: any) {
     specs: [] as string[],
     newSpec: '',
     prodStatus: 1,
+    calculationType: 'none' as 'none' | 'level_based' | 'subject_based',
   });
 
   const addLevel = () => {
@@ -114,6 +115,18 @@ export default function ProductNewScreen({ navigation }: any) {
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
+    if (form.calculationType === 'level_based' && form.productLevels.length === 0) {
+      setErrorMessage('Level-based payment requires at least one product level');
+      setSubmitting(false);
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+      return;
+    }
+    if (form.calculationType === 'subject_based' && !form.hasSubjects) {
+      setErrorMessage('Subject-based payment requires subjects to be enabled');
+      setSubmitting(false);
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+      return;
+    }
 
     try {
       const payload: any = {
@@ -124,6 +137,7 @@ export default function ProductNewScreen({ navigation }: any) {
         hasSpecs: form.hasSpecs,
         specs: form.hasSpecs ? form.specs : [],
         prodStatus: form.prodStatus,
+        calculationType: form.calculationType,
       };
 
       await apiService.post('/products', payload);
@@ -194,6 +208,38 @@ export default function ProductNewScreen({ navigation }: any) {
               value={form.productName}
               onChangeText={(text) => setForm({ ...form, productName: text })}
             />
+          </View>
+
+          <View style={styles.formSection}>
+            <Text style={styles.label}>Payment logic</Text>
+            <Text style={styles.hint}>How payable amount is divided per sale</Text>
+            <View style={styles.chipRow}>
+              {(
+                [
+                  { key: 'none' as const, label: 'Standard' },
+                  { key: 'level_based' as const, label: 'By level' },
+                  { key: 'subject_based' as const, label: 'By subject' },
+                ]
+              ).map(({ key, label }) => (
+                <TouchableOpacity
+                  key={key}
+                  style={[
+                    styles.chip,
+                    form.calculationType === key && styles.chipActive,
+                  ]}
+                  onPress={() => setForm({ ...form, calculationType: key })}
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      form.calculationType === key && styles.chipTextActive,
+                    ]}
+                  >
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
 
           <View style={styles.formSection}>
@@ -390,6 +436,18 @@ const styles = StyleSheet.create({
   statusButtonActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   statusButtonText: { ...typography.body.medium, color: colors.textPrimary },
   statusButtonTextActive: { color: colors.textLight, fontWeight: '600' },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipText: { ...typography.body.small, color: colors.textPrimary },
+  chipTextActive: { color: colors.textLight, fontWeight: '600' },
   successBanner: {
     backgroundColor: '#D1FAE5',
     borderRadius: 12,

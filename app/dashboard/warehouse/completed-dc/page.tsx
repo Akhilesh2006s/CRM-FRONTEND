@@ -9,6 +9,13 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { apiRequest, resolveUploadUrl } from '@/lib/api'
+import {
+  STUDENT_TYPE_OPTIONS,
+  STUDENT_TYPE_PLACEHOLDER,
+  followUpStudentTypeSelectValue,
+  parseFollowUpStudentTypeSelectValue,
+  isShortageStudentType,
+} from '@/lib/dcStudentTypeOptions'
 import { toast } from 'sonner'
 import { Pencil, X, Upload, FileText, Download } from 'lucide-react'
 import jsPDF from 'jspdf'
@@ -76,6 +83,7 @@ export default function CompletedDCPage() {
   }>>([])
   const [shortageRemarks, setShortageRemarks] = useState('')
   const [savingShortage, setSavingShortage] = useState(false)
+  const [followUpStudentTypeByDcId, setFollowUpStudentTypeByDcId] = useState<Record<string, string>>({})
   const [filters, setFilters] = useState({
     zone: '',
     employee: '',
@@ -535,6 +543,22 @@ export default function CompletedDCPage() {
     }
   }
 
+  const followUpRowKey = (row: Row) => row.dcId || row._id
+
+  const handleFollowUpStudentTypeContinue = (row: Row) => {
+    const id = followUpRowKey(row)
+    const sel = followUpStudentTypeByDcId[id]
+    if (!sel) {
+      toast.error('Select a student type first')
+      return
+    }
+    if (isShortageStudentType(sel)) {
+      openRecordShortageDialog(row)
+      return
+    }
+    toast.info('This student type is not available yet. Only Shortage is supported today.')
+  }
+
   const submitShortageDC = async () => {
     if (!shortageTargetDC?._id) return
     const payloadRows = shortageRows
@@ -565,7 +589,14 @@ export default function CompletedDCPage() {
       })
       toast.success('Shortage DC created successfully')
       setShortageDialogOpen(false)
+      const targetId = shortageTargetDC._id
       setShortageTargetDC(null)
+      setFollowUpStudentTypeByDcId((p) => {
+        if (!targetId) return p
+        const next = { ...p }
+        delete next[targetId]
+        return next
+      })
       await load()
     } catch (err: any) {
       toast.error(err?.message || 'Failed to create shortage DC')
@@ -1388,17 +1419,43 @@ export default function CompletedDCPage() {
                       >
                         Replace PDF
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          openRecordShortageDialog(r)
-                        }}
-                        className="border-orange-200 text-orange-700 hover:bg-orange-50"
+                      <div
+                        className="flex flex-col gap-1 min-w-[200px]"
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        Record Shortage
-                      </Button>
+                        <Select
+                          value={followUpStudentTypeSelectValue(followUpStudentTypeByDcId[followUpRowKey(r)])}
+                          onValueChange={(v) =>
+                            setFollowUpStudentTypeByDcId((p) => ({
+                              ...p,
+                              [followUpRowKey(r)]: parseFollowUpStudentTypeSelectValue(v),
+                            }))
+                          }
+                        >
+                          <SelectTrigger className="h-8 text-xs border-orange-200">
+                            <SelectValue placeholder="Student type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={STUDENT_TYPE_PLACEHOLDER}>Select student type</SelectItem>
+                            {STUDENT_TYPE_OPTIONS.map((opt) => (
+                              <SelectItem key={opt} value={opt}>
+                                {opt}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleFollowUpStudentTypeContinue(r)
+                          }}
+                          className="border-orange-200 text-orange-700 hover:bg-orange-50"
+                        >
+                          Continue
+                        </Button>
+                      </div>
                     </div>
                   </TableCell>
                   <TableCell>

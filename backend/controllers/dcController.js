@@ -1,7 +1,16 @@
 const DC = require('../models/DC');
 const Sale = require('../models/Sale');
+const DcOrder = require('../models/DcOrder');
+const ProgramBilling = require('../models/ProgramBilling');
+const Product = require('../models/Product');
 const Warehouse = require('../models/Warehouse');
 const StockMovement = require('../models/StockMovement');
+const { normalizeCalculationType } = require('../utils/paymentDivisor');
+const {
+  recordLevelDelivery,
+  recomputeProgramPayable,
+  roundToTwo,
+} = require('../services/programBillingService');
 const ExcelJS = require('exceljs');
 const multer = require('multer');
 const path = require('path');
@@ -97,6 +106,165 @@ const hasQuantityFieldsInUpdate = (body = {}) =>
   body.productDetails !== undefined ||
   body.availableQuantity !== undefined ||
   body.deliverableQuantity !== undefined;
+
+const deriveLevelNumber = (dc) => {
+  if (Number.isFinite(Number(dc.levelNumber)) && Number(dc.levelNumber) > 0) {
+    return Number(dc.levelNumber);
+  }
+  const terms = (dc.productDetails || []).map((row) => String(row.term || '').trim().toLowerCase());
+  if (terms.includes('term 2')) return 2;
+  if (terms.includes('term 3')) return 3;
+  return 1;
+};
+
+const deriveDeliveredStudents = (dc) =>
+  (Array.isArray(dc.productDetails) ? dc.productDetails : []).reduce((sum, row) => {
+    const delivered = Number(row.deliveredQuantity);
+    if (Number.isFinite(delivered) && delivered >= 0) return sum + delivered;
+    return sum;
+  }, 0);
+
+const deriveUnitPrice = async (dc) => {
+  const details = Array.isArray(dc.productDetails) ? dc.productDetails : [];
+  const detailPrices = details
+    .map((row) => Number(row.price))
+    .filter((value) => Number.isFinite(value) && value >= 0);
+  if (detailPrices.length > 0) {
+    return detailPrices[0];
+  }
+  if (!dc.dcOrderId) return 0;
+  const order = await DcOrder.findById(dc.dcOrderId).select('products').lean();
+  const firstProduct = Array.isArray(order?.products) && order.products.length > 0 ? order.products[0] : null;
+  return Number(firstProduct?.unit_price) || 0;
+};
+
+const deriveTotalLevels = async (dc) => {
+  if (Number.isFinite(Number(dc.totalLevels)) && Number(dc.totalLevels) > 0) {
+    return Number(dc.totalLevels);
+  }
+  if (!dc.dcOrderId) return 1;
+  const siblingDcs = await DC.find({ dcOrderId: dc.dcOrderId }).select('levelNumber productDetails').lean();
+  const levelsFromDcs = new Set();
+  siblingDcs.forEach((row) => {
+    if (Number.isFinite(Number(row.levelNumber)) && Number(row.levelNumber) > 0) {
+      levelsFromDcs.add(Number(row.levelNumber));
+      return;
+    }
+    const terms = (row.productDetails || []).map((p) => String(p.term || '').trim().toLowerCase());
+    if (terms.includes('term 1')) levelsFromDcs.add(1);
+    if (terms.includes('term 2')) levelsFromDcs.add(2);
+    if (terms.includes('term 3')) levelsFromDcs.add(3);
+  });
+  return Math.max(1, levelsFromDcs.size || 1);
+};
+
+const escapeRegex = (s) => String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const findProductCatalogByDcProductName = async (name) => {
+  const n = String(name || '').trim();
+  if (!n) return null;
+  return Product.findOne({ productName: new RegExp(`^${escapeRegex(n)}$`, 'i') }).lean();
+};
+
+const deriveSubjectDivisorFromDc = (dc) => {
+  const target = String(dc.product || '').toLowerCase().trim();
+  const rows = Array.isArray(dc.productDetails) ? dc.productDetails : [];
+  const subs = new Set();
+  rows.forEach((row) => {
+    const pn = String(row.product || row.productName || '').toLowerCase().trim();
+    if (pn !== target) return;
+    const s = String(row.subject || '').trim().toLowerCase();
+    if (s) subs.add(s);
+  });
+  return Math.max(1, subs.size);
+};
+
+const deriveProgramPaymentDivisor = async (dc, productDoc) => {
+  const ct = normalizeCalculationType(productDoc?.calculationType);
+  if (ct === 'subject_based') {
+    const fromRows = deriveSubjectDivisorFromDc(dc);
+    const catalogCount = Array.isArray(productDoc?.subjects) ? productDoc.subjects.length : 0;
+    return Math.max(1, fromRows > 1 ? fromRows : catalogCount || 1);
+  }
+  if (ct === 'level_based') {
+    return deriveTotalLevels(dc);
+  }
+  return 1;
+};
+
+const deriveDeliverySlotNumber = (dc, productDoc) => {
+  const ct = normalizeCalculationType(productDoc?.calculationType);
+  if (ct !== 'subject_based') {
+    return deriveLevelNumber(dc);
+  }
+  const target = String(dc.product || '').toLowerCase().trim();
+  const rows = Array.isArray(dc.productDetails) ? dc.productDetails : [];
+  const row = rows.find(
+    (r) => String(r.product || '').toLowerCase().trim() === target && String(r.subject || '').trim()
+  );
+  const subj = String(row?.subject || '').trim().toLowerCase();
+  const list = Array.isArray(productDoc?.subjects) ? productDoc.subjects : [];
+  const idx = list.findIndex((s) => String(s).trim().toLowerCase() === subj);
+  if (idx >= 0) return idx + 1;
+  return deriveLevelNumber(dc);
+};
+
+const recomputeBillingForCompletedDC = async (dc) => {
+  const featureFlag = String(process.env.ENABLE_PROGRAM_BILLING_ABACUS || 'false').toLowerCase() === 'true';
+  if (!featureFlag) {
+    return null;
+  }
+  const isLegacyAbacus = String(dc.product || '').toLowerCase() === 'abacus';
+  let productDoc = await findProductCatalogByDcProductName(dc.product);
+  if (!productDoc && isLegacyAbacus) {
+    productDoc = { calculationType: 'level_based', subjects: [] };
+  } else if (
+    productDoc &&
+    normalizeCalculationType(productDoc.calculationType) === 'none' &&
+    isLegacyAbacus
+  ) {
+    productDoc = { ...productDoc, calculationType: 'level_based' };
+  }
+  if (!productDoc || normalizeCalculationType(productDoc.calculationType) === 'none') {
+    return null;
+  }
+
+  const deliveredStudents = deriveDeliveredStudents(dc);
+  const levelNumber = deriveDeliverySlotNumber(dc, productDoc);
+  const totalLevels = await deriveProgramPaymentDivisor(dc, productDoc);
+  const unitPrice = await deriveUnitPrice(dc);
+  if (!dc.dcOrderId || deliveredStudents < 0 || unitPrice < 0) {
+    return null;
+  }
+
+  let program = await ProgramBilling.findOne({
+    dcOrderId: dc.dcOrderId,
+    product: dc.product,
+  });
+  if (!program) {
+    program = await ProgramBilling.create({
+      dcOrderId: dc.dcOrderId,
+      product: dc.product,
+      totalLevels,
+      unitPrice: roundToTwo(unitPrice),
+      currency: 'INR',
+    });
+  } else if (program.totalLevels !== totalLevels || program.unitPrice !== unitPrice) {
+    program.totalLevels = totalLevels;
+    program.unitPrice = roundToTwo(unitPrice);
+    await program.save();
+  }
+
+  await recordLevelDelivery({
+    programId: program._id,
+    levelNumber,
+    studentsCount: deliveredStudents,
+    dcId: dc._id,
+    deliveredAt: dc.completedAt || new Date(),
+  });
+
+  return recomputeProgramPayable(program._id, { sourceDcId: dc._id });
+};
 
 
 // @desc    Get all DCs with filtering
@@ -392,7 +560,7 @@ const raiseDC = async (req, res) => {
 
       const populatedShortageDc = await DC.findById(shortageDc._id)
         .populate('dcOrderId', 'school_name school_code contact_person contact_mobile email address location zone products dc_code')
-        .populate('parentDcId', '_id dc_code status requestedQuantity deliverableQuantity fulfillmentStatus dcType')
+        .populate('parentDcId', '_id dc_code status requestedQuantity deliveredQuantity fulfillmentStatus')
         .populate('employeeId', 'name email')
         .populate('createdBy', 'name email');
       return res.status(200).json(populatedShortageDc);
@@ -453,6 +621,7 @@ const raiseDC = async (req, res) => {
 
       // Term 1 DC (pending_dc)
       if (dcPending) {
+        // Ensure productDetails are properly formatted and saved
         dcPending.productDetails = normalizeProductDetails(term1Products);
         dcPending.requestedQuantity = term1Qty;
         dcPending.status = 'pending_dc';
@@ -463,9 +632,18 @@ const raiseDC = async (req, res) => {
         if (req.body.dcNotes) dcPending.deliveryNotes = req.body.dcNotes ? (dcPending.deliveryNotes ? dcPending.deliveryNotes + '\n' + req.body.dcNotes : req.body.dcNotes) : dcPending.deliveryNotes;
         if (req.body.poPhotoUrl) { dcPending.poPhotoUrl = req.body.poPhotoUrl; dcPending.poDocument = req.body.poPhotoUrl; }
         if (!dcPending.poPhotoUrl && dcOrder.pod_proof_url) { dcPending.poPhotoUrl = dcOrder.pod_proof_url; dcPending.poDocument = dcOrder.pod_proof_url; }
+        console.log('💾 Saving Term 1 DC with productDetails:', {
+          dcId: dcPending._id,
+          productDetailsCount: dcPending.productDetails.length,
+          productDetails: dcPending.productDetails
+        });
         await dcPending.save();
       } else {
         const payload = buildDcPayload(term1Products, 'pending_dc', term1Qty);
+        console.log('💾 Creating new Term 1 DC with productDetails:', {
+          productDetailsCount: payload.productDetails?.length || 0,
+          productDetails: payload.productDetails
+        });
         await DC.create(payload);
       }
 
@@ -752,6 +930,12 @@ const completeDC = async (req, res) => {
         sale.status = 'Completed';
         await sale.save();
       }
+    }
+
+    try {
+      await recomputeBillingForCompletedDC(dc);
+    } catch (billingErr) {
+      console.error('Program billing recompute failed in completeDC:', billingErr.message);
     }
 
     const populatedDC = await DC.findById(dc._id)
@@ -1278,6 +1462,12 @@ const warehouseProcess = async (req, res) => {
       }
     }
 
+    try {
+      await recomputeBillingForCompletedDC(dc);
+    } catch (billingErr) {
+      console.error('Program billing recompute failed in warehouseProcess:', billingErr.message);
+    }
+
     const populatedDC = await DC.findById(dc._id)
       .populate('saleId', 'customerName product quantity status poDocument')
       .populate('employeeId', 'name email')
@@ -1408,7 +1598,7 @@ const getMyDCs = async (req, res) => {
     if (dcs && dcs.length > 0) {
       try {
         const fullQueryPromise = DC.find({ _id: { $in: dcs.map(dc => dc._id) } })
-          .select('saleId dcOrderId employeeId customerName customerEmail customerAddress customerPhone product requestedQuantity status poPhotoUrl poDocument productDetails dcDate dcRemarks dcCategory dcNotes createdAt updatedAt')
+          .select('saleId dcOrderId parentDcId clusterId dcType fulfillmentStatus employeeId customerName customerEmail customerAddress customerPhone product requestedQuantity status poPhotoUrl poDocument productDetails dcDate dcRemarks dcCategory dcNotes createdAt updatedAt')
           .maxTimeMS(5000) // 5 seconds for full query
           .lean();
 
@@ -1436,6 +1626,7 @@ const getMyDCs = async (req, res) => {
           .populate('saleId', 'customerName product quantity status poDocument')
           .populate('dcOrderId', 'school_name school_code contact_person contact_mobile email address location zone products dc_code status school_type')
           .populate('employeeId', 'name email')
+          .populate('parentDcId', '_id dc_code status requestedQuantity deliverableQuantity fulfillmentStatus dcType')
           .maxTimeMS(8000) // Shorter timeout for populate
           .lean();
         
@@ -1778,7 +1969,8 @@ const updateDC = async (req, res) => {
 
     const populatedDC = await DC.findById(dc._id)
       .populate('saleId', 'customerName product quantity status poDocument')
-      .populate('dcOrderId', 'school_name contact_person contact_mobile email address location zone products due_amount due_percentage')
+      .populate('dcOrderId', 'school_name school_code dc_code contact_person contact_mobile email address location zone products due_amount due_percentage')
+      .populate('parentDcId', '_id dc_code status requestedQuantity deliverableQuantity fulfillmentStatus dcType')
       .populate('employeeId', 'name email')
       .populate('adminId', 'name email')
       .populate('managerId', 'name email')
@@ -1922,18 +2114,13 @@ const uploadPO = async (req, res) => {
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    // Generate URL for the uploaded file
-    // In production, you might want to use a cloud storage service like AWS S3, Cloudinary, etc.
+    // Save relative URL so it remains valid across host/port changes.
     const fileUrl = `/uploads/po/${req.file.filename}`;
-    
-    // For local development, return a full URL
-    const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
-    const fullUrl = `${baseUrl}${fileUrl}`;
 
     res.json({
       message: 'PO document uploaded successfully',
-      poPhotoUrl: fullUrl,
-      url: fullUrl, // Alias for backward compatibility
+      poPhotoUrl: fileUrl,
+      url: fileUrl, // Alias for backward compatibility
       filename: req.file.filename,
       originalName: req.file.originalname,
       size: req.file.size,
@@ -1942,6 +2129,39 @@ const uploadPO = async (req, res) => {
   } catch (error) {
     console.error('Error uploading PO document:', error);
     res.status(500).json({ message: error.message || 'Failed to upload PO document' });
+  }
+};
+
+// @desc    Download a PO file from uploads/po (authenticated; avoids static /uploads 403 in browsers)
+// @route   GET /api/dc/po-file?path=po/<filename>
+// @access  Private
+const servePoUpload = (req, res) => {
+  try {
+    const rel = req.query.path;
+    if (!rel || typeof rel !== 'string') {
+      return res.status(400).json({ message: 'Missing path' });
+    }
+    const m = /^po\/([^/\\]+)$/.exec(rel.trim());
+    if (!m) {
+      return res.status(400).json({ message: 'Invalid path' });
+    }
+    const filename = m[1];
+    if (!/^[a-zA-Z0-9._-]+$/.test(filename)) {
+      return res.status(400).json({ message: 'Invalid filename' });
+    }
+    const abs = path.join(__dirname, '../uploads/po', filename);
+    const root = path.resolve(path.join(__dirname, '../uploads/po'));
+    const resolved = path.resolve(abs);
+    if (!resolved.startsWith(root)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    if (!fs.existsSync(resolved)) {
+      return res.status(404).json({ message: 'File not found' });
+    }
+    res.sendFile(resolved);
+  } catch (error) {
+    console.error('servePoUpload:', error);
+    res.status(500).json({ message: error.message || 'Failed to serve file' });
   }
 };
 
@@ -1974,4 +2194,5 @@ module.exports = {
   exportSalesVisit,
   uploadPO,
   uploadPOMiddleware: upload.single('poPhoto'),
+  servePoUpload,
 };

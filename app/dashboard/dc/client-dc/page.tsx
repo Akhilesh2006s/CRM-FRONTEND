@@ -2,6 +2,13 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { apiRequest, API_BASE_URL, resolveUploadUrl } from '@/lib/api'
+import {
+  STUDENT_TYPE_OPTIONS,
+  STUDENT_TYPE_PLACEHOLDER,
+  followUpStudentTypeSelectValue,
+  parseFollowUpStudentTypeSelectValue,
+  isShortageStudentType,
+} from '@/lib/dcStudentTypeOptions'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -10,10 +17,11 @@ import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Pencil, Package, Plus, Upload, X, Search, FileText, PlusCircle, Filter, Calendar, RefreshCw } from 'lucide-react'
+import { Pencil, Package, Plus, Upload, X, Search, CreditCard, FileText, PlusCircle, Filter, Calendar, RefreshCw } from 'lucide-react'
 import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
 import { useProducts } from '@/hooks/useProducts'
+import { applyPaymentDivisorsToBreakdown } from '@/lib/dcPaymentDivisors'
 import { useRouter } from 'next/navigation'
 
 type DC = {
@@ -58,7 +66,6 @@ export default function ClientDCPage() {
   const [loading, setLoading] = useState(true)
   const [selectedDC, setSelectedDC] = useState<DC | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [backendSearching, setBackendSearching] = useState(false)
   
   // Filter states
   const [selectedYear, setSelectedYear] = useState<string>('all')
@@ -89,6 +96,8 @@ export default function ClientDCPage() {
   const [dcCategory, setDcCategory] = useState('')
   const [dcNotes, setDcNotes] = useState('')
   const [dcPoPhotoUrl, setDcPoPhotoUrl] = useState('')
+  /** Resolved API origin for PO preview (never raw :5000 /uploads URLs). */
+  const dcPoDisplayUrl = dcPoPhotoUrl ? resolveUploadUrl(dcPoPhotoUrl) : ''
   const [savingClientDC, setSavingClientDC] = useState(false)
   const [shortageDialogOpen, setShortageDialogOpen] = useState(false)
   const [shortageParentDC, setShortageParentDC] = useState<DC | null>(null)
@@ -104,6 +113,9 @@ export default function ClientDCPage() {
     deliveredQuantity: number
     shortageQuantity: number
   }>>([])
+  const [followUpStudentTypeByDcId, setFollowUpStudentTypeByDcId] = useState<Record<string, string>>({})
+  // Invoice view state
+  const [invoiceModalOpen, setInvoiceModalOpen] = useState(false)
   const [invoiceData, setInvoiceData] = useState<{
     schoolInfo: any
     paymentBreakdown: any[]
@@ -178,7 +190,15 @@ export default function ClientDCPage() {
   // Track current DC being edited
   const [currentEditingDCId, setCurrentEditingDCId] = useState<string | null>(null)
   
-  const { productNames: availableProducts, getProductLevels, getDefaultLevel, getProductSpecs, getProductSubjects } = useProducts()
+  const {
+    productNames: availableProducts,
+    getProductLevels,
+    getDefaultLevel,
+    getProductSpecs,
+    getProductSubjects,
+    getCalculationType,
+    getCatalogFallbackCount,
+  } = useProducts()
   
   // Get available levels for a specific product, default to L1 if product not found
   const getAvailableLevels = (product: string): string[] => {
@@ -657,13 +677,23 @@ export default function ClientDCPage() {
         })
       }
       
-      // Recalculate totalAmount to ensure it's sum of (strength * price) for all products
-      // This ensures accuracy even if some products had stored totals
-      totalAmount = paymentBreakdown.reduce((sum: number, product: any) => {
-        const strength = Number(product.strength) || 0
-        const price = Number(product.unitPrice) || 0
-        return sum + (strength * price)
-      }, 0)
+      if (paymentBreakdown.length > 0) {
+        const adj = applyPaymentDivisorsToBreakdown(
+          paymentBreakdown.map((pb: any) => ({
+            ...pb,
+            product: pb.product || '',
+            class: pb.class || '1',
+            strength: Number(pb.strength) || 0,
+            unitPrice: Number(pb.unitPrice) || 0,
+            level: pb.level,
+            subject: pb.subject,
+          })),
+          getCalculationType,
+          getCatalogFallbackCount
+        )
+        paymentBreakdown = adj.paymentBreakdown
+        totalAmount = adj.totalAmount
+      }
 
       // Calculate payment and return totals
       let totalPaidAsOn = 0
@@ -788,6 +818,7 @@ export default function ClientDCPage() {
         discountRemarks: (dcOrder as any)?.discountRemarks || '',
         financialYear,
       })
+      setInvoiceModalOpen(true)
     } catch (e: any) {
       console.error('Failed to load invoice:', e)
       toast.error('Failed to load invoice data: ' + (e?.message || 'Unknown error'))
@@ -930,33 +961,46 @@ export default function ClientDCPage() {
 
       // 1) Prefer DC.productDetails if present
       if (fullDC.productDetails && Array.isArray(fullDC.productDetails) && fullDC.productDetails.length > 0) {
-        // Only show products that were actually added (have product name and at least some quantity/strength/price)
-        const addedProducts = fullDC.productDetails.filter((p: any) => p.product && (p.price > 0 || p.strength > 0 || p.quantity > 0))
-        if (addedProducts.length > 0) {
-          console.log('Loading products for Client DC from DC.productDetails:', JSON.stringify(addedProducts, null, 2))
-          productsToShow = addedProducts.map((p: any, idx: number) => {
+        // Only require product name; keep SKU category even if quantities/prices are 0.
+        // This prevents losing `productCategory` and falling back to DcOrder.products (which has no SKU category).
+        const dcProducts = fullDC.productDetails.filter((p: any) => p && p.product)
+        if (dcProducts.length > 0) {
+          console.log('Loading products for Client DC from DC.productDetails:', JSON.stringify(dcProducts, null, 2))
+          productsToShow = dcProducts.map((p: any, idx: number) => {
             // Read values directly - preserve 0 values, only default if null/undefined
             const strengthNum = p.strength !== null && p.strength !== undefined ? Number(p.strength) : 0
             const quantityNum = p.quantity !== null && p.quantity !== undefined ? Number(p.quantity) : strengthNum
-            
+
+            const studentCategories = [
+              'New Students',
+              'Existing Students',
+              'Both',
+              'New School',
+              'Existing School',
+            ]
+            const studentLike = typeof p.category === 'string' && studentCategories.includes(p.category)
+
+            // Prefer SKU productCategory.
+            // If missing, only use `category` as SKU category when it isn't a student category.
+            const rowProductCategory =
+              p.productCategory ||
+              (!studentLike && typeof p.category === 'string' ? p.category : undefined) ||
+              undefined
+
             const row = {
               id: `dc-${idx + 1}`,
               product: p.product || '',
               class: p.class || '1',
-              // Prefer SKU productCategory from DC productDetails if present.
-              // Fallback to `category` because some records store the SKU category there.
-              productCategory: p.productCategory || p.category || undefined,
+              // Keep student category (for the `category` field that admin/warehouse use later)
+              category: p.category,
+              productCategory: rowProductCategory,
               specs: p.specs || 'Regular', // Preserve specs from saved data
               quantity: quantityNum,
               strength: strengthNum,
               level: p.level || getDefaultLevel(p.product || 'Abacus'),
               term: p.term || 'Term 1',
+              subject: p.subject || undefined,
             }
-            console.log(`Client DC Product ${idx + 1} - Specs/Subject:`, {
-              raw: { specs: p.specs, subject: p.subject, product: p.product },
-              loaded: { specs: row.specs, subject: row.subject },
-              fullProduct: p
-            })
             return row
           })
         }
@@ -1065,6 +1109,20 @@ export default function ClientDCPage() {
     })
   }
 
+  const handleFollowUpStudentTypeContinue = (dc: DC) => {
+    const id = dc._id
+    const sel = followUpStudentTypeByDcId[id]
+    if (!sel) {
+      toast.error('Select a student type first')
+      return
+    }
+    if (isShortageStudentType(sel)) {
+      openRecordShortageDialog(dc)
+      return
+    }
+    toast.info('This student type is not available yet. Only Shortage is supported today.')
+  }
+
   const handleCreateShortageDC = async () => {
     if (!shortageParentDC) return
     const payloadRows = shortageRows
@@ -1097,7 +1155,14 @@ export default function ClientDCPage() {
       })
       toast.success('Shortage DC created successfully')
       setShortageDialogOpen(false)
+      const parentId = shortageParentDC._id
       setShortageParentDC(null)
+      setFollowUpStudentTypeByDcId((p) => {
+        if (!parentId) return p
+        const next = { ...p }
+        delete next[parentId]
+        return next
+      })
       await load()
     } catch (e: any) {
       toast.error(e?.message || 'Failed to create shortage DC')
@@ -1198,11 +1263,21 @@ export default function ClientDCPage() {
 
     setSavingClientDC(true)
     try {
+      const defaultStudentCategory =
+        dcOrderData?.school_type === 'Existing' ? 'Existing Students' : 'New Students'
+
+      const normalizeStudentCategory = (v: any) => {
+        if (!v) return v
+        if (v === 'New School') return 'New Students'
+        if (v === 'Existing School') return 'Existing Students'
+        return v
+      }
+
       // Prepare product details
       const productDetails = dcProductRows.map(row => ({
         product: row.product || '',
         class: row.class || '1',
-        category: row.category || 'New School',
+        category: normalizeStudentCategory(row.category) || defaultStudentCategory,
         productCategory: row.productCategory || undefined,
         specs: row.specs || 'Regular',
         subject: row.subject || undefined,
@@ -1512,6 +1587,24 @@ export default function ClientDCPage() {
         }
       }
 
+      if (paymentBreakdown.length > 0) {
+        const adj = applyPaymentDivisorsToBreakdown(
+          paymentBreakdown.map((pb: any) => ({
+            ...pb,
+            product: pb.product || '',
+            class: pb.class || '1',
+            strength: Number(pb.strength) || 0,
+            unitPrice: Number(pb.unitPrice) || 0,
+            level: pb.level,
+            subject: pb.subject,
+          })),
+          getCalculationType,
+          getCatalogFallbackCount
+        )
+        paymentBreakdown = adj.paymentBreakdown
+        totalAmount = adj.totalAmount
+      }
+
       // Get school/client information for payment
       let schoolInfo: any = {}
       if (selectedDC.dcOrderId) {
@@ -1543,128 +1636,14 @@ export default function ClientDCPage() {
         }
       }
 
-      // Create payment automatically when DC is requested
-      // For split DCs, create payment only for Term 1 DC (Term 2 is scheduled for later)
-      // For Term 1 or "Both" only, create payment normally
-      // For Term 2 only, don't create payment (will be created later)
+      // Program billing is now owned by backend delivery completion flows.
+      // Keep UI request flow billing-free to avoid stale or duplicated payable creation.
       if (totalAmount > 0 && (hasTerm1 || hasBothTerms || hasBothTerm)) {
-        try {
-          const currentUser = getCurrentUser()
-          
-          // For split DCs, calculate amount only for Term 1 products
-          let paymentAmount = totalAmount
-          let paymentBreakdownForPayment = paymentBreakdown
-          
-          if (hasBothTerms) {
-            // Recalculate amount for Term 1 products only
-            paymentAmount = 0
-            paymentBreakdownForPayment = []
-            
-            // Recalculate from DcOrder products for Term 1 only
-            if (selectedDC.dcOrderId) {
-              try {
-                const dcOrderId = typeof selectedDC.dcOrderId === 'object' 
-                  ? selectedDC.dcOrderId._id 
-                  : selectedDC.dcOrderId
-                const dcOrder = await apiRequest<any>(`/dc-orders/${dcOrderId}`)
-                
-                if (dcOrder.products && Array.isArray(dcOrder.products) && dcOrder.products.length > 0) {
-                  const usedIndices = new Set<number>()
-                  paymentBreakdownForPayment = term1Products.map((pd: any, index: number) => {
-                    let matchingProduct: any = null
-                    let matchingIndex = -1
-                    
-                    if (index < dcOrder.products.length && !usedIndices.has(index)) {
-                      matchingProduct = dcOrder.products[index]
-                      matchingIndex = index
-                      usedIndices.add(index)
-                    } else {
-                      const dcProductName = (pd.product || '').toLowerCase().trim()
-                      for (let i = 0; i < dcOrder.products.length; i++) {
-                        if (usedIndices.has(i)) continue
-                        const p = dcOrder.products[i]
-                        const orderProductName = (p.product_name || '').toLowerCase().trim()
-                        if (dcProductName === orderProductName || 
-                            dcProductName.includes(orderProductName) || 
-                            orderProductName.includes(dcProductName)) {
-                          matchingProduct = p
-                          matchingIndex = i
-                          usedIndices.add(i)
-                          break
-                        }
-                      }
-                    }
-                    
-                    const unitPrice = matchingProduct ? (Number(matchingProduct.unit_price) || 0) : 0
-                    const strength = Number(pd.strength) || 0
-                    const total = unitPrice * strength
-                    paymentAmount += total
-                    
-                    return {
-                      product: pd.product || '',
-                      class: pd.class || '1',
-                      category: pd.category || 'New School',
-                      specs: pd.specs || 'Regular',
-                      subject: pd.subject || undefined,
-                      quantity: Number(pd.quantity) || 0,
-                      strength: strength,
-                      level: pd.level || 'L2',
-                      unitPrice: unitPrice,
-                      total: total,
-                    }
-                  })
-                }
-              } catch (e) {
-                console.error('Failed to recalculate Term 1 payment:', e)
-                // Fallback: use proportional amount
-                const term1Quantity = term1Products.reduce((sum, p) => sum + (p.quantity || 0), 0)
-                paymentAmount = totalQuantity > 0 ? (totalAmount * term1Quantity) / totalQuantity : totalAmount
-              }
-            }
-          }
-          
-          const paymentPayload = {
-            dcId: updatedDC._id, // Use the Term 1 DC ID (or main DC if not split)
-            customerName: schoolInfo.customerName,
-            schoolCode: schoolInfo.schoolCode,
-            contactName: schoolInfo.contactName,
-            mobileNumber: schoolInfo.mobileNumber,
-            location: schoolInfo.location,
-            zone: schoolInfo.zone,
-            amount: paymentAmount,
-            paymentMethod: 'Other', // Will be updated when payment is received (Cash, UPI, etc.)
-            paymentDate: new Date().toISOString(),
-            status: 'Pending',
-            description: hasBothTerms 
-              ? `Auto-generated payment for Term 1 DC request - ${schoolInfo.customerName} (DC split into Term 1 and Term 2)`
-              : `Auto-generated payment for DC request - ${schoolInfo.customerName}`,
-            paymentBreakdown: paymentBreakdownForPayment,
-            autoCreated: true,
-            createdBy: currentUser?._id,
-          }
-
-          await apiRequest('/payments/create', {
-            method: 'POST',
-            body: JSON.stringify(paymentPayload),
-          })
-
-          console.log('✅ Payment created automatically for DC request:', {
-            dcId: updatedDC._id,
-            amount: paymentAmount,
-            customerName: schoolInfo.customerName,
-            isSplit: hasBothTerms,
-          })
-        } catch (paymentErr: any) {
-          console.error('❌ Failed to create payment automatically:', paymentErr)
-          // Don't fail the whole operation if payment creation fails
-          toast.warning('DC requested successfully, but failed to create payment automatically. Please create payment manually.')
-        }
+        console.log('ℹ️ Payment creation skipped in frontend; backend program-billing handles payable recomputation.')
       } else if (hasTerm2 && !hasTerm1 && !hasBothTerm) {
-        // Term 2 only (no Term 1, no "Both") - no payment created (will be created later when Term 2 is requested from Term-Wise DC)
-        console.log('📦 Term 2 only DC - skipping payment creation (will be created later when requested from Term-Wise DC)')
+        console.log('📦 Term 2 only DC - backend will handle cumulative billing at delivery completion')
       } else if (totalAmount === 0) {
-        console.warn('⚠️ Total amount is 0, skipping payment creation')
-        toast.warning('DC requested successfully, but no payment was created as total amount is 0.')
+        console.warn('⚠️ Total amount is 0; backend billing recompute will still run on delivery events')
       }
 
       // Update the related DcOrder status based on terms
@@ -1791,6 +1770,10 @@ export default function ClientDCPage() {
         toast.success('Client Request submitted successfully!')
       }
       setClientDCDialogOpen(false)
+      // Open invoice modal after a short delay
+      setTimeout(() => {
+        setInvoiceModalOpen(true)
+      }, 500)
       load()
     } catch (e: any) {
       toast.error(e?.message || 'Failed to submit Client Request')
@@ -2170,16 +2153,12 @@ export default function ClientDCPage() {
     const query = searchQuery.trim().toLowerCase()
     if (query) {
       filtered = filtered.filter((d) => {
-        const schoolCode = (typeof d.dcOrderId === 'object')
-          ? (d.dcOrderId?.school_code || d.dcOrderId?.dc_code || '').toLowerCase()
-          : ''
         const customerName = (d.customerName || d.saleId?.customerName || d.dcOrderId?.school_name || '').toLowerCase()
         const phone = (d.customerPhone || d.dcOrderId?.contact_mobile || '').toLowerCase()
         const product = (d.product || d.saleId?.product || (d.dcOrderId?.products && Array.isArray(d.dcOrderId.products) ? d.dcOrderId.products.map((p: any) => p.product_name || p.product).join(', ') : '')).toLowerCase()
         const status = (d.status || 'created').toLowerCase()
         
-        return schoolCode.includes(query) ||
-               customerName.includes(query) || 
+        return customerName.includes(query) || 
                phone.includes(query) || 
                product.includes(query) || 
                status.includes(query)
@@ -2252,50 +2231,6 @@ export default function ClientDCPage() {
       return dateB - dateA
     })
   }, [items, searchQuery, selectedStatus, selectedProduct, selectedYear, dateFrom, dateTo])
-
-  const searchBySchoolCode = async (code: string) => {
-    if (!code || code.length < 3) return
-    setBackendSearching(true)
-    try {
-      const results = await apiRequest<any[]>(`/dc-orders?school_code=${encodeURIComponent(code)}`)
-      if (results?.length) {
-        setItems((prev) => {
-          const existingIds = new Set(prev.map((i) => i._id))
-          const mapped: DC[] = results
-            .filter((r) => !existingIds.has(r._id))
-            .map((r) => ({
-              _id: r._id,
-              customerName: r.school_name || '',
-              customerPhone: r.contact_mobile || '',
-              status: r.status || 'created',
-              dcOrderId: {
-                _id: r._id,
-                school_name: r.school_name,
-                school_code: r.school_code,
-                contact_mobile: r.contact_mobile,
-                email: r.email,
-                products: r.products,
-                status: r.status,
-                school_type: r.school_type,
-                createdAt: r.createdAt,
-              },
-            }))
-          return [...prev, ...mapped]
-        })
-      }
-    } catch (e) {
-      // silently fail — local results still shown
-    } finally {
-      setBackendSearching(false)
-    }
-  }
-
-  useEffect(() => {
-    const isCodeLike = /^[a-zA-Z]{2,5}\d*/i.test(searchQuery)
-    if (!isCodeLike) return
-    const t = setTimeout(() => searchBySchoolCode(searchQuery), 500)
-    return () => clearTimeout(t)
-  }, [searchQuery])
   
   // Count active filters
   const activeFiltersCount = useMemo(() => {
@@ -2347,7 +2282,7 @@ export default function ClientDCPage() {
           <div className="relative flex-1 min-w-[300px]">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-neutral-400" />
             <Input
-              placeholder="Search by school code or name..."
+              placeholder="Search by client name, phone, product, or status..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-11 pr-10 h-11 border-neutral-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
@@ -2529,7 +2464,6 @@ export default function ClientDCPage() {
             Showing <span className="font-semibold text-neutral-900">{filteredItems.length}</span> of{' '}
             <span className="font-semibold text-neutral-900">{items.length}</span> clients
           </div>
-          {backendSearching && <span className="text-xs text-neutral-500">Searching backend...</span>}
         </div>
 
         {loading && (
@@ -2704,15 +2638,47 @@ export default function ClientDCPage() {
                           </div>
                           ) : (
                             <div className="flex items-center gap-2 justify-center">
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => openInvoiceView(d)}
+                                className="border-neutral-200 hover:bg-neutral-50 shadow-sm"
+                              >
+                                <CreditCard className="w-4 h-4 mr-2" />
+                                View Invoice
+                              </Button>
                               {status === 'completed' && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => openRecordShortageDialog(d)}
-                                  className="border-orange-200 text-orange-700 hover:bg-orange-50 shadow-sm"
-                                >
-                                  Record Shortage
-                                </Button>
+                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                                  <Select
+                                    value={followUpStudentTypeSelectValue(followUpStudentTypeByDcId[d._id])}
+                                    onValueChange={(v) =>
+                                      setFollowUpStudentTypeByDcId((p) => ({
+                                        ...p,
+                                        [d._id]: parseFollowUpStudentTypeSelectValue(v),
+                                      }))
+                                    }
+                                  >
+                                    <SelectTrigger className="h-8 w-full sm:w-[200px] text-xs border-orange-200">
+                                      <SelectValue placeholder="Student type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value={STUDENT_TYPE_PLACEHOLDER}>Select student type</SelectItem>
+                                      {STUDENT_TYPE_OPTIONS.map((opt) => (
+                                        <SelectItem key={opt} value={opt}>
+                                          {opt}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleFollowUpStudentTypeContinue(d)}
+                                    className="border-orange-200 text-orange-700 hover:bg-orange-50 shadow-sm shrink-0"
+                                  >
+                                    Continue
+                                  </Button>
+                                </div>
                               )}
                             </div>
                           )}
@@ -2747,18 +2713,20 @@ export default function ClientDCPage() {
           </DialogHeader>
           
           <div className="py-4">
-            {viewingPoUrl && (
+            {viewingPoUrl && (() => {
+              const displayPoUrl = resolveUploadUrl(viewingPoUrl)
+              return (
               <div className="relative">
-                {viewingPoUrl.toLowerCase().endsWith('.pdf') || 
-                 viewingPoUrl.includes('application/pdf') || 
-                 viewingPoUrl.includes('.pdf') ||
+                {displayPoUrl.toLowerCase().endsWith('.pdf') || 
+                 displayPoUrl.includes('application/pdf') || 
+                 displayPoUrl.includes('.pdf') ||
                  (viewingPoUrl.startsWith('data:') && viewingPoUrl.includes('application/pdf')) ||
-                 (viewingPoUrl.startsWith('http') && viewingPoUrl.toLowerCase().includes('.pdf')) ? (
+                 (displayPoUrl.startsWith('http') && displayPoUrl.toLowerCase().includes('.pdf')) ? (
                   <div className="border rounded-lg p-4 bg-neutral-50">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium">PO Document (PDF)</span>
                       <a 
-                        href={resolveUploadUrl(viewingPoUrl)} 
+                        href={displayPoUrl} 
                         target="_blank" 
                         rel="noopener noreferrer"
                         className="text-blue-600 hover:text-blue-800 text-sm underline"
@@ -2768,13 +2736,13 @@ export default function ClientDCPage() {
                     </div>
                     {viewingPoUrl.startsWith('data:') ? (
                       <iframe 
-                        src={resolveUploadUrl(viewingPoUrl)} 
+                        src={viewingPoUrl} 
                         className="w-full h-[70vh] rounded border"
                         title="PO Document"
                       />
                     ) : (
                       <iframe 
-                        src={`${resolveUploadUrl(viewingPoUrl)}#toolbar=0`} 
+                        src={`${displayPoUrl}#toolbar=0`} 
                         className="w-full h-[70vh] rounded border"
                         title="PO Document"
                       />
@@ -2783,7 +2751,7 @@ export default function ClientDCPage() {
                 ) : (
                   <div className="relative">
                     <img 
-                      src={resolveUploadUrl(viewingPoUrl)} 
+                      src={displayPoUrl} 
                       alt="PO Document" 
                       className="w-full h-auto rounded border max-h-[70vh] object-contain bg-neutral-50 mx-auto"
                       onError={(e) => {
@@ -2811,7 +2779,7 @@ export default function ClientDCPage() {
                   </div>
                 )}
               </div>
-            )}
+            )})()}
           </div>
         </DialogContent>
       </Dialog>
@@ -2903,16 +2871,16 @@ export default function ClientDCPage() {
               </div>
               {dcPoPhotoUrl ? (
                 <div className="relative">
-                  {dcPoPhotoUrl.toLowerCase().endsWith('.pdf') || 
-                   dcPoPhotoUrl.includes('application/pdf') || 
-                   dcPoPhotoUrl.includes('.pdf') ||
+                  {dcPoDisplayUrl.toLowerCase().endsWith('.pdf') || 
+                   dcPoDisplayUrl.includes('application/pdf') || 
+                   dcPoDisplayUrl.includes('.pdf') ||
                    (dcPoPhotoUrl.startsWith('data:') && dcPoPhotoUrl.includes('application/pdf')) ||
-                   (dcPoPhotoUrl.startsWith('http') && dcPoPhotoUrl.toLowerCase().includes('.pdf')) ? (
+                   (dcPoDisplayUrl.startsWith('http') && dcPoDisplayUrl.toLowerCase().includes('.pdf')) ? (
                     <div className="border rounded-lg p-4 bg-neutral-50">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-medium">PO Document (PDF)</span>
                         <a 
-                          href={resolveUploadUrl(dcPoPhotoUrl)} 
+                          href={dcPoDisplayUrl} 
                           target="_blank" 
                           rel="noopener noreferrer"
                           className="text-blue-600 hover:text-blue-800 text-sm underline"
@@ -2922,13 +2890,13 @@ export default function ClientDCPage() {
                       </div>
                       {dcPoPhotoUrl.startsWith('data:') ? (
                         <iframe 
-                          src={resolveUploadUrl(dcPoPhotoUrl)} 
+                          src={dcPoPhotoUrl} 
                           className="w-full h-96 rounded border"
                           title="PO Document"
                         />
                       ) : (
                         <iframe 
-                          src={`${resolveUploadUrl(dcPoPhotoUrl)}#toolbar=0`} 
+                          src={`${dcPoDisplayUrl}#toolbar=0`} 
                           className="w-full h-96 rounded border"
                           title="PO Document"
                         />
@@ -2936,7 +2904,7 @@ export default function ClientDCPage() {
                     </div>
                   ) : (
                     <img 
-                      src={resolveUploadUrl(dcPoPhotoUrl)} 
+                      src={dcPoDisplayUrl} 
                       alt="PO Document" 
                       className="w-full h-auto rounded border max-h-64 object-contain bg-neutral-50"
                       onError={(e) => {
@@ -4009,6 +3977,142 @@ export default function ClientDCPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Invoice View Modal */}
+      <Dialog open={invoiceModalOpen} onOpenChange={setInvoiceModalOpen}>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto p-0">
+          <DialogHeader className="bg-green-600 text-white p-4">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-white hover:bg-green-700 p-0 h-auto"
+                onClick={() => setInvoiceModalOpen(false)}
+              >
+                ←
+              </Button>
+              <DialogTitle className="text-white">Payments Info [{invoiceData?.financialYear || '2025-26'}]</DialogTitle>
+            </div>
+          </DialogHeader>
+          
+          {invoiceData && (
+            <div className="bg-white">
+              {/* Payment Information List */}
+              <div className="divide-y divide-neutral-200">
+                {/* School Name */}
+                <div className="flex justify-between items-center p-4 bg-neutral-50">
+                  <span className="text-teal-600 font-medium">School Name:</span>
+                  <span className="text-black font-medium">{invoiceData.schoolInfo.customerName || '-'}</span>
+                </div>
+
+                {/* Previous Due */}
+                <div className="flex justify-between items-center p-4 bg-white">
+                  <span className="text-teal-600 font-medium">Previous Due:</span>
+                  <span className="text-black">Rs.{invoiceData.previousDue?.toFixed(2) || '0.00'}</span>
+                </div>
+
+                {/* Current Total Bill */}
+                <div className="flex justify-between items-center p-4 bg-neutral-50">
+                  <span className="text-teal-600 font-medium">Current Total Bill:</span>
+                  <span className="text-black">Rs.{invoiceData.totalAmount?.toFixed(2) || '0.00'}</span>
+                </div>
+
+                {/* TotalPaidAsOn */}
+                <div className="flex justify-between items-center p-4 bg-white">
+                  <span className="text-teal-600 font-medium">TotalPaidAsOn:</span>
+                  <span className="text-black">Rs.{invoiceData.totalPaidAsOn?.toFixed(2) || '0.00'}</span>
+                </div>
+
+                {/* TotalReturnValue */}
+                <div className="flex justify-between items-center p-4 bg-neutral-50">
+                  <span className="text-teal-600 font-medium">TotalReturnValue:</span>
+                  <span className="text-black">Rs.{invoiceData.totalReturnValue?.toFixed(2) || '0.00'}</span>
+                </div>
+
+                {/* TotalDue */}
+                <div className="flex justify-between items-center p-4 bg-white">
+                  <span className="text-teal-600 font-medium">TotalDue:</span>
+                  <span className="text-black">Rs.{invoiceData.totalDue?.toFixed(2) || '0.00'}</span>
+                </div>
+
+                {/* Products from Database */}
+                {invoiceData.paymentBreakdown && invoiceData.paymentBreakdown.length > 0 ? (
+                  invoiceData.paymentBreakdown.map((product: any, index: number) => {
+                    // Use strength as quantity (number of students/items), fallback to quantity field
+                    const quantity = product.strength !== undefined ? product.strength : (product.quantity !== undefined ? product.quantity : 0)
+                    // Get price from database - unitPrice comes from DcOrder or DC productDetails (both from database)
+                    const price = product.unitPrice !== undefined && product.unitPrice !== null 
+                      ? Number(product.unitPrice) 
+                      : (product.price !== undefined && product.price !== null 
+                          ? Number(product.price) 
+                          : 0)
+                    const productName = product.product || 'Product'
+                    const bgColor1 = (index * 2) % 2 === 0 ? 'bg-neutral-50' : 'bg-white'
+                    const bgColor2 = (index * 2 + 1) % 2 === 0 ? 'bg-neutral-50' : 'bg-white'
+                    
+                    return (
+                      <div key={index}>
+                        {/* Product Quantity - show 0 if quantity is 0 */}
+                        <div className={`flex justify-between items-center p-4 ${bgColor1}`}>
+                          <span className="text-teal-600 font-medium">{productName}:</span>
+                          <span className="text-black">{quantity}</span>
+                        </div>
+                        {/* Product Price - from database (DcOrder.unit_price or DC.productDetails.price) */}
+                        <div className={`flex justify-between items-center p-4 ${bgColor2}`}>
+                          <span className="text-teal-600 font-medium">{productName}Price:</span>
+                          <span className="text-black">{price > 0 ? `Rs.${price.toFixed(2)}` : '-'}</span>
+                        </div>
+                      </div>
+                    )
+                  })
+                ) : (
+                  <div className="flex justify-between items-center p-4 bg-neutral-50">
+                    <span className="text-teal-600 font-medium">No products found</span>
+                    <span className="text-black">-</span>
+                  </div>
+                )}
+
+                {/* OtherCharges */}
+                <div className="flex justify-between items-center p-4 bg-neutral-50">
+                  <span className="text-teal-600 font-medium">OtherCharges:</span>
+                  <span className="text-black">{invoiceData.otherCharges?.toFixed(2) || '0.00'}</span>
+                </div>
+
+                {/* OtherChargesRemarks */}
+                <div className="flex justify-between items-center p-4 bg-white">
+                  <span className="text-teal-600 font-medium">OtherChargesRemarks:</span>
+                  <span className="text-black">{invoiceData.otherChargesRemarks || '-'}</span>
+                </div>
+
+                {/* Discount */}
+                <div className="flex justify-between items-center p-4 bg-neutral-50">
+                  <span className="text-teal-600 font-medium">Discount:</span>
+                  <span className="text-black">{invoiceData.discount?.toFixed(2) || '0.00'}</span>
+                </div>
+
+                {/* DiscountRemarks */}
+                <div className="flex justify-between items-center p-4 bg-white">
+                  <span className="text-teal-600 font-medium">DiscountRemarks:</span>
+                  <div className="flex-1 max-w-[200px] ml-4">
+                    <Textarea
+                      value={invoiceData.discountRemarks || ''}
+                      readOnly
+                      disabled
+                      className="bg-neutral-100 rounded-lg text-sm min-h-[40px]"
+                      placeholder=""
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="p-4 border-t">
+            <Button variant="outline" onClick={() => setInvoiceModalOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

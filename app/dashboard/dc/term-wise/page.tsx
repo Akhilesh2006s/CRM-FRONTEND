@@ -13,6 +13,8 @@ import { Search, FileText, Package } from 'lucide-react'
 import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
+import { useProducts } from '@/hooks/useProducts'
+import { applyPaymentDivisorsToBreakdown } from '@/lib/dcPaymentDivisors'
 
 type DC = {
   _id: string
@@ -84,6 +86,7 @@ type InvoiceData = {
 export default function TermWiseDCPage() {
   const router = useRouter()
   const currentUser = getCurrentUser()
+  const { getCalculationType, getCatalogFallbackCount } = useProducts()
   const [items, setItems] = useState<DC[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -308,6 +311,24 @@ export default function TermWiseDCPage() {
         }
       }
       
+      if (paymentBreakdown.length > 0) {
+        const adj = applyPaymentDivisorsToBreakdown(
+          paymentBreakdown.map((pb: any) => ({
+            ...pb,
+            product: pb.product || '',
+            class: pb.class || '1',
+            strength: Number(pb.strength) || 0,
+            unitPrice: Number(pb.unitPrice) || 0,
+            level: pb.level,
+            subject: pb.subject,
+          })),
+          getCalculationType,
+          getCatalogFallbackCount
+        )
+        paymentBreakdown = adj.paymentBreakdown
+        totalAmount = adj.totalAmount
+      }
+
       setInvoiceData({
         schoolInfo,
         paymentBreakdown,

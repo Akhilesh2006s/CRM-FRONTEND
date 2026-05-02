@@ -36,6 +36,12 @@ const productSchema = new mongoose.Schema(
       type: [String], // Array of product category names
       default: [],
     },
+    // Payment: final line amount = (sum participation × unit price) ÷ divisor; divisor from levels or subjects
+    calculationType: {
+      type: String,
+      enum: ['none', 'level_based', 'subject_based'],
+      default: 'none',
+    },
     prodStatus: {
       type: Number,
       enum: [0, 1], // 0 = not available, 1 = available

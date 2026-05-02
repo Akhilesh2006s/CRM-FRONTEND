@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { apiRequest } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
-import { PlusCircle, Edit, Search, Package } from 'lucide-react'
+import { PlusCircle, Edit, Search, Package, SlidersHorizontal } from 'lucide-react'
 import Link from 'next/link'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
@@ -27,6 +27,7 @@ type Product = {
   hasCategory?: boolean
   categories?: string[]
   prodStatus: number
+  calculationType?: 'none' | 'level_based' | 'subject_based'
   createdAt: string
   createdBy?: {
     name: string
@@ -61,8 +62,10 @@ export default function ProductsPage() {
     categories: [] as string[],
     newCategory: '',
     prodStatus: 1,
+    calculationType: 'none' as 'none' | 'level_based' | 'subject_based',
   })
   const [saving, setSaving] = useState(false)
+  const [paymentLogicOpen, setPaymentLogicOpen] = useState(false)
 
   useEffect(() => {
     if (!currentUser || (currentUser.role !== 'Admin' && currentUser.role !== 'Super Admin')) {
@@ -123,6 +126,7 @@ export default function ProductsPage() {
       categories: product.categories || [],
       newCategory: '',
       prodStatus: product.prodStatus,
+      calculationType: product.calculationType || 'none',
     })
     setEditModalOpen(true)
   }
@@ -144,6 +148,7 @@ export default function ProductsPage() {
       categories: [],
       newCategory: '',
       prodStatus: 1,
+      calculationType: 'none',
     })
   }
 
@@ -235,6 +240,14 @@ export default function ProductsPage() {
       toast.error('At least one product category is required when product categories are enabled')
       return
     }
+    if (editForm.calculationType === 'level_based' && editForm.productLevels.length === 0) {
+      toast.error('Level-based payment requires at least one product level')
+      return
+    }
+    if (editForm.calculationType === 'subject_based' && !editForm.hasSubjects) {
+      toast.error('Subject-based payment requires subjects to be enabled')
+      return
+    }
 
     setSaving(true)
     try {
@@ -248,6 +261,7 @@ export default function ProductsPage() {
         hasCategory: editForm.hasCategory,
         categories: editForm.hasCategory ? editForm.categories : [],
         prodStatus: editForm.prodStatus,
+        calculationType: editForm.calculationType,
       }
 
       await apiRequest(`/products/${editingProduct._id}`, {
@@ -439,6 +453,23 @@ export default function ProductsPage() {
                 onChange={(e) => setEditForm({ ...editForm, productName: e.target.value })}
                 required
               />
+            </div>
+
+            <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3 bg-neutral-50">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-neutral-700">
+                  Payment:{' '}
+                  <span className="font-medium">
+                    {editForm.calculationType === 'none' && 'Standard'}
+                    {editForm.calculationType === 'level_based' && 'Level-based'}
+                    {editForm.calculationType === 'subject_based' && 'Subject-based'}
+                  </span>
+                </p>
+                <Button type="button" variant="outline" size="sm" onClick={() => setPaymentLogicOpen(true)}>
+                  <SlidersHorizontal className="w-4 h-4 mr-2" />
+                  Manage payment logic
+                </Button>
+              </div>
             </div>
 
             <div>
@@ -635,6 +666,40 @@ export default function ProductsPage() {
             </Button>
             <Button onClick={handleSaveEdit} disabled={saving}>
               {saving ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={paymentLogicOpen} onOpenChange={setPaymentLogicOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Manage payment logic</DialogTitle>
+            <DialogDescription>
+              Divisor comes from distinct levels or subjects on each sale (per product and class). Use levels and subjects below on this form.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label>Calculation type</Label>
+            <Select
+              value={editForm.calculationType}
+              onValueChange={(v: 'none' | 'level_based' | 'subject_based') =>
+                setEditForm({ ...editForm, calculationType: v })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None (standard per line)</SelectItem>
+                <SelectItem value="level_based">Level-based</SelectItem>
+                <SelectItem value="subject_based">Subject-based</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button type="button" onClick={() => setPaymentLogicOpen(false)}>
+              Done
             </Button>
           </DialogFooter>
         </DialogContent>

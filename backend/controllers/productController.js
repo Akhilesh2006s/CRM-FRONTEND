@@ -74,6 +74,21 @@ const create = async (req, res) => {
     if (payload.categories && !Array.isArray(payload.categories)) {
       payload.categories = [payload.categories];
     }
+
+    const allowedCalc = new Set(['none', 'level_based', 'subject_based']);
+    if (payload.calculationType != null) {
+      const ct = String(payload.calculationType);
+      if (!allowedCalc.has(ct)) {
+        return res.status(400).json({ message: 'Invalid calculationType' });
+      }
+      payload.calculationType = ct;
+    }
+    if (payload.calculationType === 'subject_based' && !payload.hasSubjects) {
+      return res.status(400).json({ message: 'subject_based requires hasSubjects to be true' });
+    }
+    if (payload.calculationType === 'level_based' && (!payload.productLevels || payload.productLevels.length === 0)) {
+      return res.status(400).json({ message: 'level_based requires at least one product level' });
+    }
     
     const product = await Product.create(payload);
     
@@ -110,6 +125,7 @@ const update = async (req, res) => {
       'hasCategory',
       'categories',
       'prodStatus',
+      'calculationType',
     ];
     
     fieldsToUpdate.forEach(field => {
@@ -117,6 +133,26 @@ const update = async (req, res) => {
         updateData[field] = req.body[field];
       }
     });
+
+    const allowedCalc = new Set(['none', 'level_based', 'subject_based']);
+    if (updateData.calculationType !== undefined) {
+      if (!allowedCalc.has(String(updateData.calculationType))) {
+        return res.status(400).json({ message: 'Invalid calculationType' });
+      }
+    }
+    const nextCalc =
+      updateData.calculationType !== undefined ? String(updateData.calculationType) : String(product.calculationType || 'none');
+    const nextHasSubjects =
+      updateData.hasSubjects !== undefined ? updateData.hasSubjects : product.hasSubjects;
+    const nextLevels =
+      updateData.productLevels !== undefined ? updateData.productLevels : product.productLevels;
+    if (nextCalc === 'subject_based' && !nextHasSubjects) {
+      return res.status(400).json({ message: 'subject_based requires hasSubjects to be true' });
+    }
+    const levelsArr = Array.isArray(nextLevels) ? nextLevels : [];
+    if (nextCalc === 'level_based' && levelsArr.length === 0) {
+      return res.status(400).json({ message: 'level_based requires at least one product level' });
+    }
     
     // Validate if hasSubjects is true, subjects must be provided
     if (updateData.hasSubjects && (!updateData.subjects || updateData.subjects.length === 0)) {
@@ -218,7 +254,7 @@ const remove = async (req, res) => {
 const getActiveProducts = async (req, res) => {
   try {
     const products = await Product.find({ prodStatus: 1 })
-      .select('productName productLevels hasSubjects subjects hasSpecs specs hasCategory categories')
+      .select('productName productLevels hasSubjects subjects hasSpecs specs hasCategory categories calculationType')
       .sort({ productName: 1 });
     
     res.json(products);

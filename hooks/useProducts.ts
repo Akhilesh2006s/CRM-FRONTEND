@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { apiRequest } from '@/lib/api'
+import { normalizeCalculationType, type CalculationType } from '@/lib/paymentDivisor'
 
 type Product = {
   _id: string
@@ -12,6 +13,7 @@ type Product = {
   hasCategory?: boolean
   categories?: string[]
   prodStatus: number
+  calculationType?: 'none' | 'level_based' | 'subject_based'
 }
 
 export function useProducts() {
@@ -108,6 +110,19 @@ export function useProducts() {
     getProductId: (productName: string): string | undefined => {
       const product = products.find(p => p.productName === productName)
       return product?._id
+    },
+    getCalculationType: (productName: string): CalculationType => {
+      const product = products.find(p => p.productName === productName)
+      return normalizeCalculationType(product?.calculationType)
+    },
+    getCatalogFallbackCount: (productName: string, ct: CalculationType): number => {
+      const product = products.find(p => p.productName === productName)
+      if (!product) return 0
+      if (ct === 'level_based')
+        return Array.isArray(product.productLevels) ? product.productLevels.length : 0
+      if (ct === 'subject_based')
+        return Array.isArray(product.subjects) ? product.subjects.length : 0
+      return 0
     },
   }
 }
