@@ -82,7 +82,7 @@ const normalizeProductDetails = (rows = [], { isShortage = false } = {}) =>
     return {
       product: p.product || p.productName || '',
       class: p.class || '1',
-      category: p.category || 'new Students',
+      category: isShortage ? 'Shortage' : (p.category || 'new Students'),
       productName: p.productName || p.product || '',
       productCategory: p.productCategory || undefined,
       quantity,
@@ -220,12 +220,12 @@ const recomputeBillingForCompletedDC = async (dc) => {
     productDoc = { calculationType: 'level_based', subjects: [] };
   } else if (
     productDoc &&
-    normalizeCalculationType(productDoc.calculationType) === 'none' &&
+    normalizeCalculationType(productDoc.calculationType) === 'normal' &&
     isLegacyAbacus
   ) {
     productDoc = { ...productDoc, calculationType: 'level_based' };
   }
-  if (!productDoc || normalizeCalculationType(productDoc.calculationType) === 'none') {
+  if (!productDoc || normalizeCalculationType(productDoc.calculationType) === 'normal') {
     return null;
   }
 
@@ -443,6 +443,7 @@ const raiseDC = async (req, res) => {
               product_name: p.product || p.product_name || 'Abacus',
               quantity: Number(p.quantity) || Number(p.strength) || 1,
               unit_price: Number(p.price) || 0,
+              class: p.class ? String(p.class).trim() : '1',
             }))
           : (lead.products && lead.products.length) ? lead.products : [{ product_name: 'Abacus', quantity: 1, unit_price: 0 }];
         dcOrder = await DcOrder.create({
@@ -1776,13 +1777,14 @@ const getMyDCs = async (req, res) => {
         poDocument: order.pod_proof_url || null,
         productDetails: order.products ? order.products.map(p => ({
           product: p.product_name || 'Abacus',
-          class: '1',
+          class: (p.class != null && String(p.class).trim() !== '') ? String(p.class).trim() : '1',
           category: order.school_type === 'Existing' ? 'Existing School' : 'New School', // Auto-determine category
           quantity: p.quantity || 1,
           strength: 0,
           price: p.unit_price || 0,
           total: (p.quantity || 1) * (p.unit_price || 0),
-          level: 'L1',
+          level: p.level || 'L1',
+          term: p.term || 'Term 1',
         })) : [],
         createdAt: order.createdAt,
         updatedAt: order.updatedAt,

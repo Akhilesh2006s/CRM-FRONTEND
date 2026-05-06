@@ -3,8 +3,8 @@ const DcOrder = require('../models/DcOrder');
 const ExcelJS = require('exceljs');
 const mongoose = require('mongoose');
 const { generateSchoolCode } = require('../utils/schoolCodeGenerator');
-
-const VALID_PRODUCT_TERMS = ['Term 1', 'Term 2', 'Both'];
+const { normalizeProductTerm } = require('../utils/productTerm');
+const { derivePriorityFromFollowUpProducts } = require('../utils/leadFollowUpPriority');
 
 function mapProductsFromInterested(productsInput) {
   if (!Array.isArray(productsInput)) return [];
@@ -14,7 +14,7 @@ function mapProductsFromInterested(productsInput) {
       product_name: String(p.product_name || p.product || '').trim(),
       quantity: Math.max(0, Number(p.quantity ?? p.strength) || 1),
       unit_price: Number(p.unit_price) || 0,
-      term: ['Term 1', 'Term 2', 'Both'].includes(p.term) ? p.term : 'Term 1',
+      term: normalizeProductTerm(p.term),
       deliverables: Array.isArray(p.deliverables) ? p.deliverables : [],
     }));
 }
@@ -24,17 +24,7 @@ function normalizeLeadProducts(products) {
 
   return products.map((p) => {
     const product = { ...p };
-
-    // Backwards compatibility: if term is missing, default to 'Term 1'
-    if (product.term == null || product.term === '') {
-      product.term = 'Term 1';
-      return product;
-    }
-
-    if (!VALID_PRODUCT_TERMS.includes(product.term)) {
-      throw new Error('Invalid product term. Allowed values are: Term 1, Term 2, Both.');
-    }
-
+    product.term = normalizeProductTerm(product.term);
     return product;
   });
 }
@@ -395,14 +385,13 @@ const updateLead = async (req, res) => {
 
     const hasFollowUpDate = req.body.follow_up_date !== undefined;
     const hasRemarks = req.body.remarks !== undefined;
-    const hasPriority = req.body.priority !== undefined;
     const hasProductsInterested = Array.isArray(req.body.productsInterested);
     const normalizeProductsInterested = (rows = []) =>
       rows
         .filter((row) => row && (row.product_name || row.product))
         .map((row) => ({
           product_name: String(row.product_name || row.product || '').trim(),
-          term: ['Term 1', 'Term 2', 'Both'].includes(row.term) ? row.term : 'Term 1',
+          term: normalizeProductTerm(row.term),
           status: ['Hot', 'Warm', 'Visit Again', 'Not Met Management', 'Not Interested'].includes(row.status)
             ? row.status
             : 'Warm',
@@ -415,13 +404,15 @@ const updateLead = async (req, res) => {
       ? normalizeProductsInterested(req.body.productsInterested)
       : [];
 
+    const derivedLeadPriority = derivePriorityFromFollowUpProducts(normalizedProductsInterested);
+    if (normalizedProductsInterested.length > 0 && derivedLeadPriority) {
+      req.body.priority = derivedLeadPriority;
+    }
+    const hasPriority = req.body.priority !== undefined;
+
     // Normalize product terms if products are being updated
     if (req.body && Array.isArray(req.body.products)) {
-      try {
-        req.body.products = normalizeLeadProducts(req.body.products);
-      } catch (termError) {
-        return res.status(400).json({ message: termError.message || 'Invalid product term' });
-      }
+      req.body.products = normalizeLeadProducts(req.body.products);
     }
     if (hasProductsInterested) {
       req.body.products = normalizeLeadProducts(normalizedProductsInterested);
@@ -435,13 +426,19 @@ const updateLead = async (req, res) => {
     const shouldTrackHistory = hasFollowUpDate || hasRemarks || hasPriority || hasProductsInterested;
 
     if (shouldTrackHistory) {
+      const historyPriority =
+        normalizedProductsInterested.length > 0 && derivedLeadPriority
+          ? derivedLeadPriority
+          : hasPriority && req.body.priority != null && req.body.priority !== ''
+            ? req.body.priority
+            : lead.priority || 'Warm';
       req.body.$push = {
         updateHistory: {
           follow_up_date: hasFollowUpDate && req.body.follow_up_date
             ? new Date(req.body.follow_up_date)
             : null,
           remarks: hasRemarks ? (req.body.remarks || '') : '',
-          priority: hasPriority ? (req.body.priority || 'Cold') : 'Cold',
+          priority: historyPriority,
           productsInterested: normalizedProductsInterested,
           updatedBy: req.user?._id || lead.createdBy,
           updatedAt: new Date(),
@@ -632,7 +629,7 @@ const convertToClient = async (req, res) => {
           product_name: p.product_name || p.product || 'Abacus',
           quantity: Number(p.quantity) || 1,
           unit_price: Number(p.unit_price) || 0,
-          term: p.term || 'Term 1',
+          term: normalizeProductTerm(p.term),
         }))
       : (lead.products && lead.products.length > 0
           ? lead.products.map((p) => ({
@@ -666,7 +663,7 @@ const convertToClient = async (req, res) => {
             product_name: p.product_name,
             quantity: Number(p.quantity) || 1,
             unit_price: Number(p.unit_price) || 0,
-            term: p.term || 'Term 1',
+            term: normalizeProductTerm(p.term),
           });
         }
       }
@@ -728,3 +725,4 @@ module.exports = {
   exportLeads,
   convertToClient,
 };
+

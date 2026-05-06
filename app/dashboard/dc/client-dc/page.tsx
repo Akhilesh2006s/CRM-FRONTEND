@@ -22,6 +22,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
 import { useProducts } from '@/hooks/useProducts'
 import { applyPaymentDivisorsToBreakdown } from '@/lib/dcPaymentDivisors'
+import { normalizeProductTerm, termFromLevelLabel } from '@/lib/productTerm'
 import { useRouter } from 'next/navigation'
 
 type DC = {
@@ -109,6 +110,7 @@ export default function ClientDCPage() {
     class: string
     category: string
     term: string
+    productCategory?: string
     orderedQuantity: number
     deliveredQuantity: number
     shortageQuantity: number
@@ -130,6 +132,8 @@ export default function ClientDCPage() {
     discount?: number
     discountRemarks?: string
     financialYear?: string
+    invoicePending?: boolean
+    invoicePendingMessage?: string
   } | null>(null)
   // Delivery and Address data (read-only)
   const [deliveryAddress, setDeliveryAddress] = useState({
@@ -176,6 +180,7 @@ export default function ClientDCPage() {
     quantity: number
     unit_price: number
     level?: string // Level configured on Products master; shown in Edit PO
+    term?: string // Academic term (Term 1 / 2 / Both) for split tables
   }>>([])
   const [addProductDialogOpen, setAddProductDialogOpen] = useState(false)
   const [addNewProductDialogOpen, setAddNewProductDialogOpen] = useState(false)
@@ -196,6 +201,8 @@ export default function ClientDCPage() {
     getDefaultLevel,
     getProductSpecs,
     getProductSubjects,
+    getProductCategories,
+    hasProductCategories,
     getCalculationType,
     getCatalogFallbackCount,
   } = useProducts()
@@ -469,6 +476,29 @@ export default function ClientDCPage() {
       setDcsWithPendingChanges(prev => new Set(prev).add(currentEditingDCId))
     }
   }, [editProductRows, currentEditingDCId, originalProductNames])
+
+  const getProgramInvoiceGate = async (
+    dcOrderId?: string | null,
+    productName?: string | null
+  ): Promise<{ invoicePending: boolean; message?: string }> => {
+    if (!dcOrderId || !productName) return { invoicePending: false }
+    try {
+      const status = await apiRequest<any>(
+        `/program-billing/status/by-dc-order-product?dcOrderId=${encodeURIComponent(
+          dcOrderId
+        )}&product=${encodeURIComponent(productName)}`
+      )
+      if (status?.exists && status?.shouldGenerateInvoice === false) {
+        return {
+          invoicePending: true,
+          message: `Invoice not generated yet. Delivered ${status.deliveredLevelsCount || 0} of ${status.totalLevels || 0} required terms.`,
+        }
+      }
+      return { invoicePending: false }
+    } catch {
+      return { invoicePending: false }
+    }
+  }
 
   const openInvoiceView = async (dc: DC) => {
     try {
@@ -803,10 +833,16 @@ export default function ClientDCPage() {
       // TotalDue = TotalPaid - ReturnValue (as per user requirement)
       const totalDue = Math.max(0, totalPaidAsOn - totalReturnValue)
       
+      const resolvedDcOrderId =
+        dcOrder?._id ||
+        (typeof dc.dcOrderId === 'object' ? dc.dcOrderId?._id : dc.dcOrderId)
+      const primaryProduct = paymentBreakdown[0]?.product || fullDC.product || ''
+      const gate = await getProgramInvoiceGate(resolvedDcOrderId, primaryProduct)
+
       setInvoiceData({
         schoolInfo,
-        paymentBreakdown,
-        totalAmount: currentTotalBill,
+        paymentBreakdown: gate.invoicePending ? [] : paymentBreakdown,
+        totalAmount: gate.invoicePending ? 0 : currentTotalBill,
         dcDate: fullDC.dcDate || undefined,
         previousDue,
         totalPaidAsOn,
@@ -817,6 +853,8 @@ export default function ClientDCPage() {
         discount,
         discountRemarks: (dcOrder as any)?.discountRemarks || '',
         financialYear,
+        invoicePending: gate.invoicePending,
+        invoicePendingMessage: gate.message,
       })
       setInvoiceModalOpen(true)
     } catch (e: any) {
@@ -997,8 +1035,12 @@ export default function ClientDCPage() {
               specs: p.specs || 'Regular', // Preserve specs from saved data
               quantity: quantityNum,
               strength: strengthNum,
-              level: p.level || getDefaultLevel(p.product || 'Abacus'),
-              term: p.term || 'Term 1',
+              level: p.level || p.term || getDefaultLevel(p.product || 'Abacus'),
+              term: normalizeProductTerm(
+                (p.term != null && String(p.term).trim() !== '')
+                  ? p.term
+                  : (termFromLevelLabel(p.level) ?? 'Term 1')
+              ),
               subject: p.subject || undefined,
             }
             return row
@@ -1027,8 +1069,12 @@ export default function ClientDCPage() {
           specs: 'Regular', // Default, as Edit PO doesn't have specs
           quantity: Number(p.quantity) || 0,
           strength: Number(p.quantity) || 0, // Use quantity as strength
-          level: getDefaultLevel(p.product_name || 'Abacus'),
-          term: p.term || 'Term 1',
+          level: p.level || p.term || getDefaultLevel(p.product_name || 'Abacus'),
+          term: normalizeProductTerm(
+            (p.term != null && String(p.term).trim() !== '')
+              ? p.term
+              : (termFromLevelLabel(p.level) ?? 'Term 1')
+          ),
         }))
       }
       
@@ -1083,17 +1129,25 @@ export default function ClientDCPage() {
       }
 
       const rows = (Array.isArray(dc.productDetails) ? dc.productDetails : []).map((p: any, idx: number) => {
+      const prodName = p.product || p.productName || ''
       const orderedQuantity = Number(p.quantity || p.strength || 0)
       const deliveredQuantity = Number(p.deliveredQuantity ?? orderedQuantity)
       const key = `${(p.product || p.productName || '').toLowerCase()}::${(p.class || '').toLowerCase()}::${(p.category || '').toLowerCase()}::${(p.term || 'term 1').toLowerCase()}`
       const alreadyRaised = Number(consumed.get(key) || 0)
       const calculatedShortage = Math.max(orderedQuantity - deliveredQuantity - alreadyRaised, 0)
+      const skuCats = hasProductCategories(prodName) ? getProductCategories(prodName) : []
+      const rawPc = typeof p.productCategory === 'string' ? p.productCategory.trim() : ''
+      const resolvedProductCategory =
+        rawPc && skuCats.some((c) => c.toLowerCase() === rawPc.toLowerCase())
+          ? skuCats.find((c) => c.toLowerCase() === rawPc.toLowerCase()) || rawPc
+          : skuCats[0] || ''
       return {
         id: `${idx}-${p.product || p.productName || 'product'}`,
-        product: p.product || p.productName || '',
+        product: prodName,
         class: p.class || '1',
         category: p.category || 'new Students',
         term: p.term || 'Term 1',
+        productCategory: resolvedProductCategory || undefined,
         orderedQuantity,
         deliveredQuantity,
         shortageQuantity: Number(p.shortageQuantity ?? calculatedShortage),
@@ -1125,18 +1179,29 @@ export default function ClientDCPage() {
 
   const handleCreateShortageDC = async () => {
     if (!shortageParentDC) return
-    const payloadRows = shortageRows
-      .filter((r) => Number(r.shortageQuantity) > 0)
-      .map((r) => ({
-        product: r.product,
-        class: r.class,
-        category: r.category,
-        term: r.term,
-        quantity: Number(r.shortageQuantity),
-        deliveredQuantity: Number(r.deliveredQuantity),
-        shortageQuantity: Number(r.shortageQuantity),
-        strength: Number(r.shortageQuantity),
-      }))
+    const rowsWithShortage = shortageRows.filter((r) => Number(r.shortageQuantity) > 0)
+    const missingSku = rowsWithShortage.find(
+      (r) => hasProductCategories(r.product) && !(r.productCategory && String(r.productCategory).trim())
+    )
+    if (missingSku) {
+      toast.error(`Select a product category for ${missingSku.product || 'each product'} with shortage quantity.`)
+      return
+    }
+
+    const payloadRows = rowsWithShortage.map((r) => ({
+      product: r.product,
+      class: r.class,
+      category: r.category,
+      term: r.term,
+      productCategory:
+        hasProductCategories(r.product) && r.productCategory?.trim()
+          ? r.productCategory.trim()
+          : undefined,
+      quantity: Number(r.shortageQuantity),
+      deliveredQuantity: Number(r.deliveredQuantity),
+      shortageQuantity: Number(r.shortageQuantity),
+      strength: Number(r.shortageQuantity),
+    }))
 
     if (payloadRows.length === 0) {
       toast.error('Enter shortage quantity for at least one product')
@@ -1752,11 +1817,22 @@ export default function ClientDCPage() {
         ? invoiceBreakdown.reduce((sum: number, p: any) => sum + (p.total || 0), 0)
         : totalAmount
       
+      const resolvedDcOrderId =
+        typeof selectedDC?.dcOrderId === 'object'
+          ? selectedDC?.dcOrderId?._id
+          : selectedDC?.dcOrderId
+      const gate = await getProgramInvoiceGate(
+        resolvedDcOrderId || null,
+        invoiceBreakdown[0]?.product || null
+      )
+
       setInvoiceData({
         schoolInfo,
-        paymentBreakdown: invoiceBreakdown,
-        totalAmount: invoiceAmount,
+        paymentBreakdown: gate.invoicePending ? [] : invoiceBreakdown,
+        totalAmount: gate.invoicePending ? 0 : invoiceAmount,
         dcDate: dcDate || undefined,
+        invoicePending: gate.invoicePending,
+        invoicePendingMessage: gate.message,
       })
       
       // Show appropriate success message based on routing
@@ -1864,74 +1940,81 @@ export default function ClientDCPage() {
       return
     }
     
-    // Store current DC ID for change tracking
+    // Must match this DC when saving so productDetails sync and IDs stay correct
+    setSelectedDC(dc)
     setCurrentEditingDCId(dc._id)
 
     try {
       // Fetch the full DcOrder details
       const dcOrder = await apiRequest<any>(`/dc-orders/${dcOrderId}`)
       setSelectedDcOrder(dcOrder)
-      
-      // Populate form with current data
+
+      const pe = dcOrder.pendingEdit?.status === 'pending' ? dcOrder.pendingEdit : null
+      const productsForRows = (pe?.products?.length ? pe.products : dcOrder.products) || []
+
+      // When a manager approval is pending, show that snapshot; otherwise last saved order
       const formData = {
-        school_name: dcOrder.school_name || '',
-        contact_person: dcOrder.contact_person || '',
-        contact_mobile: dcOrder.contact_mobile || '',
-        contact_person2: dcOrder.contact_person2 || '',
-        contact_mobile2: dcOrder.contact_mobile2 || '',
-        email: dcOrder.email || '',
-        address: dcOrder.address || '',
-        school_type: dcOrder.school_type || '',
-        zone: dcOrder.zone || '',
-        location: dcOrder.location || '',
-        products: dcOrder.products || [],
-        pod_proof_url: dcOrder.pod_proof_url || dc.poPhotoUrl || '',
-        remarks: dcOrder.remarks || '',
-        total_amount: dcOrder.total_amount || 0,
-        // Transport fields - from pendingEdit
-        transport_name: dcOrder.pendingEdit?.transport_name || '',
-        transport_location: dcOrder.pendingEdit?.transport_location || '',
-        transportation_landmark: dcOrder.pendingEdit?.transportation_landmark || '',
-        pincode: dcOrder.pendingEdit?.pincode || '',
+        school_name: pe?.school_name ?? dcOrder.school_name ?? '',
+        contact_person: pe?.contact_person ?? dcOrder.contact_person ?? '',
+        contact_mobile: pe?.contact_mobile ?? dcOrder.contact_mobile ?? '',
+        contact_person2: pe?.contact_person2 ?? dcOrder.contact_person2 ?? '',
+        contact_mobile2: pe?.contact_mobile2 ?? dcOrder.contact_mobile2 ?? '',
+        email: pe?.email ?? dcOrder.email ?? '',
+        address: pe?.address ?? dcOrder.address ?? '',
+        school_type: pe?.school_type ?? dcOrder.school_type ?? '',
+        zone: pe?.zone ?? dcOrder.zone ?? '',
+        location: pe?.location ?? dcOrder.location ?? '',
+        products: productsForRows,
+        pod_proof_url: pe?.pod_proof_url ?? dcOrder.pod_proof_url ?? dc.poPhotoUrl ?? '',
+        remarks: pe?.remarks ?? dcOrder.remarks ?? '',
+        total_amount: Number(pe?.total_amount ?? dcOrder.total_amount ?? 0) || 0,
+        transport_name: pe?.transport_name ?? dcOrder.transport_name ?? '',
+        transport_location: pe?.transport_location ?? dcOrder.transport_location ?? '',
+        transportation_landmark: pe?.transportation_landmark ?? dcOrder.transportation_landmark ?? '',
+        pincode: pe?.pincode ?? dcOrder.pincode ?? '',
       }
-      
+
       console.log('📋 Edit PO Dialog opened - Form data initialized:', {
         transport_name: formData.transport_name,
         transport_location: formData.transport_location,
         transportation_landmark: formData.transportation_landmark,
         pincode: formData.pincode,
-        hasPendingEdit: !!dcOrder.pendingEdit,
+        hasPendingEdit: !!pe,
       })
-      
+
       setEditFormData(formData)
-      
-      // Set product rows (for Edit PO)
+
       setEditProductRows(
-        (dcOrder.products || []).map((p: any, idx: number) => {
+        productsForRows.map((p: any, idx: number) => {
           const name = p.product_name || ''
-          const levels = getAvailableLevels(name)
-          const defaultLevel = levels[0] || getDefaultLevel(name || 'Abacus')
+          const catalogLevels = getAvailableLevels(name)
+          const fallbackLevel = catalogLevels[0] || getDefaultLevel(name || 'Abacus')
+          const savedLevel = (p.level && String(p.level).trim()) || ''
+          const level = savedLevel || fallbackLevel
+          const term = normalizeProductTerm(
+            p.term ?? termFromLevelLabel(savedLevel) ?? termFromLevelLabel(level)
+          )
           return {
             id: String(idx + 1),
             product_name: name,
-            quantity: p.quantity || 0,
-            unit_price: p.unit_price || 0,
-            level: defaultLevel,
+            quantity: Number(p.quantity) || 0,
+            unit_price: Number(p.unit_price) || 0,
+            level,
+            term,
           }
         })
       )
-      
-      // Extract unique product names from original PO (products selected when lead was closed)
-      const originalProducts = Array.from(new Set(
-        (dcOrder.products || []).map((p: any) => p.product_name).filter(Boolean)
-      ))
+
+      // Original PO product names (committed on DcOrder) — for price lock + "new product" detection
+      const originalProducts = Array.from(
+        new Set((dcOrder.products || []).map((p: any) => p.product_name).filter(Boolean))
+      )
       setOriginalPOProducts(originalProducts)
-      
-      // Store original state for change detection
+
       const originalPDF = dcOrder.pod_proof_url || dc.poPhotoUrl || ''
       setOriginalPDFUrl(originalPDF)
       setOriginalProductNames(originalProducts)
-      
+
       setEditPODialogOpen(true)
     } catch (e: any) {
       toast.error(e?.message || 'Failed to load DC Order details')
@@ -1994,7 +2077,11 @@ export default function ClientDCPage() {
             quantity: row.quantity,
             unit_price: row.unit_price,
             // Keep term for backward compatibility in DcOrder schema, but UI uses level only
-            term: 'Term 1',
+            term: normalizeProductTerm(
+              (row.term != null && String(row.term).trim() !== '')
+                ? row.term
+                : (termFromLevelLabel(level) ?? 'Term 1')
+            ),
             level,
           }
         })
@@ -2031,6 +2118,32 @@ export default function ClientDCPage() {
         // Explicitly include transport fields (overrides any from spread)
         ...transportFields,
       }
+      const dcProductDetailsPayload = editProductRows
+        .filter((row) => row.product_name && row.product_name.trim() !== '')
+        .map((row) => {
+          const level =
+            row.level ||
+            getAvailableLevels(row.product_name || '')[0] ||
+            getDefaultLevel(row.product_name || 'Abacus')
+          return {
+            product: row.product_name,
+            class: row.class || '1',
+            specs: row.specs || 'Regular',
+            quantity: Number(row.quantity) || 0,
+            strength: Number(row.strength || row.quantity) || 0,
+            level,
+            term: normalizeProductTerm(
+              (row.term != null && String(row.term).trim() !== '')
+                ? row.term
+                : (termFromLevelLabel(level) ?? 'Term 1')
+            ),
+            subject: row.subject || undefined,
+            category: row.category || undefined,
+            productCategory: row.productCategory || undefined,
+            price: Number(row.unit_price) || 0,
+            total: (Number(row.quantity) || 0) * (Number(row.unit_price) || 0),
+          }
+        })
 
       // If PDF changed or new products added, create pendingEdit request for Executive Manager approval
       if (pdfChanged || hasNewProducts) {
@@ -2041,11 +2154,12 @@ export default function ClientDCPage() {
         })
         
         try {
-          const response = await apiRequest(`/dc-orders/${selectedDcOrder._id}/submit-edit`, {
+          const response = await apiRequest<any>(`/dc-orders/${selectedDcOrder._id}/submit-edit`, {
             method: 'POST',
             body: JSON.stringify(payload),
           })
           console.log('✅ PendingEdit request created successfully:', response)
+          if (response?._id) setSelectedDcOrder(response)
           
           // Mark DC as having pending changes and pending edit request
           if (currentEditingDCId) {
@@ -2068,11 +2182,26 @@ export default function ClientDCPage() {
       } else {
         // No PDF or product changes - update directly (no approval needed)
         console.log('📤 Updating DC Order directly (no approval needed):', `/dc-orders/${selectedDcOrder._id}`)
-      const response = await apiRequest(`/dc-orders/${selectedDcOrder._id}`, {
+      const response = await apiRequest<any>(`/dc-orders/${selectedDcOrder._id}`, {
         method: 'PUT',
         body: JSON.stringify(payload),
       })
       console.log('✅ DC Order updated successfully:', response)
+      if (response?._id) setSelectedDcOrder(response)
+
+      // Keep DC productDetails in sync so Edit PO reopens with saved levels/terms.
+      if (selectedDC?._id) {
+        await apiRequest(`/dc/${selectedDC._id}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            productDetails: dcProductDetailsPayload,
+            requestedQuantity: dcProductDetailsPayload.reduce(
+              (sum: number, p: any) => sum + (Number(p.quantity) || 0),
+              0
+            ),
+          }),
+        })
+      }
         
         // Remove from pending changes if no changes detected
         if (currentEditingDCId) {
@@ -2106,15 +2235,32 @@ export default function ClientDCPage() {
     }
   }
 
+  const getDcProductsText = (d: any) => {
+    const fromDetails = Array.isArray(d.productDetails)
+      ? Array.from(
+          new Set(
+            d.productDetails
+              .map((p: any) => (p?.product || p?.productName || '').toString().trim())
+              .filter(Boolean)
+          )
+        )
+      : []
+    if (fromDetails.length > 0) return fromDetails.join(', ')
+    const fromOrder = d.dcOrderId?.products && Array.isArray(d.dcOrderId.products)
+      ? d.dcOrderId.products
+          .map((p: any) => (p.product_name || p.product || '').toString().trim())
+          .filter(Boolean)
+      : []
+    if (fromOrder.length > 0) return Array.from(new Set(fromOrder)).join(', ')
+    return d.product || d.saleId?.product || ''
+  }
+
   // Filter and sort items based on search query
   // Get unique products and years from items
   const uniqueProducts = useMemo(() => {
     const products = new Set<string>()
     items.forEach(item => {
-      const product = item.product || item.saleId?.product || 
-        (item.dcOrderId?.products && Array.isArray(item.dcOrderId.products) 
-          ? item.dcOrderId.products.map((p: any) => p.product_name || p.product).join(', ')
-          : '')
+      const product = getDcProductsText(item)
       if (product && product !== '-') {
         products.add(product)
       }
@@ -2155,7 +2301,7 @@ export default function ClientDCPage() {
       filtered = filtered.filter((d) => {
         const customerName = (d.customerName || d.saleId?.customerName || d.dcOrderId?.school_name || '').toLowerCase()
         const phone = (d.customerPhone || d.dcOrderId?.contact_mobile || '').toLowerCase()
-        const product = (d.product || d.saleId?.product || (d.dcOrderId?.products && Array.isArray(d.dcOrderId.products) ? d.dcOrderId.products.map((p: any) => p.product_name || p.product).join(', ') : '')).toLowerCase()
+        const product = getDcProductsText(d).toLowerCase()
         const status = (d.status || 'created').toLowerCase()
         
         return customerName.includes(query) || 
@@ -2173,10 +2319,7 @@ export default function ClientDCPage() {
     // Product filter
     if (selectedProduct !== 'all') {
       filtered = filtered.filter(d => {
-        const product = d.product || d.saleId?.product || 
-          (d.dcOrderId?.products && Array.isArray(d.dcOrderId.products) 
-            ? d.dcOrderId.products.map((p: any) => p.product_name || p.product).join(', ')
-            : '')
+        const product = getDcProductsText(d)
         return product === selectedProduct
       })
     }
@@ -2538,7 +2681,7 @@ export default function ClientDCPage() {
                   filteredItems.map((d, idx) => {
                     const customerName = d.customerName || d.saleId?.customerName || d.dcOrderId?.school_name || 'Unknown Client'
                     const phone = d.customerPhone || d.dcOrderId?.contact_mobile || '-'
-                    const product = d.product || d.saleId?.product || (d.dcOrderId?.products && Array.isArray(d.dcOrderId.products) ? d.dcOrderId.products.map((p: any) => p.product_name || p.product).join(', ') : '-')
+                    const product = getDcProductsText(d) || '-'
                     const status = d.status || 'created'
                     const createdDate = d.createdAt ? new Date(d.createdAt).toLocaleDateString() : '-'
                     // Client turned date: use dcOrderId.createdAt for converted leads, otherwise use createdAt
@@ -2556,7 +2699,7 @@ export default function ClientDCPage() {
                         <TableCell className="font-semibold text-blue-600">{schoolCode}</TableCell>
                         <TableCell className="font-semibold text-neutral-900">{customerName}</TableCell>
                         <TableCell className="text-neutral-700">{phone}</TableCell>
-                        <TableCell className="max-w-[200px] truncate text-neutral-700" title={product}>{product}</TableCell>
+                        <TableCell className="max-w-[320px] whitespace-normal break-words text-neutral-700" title={product}>{product}</TableCell>
                         <TableCell>
                           <span className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap shadow-sm ${
                             status === 'created' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
@@ -2785,7 +2928,7 @@ export default function ClientDCPage() {
       </Dialog>
 
       <Dialog open={shortageDialogOpen} onOpenChange={setShortageDialogOpen}>
-        <DialogContent className="sm:max-w-[820px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[960px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Record Shortage DC</DialogTitle>
             <DialogDescription>
@@ -2801,6 +2944,7 @@ export default function ClientDCPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Product</TableHead>
+                  <TableHead>Product Category</TableHead>
                   <TableHead>Class</TableHead>
                   <TableHead>Ordered</TableHead>
                   <TableHead>Delivered</TableHead>
@@ -2811,6 +2955,38 @@ export default function ClientDCPage() {
                 {shortageRows.map((row, idx) => (
                   <TableRow key={row.id}>
                     <TableCell>{row.product || '-'}</TableCell>
+                    <TableCell className="min-w-[140px]">
+                      {hasProductCategories(row.product) ? (
+                        <Select
+                          value={row.productCategory || getProductCategories(row.product)[0] || ''}
+                          onValueChange={(v) => {
+                            setShortageRows((prev) => {
+                              const updated = [...prev]
+                              updated[idx] = { ...updated[idx], productCategory: v }
+                              return updated
+                            })
+                          }}
+                        >
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue placeholder="Select category" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(() => {
+                              const opts = getProductCategories(row.product)
+                              const cur = (row.productCategory || '').trim()
+                              const list = cur && !opts.includes(cur) ? [...opts, cur] : opts
+                              return list.map((cat) => (
+                                <SelectItem key={cat} value={cat}>
+                                  {cat}
+                                </SelectItem>
+                              ))
+                            })()}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <span className="text-xs text-neutral-500">—</span>
+                      )}
+                    </TableCell>
                     <TableCell>{row.class}</TableCell>
                     <TableCell>{row.orderedQuantity}</TableCell>
                     <TableCell>{row.deliveredQuantity}</TableCell>
@@ -3603,6 +3779,8 @@ export default function ClientDCPage() {
                             onValueChange={(value) => {
                               const updated = [...editProductRows]
                               updated[actualIdx].level = value
+                              const t = termFromLevelLabel(value)
+                              if (t) updated[actualIdx].term = t
                               setEditProductRows(updated)
                               // Recalculate total after level change (total is still qty × price)
                               const total = updated.reduce(
@@ -3616,11 +3794,19 @@ export default function ClientDCPage() {
                               <SelectValue placeholder="Select level" />
                             </SelectTrigger>
                             <SelectContent>
-                              {getAvailableLevels(row.product_name || '').map((lvl) => (
-                                <SelectItem key={lvl} value={lvl}>
-                                  {lvl}
-                                </SelectItem>
-                              ))}
+                              {(() => {
+                                const catalog = getAvailableLevels(row.product_name || '')
+                                const cur =
+                                  row.level ||
+                                  catalog[0] ||
+                                  getDefaultLevel(row.product_name || 'Abacus')
+                                const levelOptions = [...new Set([cur, ...catalog].filter(Boolean))]
+                                return levelOptions.map((lvl) => (
+                                  <SelectItem key={lvl} value={lvl}>
+                                    {lvl}
+                                  </SelectItem>
+                                ))
+                              })()}
                             </SelectContent>
                           </Select>
                           </TableCell>
@@ -3870,6 +4056,7 @@ export default function ClientDCPage() {
                               product_name: product,
                               quantity: 0,
                               unit_price: 0,
+                              level: getAvailableLevels(product)[0] || getDefaultLevel(product || 'Abacus'),
                               term: 'Term 1',
                             }
                             setEditProductRows([...editProductRows, newRow])
@@ -3951,6 +4138,7 @@ export default function ClientDCPage() {
                               product_name: product,
                               quantity: 0,
                               unit_price: 0,
+                              level: getAvailableLevels(product)[0] || getDefaultLevel(product || 'Abacus'),
                               term: 'Term 1',
                             }
                             setEditProductRows([...editProductRows, newRow])
@@ -4009,6 +4197,12 @@ export default function ClientDCPage() {
                   <span className="text-teal-600 font-medium">Previous Due:</span>
                   <span className="text-black">Rs.{invoiceData.previousDue?.toFixed(2) || '0.00'}</span>
                 </div>
+
+                {invoiceData.invoicePending && (
+                  <div className="p-4 bg-amber-50 border-y border-amber-200 text-amber-800 text-sm">
+                    {invoiceData.invoicePendingMessage || 'Invoice not generated yet'}
+                  </div>
+                )}
 
                 {/* Current Total Bill */}
                 <div className="flex justify-between items-center p-4 bg-neutral-50">

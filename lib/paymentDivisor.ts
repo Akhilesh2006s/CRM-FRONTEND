@@ -1,10 +1,11 @@
-export type CalculationType = 'none' | 'level_based' | 'subject_based'
+export type CalculationType = 'normal' | 'level_based' | 'subject_based'
 
-const ALLOWED_CALC = new Set(['none', 'level_based', 'subject_based'])
+const ALLOWED_CALC = new Set(['normal', 'none', 'level_based', 'subject_based'])
 
 export function normalizeCalculationType(t: string | undefined | null): CalculationType {
-  const v = String(t || 'none').toLowerCase()
-  return (ALLOWED_CALC.has(v) ? v : 'none') as CalculationType
+  const v = String(t || 'normal').toLowerCase()
+  if (!ALLOWED_CALC.has(v)) return 'normal'
+  return (v === 'none' ? 'normal' : v) as CalculationType
 }
 
 const normalizeLevel = (level: unknown) =>
@@ -24,7 +25,7 @@ export function resolveDivisor(opts: {
   catalogFallbackCount?: number
 }): number {
   const ct = normalizeCalculationType(opts.calculationType)
-  if (ct === 'none') return 1
+  if (ct === 'normal') return 1
 
   const activeRows = (opts.rows || []).filter((r) => (Number(r.strength) || 0) > 0)
 
@@ -62,7 +63,7 @@ export function computeBucketAmount(opts: {
   const ct = normalizeCalculationType(opts.calculationType)
   const price = Number(opts.unitPrice) || 0
 
-  if (ct === 'none') {
+  if (ct === 'normal') {
     const sum = (opts.rows || []).reduce((s, r) => {
       const st = Number(r.strength) || 0
       const pr = Number(r.price !== undefined ? r.price : opts.unitPrice) || 0

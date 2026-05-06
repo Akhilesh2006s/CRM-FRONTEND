@@ -50,6 +50,58 @@ type ProductInterested = {
   chance: number
 }
 
+const DEAL_PRODUCT_STATUS_ORDER = ['Hot', 'Warm', 'Visit Again', 'Not Met Management', 'Not Interested'] as const
+
+function normalizeProductLineStatus(status?: string): string {
+  const s = (status || '').trim()
+  if (s === 'Management Not Met') return 'Not Met Management'
+  return s
+}
+
+function deriveLeadPriorityFromDealProducts(products: { status?: string }[]): string | null {
+  let best = ''
+  let bestIdx = DEAL_PRODUCT_STATUS_ORDER.length
+  for (const p of products) {
+    const st = normalizeProductLineStatus(p.status)
+    const i = (DEAL_PRODUCT_STATUS_ORDER as readonly string[]).indexOf(st)
+    if (i !== -1 && i < bestIdx) {
+      bestIdx = i
+      best = st
+    }
+  }
+  return best || null
+}
+
+function displayLeadDealPriority(lead: {
+  priority?: string
+  lead_status?: string
+  products?: Lead['products']
+}): string {
+  if (Array.isArray(lead.products) && lead.products.length > 0) {
+    const derived = deriveLeadPriorityFromDealProducts(lead.products)
+    if (derived) return derived
+  }
+  return lead.priority || lead.lead_status || 'Hot'
+}
+
+const HISTORY_SNAPSHOT_STATUSES = ['Hot', 'Warm', 'Visit Again', 'Not Met Management', 'Not Interested'] as const
+
+function leadProductsToHistorySnapshot(products: Lead['products']) {
+  if (!Array.isArray(products)) return []
+  return products
+    .filter((p: any) => p && (p.product_name || p.product))
+    .map((p: any) => {
+      let status = String(p.status || '').trim() || 'Warm'
+      if (status === 'Management Not Met') status = 'Not Met Management'
+      if (!HISTORY_SNAPSHOT_STATUSES.includes(status as any)) status = 'Warm'
+      return {
+        product_name: String(p.product_name || p.product || '').trim(),
+        term: String(p.term || 'Term 1').trim(),
+        status,
+      }
+    })
+}
+
 export default function FollowupLeadsPage() {
   const router = useRouter()
   const currentUser = getCurrentUser()
@@ -152,7 +204,8 @@ export default function FollowupLeadsPage() {
         
         return {
           ...lead,
-          school_code: schoolCode, // Ensure school_code is preserved
+          school_code: schoolCode,
+          priority: displayLeadDealPriority(lead),
         }
       })
       
@@ -177,7 +230,8 @@ export default function FollowupLeadsPage() {
           createdAt: order.createdAt,
           remarks: order.remarks,
           school_type: order.school_type,
-          priority: order.priority || order.lead_status || 'Hot',
+          products: Array.isArray(order.products) ? order.products : undefined,
+          priority: displayLeadDealPriority(order),
         }))
       
       // Combine and filter followup leads
@@ -275,6 +329,27 @@ export default function FollowupLeadsPage() {
     }
   }
 
+  /** Match server: legacy history rows stored Cold with no product snapshot when deal was actually Hot/Warm */
+  function resolveHistoryEntryPriority(
+    item: { priority?: string; productsInterested?: { status?: string }[] },
+    currentLeadPriority?: string
+  ): string {
+    const rows = Array.isArray(item.productsInterested) ? item.productsInterested : []
+    const fromProducts = deriveLeadPriorityFromDealProducts(rows)
+    if (fromProducts) return fromProducts
+    const stored = item.priority
+    const cur =
+      currentLeadPriority && currentLeadPriority !== 'Cold' ? currentLeadPriority : undefined
+    if (
+      (stored === 'Cold' || stored === undefined || stored === null || stored === '') &&
+      rows.length === 0 &&
+      cur
+    ) {
+      return cur
+    }
+    return stored || currentLeadPriority || 'Warm'
+  }
+
   const getPriorityColor = (priority?: string) => {
     switch (priority?.toLowerCase()) {
       case 'hot':
@@ -299,14 +374,14 @@ export default function FollowupLeadsPage() {
     // Clear form for creating a new follow-up entry (don't pre-fill with old data)
     setUpdateForm({
       follow_up_date: '',
-      status: lead.priority || 'Hot', // Pre-fill priority from current lead status
+      status: displayLeadDealPriority(lead),
       remarks: '',
       productsInterested: (() => {
         if (Array.isArray(lead.products) && lead.products.length > 0) {
           return lead.products.map((p: any) => ({
             product_name: p.product_name || p.product || '',
             term: p.term || 'Term 1',
-            status: p.status || lead.priority || 'Warm',
+            status: p.status || displayLeadDealPriority(lead) || 'Warm',
             strength: Number(p.strength ?? p.quantity ?? 0) || 0,
             chance: Number(p.chance ?? 0) || 0,
           }))
@@ -320,7 +395,7 @@ export default function FollowupLeadsPage() {
             .map((name: string) => ({
               product_name: name,
               term: 'Term 1',
-              status: lead.priority || 'Warm',
+              status: displayLeadDealPriority(lead) || 'Warm',
               strength: 0,
               chance: 0,
             }))
@@ -346,26 +421,24 @@ export default function FollowupLeadsPage() {
       toast.error('Next Follow-up Date is required')
       return
     }
-    if (!updateForm.status || !updateForm.status.trim()) {
-      toast.error('Lead Priority is required')
-      return
-    }
     if (!updateForm.remarks || !updateForm.remarks.trim()) {
       toast.error('Remarks is required')
+      return
+    }
+
+    const selectedProducts = updateForm.productsInterested
+      .filter((p) => p.product_name && p.product_name.trim())
+    const missingStrengthOrChance = selectedProducts.some(
+      (p) => (Number(p.strength) || 0) <= 0 || (Number(p.chance) || 0) <= 0
+    )
+    if (missingStrengthOrChance) {
+      toast.error('Strength and Chance are mandatory for all selected products')
       return
     }
     
     setUpdating(true)
     try {
-      // All fields are required, so include them all
-      const payload: any = {
-        follow_up_date: new Date(updateForm.follow_up_date).toISOString(),
-        priority: updateForm.status,
-        remarks: updateForm.remarks,
-      }
-
-      const validProducts = updateForm.productsInterested
-        .filter((p) => p.product_name && p.product_name.trim())
+      const validProducts = selectedProducts
         .map((p) => ({
           product_name: p.product_name.trim(),
           term: p.term || 'Term 1',
@@ -375,6 +448,14 @@ export default function FollowupLeadsPage() {
           quantity: Number(p.strength) || 0,
           unit_price: 0,
         }))
+
+      const derivedPriority = deriveLeadPriorityFromDealProducts(validProducts)
+      const payload: any = {
+        follow_up_date: new Date(updateForm.follow_up_date).toISOString(),
+        priority:
+          derivedPriority || selectedLead.priority || updateForm.status || 'Warm',
+        remarks: updateForm.remarks,
+      }
 
       if (validProducts.length > 0) {
         payload.productsInterested = validProducts
@@ -428,6 +509,7 @@ export default function FollowupLeadsPage() {
     // Fetch update history from API
     try {
       let historyData: any[] = []
+      let fullDcOrder: any = null
       
       // Try to get history from dc-orders API first
       try {
@@ -459,13 +541,13 @@ export default function FollowupLeadsPage() {
       
       // Also try to get the full lead data which might have history embedded
       try {
-        const fullLeadData = await apiRequest<any>(`/dc-orders/${lead._id}`)
-        console.log('Full lead data:', fullLeadData)
-        if (fullLeadData?.updateHistory && Array.isArray(fullLeadData.updateHistory)) {
-          console.log('Found history in full lead data:', fullLeadData.updateHistory.length, 'entries')
+        fullDcOrder = await apiRequest<any>(`/dc-orders/${lead._id}`)
+        console.log('Full lead data:', fullDcOrder)
+        if (fullDcOrder?.updateHistory && Array.isArray(fullDcOrder.updateHistory)) {
+          console.log('Found history in full lead data:', fullDcOrder.updateHistory.length, 'entries')
           // Merge with existing history, avoiding duplicates
           const existingDates = new Set(historyData.map(h => new Date(h.updatedAt).getTime()))
-          fullLeadData.updateHistory.forEach((entry: any) => {
+          fullDcOrder.updateHistory.forEach((entry: any) => {
             const entryDate = new Date(entry.updatedAt).getTime()
             if (!existingDates.has(entryDate)) {
               historyData.push(entry)
@@ -483,7 +565,8 @@ export default function FollowupLeadsPage() {
         historyData.push({
           follow_up_date: lead.follow_up_date || null,
           remarks: lead.remarks || 'Lead created',
-          priority: lead.priority || 'Hot',
+          priority: displayLeadDealPriority(lead),
+          productsInterested: leadProductsToHistorySnapshot(lead.products),
           updatedAt: lead.createdAt,
           updatedBy: { name: 'System' },
         })
@@ -497,6 +580,13 @@ export default function FollowupLeadsPage() {
       })
       
       console.log('Final history data:', historyData.length, 'entries')
+      const mergedForDisplay = {
+        ...lead,
+        ...(fullDcOrder || {}),
+        products: fullDcOrder?.products ?? lead.products,
+      }
+      const dcPriority = displayLeadDealPriority(mergedForDisplay as Lead)
+      setHistoryLead({ ...lead, priority: dcPriority })
       setHistory(historyData)
     } catch (err: any) {
       console.error('Failed to load history:', err)
@@ -505,7 +595,8 @@ export default function FollowupLeadsPage() {
         setHistory([{
           follow_up_date: lead.follow_up_date || null,
           remarks: lead.remarks || 'Lead created',
-          priority: lead.priority || 'Hot',
+          priority: displayLeadDealPriority(lead),
+          productsInterested: leadProductsToHistorySnapshot(lead.products),
           updatedAt: lead.createdAt,
           updatedBy: { name: 'System' },
         }])
@@ -710,8 +801,8 @@ export default function FollowupLeadsPage() {
                     )}
                     <div>
                       <span className="text-neutral-600">Lead Status:</span>
-                      <span className={`ml-2 px-2 py-1 rounded text-xs font-medium ${getPriorityColor(lead.priority)}`}>
-                        {lead.priority || 'Hot'}
+                      <span className={`ml-2 px-2 py-1 rounded text-xs font-medium ${getPriorityColor(displayLeadDealPriority(lead))}`}>
+                        {displayLeadDealPriority(lead)}
                       </span>
                     </div>
                   </div>
@@ -784,54 +875,6 @@ export default function FollowupLeadsPage() {
                 />
               </div>
               
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold text-neutral-700 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-purple-500"></span>
-                  Lead Priority *
-                </Label>
-                <Select 
-                  value={updateForm.status} 
-                  onValueChange={(v) => setUpdateForm({ ...updateForm, status: v })}
-                  required
-                >
-                  <SelectTrigger className="h-11 bg-white border-neutral-300 focus:border-purple-500 focus:ring-purple-500/20">
-                    <SelectValue placeholder="Select Priority" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Hot" className="focus:bg-red-50">
-                      <span className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                        Hot
-                      </span>
-                    </SelectItem>
-                    <SelectItem value="Warm" className="focus:bg-orange-50">
-                      <span className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-orange-500"></span>
-                        Warm
-                      </span>
-                    </SelectItem>
-                    <SelectItem value="Visit Again" className="focus:bg-yellow-50">
-                      <span className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
-                        Visit Again
-                      </span>
-                    </SelectItem>
-                    <SelectItem value="Not Met Management" className="focus:bg-blue-50">
-                      <span className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                        Not Met Management
-                      </span>
-                    </SelectItem>
-                    <SelectItem value="Not Interested" className="focus:bg-gray-50">
-                      <span className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-gray-500"></span>
-                        Not Interested
-                      </span>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-semibold text-neutral-700 flex items-center gap-2">
@@ -989,7 +1032,7 @@ export default function FollowupLeadsPage() {
 
       {/* View History Modal - Modern Professional Design */}
       <Dialog open={historyModalOpen} onOpenChange={setHistoryModalOpen}>
-        <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-hidden p-0 gap-0 shadow-2xl border-0">
+        <DialogContent className="sm:max-w-[680px] max-h-[85vh] overflow-hidden p-0 gap-0 shadow-2xl border-0">
           {/* Elegant Header with Gradient */}
           <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 px-6 py-5 sticky top-0 z-10">
             <div className="flex items-center justify-between">
@@ -1036,7 +1079,7 @@ export default function FollowupLeadsPage() {
                     {history.map((item, index) => {
                       // Use a unique key for each entry
                       const entryKey = item._id || item.updatedAt || `entry-${index}`;
-                      const priority = item.priority || 'Hot'
+                      const priority = resolveHistoryEntryPriority(item, historyLead?.priority)
                       const priorityColors = {
                         Hot: 'bg-red-100 text-red-700 border-red-200',
                         Warm: 'bg-orange-100 text-orange-700 border-orange-200',
@@ -1109,6 +1152,41 @@ export default function FollowupLeadsPage() {
                                     {item.remarks}
                                   </p>
                                 </div>
+                              </div>
+                            )}
+
+                            {Array.isArray(item.productsInterested) && item.productsInterested.length > 0 && (
+                              <div className="mt-3 rounded-lg border border-violet-100 bg-violet-50/50 p-3">
+                                <p className="text-xs font-semibold text-violet-900 uppercase tracking-wide mb-2">
+                                  Product lead status
+                                </p>
+                                <ul className="space-y-2">
+                                  {item.productsInterested.map((row: any, pi: number) => {
+                                    const st = row.status === 'Management Not Met' ? 'Not Met Management' : row.status
+                                    const badgeClass =
+                                      priorityColors[st as keyof typeof priorityColors] || priorityColors.Warm
+                                    return (
+                                      <li
+                                        key={`${row.product_name}-${pi}-${row.term || ''}`}
+                                        className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-white/80 px-3 py-2 border border-neutral-100"
+                                      >
+                                        <div className="min-w-0 flex-1">
+                                          <span className="text-sm font-medium text-neutral-900 truncate block">
+                                            {row.product_name || 'Product'}
+                                          </span>
+                                          {row.term ? (
+                                            <span className="text-xs text-neutral-500">{row.term}</span>
+                                          ) : null}
+                                        </div>
+                                        <span
+                                          className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-semibold border ${badgeClass}`}
+                                        >
+                                          {st || 'Warm'}
+                                        </span>
+                                      </li>
+                                    )
+                                  })}
+                                </ul>
                               </div>
                             )}
                           </div>

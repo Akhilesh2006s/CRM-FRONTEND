@@ -77,6 +77,8 @@ type InvoiceData = {
   }>
   totalAmount: number
   dcDate?: string
+  invoicePending?: boolean
+  invoicePendingMessage?: string
 }
 
 export default function TermWiseDCPage() {
@@ -88,6 +90,28 @@ export default function TermWiseDCPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [invoiceModalOpen, setInvoiceModalOpen] = useState(false)
   const [invoiceData, setInvoiceData] = useState<InvoiceData | null>(null)
+  const getProgramInvoiceGate = async (
+    dcOrderId?: string | null,
+    productName?: string | null
+  ): Promise<{ invoicePending: boolean; message?: string }> => {
+    if (!dcOrderId || !productName) return { invoicePending: false }
+    try {
+      const status = await apiRequest<any>(
+        `/program-billing/status/by-dc-order-product?dcOrderId=${encodeURIComponent(
+          dcOrderId
+        )}&product=${encodeURIComponent(productName)}`
+      )
+      if (status?.exists && status?.shouldGenerateInvoice === false) {
+        return {
+          invoicePending: true,
+          message: `Invoice not generated yet. Delivered ${status.deliveredLevelsCount || 0} of ${status.totalLevels || 0} required terms.`,
+        }
+      }
+      return { invoicePending: false }
+    } catch {
+      return { invoicePending: false }
+    }
+  }
   
   // Edit PO Dialog state
   const [editPODialogOpen, setEditPODialogOpen] = useState(false)
@@ -412,11 +436,22 @@ export default function TermWiseDCPage() {
         totalAmount = adj.totalAmount
       }
 
+      const resolvedDcOrderId =
+        dc.dcOrderId && typeof dc.dcOrderId === 'object'
+          ? dc.dcOrderId._id
+          : (dc.dcOrderId as string | undefined)
+      const gate = await getProgramInvoiceGate(
+        resolvedDcOrderId ? String(resolvedDcOrderId) : null,
+        paymentBreakdown[0]?.product || fullDC.product || null
+      )
+
       setInvoiceData({
         schoolInfo,
-        paymentBreakdown,
-        totalAmount,
+        paymentBreakdown: gate.invoicePending ? [] : paymentBreakdown,
+        totalAmount: gate.invoicePending ? 0 : totalAmount,
         dcDate: fullDC.dcDate || undefined,
+        invoicePending: gate.invoicePending,
+        invoicePendingMessage: gate.message,
       })
       setInvoiceModalOpen(true)
     } catch (e: any) {
@@ -1097,6 +1132,12 @@ export default function TermWiseDCPage() {
                 </div>
               </div>
 
+              {invoiceData.invoicePending && (
+                <div className="border rounded-lg p-4 bg-amber-50 text-amber-800 text-sm">
+                  {invoiceData.invoicePendingMessage || 'Invoice not generated yet'}
+                </div>
+              )}
+
               {/* Products Table */}
               <div className="border rounded-lg overflow-hidden">
                 <div className="bg-neutral-100 px-4 py-3 border-b">
@@ -1149,21 +1190,23 @@ export default function TermWiseDCPage() {
               </div>
 
               {/* Payment Status */}
-              <div className="border rounded-lg p-4 bg-blue-50">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-neutral-600">Payment Status</p>
-                    <p className="text-lg font-semibold text-blue-700">Pending</p>
-                    <p className="text-xs text-neutral-500 mt-1">
-                      Payment will be updated when received (Cash, UPI, etc.)
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm text-neutral-600">Total Amount</p>
-                    <p className="text-2xl font-bold text-blue-700">₹{invoiceData.totalAmount.toFixed(2)}</p>
+              {!invoiceData.invoicePending && (
+                <div className="border rounded-lg p-4 bg-blue-50">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-neutral-600">Payment Status</p>
+                      <p className="text-lg font-semibold text-blue-700">Pending</p>
+                      <p className="text-xs text-neutral-500 mt-1">
+                        Payment will be updated when received (Cash, UPI, etc.)
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-neutral-600">Total Amount</p>
+                      <p className="text-2xl font-bold text-blue-700">₹{invoiceData.totalAmount.toFixed(2)}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
 

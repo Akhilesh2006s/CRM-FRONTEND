@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Checkbox } from '@/components/ui/checkbox'
 import { useProducts } from '@/hooks/useProducts'
 import { computeBucketAmount, type CalculationType } from '@/lib/paymentDivisor'
+import { normalizeProductTerm, termFromLevelLabel, type ProductTerm } from '@/lib/productTerm'
 
 type Lead = {
   _id: string
@@ -397,7 +398,7 @@ export default function CloseLeadPage() {
               selectedCategories: hasProductCategories(product) 
                 ? getProductCategories(product) 
                 : undefined,
-              term: productData?.term || 'Term 1',
+              term: normalizeProductTerm(productData?.term),
             }
           })
           setProductDetails(parentRows)
@@ -808,7 +809,6 @@ export default function CloseLeadPage() {
     try {
       // Create DC with all details
       const assignedEmployeeId = currentUser?._id
-      const leadId = id as string
 
       const dcPayload: any = {
         dcOrderId: leadId,
@@ -1022,6 +1022,17 @@ export default function CloseLeadPage() {
             if (r.level) levelSet.add(String(r.level).trim())
             if (r.subject) subjectSet.add(String(r.subject).trim())
           })
+          const termsFromLevels = new Set<ProductTerm>()
+          bucketRows.forEach((r) => {
+            const t = termFromLevelLabel(r.level)
+            if (t) termsFromLevels.add(t)
+          })
+          let invoiceTerm: ProductTerm = normalizeProductTerm(parentRow?.term)
+          if (termsFromLevels.size === 1) {
+            invoiceTerm = [...termsFromLevels][0]
+          } else if (termsFromLevels.size > 1) {
+            invoiceTerm = 'Both'
+          }
           const selectedSubjects =
             parentRow?.selectedSubjects?.length && parentRow.selectedSubjects.length > 0
               ? [...parentRow.selectedSubjects]
@@ -1030,6 +1041,7 @@ export default function CloseLeadPage() {
             product_name: p.product,
             quantity: p.strength, // Use strength as quantity
             unit_price: p.price,
+            class: String(p.class ?? '1'),
             deliverables,
             // Persist SKU category so Raise DC can prefill productCategory from Close Lead.
             productCategory: (p as any).productCategory || (p as any).category || undefined,
@@ -1037,6 +1049,7 @@ export default function CloseLeadPage() {
             levels_snapshot: Array.from(levelSet),
             level: levelSet.size === 1 ? Array.from(levelSet)[0] : undefined,
             subject: subjectSet.size === 1 ? Array.from(subjectSet)[0] : undefined,
+            term: invoiceTerm,
           }
         }),
       }
@@ -1159,7 +1172,12 @@ export default function CloseLeadPage() {
           specs: p.specs || 'Regular', // Include specs
           subject: p.subject || undefined, // Include subject if present
           deliverables,
-          term: termFromLevel || (p as any).term || (parentRow as any)?.term || 'Term 1',
+          term: normalizeProductTerm(
+            termFromLevel ||
+              (p as any).term ||
+              termFromLevelLabel((p as any).level) ||
+              (parentRow as any)?.term
+          ),
         }
       })
       

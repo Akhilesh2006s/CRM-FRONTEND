@@ -6,11 +6,12 @@
 const roundToTwo = (value) =>
   Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 
-const ALLOWED_CALC = new Set(['none', 'level_based', 'subject_based']);
+const ALLOWED_CALC = new Set(['normal', 'none', 'level_based', 'subject_based']);
 
 const normalizeCalculationType = (t) => {
-  const v = String(t || 'none').toLowerCase();
-  return ALLOWED_CALC.has(v) ? v : 'none';
+  const v = String(t || 'normal').toLowerCase();
+  if (!ALLOWED_CALC.has(v)) return 'normal';
+  return v === 'none' ? 'normal' : v;
 };
 
 const normalizeLevel = (level) =>
@@ -21,7 +22,7 @@ const normalizeSubject = (subject) =>
 
 /**
  * @param {object} opts
- * @param {string} opts.calculationType - none | level_based | subject_based
+ * @param {string} opts.calculationType - normal | level_based | subject_based
  * @param {Array<{ strength?: number, level?: string, subject?: string }>} opts.rows
  * @param {number} [opts.catalogFallbackCount] - e.g. productLevels.length or subjects.length
  */
@@ -31,7 +32,7 @@ const resolveDivisor = ({
   catalogFallbackCount = 0,
 }) => {
   const ct = normalizeCalculationType(calculationType);
-  if (ct === 'none') return 1;
+  if (ct === 'normal') return 1;
 
   const activeRows = rows.filter((r) => (Number(r.strength) || 0) > 0);
 
@@ -61,7 +62,7 @@ const resolveDivisor = ({
 };
 
 /**
- * Legacy none: sum of (strength × price) per row when prices may differ.
+ * Normal: sum of (strength × price) per row when prices may differ.
  * level_based / subject_based: (sumStrength × unitPrice) ÷ divisor using rows for divisor.
  */
 const computeBucketAmount = ({
@@ -73,7 +74,7 @@ const computeBucketAmount = ({
   const ct = normalizeCalculationType(calculationType);
   const price = Number(unitPrice) || 0;
 
-  if (ct === 'none') {
+  if (ct === 'normal') {
     const sum = rows.reduce((s, r) => {
       const st = Number(r.strength) || 0;
       const pr = Number(r.price !== undefined ? r.price : unitPrice) || 0;

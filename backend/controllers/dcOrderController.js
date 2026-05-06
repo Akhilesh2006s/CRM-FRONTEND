@@ -1,7 +1,27 @@
 const DcOrder = require('../models/DcOrder');
 const DC = require('../models/DC');
 const { generateSchoolCode } = require('../utils/schoolCodeGenerator');
+const { normalizeProductTerm, normalizeDcOrderProductTermsInArray } = require('../utils/productTerm');
+const { derivePriorityFromFollowUpProducts } = require('../utils/leadFollowUpPriority');
+const { dealProductsToFollowUpSnapshot } = require('../utils/dealProductsToFollowUpSnapshot');
 const mongoose = require('mongoose');
+
+/** Undo legacy bug: empty products + Cold in history usually meant "unspecified", not a real Cold visit */
+function resolveHistoryPriorityForResponse(entry = {}, doc = {}) {
+  const rows = Array.isArray(entry.productsInterested) ? entry.productsInterested : [];
+  const fromProducts = derivePriorityFromFollowUpProducts(rows);
+  if (fromProducts) return fromProducts;
+  const stored = entry.priority;
+  if (
+    (stored === 'Cold' || stored == null || stored === '') &&
+    rows.length === 0 &&
+    doc.priority &&
+    doc.priority !== 'Cold'
+  ) {
+    return doc.priority;
+  }
+  return stored || doc.priority || 'Warm';
+}
 
 const list = async (req, res) => {
   try {
@@ -70,7 +90,7 @@ const list = async (req, res) => {
     // Query with pagination - optimized for performance
     // Only populate essential fields, skip updateHistory populate for list view
     const query = DcOrder.find(filter)
-      .select('school_name school_code contact_person contact_mobile zone status follow_up_date location strength createdAt remarks school_type priority lead_status assigned_to created_by pendingEdit') // Only select needed fields
+      .select('school_name school_code contact_person contact_mobile zone status follow_up_date location strength createdAt remarks school_type priority lead_status assigned_to created_by pendingEdit products') // products: used for follow-up list lead status from line items
       .populate('assigned_to', 'name email') // Only populate assigned_to for list view
       .populate('pendingEdit.requestedBy', 'name email') // Populate pendingEdit.requestedBy for Executive Manager
       .sort({ createdAt: -1 })
@@ -206,16 +226,26 @@ const getHistory = async (req, res) => {
       });
     }
     
+    const productSnapshotForDisplay = dealProductsToFollowUpSnapshot(item.products || []);
+
     // If no history exists but item has data, create initial entry
-    if (history.length === 0 && (item.follow_up_date || item.remarks || item.priority)) {
+    if (history.length === 0 && (item.follow_up_date || item.remarks || item.priority || productSnapshotForDisplay.length)) {
       console.log('No history found, creating initial entry from current data');
       history = [{
         follow_up_date: item.follow_up_date || null,
         remarks: item.remarks || 'Lead created',
-        priority: item.priority || 'Cold',
+        priority: item.priority || 'Hot',
+        productsInterested: productSnapshotForDisplay,
         updatedAt: item.createdAt || new Date(),
         updatedBy: { name: 'System', _id: null },
       }];
+    }
+
+    if (history.length === 1 && productSnapshotForDisplay.length > 0) {
+      const [only] = history;
+      if (only && (!only.productsInterested || only.productsInterested.length === 0)) {
+        history = [{ ...only, productsInterested: productSnapshotForDisplay }];
+      }
     }
     
     // Sort history by date descending (newest first)
@@ -224,6 +254,11 @@ const getHistory = async (req, res) => {
       const dateB = new Date(b.updatedAt || 0).getTime();
       return dateB - dateA;
     });
+
+    history = history.map((entry) => ({
+      ...entry,
+      priority: resolveHistoryPriorityForResponse(entry, item),
+    }));
     
     console.log(`Returning ${history.length} history entries for DC ${req.params.id}`);
     res.json(history);
@@ -236,13 +271,18 @@ const getHistory = async (req, res) => {
 const create = async (req, res) => {
   try {
     const payload = { ...req.body, created_by: req.user._id };
+    if (Array.isArray(payload.products)) {
+      payload.products = normalizeDcOrderProductTermsInArray(payload.products);
+    }
     
     // Auto-generate school code if not provided
     // Use assigned_to if available, otherwise use created_by (the user creating)
     if (!payload.school_code) {
-      const executiveId = payload.assigned_to || req.user._id;
       try {
-        const schoolCode = await generateSchoolCode(executiveId);
+        const schoolCode = await generateSchoolCode({
+          region: payload.region || '',
+          city: payload.city || '',
+        });
         if (schoolCode) {
           payload.school_code = schoolCode;
         }
@@ -253,12 +293,13 @@ const create = async (req, res) => {
       }
     }
     
-    // Initialize history with creation entry if follow_up_date, remarks, or priority is provided
-    if (payload.follow_up_date || payload.remarks || payload.priority) {
+    const creationProductSnapshot = dealProductsToFollowUpSnapshot(payload.products || []);
+    if (payload.follow_up_date || payload.remarks || payload.priority || creationProductSnapshot.length > 0) {
       payload.updateHistory = [{
         follow_up_date: payload.follow_up_date ? new Date(payload.follow_up_date) : null,
         remarks: payload.remarks || '',
-        priority: payload.priority || 'Cold',
+        priority: payload.priority || 'Hot',
+        productsInterested: creationProductSnapshot,
         updatedBy: req.user._id,
         updatedAt: new Date(),
       }];
@@ -332,7 +373,11 @@ const update = async (req, res) => {
       console.log('❌ DcOrder not found:', req.params.id);
       return res.status(404).json({ message: 'DC not found' });
     }
-    
+
+    if (Array.isArray(req.body.products)) {
+      req.body.products = normalizeDcOrderProductTermsInArray(req.body.products);
+    }
+
     console.log('✅ DcOrder found:', {
       currentStatus: item.status,
       currentAssignedTo: item.assigned_to,
@@ -349,7 +394,7 @@ const update = async (req, res) => {
         .filter((row) => row && (row.product_name || row.product))
         .map((row) => ({
           product_name: String(row.product_name || row.product || '').trim(),
-          term: ['Term 1', 'Term 2', 'Both'].includes(row.term) ? row.term : 'Term 1',
+          term: normalizeProductTerm(row.term),
           status: ['Hot', 'Warm', 'Visit Again', 'Not Met Management', 'Not Interested'].includes(row.status)
             ? row.status
             : 'Warm',
@@ -377,7 +422,12 @@ const update = async (req, res) => {
       updateData.priority = req.body.priority;
     }
     if (hasProductsInterested) {
+      // Keep latest product-interest snapshot on record as well.
       updateData.products = normalizedProductsInterested;
+      const derived = derivePriorityFromFollowUpProducts(normalizedProductsInterested);
+      if (derived) {
+        updateData.priority = derived;
+      }
     }
     
     // assigned_to: allow when closing lead → client so My Clients shows the record for current user
@@ -437,8 +487,14 @@ const update = async (req, res) => {
         ? new Date(req.body.follow_up_date) 
         : null;
       const newRemarks = hasRemarks ? (req.body.remarks || '') : '';
-      const newPriority = hasPriority ? (req.body.priority || 'Cold') : 'Cold';
-      
+      const derivedFromProducts = derivePriorityFromFollowUpProducts(normalizedProductsInterested);
+      const newPriority =
+        normalizedProductsInterested.length > 0 && derivedFromProducts
+          ? derivedFromProducts
+          : hasPriority && req.body.priority != null && req.body.priority !== ''
+            ? req.body.priority
+            : item.priority || 'Warm';
+
       // Create a NEW history entry with the values being set
       // This entry represents this specific update/change
       const historyEntry = {
@@ -639,7 +695,7 @@ const submitEdit = async (req, res) => {
       school_type: req.body.school_type || '',
       zone: req.body.zone || '',
       location: req.body.location || '',
-      products: req.body.products || [],
+      products: normalizeDcOrderProductTermsInArray(req.body.products || []),
       pod_proof_url: req.body.pod_proof_url || '',
       remarks: req.body.remarks || '',
       total_amount: req.body.total_amount || 0,
@@ -756,7 +812,9 @@ const approveEdit = async (req, res) => {
         school_type: item.pendingEdit.school_type !== undefined ? item.pendingEdit.school_type : item.school_type,
         zone: item.pendingEdit.zone !== undefined ? item.pendingEdit.zone : item.zone,
         location: item.pendingEdit.location !== undefined ? item.pendingEdit.location : item.location,
-        products: item.pendingEdit.products !== undefined ? item.pendingEdit.products : item.products,
+        products: normalizeDcOrderProductTermsInArray(
+          item.pendingEdit.products !== undefined ? item.pendingEdit.products : item.products
+        ),
         pod_proof_url: item.pendingEdit.pod_proof_url !== undefined ? item.pendingEdit.pod_proof_url : item.pod_proof_url,
         remarks: item.pendingEdit.remarks !== undefined ? item.pendingEdit.remarks : item.remarks,
         total_amount: item.pendingEdit.total_amount !== undefined ? item.pendingEdit.total_amount : item.total_amount,

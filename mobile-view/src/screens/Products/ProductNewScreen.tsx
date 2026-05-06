@@ -39,7 +39,7 @@ export default function ProductNewScreen({ navigation }: any) {
     specs: [] as string[],
     newSpec: '',
     prodStatus: 1,
-    calculationType: 'none' as 'none' | 'level_based' | 'subject_based',
+    calculationType: 'normal' as 'normal' | 'level_based' | 'subject_based',
   });
 
   const addLevel = () => {
@@ -216,9 +216,9 @@ export default function ProductNewScreen({ navigation }: any) {
             <View style={styles.chipRow}>
               {(
                 [
-                  { key: 'none' as const, label: 'Standard' },
-                  { key: 'level_based' as const, label: 'By level' },
-                  { key: 'subject_based' as const, label: 'By subject' },
+                  { key: 'normal' as const, label: 'Normal' },
+                  { key: 'level_based' as const, label: 'Level-Based' },
+                  { key: 'subject_based' as const, label: 'Subject-Based' },
                 ]
               ).map(({ key, label }) => (
                 <TouchableOpacity
@@ -240,6 +240,9 @@ export default function ProductNewScreen({ navigation }: any) {
                 </TouchableOpacity>
               ))}
             </View>
+            <Text style={styles.hint}>Level-Based: Total amount is divided by number of levels (terms)</Text>
+            <Text style={styles.hint}>Subject-Based: Total amount is divided by number of selected subjects</Text>
+            <Text style={styles.hint}>Normal: Full amount is charged without division</Text>
           </View>
 
           <View style={styles.formSection}>

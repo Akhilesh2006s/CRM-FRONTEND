@@ -75,13 +75,13 @@ const create = async (req, res) => {
       payload.categories = [payload.categories];
     }
 
-    const allowedCalc = new Set(['none', 'level_based', 'subject_based']);
+    const allowedCalc = new Set(['normal', 'none', 'level_based', 'subject_based']);
     if (payload.calculationType != null) {
       const ct = String(payload.calculationType);
       if (!allowedCalc.has(ct)) {
         return res.status(400).json({ message: 'Invalid calculationType' });
       }
-      payload.calculationType = ct;
+      payload.calculationType = ct === 'none' ? 'normal' : ct;
     }
     if (payload.calculationType === 'subject_based' && !payload.hasSubjects) {
       return res.status(400).json({ message: 'subject_based requires hasSubjects to be true' });
@@ -134,14 +134,19 @@ const update = async (req, res) => {
       }
     });
 
-    const allowedCalc = new Set(['none', 'level_based', 'subject_based']);
+    const allowedCalc = new Set(['normal', 'none', 'level_based', 'subject_based']);
     if (updateData.calculationType !== undefined) {
       if (!allowedCalc.has(String(updateData.calculationType))) {
         return res.status(400).json({ message: 'Invalid calculationType' });
       }
     }
+    if (updateData.calculationType !== undefined) {
+      updateData.calculationType = String(updateData.calculationType) === 'none'
+        ? 'normal'
+        : String(updateData.calculationType);
+    }
     const nextCalc =
-      updateData.calculationType !== undefined ? String(updateData.calculationType) : String(product.calculationType || 'none');
+      updateData.calculationType !== undefined ? String(updateData.calculationType) : String(product.calculationType || 'normal');
     const nextHasSubjects =
       updateData.hasSubjects !== undefined ? updateData.hasSubjects : product.hasSubjects;
     const nextLevels =

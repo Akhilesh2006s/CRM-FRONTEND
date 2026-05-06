@@ -13,7 +13,7 @@ type Product = {
   hasCategory?: boolean
   categories?: string[]
   prodStatus: number
-  calculationType?: 'none' | 'level_based' | 'subject_based'
+  calculationType?: 'normal' | 'none' | 'level_based' | 'subject_based'
 }
 
 export function useProducts() {

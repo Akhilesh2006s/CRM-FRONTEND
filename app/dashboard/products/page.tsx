@@ -27,7 +27,7 @@ type Product = {
   hasCategory?: boolean
   categories?: string[]
   prodStatus: number
-  calculationType?: 'none' | 'level_based' | 'subject_based'
+  calculationType?: 'normal' | 'none' | 'level_based' | 'subject_based'
   createdAt: string
   createdBy?: {
     name: string
@@ -62,7 +62,7 @@ export default function ProductsPage() {
     categories: [] as string[],
     newCategory: '',
     prodStatus: 1,
-    calculationType: 'none' as 'none' | 'level_based' | 'subject_based',
+    calculationType: 'normal' as 'normal' | 'level_based' | 'subject_based',
   })
   const [saving, setSaving] = useState(false)
   const [paymentLogicOpen, setPaymentLogicOpen] = useState(false)
@@ -126,7 +126,7 @@ export default function ProductsPage() {
       categories: product.categories || [],
       newCategory: '',
       prodStatus: product.prodStatus,
-      calculationType: product.calculationType || 'none',
+      calculationType: (product.calculationType === 'none' ? 'normal' : product.calculationType) || 'normal',
     })
     setEditModalOpen(true)
   }
@@ -148,7 +148,7 @@ export default function ProductsPage() {
       categories: [],
       newCategory: '',
       prodStatus: 1,
-      calculationType: 'none',
+      calculationType: 'normal',
     })
   }
 
@@ -460,7 +460,7 @@ export default function ProductsPage() {
                 <p className="text-sm text-neutral-700">
                   Payment:{' '}
                   <span className="font-medium">
-                    {editForm.calculationType === 'none' && 'Standard'}
+                    {editForm.calculationType === 'normal' && 'Normal'}
                     {editForm.calculationType === 'level_based' && 'Level-based'}
                     {editForm.calculationType === 'subject_based' && 'Subject-based'}
                   </span>
@@ -683,7 +683,7 @@ export default function ProductsPage() {
             <Label>Calculation type</Label>
             <Select
               value={editForm.calculationType}
-              onValueChange={(v: 'none' | 'level_based' | 'subject_based') =>
+              onValueChange={(v: 'normal' | 'level_based' | 'subject_based') =>
                 setEditForm({ ...editForm, calculationType: v })
               }
             >
@@ -691,11 +691,14 @@ export default function ProductsPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">None (standard per line)</SelectItem>
-                <SelectItem value="level_based">Level-based</SelectItem>
-                <SelectItem value="subject_based">Subject-based</SelectItem>
+                <SelectItem value="normal">Normal</SelectItem>
+                <SelectItem value="level_based">Level-Based</SelectItem>
+                <SelectItem value="subject_based">Subject-Based</SelectItem>
               </SelectContent>
             </Select>
+            <p className="text-xs text-neutral-500 mt-1">
+              Level-Based: Total amount is divided by number of levels (terms). Subject-Based: Total amount is divided by number of selected subjects. Normal: Full amount is charged without division.
+            </p>
           </div>
           <DialogFooter>
             <Button type="button" onClick={() => setPaymentLogicOpen(false)}>

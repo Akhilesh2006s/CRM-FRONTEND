@@ -37,7 +37,7 @@ export default function NewProductPage() {
     categories: [] as string[],
     newCategory: '',
     prodStatus: 1,
-    calculationType: 'none' as 'none' | 'level_based' | 'subject_based',
+    calculationType: 'normal' as 'normal' | 'level_based' | 'subject_based',
   })
 
   const addLevel = () => {
@@ -215,7 +215,7 @@ export default function NewProductPage() {
             <div>
               <p className="text-sm font-medium text-neutral-900">Payment logic</p>
               <p className="text-xs text-neutral-600 mt-1">
-                {form.calculationType === 'none' && 'Standard: line amount = strength × unit price.'}
+                {form.calculationType === 'normal' && 'Normal: full amount is charged without division.'}
                 {form.calculationType === 'level_based' &&
                   'Level-based: amount = (total students × price) ÷ distinct levels in the sale (per class).'}
                 {form.calculationType === 'subject_based' &&
@@ -248,13 +248,13 @@ export default function NewProductPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">None (standard per line)</SelectItem>
-                    <SelectItem value="level_based">Level-based (divide by distinct levels)</SelectItem>
-                    <SelectItem value="subject_based">Subject-based (divide by distinct subjects)</SelectItem>
+                    <SelectItem value="normal">Normal</SelectItem>
+                    <SelectItem value="level_based">Level-Based</SelectItem>
+                    <SelectItem value="subject_based">Subject-Based</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-neutral-500">
-                  Divisor uses distinct levels or subjects on each DC row for that product and class. Catalog lists are used only as a fallback when rows omit level/subject.
+                  Level-Based: Total amount is divided by number of levels (terms). Subject-Based: Total amount is divided by number of selected subjects. Normal: Full amount is charged without division.
                 </p>
               </div>
               <DialogFooter>

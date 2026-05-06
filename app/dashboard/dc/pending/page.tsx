@@ -78,6 +78,7 @@ type DC = {
   financeRemarks?: string
   splApproval?: string
   smeRemarks?: string
+  dcType?: 'normal' | 'shortage'
   employeeId?: {
     _id: string
     name?: string
@@ -249,6 +250,8 @@ export default function PendingDCPage() {
       setDcNotes(mergedDC.dcNotes || '')
       setSmeRemarks(mergedDC.smeRemarks || '')
       
+      const isShortageDc = fullDC.dcType === 'shortage'
+
       // Populate product rows - prioritize DC.productDetails, then DcOrder.products
       // Filter out empty or invalid productDetails entries
       const validProductDetails = mergedDC.productDetails && Array.isArray(mergedDC.productDetails) 
@@ -257,6 +260,7 @@ export default function PendingDCPage() {
       
       console.log('📦 Loading products for Pending DC:', {
         dcId: mergedDC._id,
+        dcType: fullDC.dcType,
         hasProductDetails: !!mergedDC.productDetails,
         productDetailsLength: mergedDC.productDetails?.length || 0,
         validProductDetailsLength: validProductDetails.length,
@@ -308,7 +312,9 @@ export default function PendingDCPage() {
           const normalizedCategory = normalizeCategory(rawCategory)
           const defaultCategory =
             mergedDC.school_type === 'Existing' ? 'Old Students' : 'new Students'
-          const finalCategory = categoryOptions.includes(normalizedCategory)
+          const finalCategory = isShortageDc
+            ? 'Shortage'
+            : categoryOptions.includes(normalizedCategory)
             ? normalizedCategory
             : defaultCategory
 
@@ -412,11 +418,12 @@ export default function PendingDCPage() {
                 id: String(idx + 1),
                 product: matchedProduct, // Use matched product for dropdown
                 class: p.class || '1',
-                category:
-                  p.category ||
-                  (mergedDC.school_type === 'Existing'
-                    ? 'Existing Students'
-                    : 'New Students'),
+                category: isShortageDc
+                  ? 'Shortage'
+                  : p.category ||
+                    (mergedDC.school_type === 'Existing'
+                      ? 'Existing Students'
+                      : 'New Students'),
                 productCategory: finalProductCategory || undefined,
                 productName: matchedProduct, // Use matched product
                 quantity: Number(p.quantity) || 0,
@@ -456,7 +463,11 @@ export default function PendingDCPage() {
           id: '1',
           product: matchedProduct, // Use matched product for dropdown
           class: '1',
-          category: mergedDC?.school_type === 'Existing' ? 'Old Students' : 'new Students',
+          category: isShortageDc
+            ? 'Shortage'
+            : mergedDC?.school_type === 'Existing'
+              ? 'Old Students'
+              : 'new Students',
           productCategory: undefined,
           productName: matchedProduct, // Use matched product
           quantity: fallbackQuantity,
@@ -517,7 +528,7 @@ export default function PendingDCPage() {
           productDetails: productRows.map(row => ({
             product: row.product,
             class: row.class || '1',
-            category: row.category,
+            category: selectedDC.dcType === 'shortage' ? 'Shortage' : row.category,
             productCategory: row.productCategory || undefined,
             productName: row.productName,
             quantity: row.quantity,
@@ -592,7 +603,7 @@ export default function PendingDCPage() {
           productDetails: productRows.map(row => ({
             product: row.product,
             class: row.class || '1',
-            category: row.category,
+            category: selectedDC.dcType === 'shortage' ? 'Shortage' : row.category,
             productCategory: row.productCategory || undefined,
             productName: row.productName,
             quantity: row.quantity,
@@ -657,6 +668,14 @@ export default function PendingDCPage() {
   }
 
   if (selectedDC) {
+    const isShortageDcDetail = selectedDC.dcType === 'shortage'
+    const defaultNewRowCategory =
+      typeof selectedDC.dcOrderId === 'object' &&
+      selectedDC.dcOrderId !== null &&
+      selectedDC.dcOrderId.school_type === 'Existing'
+        ? 'Old Students'
+        : 'new Students'
+
     // Show detailed form view
     return (
       <div className="space-y-6">
@@ -922,6 +941,7 @@ export default function PendingDCPage() {
           <div className="border-t pt-6 mb-6">
             <div className="flex items-center justify-between mb-3">
               <Label className="text-lg font-semibold text-gray-900">Products</Label>
+              {!isShortageDcDetail && (
               <Button
                 type="button"
                 size="sm"
@@ -931,16 +951,21 @@ export default function PendingDCPage() {
                     id: Date.now().toString(),
                     product: 'ABACUS',
                     class: '1',
-                    category: mergedDC?.school_type === 'Existing' ? 'Old Students' : 'new Students',
+                    category: defaultNewRowCategory,
+                    specs: 'Regular',
+                    level: getDefaultLevel('ABACUS'),
                     productName: 'ABACUS',
                     quantity: 0,
                     strength: 0,
-                    term: 'Term 1'
+                    term: 'Term 1',
+                    price: 0,
+                    total: 0,
                   }])
                 }}
               >
                 (+) Add
               </Button>
+              )}
             </div>
             
             <div className="overflow-x-auto">
@@ -1038,7 +1063,16 @@ export default function PendingDCPage() {
                         )}
                       </td>
                       <td className="py-2 px-3 border-r">
-                        <span className="text-xs text-gray-900">{row.category || '-'}</span>
+                        {isShortageDcDetail ? (
+                          <span
+                            className="text-xs font-medium text-amber-900 bg-amber-50 border border-amber-200 px-2 py-1 rounded"
+                            title="Shortage DC — category is always Shortage (read-only)"
+                          >
+                            Shortage
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-900">{row.category || '-'}</span>
+                        )}
                       </td>
                       <td className="py-2 px-3 border-r">
                         <Select value={row.specs || 'Regular'} onValueChange={(v) => {

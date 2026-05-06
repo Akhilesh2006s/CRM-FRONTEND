@@ -19,6 +19,40 @@ import { useAuth } from '../../context/AuthContext';
 import MessageBanner from '../../components/MessageBanner';
 import LogoutButton from '../../components/LogoutButton';
 
+const DEAL_PRODUCT_STATUS_ORDER = ['Hot', 'Warm', 'Visit Again', 'Not Met Management', 'Not Interested'] as const;
+
+function normalizeProductLineStatus(status?: string): string {
+  const s = (status || '').trim();
+  if (s === 'Management Not Met') return 'Not Met Management';
+  return s;
+}
+
+function deriveLeadPriorityFromDealProducts(products: { status?: string }[]): string | null {
+  let best = '';
+  let bestIdx = DEAL_PRODUCT_STATUS_ORDER.length;
+  for (const p of products) {
+    const st = normalizeProductLineStatus(p.status);
+    const i = (DEAL_PRODUCT_STATUS_ORDER as readonly string[]).indexOf(st);
+    if (i !== -1 && i < bestIdx) {
+      bestIdx = i;
+      best = st;
+    }
+  }
+  return best || null;
+}
+
+function displayLeadDealPriority(lead: {
+  priority?: string;
+  lead_status?: string;
+  products?: { status?: string }[];
+}): string {
+  if (Array.isArray(lead.products) && lead.products.length > 0) {
+    const derived = deriveLeadPriorityFromDealProducts(lead.products);
+    if (derived) return derived;
+  }
+  return lead.priority || lead.lead_status || 'Hot';
+}
+
 export default function LeadFollowupScreen({ navigation }: any) {
   const { user } = useAuth();
   const [leads, setLeads] = useState<any[]>([]);
@@ -59,10 +93,15 @@ export default function LeadFollowupScreen({ navigation }: any) {
       const dcOrders = Array.isArray(dcOrdersResponse) ? dcOrdersResponse : (dcOrdersResponse?.data || []);
 
       // Filter out closed/saved/completed leads
-      const activeLeads = (Array.isArray(allData) ? allData : []).filter((lead: any) => {
+      const activeLeads = (Array.isArray(allData) ? allData : [])
+        .filter((lead: any) => {
         const status = lead.status?.toLowerCase();
         return status !== 'saved' && status !== 'completed' && status !== 'closed';
-      });
+      })
+        .map((lead: any) => ({
+          ...lead,
+          priority: displayLeadDealPriority(lead),
+        }));
 
       // Convert dc-orders to lead format and exclude closed/saved leads
       const leadsFromOrders: any[] = dcOrders
@@ -83,7 +122,8 @@ export default function LeadFollowupScreen({ navigation }: any) {
           createdAt: order.createdAt,
           remarks: order.remarks,
           school_type: order.school_type,
-          priority: order.priority || order.lead_status || 'Hot',
+          products: Array.isArray(order.products) ? order.products : undefined,
+          priority: displayLeadDealPriority(order),
         }));
 
       // Combine and filter follow-up leads
@@ -128,7 +168,7 @@ export default function LeadFollowupScreen({ navigation }: any) {
     setSelectedLead(lead);
     setUpdateForm({
       follow_up_date: '',
-      priority: lead.priority || 'Hot',
+      priority: displayLeadDealPriority(lead),
       remarks: '',
     });
     setShowUpdateModal(true);
@@ -289,7 +329,8 @@ export default function LeadFollowupScreen({ navigation }: any) {
           </View>
         ) : (
           leads.map((lead) => {
-            const priorityColors = getPriorityColor(lead.priority);
+            const dealPriority = displayLeadDealPriority(lead);
+            const priorityColors = getPriorityColor(dealPriority);
             const isOverdue = lead.follow_up_date && new Date(lead.follow_up_date) < new Date();
             
             return (
@@ -314,7 +355,7 @@ export default function LeadFollowupScreen({ navigation }: any) {
                     </View>
                     <View style={[styles.priorityBadge, { backgroundColor: priorityColors.bg, borderColor: priorityColors.border }]}>
                       <Text style={[styles.priorityText, { color: priorityColors.text }]}>
-                        {lead.priority || 'Hot'}
+                        {dealPriority}
                       </Text>
                     </View>
                   </View>

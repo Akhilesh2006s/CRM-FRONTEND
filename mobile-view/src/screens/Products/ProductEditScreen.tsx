@@ -37,7 +37,7 @@ export default function ProductEditScreen({ navigation, route }: any) {
     specs: [] as string[],
     newSpec: '',
     prodStatus: 1,
-    calculationType: 'none' as 'none' | 'level_based' | 'subject_based',
+    calculationType: 'normal' as 'normal' | 'level_based' | 'subject_based',
   });
 
   useEffect(() => {
@@ -59,7 +59,7 @@ export default function ProductEditScreen({ navigation, route }: any) {
         specs: Array.isArray(product.specs) ? product.specs : (product.specs ? [product.specs] : []),
         newSpec: '',
         prodStatus: product.prodStatus || 1,
-        calculationType: product.calculationType || 'none',
+        calculationType: (product.calculationType === 'none' ? 'normal' : product.calculationType) || 'normal',
       });
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to load product');
@@ -238,9 +238,9 @@ export default function ProductEditScreen({ navigation, route }: any) {
             <View style={styles.chipRow}>
               {(
                 [
-                  { key: 'none' as const, label: 'Standard' },
-                  { key: 'level_based' as const, label: 'By level' },
-                  { key: 'subject_based' as const, label: 'By subject' },
+                  { key: 'normal' as const, label: 'Normal' },
+                  { key: 'level_based' as const, label: 'Level-Based' },
+                  { key: 'subject_based' as const, label: 'Subject-Based' },
                 ]
               ).map(({ key, label }) => (
                 <TouchableOpacity
@@ -262,6 +262,9 @@ export default function ProductEditScreen({ navigation, route }: any) {
                 </TouchableOpacity>
               ))}
             </View>
+            <Text style={styles.hint}>Level-Based: Total amount is divided by number of levels (terms)</Text>
+            <Text style={styles.hint}>Subject-Based: Total amount is divided by number of selected subjects</Text>
+            <Text style={styles.hint}>Normal: Full amount is charged without division</Text>
           </View>
 
           <View style={styles.formSection}>

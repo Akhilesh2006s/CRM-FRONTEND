@@ -12,6 +12,8 @@ const productSchema = new mongoose.Schema(
     category: { type: String },
     expiry_date: { type: Date },
     term: { type: String, enum: ['Term 1', 'Term 2', 'Both'], default: 'Term 1' },
+    // School class (grade) — set at close lead / create client; used by Pending DC
+    class: { type: String, trim: true, default: '1' },
     // Per-product lead metadata
     status: {
       type: String,
