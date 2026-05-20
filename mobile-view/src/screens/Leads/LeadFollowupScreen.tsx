@@ -46,11 +46,17 @@ function displayLeadDealPriority(lead: {
   lead_status?: string;
   products?: { status?: string }[];
 }): string {
+  const schoolLeadStatus = (lead.lead_status || '').trim();
+  if (schoolLeadStatus) return schoolLeadStatus;
+
+  const schoolPriority = (lead.priority || '').trim();
+  if (schoolPriority) return schoolPriority;
+
   if (Array.isArray(lead.products) && lead.products.length > 0) {
     const derived = deriveLeadPriorityFromDealProducts(lead.products);
     if (derived) return derived;
   }
-  return lead.priority || lead.lead_status || 'Hot';
+  return 'Hot';
 }
 
 export default function LeadFollowupScreen({ navigation }: any) {
@@ -98,10 +104,7 @@ export default function LeadFollowupScreen({ navigation }: any) {
         const status = lead.status?.toLowerCase();
         return status !== 'saved' && status !== 'completed' && status !== 'closed';
       })
-        .map((lead: any) => ({
-          ...lead,
-          priority: displayLeadDealPriority(lead),
-        }));
+        .map((lead: any) => ({ ...lead }));
 
       // Convert dc-orders to lead format and exclude closed/saved leads
       const leadsFromOrders: any[] = dcOrders
@@ -123,7 +126,8 @@ export default function LeadFollowupScreen({ navigation }: any) {
           remarks: order.remarks,
           school_type: order.school_type,
           products: Array.isArray(order.products) ? order.products : undefined,
-          priority: displayLeadDealPriority(order),
+          lead_status: order.lead_status,
+          priority: order.priority,
         }));
 
       // Combine and filter follow-up leads

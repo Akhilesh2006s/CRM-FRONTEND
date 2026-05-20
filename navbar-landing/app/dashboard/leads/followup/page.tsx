@@ -354,30 +354,39 @@ export default function FollowupLeadsPage() {
       toast.error('Remarks is required')
       return
     }
+
+    const selectedProducts = updateForm.productsInterested.filter(
+      (p) => p.product_name && p.product_name.trim()
+    )
+    if (selectedProducts.length === 0) {
+      toast.error('Add at least one product with Strength (quantity) and Chance %')
+      return
+    }
+    const missingStrengthOrChance = selectedProducts.some(
+      (p) => (Number(p.strength) || 0) <= 0 || (Number(p.chance) || 0) <= 0
+    )
+    if (missingStrengthOrChance) {
+      toast.error('Each product must have Strength greater than 0 and Chance % greater than 0')
+      return
+    }
     
     setUpdating(true)
     try {
-      // All fields are required, so include them all
+      const validProducts = selectedProducts.map((p) => ({
+        product_name: p.product_name.trim(),
+        term: p.term || 'Term 1',
+        status: p.status || 'Warm',
+        strength: Number(p.strength) || 0,
+        chance: Number(p.chance) || 0,
+        quantity: Number(p.strength) || 0,
+        unit_price: 0,
+      }))
+
       const payload: any = {
         follow_up_date: new Date(updateForm.follow_up_date).toISOString(),
         priority: updateForm.status,
         remarks: updateForm.remarks,
-      }
-
-      const validProducts = updateForm.productsInterested
-        .filter((p) => p.product_name && p.product_name.trim())
-        .map((p) => ({
-          product_name: p.product_name.trim(),
-          term: p.term || 'Term 1',
-          status: p.status || 'Warm',
-          strength: Number(p.strength) || 0,
-          chance: Number(p.chance) || 0,
-          quantity: Number(p.strength) || 0,
-          unit_price: 0,
-        }))
-
-      if (validProducts.length > 0) {
-        payload.productsInterested = validProducts
+        productsInterested: validProducts,
       }
       
       console.log('Updating lead with payload:', payload)
@@ -836,7 +845,7 @@ export default function FollowupLeadsPage() {
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-semibold text-neutral-700 flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-purple-500"></span>
-                    Products Interested
+                    Products Interested *
                   </Label>
                   <Button type="button" size="sm" variant="outline" onClick={addInterestedProduct}>
                     Add Product
@@ -935,7 +944,7 @@ export default function FollowupLeadsPage() {
                   )}
                 </div>
                 <p className="text-xs text-neutral-500">
-                  Select products, then set Term, Status, Strength, and Chance % for each.
+                  Required: add at least one product with Strength (quantity) and Chance % for each row.
                 </p>
               </div>
               

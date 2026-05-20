@@ -403,6 +403,22 @@ const updateLead = async (req, res) => {
     const normalizedProductsInterested = hasProductsInterested
       ? normalizeProductsInterested(req.body.productsInterested)
       : [];
+    const isFollowUpSubmission = hasFollowUpDate && hasRemarks;
+    if (isFollowUpSubmission) {
+      if (normalizedProductsInterested.length === 0) {
+        return res.status(400).json({
+          message: 'At least one product with Strength (quantity) and Chance % is required',
+        });
+      }
+      const invalidProductRows = normalizedProductsInterested.some(
+        (row) => row.strength <= 0 || row.chance <= 0
+      );
+      if (invalidProductRows) {
+        return res.status(400).json({
+          message: 'Each product must have Strength greater than 0 and Chance % greater than 0',
+        });
+      }
+    }
 
     const derivedLeadPriority = derivePriorityFromFollowUpProducts(normalizedProductsInterested);
     if (normalizedProductsInterested.length > 0 && derivedLeadPriority) {

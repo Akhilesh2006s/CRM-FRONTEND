@@ -25,6 +25,7 @@ type Lead = {
   zone?: string
   status?: string
   priority?: string
+  lead_status?: string
   follow_up_date?: string
   location?: string
   strength?: number
@@ -50,7 +51,9 @@ type ProductInterested = {
   chance: number
 }
 
+/** Align product-line enums across Lead/DcOrder schemas */
 const DEAL_PRODUCT_STATUS_ORDER = ['Hot', 'Warm', 'Visit Again', 'Not Met Management', 'Not Interested'] as const
+const SCHOOL_LEAD_STATUSES = new Set(['Hot', 'Warm', 'Cold'])
 
 function normalizeProductLineStatus(status?: string): string {
   const s = (status || '').trim()
@@ -58,6 +61,7 @@ function normalizeProductLineStatus(status?: string): string {
   return s
 }
 
+/** Strongest status among deal products (same ranking as follow-up snapshots) */
 function deriveLeadPriorityFromDealProducts(products: { status?: string }[]): string | null {
   let best = ''
   let bestIdx = DEAL_PRODUCT_STATUS_ORDER.length
@@ -72,20 +76,28 @@ function deriveLeadPriorityFromDealProducts(products: { status?: string }[]): st
   return best || null
 }
 
+/** Lead status on cards: school lead_status from Add New School, then legacy fields. */
 function displayLeadDealPriority(lead: {
   priority?: string
   lead_status?: string
   products?: Lead['products']
 }): string {
+  const schoolLeadStatus = (lead.lead_status || '').trim()
+  if (schoolLeadStatus) return schoolLeadStatus
+
+  const legacyPriority = (lead.priority || '').trim()
+  if (legacyPriority) return legacyPriority
+
   if (Array.isArray(lead.products) && lead.products.length > 0) {
     const derived = deriveLeadPriorityFromDealProducts(lead.products)
     if (derived) return derived
   }
-  return lead.priority || lead.lead_status || 'Hot'
+  return 'Warm'
 }
 
 const HISTORY_SNAPSHOT_STATUSES = ['Hot', 'Warm', 'Visit Again', 'Not Met Management', 'Not Interested'] as const
 
+/** Build `productsInterested`-shaped rows for synthetic history when API omits snapshots */
 function leadProductsToHistorySnapshot(products: Lead['products']) {
   if (!Array.isArray(products)) return []
   return products
@@ -205,7 +217,6 @@ export default function FollowupLeadsPage() {
         return {
           ...lead,
           school_code: schoolCode,
-          priority: displayLeadDealPriority(lead),
         }
       })
       
@@ -216,7 +227,8 @@ export default function FollowupLeadsPage() {
           const status = order.status?.toLowerCase()
           return status !== 'saved' && status !== 'completed' && status !== 'closed'
         })
-        .map((order: any) => ({
+        .map((order: any) => {
+          const mapped: Lead = {
           _id: order._id,
           school_name: order.school_name,
           school_code: order.school_code,
@@ -231,8 +243,11 @@ export default function FollowupLeadsPage() {
           remarks: order.remarks,
           school_type: order.school_type,
           products: Array.isArray(order.products) ? order.products : undefined,
-          priority: displayLeadDealPriority(order),
-        }))
+          lead_status: order.lead_status,
+          priority: order.priority,
+          }
+          return mapped
+        })
       
       // Combine and filter followup leads
       const combinedLeads = [...activeLeads, ...leadsFromOrders]
@@ -329,25 +344,27 @@ export default function FollowupLeadsPage() {
     }
   }
 
-  /** Match server: legacy history rows stored Cold with no product snapshot when deal was actually Hot/Warm */
-  function resolveHistoryEntryPriority(
+  /** Lead status badge on a history row (matches server resolveHistoryPriorityForResponse). */
+  function resolveHistoryEntryLeadStatus(
     item: { priority?: string; productsInterested?: { status?: string }[] },
-    currentLeadPriority?: string
+    lead?: { lead_status?: string; priority?: string }
   ): string {
+    const stored = (item.priority || '').trim()
+    const schoolStatus = (lead?.lead_status || '').trim()
+
+    if (SCHOOL_LEAD_STATUSES.has(stored)) return stored
+    if (SCHOOL_LEAD_STATUSES.has(schoolStatus)) return schoolStatus
+
     const rows = Array.isArray(item.productsInterested) ? item.productsInterested : []
     const fromProducts = deriveLeadPriorityFromDealProducts(rows)
-    if (fromProducts) return fromProducts
-    const stored = item.priority
-    const cur =
-      currentLeadPriority && currentLeadPriority !== 'Cold' ? currentLeadPriority : undefined
-    if (
-      (stored === 'Cold' || stored === undefined || stored === null || stored === '') &&
-      rows.length === 0 &&
-      cur
-    ) {
-      return cur
-    }
-    return stored || currentLeadPriority || 'Warm'
+    if (fromProducts && rows.length > 0) return fromProducts
+
+    if (stored) return stored
+
+    const legacy = (lead?.priority || '').trim()
+    if (legacy) return legacy
+
+    return 'Warm'
   }
 
   const getPriorityColor = (priority?: string) => {
@@ -374,7 +391,7 @@ export default function FollowupLeadsPage() {
     // Clear form for creating a new follow-up entry (don't pre-fill with old data)
     setUpdateForm({
       follow_up_date: '',
-      status: displayLeadDealPriority(lead),
+      status: displayLeadDealPriority(lead), // Reflects per-product + deal priority
       remarks: '',
       productsInterested: (() => {
         if (Array.isArray(lead.products) && lead.products.length > 0) {
@@ -426,18 +443,24 @@ export default function FollowupLeadsPage() {
       return
     }
 
-    const selectedProducts = updateForm.productsInterested
-      .filter((p) => p.product_name && p.product_name.trim())
+    const selectedProducts = updateForm.productsInterested.filter(
+      (p) => p.product_name && p.product_name.trim()
+    )
+    if (selectedProducts.length === 0) {
+      toast.error('Add at least one product with Strength (quantity) and Chance %')
+      return
+    }
     const missingStrengthOrChance = selectedProducts.some(
       (p) => (Number(p.strength) || 0) <= 0 || (Number(p.chance) || 0) <= 0
     )
     if (missingStrengthOrChance) {
-      toast.error('Strength and Chance are mandatory for all selected products')
+      toast.error('Each product must have Strength greater than 0 and Chance % greater than 0')
       return
     }
     
     setUpdating(true)
     try {
+      // All fields are required, so include them all
       const validProducts = selectedProducts
         .map((p) => ({
           product_name: p.product_name.trim(),
@@ -450,16 +473,20 @@ export default function FollowupLeadsPage() {
         }))
 
       const derivedPriority = deriveLeadPriorityFromDealProducts(validProducts)
+      const schoolLeadStatus = (selectedLead.lead_status || '').trim()
       const payload: any = {
         follow_up_date: new Date(updateForm.follow_up_date).toISOString(),
-        priority:
-          derivedPriority || selectedLead.priority || updateForm.status || 'Warm',
         remarks: updateForm.remarks,
       }
-
-      if (validProducts.length > 0) {
-        payload.productsInterested = validProducts
+      if (SCHOOL_LEAD_STATUSES.has(schoolLeadStatus)) {
+        payload.lead_status = schoolLeadStatus
+        payload.priority = schoolLeadStatus
+      } else {
+        payload.priority =
+          derivedPriority || selectedLead.priority || updateForm.status || 'Warm'
       }
+
+      payload.productsInterested = validProducts
       
       console.log('Updating lead with payload:', payload)
       
@@ -510,7 +537,7 @@ export default function FollowupLeadsPage() {
     try {
       let historyData: any[] = []
       let fullDcOrder: any = null
-      
+
       // Try to get history from dc-orders API first
       try {
         console.log('Fetching history for lead:', lead._id)
@@ -565,7 +592,7 @@ export default function FollowupLeadsPage() {
         historyData.push({
           follow_up_date: lead.follow_up_date || null,
           remarks: lead.remarks || 'Lead created',
-          priority: displayLeadDealPriority(lead),
+          priority: lead.lead_status || displayLeadDealPriority(lead),
           productsInterested: leadProductsToHistorySnapshot(lead.products),
           updatedAt: lead.createdAt,
           updatedBy: { name: 'System' },
@@ -584,9 +611,10 @@ export default function FollowupLeadsPage() {
         ...lead,
         ...(fullDcOrder || {}),
         products: fullDcOrder?.products ?? lead.products,
+        lead_status: fullDcOrder?.lead_status ?? lead.lead_status,
+        priority: fullDcOrder?.priority ?? lead.priority,
       }
-      const dcPriority = displayLeadDealPriority(mergedForDisplay as Lead)
-      setHistoryLead({ ...lead, priority: dcPriority })
+      setHistoryLead(mergedForDisplay as Lead)
       setHistory(historyData)
     } catch (err: any) {
       console.error('Failed to load history:', err)
@@ -595,7 +623,7 @@ export default function FollowupLeadsPage() {
         setHistory([{
           follow_up_date: lead.follow_up_date || null,
           remarks: lead.remarks || 'Lead created',
-          priority: displayLeadDealPriority(lead),
+          priority: lead.lead_status || displayLeadDealPriority(lead),
           productsInterested: leadProductsToHistorySnapshot(lead.products),
           updatedAt: lead.createdAt,
           updatedBy: { name: 'System' },
@@ -879,7 +907,7 @@ export default function FollowupLeadsPage() {
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-semibold text-neutral-700 flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-purple-500"></span>
-                    Products Interested
+                    Products Interested *
                   </Label>
                   <Button type="button" size="sm" variant="outline" onClick={addInterestedProduct}>
                     Add Product
@@ -978,7 +1006,7 @@ export default function FollowupLeadsPage() {
                   )}
                 </div>
                 <p className="text-xs text-neutral-500">
-                  Select products, then set Term, Status, Strength, and Chance % for each.
+                  Required: add at least one product with Strength (quantity) and Chance % for each row.
                 </p>
               </div>
               
@@ -1079,7 +1107,7 @@ export default function FollowupLeadsPage() {
                     {history.map((item, index) => {
                       // Use a unique key for each entry
                       const entryKey = item._id || item.updatedAt || `entry-${index}`;
-                      const priority = resolveHistoryEntryPriority(item, historyLead?.priority)
+                      const leadStatus = resolveHistoryEntryLeadStatus(item, historyLead ?? undefined)
                       const priorityColors = {
                         Hot: 'bg-red-100 text-red-700 border-red-200',
                         Warm: 'bg-orange-100 text-orange-700 border-orange-200',
@@ -1102,21 +1130,21 @@ export default function FollowupLeadsPage() {
                       return (
                         <div key={entryKey} className="relative pl-12">
                           {/* Timeline Dot */}
-                          <div className={`absolute left-0 top-1.5 w-8 h-8 rounded-full ${priorityDotColors[priority as keyof typeof priorityDotColors] || priorityDotColors.Hot} ring-4 ring-white flex items-center justify-center shadow-lg`}>
+                          <div className={`absolute left-0 top-1.5 w-8 h-8 rounded-full ${priorityDotColors[leadStatus as keyof typeof priorityDotColors] || priorityDotColors.Hot} ring-4 ring-white flex items-center justify-center shadow-lg`}>
                             <div className="w-2 h-2 rounded-full bg-white"></div>
                           </div>
                           
                           {/* History Card */}
                           <div className="bg-white rounded-lg border border-neutral-200 shadow-sm hover:shadow-md transition-shadow p-5">
-                            {/* Header with Date and Priority */}
+                            {/* Header with Date and lead status */}
                             <div className="flex items-start justify-between mb-3">
                               <div className="flex-1">
                                 <div className="flex items-center gap-3 mb-2">
                                   <span className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">
                                     {formatDateTime(item.updatedAt)}
                                   </span>
-                                  <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${priorityColors[priority as keyof typeof priorityColors] || priorityColors.Hot}`}>
-                                    {priority}
+                                  <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${priorityColors[leadStatus as keyof typeof priorityColors] || priorityColors.Hot}`}>
+                                    {leadStatus}
                                   </span>
                                 </div>
                                 {item.updatedBy?.name && (

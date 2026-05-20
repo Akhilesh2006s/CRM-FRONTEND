@@ -16,6 +16,8 @@ import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { useProducts } from '@/hooks/useProducts'
 
+const LEAD_STATUS_OPTIONS = ['Hot', 'Warm', 'Cold'] as const
+
 type ProductSelection = {
   name: string
   checked: boolean
@@ -45,15 +47,17 @@ export default function NewSchoolPage() {
     state: '',
     region: '',
     area: '',
+    lead_status: 'Warm',
     zone: '',
     branches: '',
     strength: '',
     remarks: '',
     average_fee: '',
     follow_up_date: '',
+    cluster_code: '',
   })
   
-  // Product selections - checkboxes + per-product status/term/strength
+  // Product selections - checkboxes for interest + per-product status/term/strength
   const [products, setProducts] = useState<ProductSelection[]>([])
   
   // Initialize products when availableProducts are loaded
@@ -333,6 +337,7 @@ export default function NewSchoolPage() {
         region: form.region || undefined,
         area: form.area || undefined,
         zone: form.zone || undefined,
+        lead_status: form.lead_status || 'Warm',
         branches: form.branches ? Number(form.branches) : undefined,
         strength: form.strength && form.strength.trim() ? Number(form.strength) : undefined,
         remarks: form.remarks || undefined,
@@ -341,6 +346,7 @@ export default function NewSchoolPage() {
         products: productsPayload,
         follow_up_date: parseFollowUp(form.follow_up_date), // Save as follow_up_date, NOT estimated_delivery_date
         assigned_to: currentUser?._id, // Auto-assign to current employee
+        cluster_code: form.cluster_code || undefined,
       }
       
       if (selectedProducts.length === 0) {
@@ -627,6 +633,28 @@ export default function NewSchoolPage() {
           </div>
 
           <div>
+            <Label>Lead status *</Label>
+            <Select
+              value={form.lead_status}
+              onValueChange={(v) => setForm((f) => ({ ...f, lead_status: v }))}
+              required
+            >
+              <SelectTrigger className="bg-white text-neutral-900">
+                <SelectValue placeholder="Select lead status" />
+              </SelectTrigger>
+              <SelectContent>
+                {LEAD_STATUS_OPTIONS.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-neutral-500 mt-1">
+              Pipeline status (Hot / Warm / Cold). Product rows below can have finer status per SKU.
+            </p>
+          </div>
+          <div>
             <Label>Zone</Label>
             <Input 
               className="bg-neutral-100 text-neutral-900 cursor-not-allowed" 
@@ -639,6 +667,16 @@ export default function NewSchoolPage() {
             <p className="text-xs text-neutral-500 mt-1">
               Zone is automatically set based on your assigned zone
             </p>
+          </div>
+          <div>
+            <Label>Cluster Code</Label>
+            <Input
+              className="bg-white text-neutral-900"
+              name="cluster_code"
+              value={form.cluster_code}
+              onChange={onChange}
+              placeholder="Enter cluster code"
+            />
           </div>
           <div>
             <Label>Follow-up date *</Label>

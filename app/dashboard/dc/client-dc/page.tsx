@@ -23,6 +23,12 @@ import { toast } from 'sonner'
 import { useProducts } from '@/hooks/useProducts'
 import { applyPaymentDivisorsToBreakdown } from '@/lib/dcPaymentDivisors'
 import { normalizeProductTerm, termFromLevelLabel } from '@/lib/productTerm'
+import {
+  buildClientDCProductRows,
+  findMatchingOrderProduct,
+  resolveClientDCRowFields,
+  type ResolveClientDCRowOpts,
+} from '@/lib/clientDcProductRows'
 import { useRouter } from 'next/navigation'
 
 type DC = {
@@ -179,6 +185,12 @@ export default function ClientDCPage() {
     product_name: string
     quantity: number
     unit_price: number
+    class?: string
+    specs?: string
+    productCategory?: string
+    category?: string
+    strength?: number
+    subject?: string
     level?: string // Level configured on Products master; shown in Edit PO
     term?: string // Academic term (Term 1 / 2 / Both) for split tables
   }>>([])
@@ -989,95 +1001,15 @@ export default function ClientDCPage() {
     try {
       const fullDC = await apiRequest<any>(`/dc/${dc._id}`)
       
-      // Load existing product details.
-      // IMPORTANT: For closed leads → DC flow, DC.productDetails is the source of truth
-      // (it contains per-spec rows, productCategory, correct strength & level).
-      // So we PREFER DC.productDetails and only fall back to dcOrder.products when
-      // productDetails is empty.
-      let productsToShow: any[] = []
       const dcProductDetails = Array.isArray(fullDC.productDetails) ? fullDC.productDetails : []
+      const rowOpts: ResolveClientDCRowOpts = { hasProductCategories, getProductCategories }
+      const productsToShow = buildClientDCProductRows(
+        dcProductDetails,
+        dcOrderProducts,
+        rowOpts,
+        getDefaultLevel
+      )
 
-      // 1) Prefer DC.productDetails if present
-      if (fullDC.productDetails && Array.isArray(fullDC.productDetails) && fullDC.productDetails.length > 0) {
-        // Only require product name; keep SKU category even if quantities/prices are 0.
-        // This prevents losing `productCategory` and falling back to DcOrder.products (which has no SKU category).
-        const dcProducts = fullDC.productDetails.filter((p: any) => p && p.product)
-        if (dcProducts.length > 0) {
-          console.log('Loading products for Client DC from DC.productDetails:', JSON.stringify(dcProducts, null, 2))
-          productsToShow = dcProducts.map((p: any, idx: number) => {
-            // Read values directly - preserve 0 values, only default if null/undefined
-            const strengthNum = p.strength !== null && p.strength !== undefined ? Number(p.strength) : 0
-            const quantityNum = p.quantity !== null && p.quantity !== undefined ? Number(p.quantity) : strengthNum
-
-            const studentCategories = [
-              'New Students',
-              'Existing Students',
-              'Both',
-              'New School',
-              'Existing School',
-            ]
-            const studentLike = typeof p.category === 'string' && studentCategories.includes(p.category)
-
-            // Prefer SKU productCategory.
-            // If missing, only use `category` as SKU category when it isn't a student category.
-            const rowProductCategory =
-              p.productCategory ||
-              (!studentLike && typeof p.category === 'string' ? p.category : undefined) ||
-              undefined
-
-            const row = {
-              id: `dc-${idx + 1}`,
-              product: p.product || '',
-              class: p.class || '1',
-              // Keep student category (for the `category` field that admin/warehouse use later)
-              category: p.category,
-              productCategory: rowProductCategory,
-              specs: p.specs || 'Regular', // Preserve specs from saved data
-              quantity: quantityNum,
-              strength: strengthNum,
-              level: p.level || p.term || getDefaultLevel(p.product || 'Abacus'),
-              term: normalizeProductTerm(
-                (p.term != null && String(p.term).trim() !== '')
-                  ? p.term
-                  : (termFromLevelLabel(p.level) ?? 'Term 1')
-              ),
-              subject: p.subject || undefined,
-            }
-            return row
-          })
-        }
-      }
-      
-      // 2) If DC.productDetails is empty, fall back to DcOrder products (Edit PO)
-      if (productsToShow.length === 0 && dcOrderProducts.length > 0) {
-        productsToShow = dcOrderProducts.map((p: any, idx: number) => ({
-          id: `dcorder-${idx + 1}`,
-          product: p.product_name || '',
-          // Try to preserve the original class from DC productDetails (by index or matching name)
-          class: (() => {
-            const byIndex = dcProductDetails[idx]
-            if (byIndex && byIndex.class) return byIndex.class
-            const byName = dcProductDetails.find((d: any) => {
-              const dcName = (d.product || d.productName || '').toString().toLowerCase().trim()
-              const orderName = (p.product_name || '').toString().toLowerCase().trim()
-              return dcName !== '' && dcName === orderName
-            })
-            return byName?.class || '1'
-          })(),
-          // DcOrder doesn't have per-product category; keep this empty here.
-          productCategory: undefined,
-          specs: 'Regular', // Default, as Edit PO doesn't have specs
-          quantity: Number(p.quantity) || 0,
-          strength: Number(p.quantity) || 0, // Use quantity as strength
-          level: p.level || p.term || getDefaultLevel(p.product_name || 'Abacus'),
-          term: normalizeProductTerm(
-            (p.term != null && String(p.term).trim() !== '')
-              ? p.term
-              : (termFromLevelLabel(p.level) ?? 'Term 1')
-          ),
-        }))
-      }
-      
       // Set the products to display
       if (productsToShow.length > 0) {
         console.log('Setting products for Request DC:', JSON.stringify(productsToShow, null, 2))
@@ -1945,12 +1877,16 @@ export default function ClientDCPage() {
     setCurrentEditingDCId(dc._id)
 
     try {
-      // Fetch the full DcOrder details
-      const dcOrder = await apiRequest<any>(`/dc-orders/${dcOrderId}`)
+      const [dcOrder, fullDC] = await Promise.all([
+        apiRequest<any>(`/dc-orders/${dcOrderId}`),
+        apiRequest<any>(`/dc/${dc._id}`),
+      ])
       setSelectedDcOrder(dcOrder)
 
       const pe = dcOrder.pendingEdit?.status === 'pending' ? dcOrder.pendingEdit : null
-      const productsForRows = (pe?.products?.length ? pe.products : dcOrder.products) || []
+      const orderProducts = (pe?.products?.length ? pe.products : dcOrder.products) || []
+      const dcDetails = Array.isArray(fullDC?.productDetails) ? fullDC.productDetails : []
+      const rowOpts: ResolveClientDCRowOpts = { hasProductCategories, getProductCategories }
 
       // When a manager approval is pending, show that snapshot; otherwise last saved order
       const formData = {
@@ -1964,7 +1900,7 @@ export default function ClientDCPage() {
         school_type: pe?.school_type ?? dcOrder.school_type ?? '',
         zone: pe?.zone ?? dcOrder.zone ?? '',
         location: pe?.location ?? dcOrder.location ?? '',
-        products: productsForRows,
+        products: orderProducts,
         pod_proof_url: pe?.pod_proof_url ?? dcOrder.pod_proof_url ?? dc.poPhotoUrl ?? '',
         remarks: pe?.remarks ?? dcOrder.remarks ?? '',
         total_amount: Number(pe?.total_amount ?? dcOrder.total_amount ?? 0) || 0,
@@ -1984,25 +1920,77 @@ export default function ClientDCPage() {
 
       setEditFormData(formData)
 
+      const usedOrderIdx = new Set<number>()
+      const rowsFromDetails =
+        dcDetails.length > 0
+          ? dcDetails.map((p: any, idx: number) => {
+              const name = p.product || p.productName || ''
+              const order = findMatchingOrderProduct(orderProducts, p, idx, usedOrderIdx)
+              const merged = order
+                ? {
+                    ...p,
+                    product: name,
+                    class: order.class ?? p.class,
+                    specs: order.specs ?? p.specs,
+                    productCategory: order.productCategory ?? p.productCategory,
+                    strength: p.strength ?? order.quantity,
+                    price: p.price ?? order.unit_price,
+                    level: p.level || order.level,
+                    term: p.term ?? order.term,
+                  }
+                : p
+              const resolved = resolveClientDCRowFields(merged, name, rowOpts)
+              const catalogLevels = getAvailableLevels(name)
+              const fallbackLevel = catalogLevels[0] || getDefaultLevel(name || 'Abacus')
+              const savedLevel = (merged.level && String(merged.level).trim()) || ''
+              const level = savedLevel || fallbackLevel
+              const term = normalizeProductTerm(
+                merged.term ?? termFromLevelLabel(savedLevel) ?? termFromLevelLabel(level)
+              )
+              return {
+                id: String(idx + 1),
+                product_name: name,
+                quantity: Number(merged.strength ?? merged.quantity ?? order?.quantity) || 0,
+                unit_price: Number(merged.price ?? order?.unit_price) || 0,
+                class: resolved.class,
+                specs: resolved.specs,
+                productCategory: resolved.productCategory,
+                category: merged.category,
+                strength: Number(merged.strength ?? merged.quantity) || 0,
+                subject: merged.subject,
+                level,
+                term,
+              }
+            })
+          : []
+
       setEditProductRows(
-        productsForRows.map((p: any, idx: number) => {
-          const name = p.product_name || ''
-          const catalogLevels = getAvailableLevels(name)
-          const fallbackLevel = catalogLevels[0] || getDefaultLevel(name || 'Abacus')
-          const savedLevel = (p.level && String(p.level).trim()) || ''
-          const level = savedLevel || fallbackLevel
-          const term = normalizeProductTerm(
-            p.term ?? termFromLevelLabel(savedLevel) ?? termFromLevelLabel(level)
-          )
-          return {
-            id: String(idx + 1),
-            product_name: name,
-            quantity: Number(p.quantity) || 0,
-            unit_price: Number(p.unit_price) || 0,
-            level,
-            term,
-          }
-        })
+        rowsFromDetails.length > 0
+          ? rowsFromDetails
+          : orderProducts.map((p: any, idx: number) => {
+              const name = p.product_name || ''
+              const resolved = resolveClientDCRowFields(p, name, rowOpts)
+              const catalogLevels = getAvailableLevels(name)
+              const fallbackLevel = catalogLevels[0] || getDefaultLevel(name || 'Abacus')
+              const savedLevel = (p.level && String(p.level).trim()) || ''
+              const level = savedLevel || fallbackLevel
+              const term = normalizeProductTerm(
+                p.term ?? termFromLevelLabel(savedLevel) ?? termFromLevelLabel(level)
+              )
+              return {
+                id: String(idx + 1),
+                product_name: name,
+                quantity: Number(p.quantity) || 0,
+                unit_price: Number(p.unit_price) || 0,
+                class: resolved.class,
+                specs: resolved.specs,
+                productCategory: resolved.productCategory,
+                category: p.category,
+                strength: Number(p.quantity) || 0,
+                level,
+                term,
+              }
+            })
       )
 
       // Original PO product names (committed on DcOrder) — for price lock + "new product" detection
@@ -2076,6 +2064,11 @@ export default function ClientDCPage() {
             product_name: row.product_name,
             quantity: row.quantity,
             unit_price: row.unit_price,
+            class: row.class || '1',
+            specs: row.specs || 'Regular',
+            productCategory: row.productCategory || undefined,
+            category: row.category || undefined,
+            strength: Number(row.strength ?? row.quantity) || 0,
             // Keep term for backward compatibility in DcOrder schema, but UI uses level only
             term: normalizeProductTerm(
               (row.term != null && String(row.term).trim() !== '')

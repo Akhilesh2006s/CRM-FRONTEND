@@ -16,10 +16,15 @@ import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { useProducts } from '@/hooks/useProducts'
 
+const LEAD_STATUS_OPTIONS = ['Hot', 'Warm', 'Cold'] as const
+
 type ProductSelection = {
   name: string
   checked: boolean
-  term?: string
+  term: string
+  status: 'Hot' | 'Warm' | 'Not Interested' | 'Management Not Met' | 'Visit Again'
+  strength: number
+  chance: number
 }
 
 export default function NewSchoolPage() {
@@ -42,22 +47,32 @@ export default function NewSchoolPage() {
     state: '',
     region: '',
     area: '',
-    priority: 'Hot',
+    lead_status: 'Warm',
     zone: '',
     branches: '',
     strength: '',
     remarks: '',
     average_fee: '',
     follow_up_date: '',
+    cluster_code: '',
   })
   
-  // Product selections - checkboxes + term selection
+  // Product selections - checkboxes for interest + per-product status/term/strength
   const [products, setProducts] = useState<ProductSelection[]>([])
   
   // Initialize products when availableProducts are loaded
   useEffect(() => {
     if (availableProducts.length > 0 && products.length === 0) {
-      setProducts(availableProducts.map(p => ({ name: p, checked: false, term: 'Term 1' })))
+      setProducts(
+        availableProducts.map((p) => ({
+          name: p,
+          checked: false,
+          term: 'Term 1',
+          status: 'Warm',
+          strength: 0,
+          chance: 0,
+        })),
+      )
     }
   }, [availableProducts])
 
@@ -167,6 +182,36 @@ export default function NewSchoolPage() {
     setProducts(updated)
   }
 
+  const handleProductStatusChange = (
+    index: number,
+    status: ProductSelection['status'],
+  ) => {
+    const updated = [...products]
+    updated[index].status = status
+
+    // For non Hot/Warm statuses, strength and chance should be 0
+    if (status !== 'Hot' && status !== 'Warm') {
+      updated[index].strength = 0
+      updated[index].chance = 0
+    }
+
+    setProducts(updated)
+  }
+
+  const handleProductStrengthChange = (index: number, value: number) => {
+    const updated = [...products]
+    updated[index].strength = value < 0 ? 0 : value
+    setProducts(updated)
+  }
+
+  const handleProductChanceChange = (index: number, value: number) => {
+    const updated = [...products]
+    // Clamp between 0 and 100
+    const clamped = Math.max(0, Math.min(100, value))
+    updated[index].chance = clamped
+    setProducts(updated)
+  }
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSubmitting(true)
@@ -232,14 +277,49 @@ export default function NewSchoolPage() {
         return undefined
       }
       
-      // Build products array from checked products - include term for backend splitting
-      const selectedProducts = products
-        .filter(p => p.checked)
-        .map(p => ({
+      // Build products array from checked products - include term and per-product status/strength/chance
+      const selectedProducts = products.filter((p) => p.checked)
+
+      if (selectedProducts.length === 0) {
+        throw new Error('Please select at least one product.')
+      }
+
+      // Validate per-product rules
+      for (const p of selectedProducts) {
+        // Strength is required for Hot/Warm
+        if ((p.status === 'Hot' || p.status === 'Warm') && (!p.strength || p.strength <= 0)) {
+          throw new Error(
+            `Please enter strength for product "${p.name}" when status is ${p.status}.`,
+          )
+        }
+
+        // Chance rules
+        if (p.status === 'Hot') {
+          if (p.chance < 80) {
+            throw new Error(
+              `Chance % for product "${p.name}" must be at least 80% when status is Hot.`,
+            )
+          }
+        } else if (p.status === 'Warm') {
+          if (p.chance < 20) {
+            throw new Error(
+              `Chance % for product "${p.name}" must be at least 20% when status is Warm.`,
+            )
+          }
+        } else {
+          // For all other statuses, chance must be 0
+          p.chance = 0
+        }
+      }
+
+      const productsPayload = selectedProducts.map((p) => ({
           product_name: p.name,
           quantity: 1,
           unit_price: 0,
           term: p.term || 'Term 1',
+        status: p.status,
+        strength: p.strength || 0,
+        chance: p.chance || 0,
         }))
       
       const payload: any = {
@@ -257,15 +337,16 @@ export default function NewSchoolPage() {
         region: form.region || undefined,
         area: form.area || undefined,
         zone: form.zone || undefined,
-        priority: form.priority || 'Hot',
+        lead_status: form.lead_status || 'Warm',
         branches: form.branches ? Number(form.branches) : undefined,
         strength: form.strength && form.strength.trim() ? Number(form.strength) : undefined,
         remarks: form.remarks || undefined,
         average_fee: form.average_fee ? Number(form.average_fee) : undefined,
         email: form.email,
-        products: selectedProducts,
+        products: productsPayload,
         follow_up_date: parseFollowUp(form.follow_up_date), // Save as follow_up_date, NOT estimated_delivery_date
         assigned_to: currentUser?._id, // Auto-assign to current employee
+        cluster_code: form.cluster_code || undefined,
       }
       
       if (selectedProducts.length === 0) {
@@ -454,9 +535,14 @@ export default function NewSchoolPage() {
           <div className="md:col-span-2">
             <Label>Products Interested *</Label>
             <div className="space-y-2 mt-2 p-4 bg-white rounded border">
-              {products.map((product, index) => (
-                <div key={product.name} className="flex items-center justify-between space-x-2 p-2 hover:bg-gray-50 rounded">
-                  <div className="flex items-center space-x-2">
+              {products.map((product, index) => {
+                const isHotOrWarm = product.status === 'Hot' || product.status === 'Warm'
+                return (
+                  <div
+                    key={product.name}
+                    className="flex flex-col md:flex-row md:items-center justify-between gap-2 p-2 hover:bg-gray-50 rounded"
+                  >
+                    <div className="flex items-center space-x-2 min-w-[160px]">
                     <Checkbox
                       id={`product-${index}`}
                       checked={product.checked}
@@ -466,7 +552,8 @@ export default function NewSchoolPage() {
                       {product.name}
                     </Label>
                   </div>
-                  <div className="w-32">
+                    <div className="flex flex-wrap gap-2 flex-1">
+                      <div className="w-28">
                     <Select
                       value={product.term || 'Term 1'}
                       onValueChange={(value) => handleProductTermChange(index, value)}
@@ -480,29 +567,92 @@ export default function NewSchoolPage() {
                         <SelectItem value="Both">Both</SelectItem>
                       </SelectContent>
                     </Select>
+                      </div>
+                      <div className="w-40">
+                        <Select
+                          value={product.status}
+                          onValueChange={(value) =>
+                            handleProductStatusChange(
+                              index,
+                              value as ProductSelection['status'],
+                            )
+                          }
+                        >
+                          <SelectTrigger className="h-8 text-xs bg-white text-neutral-900">
+                            <SelectValue placeholder="Status" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Hot">Hot</SelectItem>
+                            <SelectItem value="Warm">Warm</SelectItem>
+                            <SelectItem value="Not Interested">Not Interested</SelectItem>
+                            <SelectItem value="Management Not Met">
+                              Management Not Met
+                            </SelectItem>
+                            <SelectItem value="Visit Again">Visit Again</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="w-28">
+                        <Input
+                          type="number"
+                          min={0}
+                          disabled={!isHotOrWarm}
+                          className="h-8 text-xs bg-white text-neutral-900"
+                          placeholder="Strength"
+                          value={product.strength}
+                          onChange={(e) =>
+                            handleProductStrengthChange(index, Number(e.target.value) || 0)
+                          }
+                        />
+                      </div>
+                      <div className="w-28 flex items-center">
+                        <Input
+                          type="number"
+                          min={0}
+                          max={100}
+                          disabled={!isHotOrWarm}
+                          className="h-8 text-xs bg-white text-neutral-900"
+                          placeholder="%"
+                          value={product.chance}
+                          onChange={(e) =>
+                            handleProductChanceChange(index, Number(e.target.value) || 0)
+                          }
+                        />
+                        <span className="ml-1 text-xs text-neutral-500">%</span>
+                      </div>
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
             <p className="text-xs text-neutral-500 mt-2">
-              Select the products the school is interested in and their term.
+              Select products, then set Term, Status, Strength, and Chance % for each.
+              Strength is required when status is Hot or Warm; other statuses will always
+              have 0 strength and 0% chance.
             </p>
           </div>
 
           <div>
-            <Label>Priority *</Label>
-            <Select value={form.priority} onValueChange={(v) => setForm((f) => ({ ...f, priority: v }))} required>
+            <Label>Lead status *</Label>
+            <Select
+              value={form.lead_status}
+              onValueChange={(v) => setForm((f) => ({ ...f, lead_status: v }))}
+              required
+            >
               <SelectTrigger className="bg-white text-neutral-900">
-                <SelectValue placeholder="Select priority" />
+                <SelectValue placeholder="Select lead status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Hot">Hot</SelectItem>
-                <SelectItem value="Warm">Warm</SelectItem>
-                <SelectItem value="Visit Again">Visit Again</SelectItem>
-                <SelectItem value="Not Met Management">Not Met Management</SelectItem>
-                <SelectItem value="Not Interested">Not Interested</SelectItem>
+                {LEAD_STATUS_OPTIONS.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
+            <p className="text-xs text-neutral-500 mt-1">
+              Pipeline status (Hot / Warm / Cold). Product rows below can have finer status per SKU.
+            </p>
           </div>
           <div>
             <Label>Zone</Label>
@@ -517,6 +667,16 @@ export default function NewSchoolPage() {
             <p className="text-xs text-neutral-500 mt-1">
               Zone is automatically set based on your assigned zone
             </p>
+          </div>
+          <div>
+            <Label>Cluster Code</Label>
+            <Input
+              className="bg-white text-neutral-900"
+              name="cluster_code"
+              value={form.cluster_code}
+              onChange={onChange}
+              placeholder="Enter cluster code"
+            />
           </div>
           <div>
             <Label>Follow-up date *</Label>
