@@ -15,6 +15,7 @@ import { toast } from 'sonner'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { useProducts } from '@/hooks/useProducts'
+import { lookupPincode } from '@/lib/pincode'
 
 const LEAD_STATUS_OPTIONS = ['Hot', 'Warm', 'Cold'] as const
 
@@ -105,6 +106,7 @@ export default function NewSchoolPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loadingPincode, setLoadingPincode] = useState(false)
+  const [pincodeError, setPincodeError] = useState<string | null>(null)
   const [areas, setAreas] = useState<Array<{ name: string; district: string; block?: string; branchType?: string }>>([])
 
   const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -115,58 +117,41 @@ export default function NewSchoolPage() {
   const handlePincodeChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const pincode = e.target.value.replace(/\D/g, '').slice(0, 6)
     setForm((f) => ({ ...f, pincode }))
-    
+    setPincodeError(null)
+
     if (pincode.length === 6) {
       setLoadingPincode(true)
       try {
-        const response = await apiRequest<{
-          town?: string
-          district?: string
-          state?: string
-          region?: string
-          success: boolean
-          postOffices?: Array<{ Name: string; District: string; State: string; Division?: string; Region?: string; Block?: string; BranchType?: string }>
-        }>(`/location/get-town?pincode=${pincode}`)
-        
+        const response = await lookupPincode(pincode)
+
         if (response.success && response.town) {
           setForm((f) => ({
             ...f,
-            // Don't auto-fill location (landmark) - user should enter manually
             city: response.district || '',
             state: response.state || '',
             region: response.region || '',
-            // Don't auto-select area - user must select manually
           }))
-          
-          // Populate area dropdown with all post offices (exact areas)
-          if (response.postOffices && response.postOffices.length > 0) {
-            setAreas(response.postOffices.map(po => ({
-              name: po.Name,
-              district: po.District,
-              block: po.Block,
-              branchType: po.BranchType,
-            })))
-            // Don't auto-select - user must select manually
-          } else {
-            // Fallback: use town as area option
-            setAreas([{ name: response.town, district: response.district || '' }])
-            // Don't auto-select - user must select manually
-          }
+          setAreas(response.postOffices || [{ name: response.town, district: response.district || '' }])
+        } else {
+          setAreas([])
+          setForm((f) => ({ ...f, city: '', state: '', region: '', area: '' }))
+          const msg = response.message || 'Could not find this pincode.'
+          setPincodeError(msg)
+          toast.error(msg)
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Pincode lookup failed:', err)
-        // Don't show error, just allow manual entry
         setAreas([])
+        const msg =
+          err instanceof Error ? err.message : 'Pincode lookup failed. Enter location manually.'
+        setPincodeError(msg)
+        toast.error(msg)
       } finally {
         setLoadingPincode(false)
       }
-    } else {
-      // Clear fields if pincode is incomplete
-      if (pincode.length < 6) {
-        setAreas([])
-        setForm((f) => ({ ...f, city: '', state: '', region: '', area: '' }))
-        // Don't clear location (landmark) - user may have entered it manually
-      }
+    } else if (pincode.length < 6) {
+      setAreas([])
+      setForm((f) => ({ ...f, city: '', state: '', region: '', area: '' }))
     }
   }
 
@@ -429,6 +414,9 @@ export default function NewSchoolPage() {
               required
             />
             {loadingPincode && <p className="text-xs text-blue-600 mt-1">Loading location details...</p>}
+            {pincodeError && !loadingPincode && (
+              <p className="text-xs text-red-600 mt-1">{pincodeError}</p>
+            )}
           </div>
           <div>
             <Label>State</Label>
