@@ -18,7 +18,7 @@ export default function NewEmployeePage() {
     empCode: '',
     email: '',
     password: '',
-    phone: '0',
+    phone: '',
     mobile: '',
     address1: '',
     state: '',
@@ -40,14 +40,12 @@ export default function NewEmployeePage() {
       // Zone–cluster pairs (optional). The Clusters / Zones admin pages only hit
       // /clusters and /zones, so this collection is often empty unless someone
       // POSTs to /zones-clusters — without a merge, the employee form shows no clusters.
-      const [pairsRaw, zonesRaw, clustersRaw] = await Promise.all([
+      const [pairsRaw, zonesRaw] = await Promise.all([
         apiRequest<{ zone?: string; cluster?: string }[]>('/zones-clusters').catch(() => []),
         apiRequest<{ name?: string }[]>('/zones').catch(() => []),
-        apiRequest<{ name?: string }[]>('/clusters').catch(() => []),
       ])
       const pairs = Array.isArray(pairsRaw) ? pairsRaw : []
       const zoneDocs = Array.isArray(zonesRaw) ? zonesRaw : []
-      const clusterDocs = Array.isArray(clustersRaw) ? clustersRaw : []
 
       const zoneMap: Record<string, string[]> = {}
       pairs.forEach((zc) => {
@@ -59,17 +57,10 @@ export default function NewEmployeePage() {
       })
 
       const zoneNamesFromApi = zoneDocs.map((z) => (z.name || '').trim()).filter(Boolean)
-      const clusterNames = clusterDocs.map((c) => (c.name || '').trim()).filter(Boolean)
 
       const allZones = [...new Set([...Object.keys(zoneMap), ...zoneNamesFromApi])].sort((a, b) =>
         a.localeCompare(b)
       )
-
-      for (const z of allZones) {
-        if (!zoneMap[z]?.length && clusterNames.length) {
-          zoneMap[z] = [...clusterNames]
-        }
-      }
 
       setZones(allZones)
       setClustersByZone(zoneMap)
@@ -92,19 +83,23 @@ export default function NewEmployeePage() {
       setLoadingPincode(true)
       try {
         const response = await apiRequest<{
+          city?: string
           town?: string
           district?: string
           state?: string
-          region?: string
+          zone?: string
+          cluster?: string
           success: boolean
-        }>(`/location/get-town?pincode=${pincode}`)
+        }>(`/location/resolve?pincode=${pincode}`)
 
         if (response.success) {
           setForm((f) => ({
             ...f,
             state: response.state || f.state,
             district: response.district || f.district,
-            city: response.town || f.city,
+            city: response.city || response.town || f.city,
+            zone: response.zone || f.zone,
+            cluster: response.cluster || (response.zone ? '' : f.cluster),
           }))
         }
       } catch (err) {
@@ -120,6 +115,8 @@ export default function NewEmployeePage() {
         state: '',
         district: '',
         city: '',
+        zone: '',
+        cluster: '',
       }))
     }
   }
@@ -184,8 +181,8 @@ export default function NewEmployeePage() {
             <Input className="bg-white text-neutral-900" type="email" name="email" value={form.email} onChange={onChange} placeholder="Email" required />
           </div>
           <div>
-            <Label>Phone</Label>
-            <Input className="bg-white text-neutral-900" name="phone" value={form.phone} onChange={onChange} placeholder="Phone" />
+            <Label>Phone (optional)</Label>
+            <Input className="bg-white text-neutral-900" name="phone" value={form.phone} onChange={onChange} placeholder="Secondary phone" />
           </div>
           <div>
             <Label>Mobile *</Label>
@@ -250,11 +247,17 @@ export default function NewEmployeePage() {
                   <SelectValue placeholder="Select Employee Cluster" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(clustersByZone[form.zone] || []).map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c}
-                    </SelectItem>
-                  ))}
+                  {(clustersByZone[form.zone] || []).length === 0 ? (
+                    <div className="px-2 py-1.5 text-sm text-neutral-500">
+                      No clusters linked to this zone. Add links under Users → Zones.
+                    </div>
+                  ) : (
+                    (clustersByZone[form.zone] || []).map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>

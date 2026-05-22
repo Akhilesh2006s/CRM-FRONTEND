@@ -20,7 +20,8 @@ export default function ReturnsReportPage() {
         apiRequest<ExecReturn[]>(`/stock-returns/executive`),
         apiRequest<WarehouseReturn[]>(`/stock-returns/warehouse`),
       ])
-      setExecutive(execData); setWarehouse(whData)
+      setExecutive(Array.isArray(execData) ? execData : (execData as any)?.data ?? [])
+      setWarehouse(Array.isArray(whData) ? whData : (whData as any)?.data ?? [])
     } catch (e: any) { toast({ title: 'Error', description: e.message, variant: 'destructive' }) }
     finally { setLoading(false) }
   }

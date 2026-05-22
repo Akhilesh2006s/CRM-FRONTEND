@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter, useParams } from 'next/navigation'
+import { Suspense, useEffect, useState } from 'react'
+import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -39,10 +39,16 @@ type Trainer = {
   name: string
 }
 
-export default function EditExpensePage() {
+function EditExpensePageContent() {
   const router = useRouter()
   const params = useParams()
+  const searchParams = useSearchParams()
   const expenseId = params.id as string
+
+  const getListPath = () =>
+    searchParams.get('returnTo') === 'finance-pending'
+      ? '/dashboard/expenses/finance-pending'
+      : '/dashboard/expenses/pending'
 
   const [expense, setExpense] = useState<Expense | null>(null)
   const [loading, setLoading] = useState(true)
@@ -102,11 +108,11 @@ export default function EditExpensePage() {
         })
       } else {
         toast.error('Expense not found')
-        router.push('/dashboard/expenses/pending')
+        router.push(getListPath())
       }
     } catch (error: any) {
       toast.error(error?.message || 'Failed to load expense')
-      router.push('/dashboard/expenses/pending')
+      router.push(getListPath())
     } finally {
       setLoading(false)
     }
@@ -132,7 +138,7 @@ export default function EditExpensePage() {
       })
 
       toast.success('Expense updated successfully')
-      router.push('/dashboard/expenses/pending')
+      router.push(getListPath())
     } catch (error: any) {
       toast.error(error?.message || 'Failed to update expense')
     } finally {
@@ -150,10 +156,6 @@ export default function EditExpensePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Edit Expense</h1>
-      </div>
-
       <Card className="p-6 shadow-sm">
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
@@ -310,7 +312,7 @@ export default function EditExpensePage() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => router.push('/dashboard/expenses/pending')}
+              onClick={() => router.push(getListPath())}
             >
               Cancel
             </Button>
@@ -318,6 +320,14 @@ export default function EditExpensePage() {
         </form>
       </Card>
     </div>
+  )
+}
+
+export default function EditExpensePage() {
+  return (
+    <Suspense fallback={<div className="py-8 text-neutral-500">Loading expense...</div>}>
+      <EditExpensePageContent />
+    </Suspense>
   )
 }
 

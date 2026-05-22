@@ -20,10 +20,14 @@ const {
   uploadReturnPhotoMiddleware,
 } = require('../controllers/stockReturnController');
 
+// Static paths first (before /:id)
 router.post('/executive', authMiddleware, createExecutiveReturn);
 router.get('/executive/list', authMiddleware, listExecutiveReturns);
-router.get('/executive', authMiddleware, listExecutiveReturns); // Keep for backward compatibility
+router.get('/executive', authMiddleware, listExecutiveReturns);
 router.get('/executive/mine', authMiddleware, listMyExecutiveReturns);
+
+router.post('/warehouse', authMiddleware, createWarehouseReturn);
+router.get('/warehouse', authMiddleware, listWarehouseReturns);
 
 router.get('/warehouse-executive/queue', authMiddleware, listWarehouseExecutiveQueue);
 router.get('/warehouse-executive/:id', authMiddleware, getReturnForWarehouseExecutive);
@@ -31,13 +35,6 @@ router.get('/warehouse-executive/:id', authMiddleware, getReturnForWarehouseExec
 router.get('/warehouse-manager/queue', authMiddleware, listWarehouseManagerQueue);
 router.get('/warehouse-manager/:id', authMiddleware, getReturnForWarehouseManager);
 
-router.get('/:id', authMiddleware, getExecutiveReturnById);
-router.put('/:id', authMiddleware, updateExecutiveReturn);
-
-router.post('/warehouse', authMiddleware, createWarehouseReturn);
-router.get('/warehouse', authMiddleware, listWarehouseReturns);
-
-// Photo upload - must be before /:id routes
 router.post('/upload-photo', authMiddleware, (req, res, next) => {
   uploadReturnPhotoMiddleware(req, res, (err) => {
     if (err) {
@@ -53,12 +50,10 @@ router.post('/upload-photo', authMiddleware, (req, res, next) => {
   });
 }, uploadReturnPhoto);
 
-// Warehouse Executive verification endpoint
 router.put('/:id/warehouse-verify', authMiddleware, warehouseVerifyReturn);
-
-// Warehouse Manager action endpoint
 router.put('/:id/manager-action', authMiddleware, managerAction);
 
+router.get('/:id', authMiddleware, getExecutiveReturnById);
+router.put('/:id', authMiddleware, updateExecutiveReturn);
+
 module.exports = router;
-
-

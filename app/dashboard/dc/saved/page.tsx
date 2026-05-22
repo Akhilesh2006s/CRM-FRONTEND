@@ -512,8 +512,14 @@ export default function SavedDCPage() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Input placeholder="By School Name" />
           <Input placeholder="By Contact Mobile No" />
-          <Input type="date" placeholder="From Date" />
-          <Input type="date" placeholder="To Date" />
+          <div className="space-y-2">
+            <Label htmlFor="saved-from-date">From Date</Label>
+            <Input id="saved-from-date" type="date" />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="saved-to-date">To Date</Label>
+            <Input id="saved-to-date" type="date" />
+          </div>
           <Input placeholder="Select Zone" />
           <Input placeholder="Select Executive" />
           <Input placeholder="By Town" />

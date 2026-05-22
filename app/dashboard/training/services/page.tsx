@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Pencil } from 'lucide-react'
@@ -126,10 +127,16 @@ export default function ServicesListPage() {
               {trainers.map(t => <SelectItem key={t._id} value={t._id}>{t.name}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Input className="bg-white text-neutral-900" placeholder="By School Code" value={filters.schoolCode} onChange={(e) => setFilters(f => ({ ...f, schoolCode: e.target.value }))} />
-          <Input className="bg-white text-neutral-900" placeholder="By School Name" value={filters.schoolName} onChange={(e) => setFilters(f => ({ ...f, schoolName: e.target.value }))} />
-          <Input className="bg-white text-neutral-900" type="date" placeholder="From Date" value={filters.fromDate} onChange={(e) => setFilters(f => ({ ...f, fromDate: e.target.value }))} />
-          <Input className="bg-white text-neutral-900" type="date" placeholder="To Date" value={filters.toDate} onChange={(e) => setFilters(f => ({ ...f, toDate: e.target.value }))} />
+          <Input className="bg-white text-neutral-900" placeholder="School Code" value={filters.schoolCode} onChange={(e) => setFilters(f => ({ ...f, schoolCode: e.target.value }))} />
+          <Input className="bg-white text-neutral-900" placeholder="School Name" value={filters.schoolName} onChange={(e) => setFilters(f => ({ ...f, schoolName: e.target.value }))} />
+          <div className="space-y-2">
+            <Label htmlFor="services-list-from">From Date</Label>
+            <Input id="services-list-from" className="bg-white text-neutral-900" type="date" value={filters.fromDate} onChange={(e) => setFilters(f => ({ ...f, fromDate: e.target.value }))} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="services-list-to">To Date</Label>
+            <Input id="services-list-to" className="bg-white text-neutral-900" type="date" value={filters.toDate} onChange={(e) => setFilters(f => ({ ...f, toDate: e.target.value }))} />
+          </div>
           <Button type="submit" className="md:col-span-4">Search</Button>
         </form>
       </Card>

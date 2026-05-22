@@ -53,15 +53,24 @@ export default function StockAddPage() {
       toast.error('Enter a valid inventory quantity')
       return
     }
+    if (!comments.trim()) {
+      toast.error('Comments are required')
+      return
+    }
+    if (!vendor.trim()) {
+      toast.error('Vendor is required')
+      return
+    }
     try {
       setSaving(true)
       await apiRequest('/warehouse/stock', {
         method: 'POST',
         body: JSON.stringify({
-          productId: productId || selectedProductId, // row id or selected from dropdown
+          productId: productId || selectedProductId,
           quantity: amount,
           movementType: 'In',
-          reason: comments || 'Manual add',
+          reason: comments.trim(),
+          vendor: vendor.trim(),
         }),
       })
       toast.success('Quantity updated')
@@ -114,7 +123,7 @@ export default function StockAddPage() {
           </div>
 
           <div className="space-y-2 md:col-span-2">
-            <div className="text-sm font-medium">Vendor</div>
+            <div className="text-sm font-medium">Vendor *</div>
             <Select value={vendor} onValueChange={setVendor}>
               <SelectTrigger>
                 <SelectValue placeholder="Select Vendor" />
@@ -128,7 +137,18 @@ export default function StockAddPage() {
           </div>
 
           <div className="md:col-span-2 flex gap-3">
-            <Button type="submit" disabled={saving || (!selectedProductId && !productId) || !qty}>{saving ? 'Saving…' : 'Add Item'}</Button>
+            <Button
+              type="submit"
+              disabled={
+                saving ||
+                (!selectedProductId && !productId) ||
+                !qty ||
+                !comments.trim() ||
+                !vendor.trim()
+              }
+            >
+              {saving ? 'Saving…' : 'Add Item'}
+            </Button>
             <Button type="button" variant="destructive" onClick={() => router.push('/dashboard/warehouse/stock')}>Cancel</Button>
           </div>
         </form>

@@ -1652,18 +1652,24 @@ export default function ClosedSalesPage() {
             value={searchMobile}
             onChange={(e) => setSearchMobile(e.target.value)}
           />
-          <Input 
-            type="date" 
-            placeholder="From Date"
-            value={searchFromDate}
-            onChange={(e) => setSearchFromDate(e.target.value)}
-          />
-          <Input 
-            type="date" 
-            placeholder="To Date"
-            value={searchToDate}
-            onChange={(e) => setSearchToDate(e.target.value)}
-          />
+          <div className="space-y-2">
+            <Label htmlFor="closed-from-date">From Date</Label>
+            <Input
+              id="closed-from-date"
+              type="date"
+              value={searchFromDate}
+              onChange={(e) => setSearchFromDate(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="closed-to-date">To Date</Label>
+            <Input
+              id="closed-to-date"
+              type="date"
+              value={searchToDate}
+              onChange={(e) => setSearchToDate(e.target.value)}
+            />
+          </div>
           <Select value={searchZone || 'all'} onValueChange={(value) => setSearchZone(value === 'all' ? '' : value)}>
             <SelectTrigger>
               <SelectValue placeholder="Select Zone" />

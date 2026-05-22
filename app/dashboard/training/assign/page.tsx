@@ -401,37 +401,37 @@ export default function AssignTrainingServicePage() {
       <Card className="p-4">
         <form onSubmit={(e) => { e.preventDefault(); setCurrentPage(1) }} className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
-            <label className="text-sm font-medium text-neutral-700 mb-1 block">By School Code</label>
+            <label className="text-sm font-medium text-neutral-700 mb-1 block">School Code</label>
             <Input
               className="bg-white text-neutral-900"
-              placeholder="By School Code"
+              placeholder="School Code"
               value={filters.schoolCode}
               onChange={(e) => setFilters(f => ({ ...f, schoolCode: e.target.value }))}
             />
           </div>
           <div>
-            <label className="text-sm font-medium text-neutral-700 mb-1 block">By School Name</label>
+            <label className="text-sm font-medium text-neutral-700 mb-1 block">School Name</label>
             <Input
               className="bg-white text-neutral-900"
-              placeholder="By School Name"
+              placeholder="School Name"
               value={filters.schoolName}
               onChange={(e) => setFilters(f => ({ ...f, schoolName: e.target.value }))}
             />
           </div>
           <div>
-            <label className="text-sm font-medium text-neutral-700 mb-1 block">By Mobile No</label>
+            <label className="text-sm font-medium text-neutral-700 mb-1 block">Mobile No</label>
             <Input
               className="bg-white text-neutral-900"
-              placeholder="By Mobile No"
+              placeholder="Mobile No"
               value={filters.mobile}
               onChange={(e) => setFilters(f => ({ ...f, mobile: e.target.value }))}
             />
           </div>
           <div>
-            <label className="text-sm font-medium text-neutral-700 mb-1 block">By Town</label>
+            <label className="text-sm font-medium text-neutral-700 mb-1 block">Town</label>
             <Input
               className="bg-white text-neutral-900"
-              placeholder="By Town"
+              placeholder="Town"
               value={filters.town}
               onChange={(e) => setFilters(f => ({ ...f, town: e.target.value }))}
             />

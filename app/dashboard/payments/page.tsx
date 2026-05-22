@@ -12,6 +12,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { CheckCircle2, Clock, XCircle, Pause, CreditCard, TrendingUp, ChevronDown, ChevronUp, FileText } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import Link from 'next/link'
+import { Label } from '@/components/ui/label'
 
 type Payment = {
   _id: string
@@ -255,20 +256,26 @@ export default function PaymentsPage() {
               <SelectItem value="Cheque">Cheque</SelectItem>
             </SelectContent>
           </Select>
-          <Input
-            type="date"
-            placeholder="From Date"
-            value={filters.fromDate}
-            onChange={(e) => setFilters(f => ({ ...f, fromDate: e.target.value }))}
-            className="bg-white text-neutral-900"
-          />
-          <Input
-            type="date"
-            placeholder="To Date"
-            value={filters.toDate}
-            onChange={(e) => setFilters(f => ({ ...f, toDate: e.target.value }))}
-            className="bg-white text-neutral-900"
-          />
+          <div className="space-y-2">
+            <Label htmlFor="payments-from-date">From Date</Label>
+            <Input
+              id="payments-from-date"
+              type="date"
+              value={filters.fromDate}
+              onChange={(e) => setFilters(f => ({ ...f, fromDate: e.target.value }))}
+              className="bg-white text-neutral-900"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="payments-to-date">To Date</Label>
+            <Input
+              id="payments-to-date"
+              type="date"
+              value={filters.toDate}
+              onChange={(e) => setFilters(f => ({ ...f, toDate: e.target.value }))}
+              className="bg-white text-neutral-900"
+            />
+          </div>
           <Button type="submit">Search</Button>
         </form>
       </Card>

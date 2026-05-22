@@ -37,7 +37,7 @@ function transformToWarehouseDC(doc) {
     town: doc.town || '',
     address: doc.address || doc.location || doc.customerAddress || '',
     zone: doc.zone || '',
-    cluster: doc.cluster || '',
+    cluster: doc.cluster_code || doc.cluster || '',
     executive: doc.executive || (doc.assigned_to?.name || doc.assigned_to?.email || '') || (doc.created_by?.name || doc.created_by?.email || '') || (doc.createdBy?.name || ''),
     dcRemarks: doc.dcRemarks || doc.remarks || '',
     products: doc.products?.map(p => {
@@ -93,7 +93,7 @@ const getWarehouseDCList = async (req, res) => {
     try {
       // First fetch without populate
       dcOrders = await DcOrder.find(filter)
-        .select('_id dc_code school_name contact_person contact_mobile email address location zone products dc_code status school_type assigned_to created_by createdAt updatedAt pod_proof_url')
+        .select('_id dc_code school_name contact_person contact_mobile email address location zone cluster_code products status school_type assigned_to created_by createdAt updatedAt pod_proof_url')
         .sort({ createdAt: -1 })
         .lean()
         .maxTimeMS(20000); // 20 second timeout
@@ -175,6 +175,11 @@ const updateWarehouseDC = async (req, res) => {
       address,
       zone,
       cluster,
+      cluster_code,
+      schoolType,
+      school_type,
+      dcNo,
+      dc_code,
       remarks,
       dcNotes,
       dcRemarks,
@@ -190,7 +195,12 @@ const updateWarehouseDC = async (req, res) => {
     if (town !== undefined) updateData.town = town;
     if (address !== undefined) updateData.address = address;
     if (zone !== undefined) updateData.zone = zone;
-    if (cluster !== undefined) updateData.cluster = cluster;
+    const clusterVal = cluster_code !== undefined ? cluster_code : cluster;
+    if (clusterVal !== undefined) updateData.cluster_code = clusterVal;
+    const schoolTypeVal = school_type !== undefined ? school_type : schoolType;
+    if (schoolTypeVal !== undefined) updateData.school_type = schoolTypeVal;
+    const dcCodeVal = dc_code !== undefined ? dc_code : dcNo;
+    if (dcCodeVal !== undefined) updateData.dc_code = dcCodeVal;
     if (remarks !== undefined) updateData.remarks = remarks;
 
     // Handle items if provided

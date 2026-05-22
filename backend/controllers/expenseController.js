@@ -240,14 +240,18 @@ const getManagerPendingExpenses = async (req, res) => {
 const getExpensesByEmployee = async (req, res) => {
   try {
     const { employeeId } = req.params;
-    const { fromDate, toDate } = req.query;
+    const { fromDate, toDate, status: statusQuery } = req.query;
+
+    const isExecutiveManager = req.user.role === 'Executive Manager';
+    const defaultStatus = isExecutiveManager ? 'Pending' : 'Executive Manager Approved';
+    const status = statusQuery || defaultStatus;
     
     const filter = {
       $or: [
         { employeeId: employeeId },
         { trainerId: employeeId }
       ],
-      status: 'Pending',
+      status,
     };
 
     if (fromDate || toDate) {
@@ -288,7 +292,7 @@ const approveMultipleExpenses = async (req, res) => {
     const updatedExpenses = [];
 
     for (const exp of expenses) {
-      const { id, approvedAmount, managerRemarks } = exp;
+      const { id, approvedAmount, managerRemarks, employeeRemarks } = exp;
       
       const updateData = {
         status: targetStatus,
@@ -316,8 +320,12 @@ const approveMultipleExpenses = async (req, res) => {
         }
       }
 
-      if (managerRemarks) {
+      if (managerRemarks !== undefined) {
         updateData.managerRemarks = managerRemarks;
+      }
+
+      if (employeeRemarks !== undefined) {
+        updateData.employeeRemarks = employeeRemarks;
       }
 
       const updated = await Expense.findByIdAndUpdate(

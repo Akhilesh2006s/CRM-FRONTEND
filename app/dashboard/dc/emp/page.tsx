@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { apiRequest } from '@/lib/api'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -25,13 +26,36 @@ type SampleRequest = {
 }
 
 export default function EmployeeDCPage() {
+  const router = useRouter()
   const [list, setList] = useState<EmpDC[]>([])
   const [loading, setLoading] = useState(true)
   const [sampleRequests, setSampleRequests] = useState<SampleRequest[]>([])
   const [loadingSamples, setLoadingSamples] = useState(true)
+  const [employees, setEmployees] = useState<Emp[]>([])
+  const [loadingEmployees, setLoadingEmployees] = useState(true)
   const [form, setForm] = useState({ employee_id: '', kit_type: 'Sales', distribution_date: '', expected_return_date: '' })
   const [submitting, setSubmitting] = useState(false)
   const [processingRequest, setProcessingRequest] = useState<string | null>(null)
+
+  useEffect(() => {
+    ;(async () => {
+      setLoadingEmployees(true)
+      try {
+        const data = await apiRequest<any[]>('/employees?isActive=true')
+        const list = Array.isArray(data) ? data : []
+        setEmployees(
+          list
+            .map((u: any) => ({ _id: u._id || u.id, name: u.name || 'Unknown' }))
+            .filter((e) => e.name !== 'Unknown')
+        )
+      } catch (err: any) {
+        console.error('Failed to load employees:', err)
+        setEmployees([])
+      } finally {
+        setLoadingEmployees(false)
+      }
+    })()
+  }, [])
 
   const load = async () => {
     setLoading(true)
@@ -93,13 +117,39 @@ export default function EmployeeDCPage() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!form.employee_id) {
+      toast.error('Please select an employee')
+      return
+    }
+    if (!form.distribution_date) {
+      toast.error('Distribution date is required')
+      return
+    }
     setSubmitting(true)
     try {
-      await apiRequest(`/emp-dc/create`, { method: 'POST', body: JSON.stringify(form) })
+      const payload: Record<string, string> = {
+        employee_id: form.employee_id,
+        kit_type: form.kit_type,
+        distribution_date: new Date(form.distribution_date).toISOString(),
+      }
+      if (form.expected_return_date) {
+        payload.expected_return_date = new Date(form.expected_return_date).toISOString()
+      }
+      await apiRequest(`/emp-dc/create`, { method: 'POST', body: JSON.stringify(payload) })
       setForm({ employee_id: '', kit_type: 'Sales', distribution_date: '', expected_return_date: '' })
+      toast.success('EMP DC created successfully')
       load()
-    } catch (e) {
-      alert('Failed to create EMP DC. Ensure you are logged in.')
+    } catch (err: any) {
+      if (err?.status === 401) {
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('authToken')
+          localStorage.removeItem('authUser')
+        }
+        toast.error('Session expired. Please log in again.')
+        router.replace('/auth/login')
+        return
+      }
+      toast.error(err?.message || 'Failed to create EMP DC')
     } finally {
       setSubmitting(false)
     }
@@ -187,14 +237,38 @@ export default function EmployeeDCPage() {
         <TabsContent value="kits">
           <Card className="p-4 space-y-4 text-neutral-900">
             <form onSubmit={submit} className="grid grid-cols-1 md:grid-cols-4 gap-3">
-              <div>
-                <Label>Employee ID</Label>
-                <Input value={form.employee_id} onChange={(e) => setForm({ ...form, employee_id: e.target.value })} placeholder="User ObjectId" required />
+              <div className="space-y-2">
+                <Label htmlFor="emp-dc-employee">Employee *</Label>
+                <Select
+                  value={form.employee_id}
+                  onValueChange={(v) => setForm({ ...form, employee_id: v })}
+                  disabled={loadingEmployees}
+                  required
+                >
+                  <SelectTrigger id="emp-dc-employee">
+                    <SelectValue
+                      placeholder={
+                        loadingEmployees
+                          ? 'Loading employees…'
+                          : employees.length === 0
+                            ? 'No employees found'
+                            : 'Select employee'
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {employees.map((e) => (
+                      <SelectItem key={e._id} value={e._id}>
+                        {e.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <div>
-                <Label>Kit Type</Label>
+              <div className="space-y-2">
+                <Label htmlFor="emp-dc-kit-type">Kit Type</Label>
                 <Select value={form.kit_type} onValueChange={(v) => setForm({ ...form, kit_type: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="emp-dc-kit-type"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Sales">Sales</SelectItem>
                     <SelectItem value="Training">Training</SelectItem>
@@ -202,13 +276,24 @@ export default function EmployeeDCPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label>Distribution Date</Label>
-                <Input type="date" value={form.distribution_date} onChange={(e) => setForm({ ...form, distribution_date: e.target.value })} required />
+              <div className="space-y-2">
+                <Label htmlFor="emp-dc-distribution-date">Distribution Date *</Label>
+                <Input
+                  id="emp-dc-distribution-date"
+                  type="date"
+                  value={form.distribution_date}
+                  onChange={(e) => setForm({ ...form, distribution_date: e.target.value })}
+                  required
+                />
               </div>
-              <div>
-                <Label>Expected Return</Label>
-                <Input type="date" value={form.expected_return_date} onChange={(e) => setForm({ ...form, expected_return_date: e.target.value })} />
+              <div className="space-y-2">
+                <Label htmlFor="emp-dc-return-date">Expected Return</Label>
+                <Input
+                  id="emp-dc-return-date"
+                  type="date"
+                  value={form.expected_return_date}
+                  onChange={(e) => setForm({ ...form, expected_return_date: e.target.value })}
+                />
               </div>
               <div className="md:col-span-4">
                 <Button type="submit" disabled={submitting}>{submitting ? 'Creating…' : 'Create Kit'}</Button>

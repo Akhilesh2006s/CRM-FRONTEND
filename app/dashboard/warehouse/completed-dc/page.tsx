@@ -16,6 +16,8 @@ import {
   parseFollowUpStudentTypeSelectValue,
   isShortageStudentType,
 } from '@/lib/dcStudentTypeOptions'
+import { SCHOOL_TYPE_OPTIONS } from '@/lib/warehouseOptions'
+import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { Pencil, X, Upload, FileText, Download } from 'lucide-react'
 import jsPDF from 'jspdf'
@@ -127,8 +129,8 @@ export default function CompletedDCPage() {
     }
     
     if (filters.schoolType) {
-      filtered = filtered.filter(r => 
-        (r.schoolType || '').toLowerCase().includes(filters.schoolType.toLowerCase())
+      filtered = filtered.filter(r =>
+        (r.schoolType || '').toLowerCase() === filters.schoolType.toLowerCase()
       )
     }
     
@@ -357,6 +359,10 @@ export default function CompletedDCPage() {
             row.poDocument = matchingDC.poDocument || matchingDC.poPhotoUrl || row.poDocument
             row.poPhotoUrl = matchingDC.poPhotoUrl || matchingDC.poDocument || row.poPhotoUrl
             row.lrCost = matchingDC.lrCost || row.lrCost
+            row.lrNo = matchingDC.lrNo || row.lrNo
+            row.deliveryStatus = matchingDC.deliveryStatus || row.deliveryStatus
+            row.schoolType = matchingDC.dcOrderId?.school_type || row.schoolType
+            row.zone = matchingDC.dcOrderId?.zone || row.zone
             console.log(`Found DC ${row.dcId} for DcOrder ${row._id}`)
           } else {
             console.warn(`No DC found for DcOrder ${row._id} - this entry cannot be updated`)
@@ -1283,7 +1289,22 @@ export default function CompletedDCPage() {
           <Input placeholder="Employee/Executive" value={filters.employee} onChange={(e) => setFilters({ ...filters, employee: e.target.value })} />
           <Input placeholder="School Code" value={filters.schoolCode} onChange={(e) => setFilters({ ...filters, schoolCode: e.target.value })} />
           <Input placeholder="School Name" value={filters.schoolName} onChange={(e) => setFilters({ ...filters, schoolName: e.target.value })} />
-          <Input placeholder="School Type" value={filters.schoolType} onChange={(e) => setFilters({ ...filters, schoolType: e.target.value })} />
+          <Select
+            value={filters.schoolType || 'all'}
+            onValueChange={(v) => setFilters({ ...filters, schoolType: v === 'all' ? '' : v })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="School Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All School Types</SelectItem>
+              {SCHOOL_TYPE_OPTIONS.map((t) => (
+                <SelectItem key={t} value={t}>
+                  {t}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Input placeholder="DC No" value={filters.dcNo} onChange={(e) => setFilters({ ...filters, dcNo: e.target.value })} />
           <Select value={filters.dcCategory || 'all'} onValueChange={(v) => setFilters({ ...filters, dcCategory: v === 'all' ? '' : v })}>
             <SelectTrigger>
@@ -1310,8 +1331,24 @@ export default function CompletedDCPage() {
               <SelectItem value="Completed">Completed</SelectItem>
             </SelectContent>
           </Select>
-          <Input type="date" placeholder="From Date" value={filters.fromDate} onChange={(e) => setFilters({ ...filters, fromDate: e.target.value })} />
-          <Input type="date" placeholder="To Date" value={filters.toDate} onChange={(e) => setFilters({ ...filters, toDate: e.target.value })} />
+          <div className="space-y-2">
+            <Label htmlFor="completed-dc-from">From Date</Label>
+            <Input
+              id="completed-dc-from"
+              type="date"
+              value={filters.fromDate}
+              onChange={(e) => setFilters({ ...filters, fromDate: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="completed-dc-to">To Date</Label>
+            <Input
+              id="completed-dc-to"
+              type="date"
+              value={filters.toDate}
+              onChange={(e) => setFilters({ ...filters, toDate: e.target.value })}
+            />
+          </div>
         </div>
         <div className="mt-3 flex items-center gap-3">
           <Button onClick={load}>Search</Button>
@@ -1462,7 +1499,13 @@ export default function CompletedDCPage() {
                     <Button size="sm" onClick={(e) => { e.stopPropagation(); actionPlaceholder('Stock Return') }}>Stock Return</Button>
                   </TableCell>
                   <TableCell className="truncate max-w-[240px]">{r.remarks || '-'}</TableCell>
-                  <TableCell className="whitespace-nowrap">{r.deliveryStatus || '-'}</TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {r.deliveryStatus ? (
+                      <Badge variant="outline">{r.deliveryStatus}</Badge>
+                    ) : (
+                      '-'
+                    )}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

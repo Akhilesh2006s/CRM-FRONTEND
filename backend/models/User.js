@@ -25,7 +25,7 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['Super Admin', 'Admin', 'Finance Manager', 'Trainer', 'Coordinator', 'Senior Coordinator', 'Manager', 'Executive', 'Sales BDE', 'Executive Manager', 'Warehouse Executive', 'Warehouse Manager', 'Vendor'],
+    enum: ['Super Admin', 'Admin', 'Finance Manager', 'Trainer', 'Coordinator', 'Senior Coordinator', 'Manager', 'Executive', 'Sales BDE', 'Executive Manager', 'Warehouse Executive', 'Warehouse Manager', 'Vendor', 'Partner'],
     default: 'Executive',
   },
   // Support for multiple roles (for mobile app employees who can be both Sales BDE and Trainer)
@@ -58,6 +58,10 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: true,
   },
+  inactiveReason: {
+    type: String,
+    enum: ['on_leave', 'manual'],
+  },
   avatar: {
     type: String,
   },
@@ -86,7 +90,9 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: null,
   },
-  // Vendor-specific: products assigned to this vendor (only used when role is Vendor)
+  // Partner-specific: products assigned to this partner
+  partnerAssignedProducts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }],
+  // Legacy vendor field (kept for existing records)
   vendorAssignedProducts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }],
 }, {
   timestamps: true,

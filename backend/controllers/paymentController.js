@@ -133,9 +133,24 @@ const updatePayment = async (req, res) => {
       if (status === 'Approved') {
         updateData.approvedBy = req.user._id;
         updateData.approvedAt = new Date();
+        updateData.heldBy = null;
+        updateData.heldAt = null;
+        updateData.rejectedBy = null;
+        updateData.rejectedAt = null;
       } else if (status === 'Rejected') {
         updateData.rejectedBy = req.user._id;
         updateData.rejectedAt = new Date();
+        updateData.approvedBy = null;
+        updateData.approvedAt = null;
+        updateData.heldBy = null;
+        updateData.heldAt = null;
+      } else if (status === 'Hold') {
+        updateData.heldBy = req.user._id;
+        updateData.heldAt = new Date();
+        updateData.approvedBy = null;
+        updateData.approvedAt = null;
+        updateData.rejectedBy = null;
+        updateData.rejectedAt = null;
       }
     }
     if (referenceNumber !== undefined) updateData.referenceNumber = referenceNumber;
@@ -184,12 +199,19 @@ const updatePayment = async (req, res) => {
 // @access  Private
 const approvePayment = async (req, res) => {
   try {
-    const { status, rejectionReason, adminRemarks } = req.body;
+    const { status, rejectionReason, adminRemarks, referenceNumber, refNo } = req.body;
 
     const updateData = {
       status,
       adminRemarks: adminRemarks || null,
     };
+    if (referenceNumber !== undefined) {
+      updateData.referenceNumber = referenceNumber;
+      updateData.refNo = refNo !== undefined ? refNo : referenceNumber;
+    } else if (refNo !== undefined) {
+      updateData.refNo = refNo;
+      updateData.referenceNumber = refNo;
+    }
 
     if (status === 'Approved') {
       updateData.approvedBy = req.user._id;

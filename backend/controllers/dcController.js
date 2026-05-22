@@ -304,7 +304,7 @@ const getDCs = async (req, res) => {
       try {
         const populatedPromise = DC.find({ _id: { $in: dcs.map(dc => dc._id) } })
           .populate('saleId', 'customerName product quantity status poDocument')
-          .populate('dcOrderId', 'school_name school_code school_type contact_person contact_mobile email address location zone products dc_code')
+          .populate('dcOrderId', 'school_name school_code school_type contact_person contact_mobile email address location zone cluster_code products dc_code')
           .populate('employeeId', 'name email')
           .populate('createdBy', 'name email')
           .populate('submittedBy', 'name email')
@@ -1057,7 +1057,7 @@ const getCompletedDCs = async (req, res) => {
         const populatedPromise = DC.find({ _id: { $in: dcs.map(dc => dc._id) }, status: 'completed' })
           .select('_id saleId dcOrderId parentDcId clusterId dcType fulfillmentStatus employeeId customerName customerPhone customerEmail customerAddress product requestedQuantity availableQuantity deliverableQuantity status poPhotoUrl poDocument productDetails dcDate dcRemarks dcCategory dcNotes transport lrNo lrDate lrCost boxes transportArea deliveryStatus financeRemarks splApproval smeRemarks warehouseProcessedAt warehouseProcessedBy completedAt completedBy createdAt updatedAt')
           .populate('saleId', 'customerName product quantity status')
-          .populate('dcOrderId', 'school_name school_code school_type contact_person contact_mobile email address location zone products dc_code')
+          .populate('dcOrderId', 'school_name school_code school_type contact_person contact_mobile email address location zone cluster_code products dc_code')
           .populate('parentDcId', '_id dc_code status requestedQuantity deliverableQuantity fulfillmentStatus dcType')
           .populate('employeeId', 'name email')
           .populate('completedBy', 'name email')
@@ -1385,6 +1385,9 @@ const warehouseProcess = async (req, res) => {
     
     if (remarks) {
       dc.deliveryNotes = remarks;
+    }
+    if (!dc.deliveryStatus) {
+      dc.deliveryStatus = 'Pending';
     }
     await dc.save();
 
@@ -1965,6 +1968,32 @@ const updateDC = async (req, res) => {
     if (req.body.boxes !== undefined) dc.boxes = req.body.boxes;
     if (req.body.transportArea !== undefined) dc.transportArea = req.body.transportArea;
     if (req.body.deliveryStatus !== undefined) dc.deliveryStatus = req.body.deliveryStatus;
+    if (req.body.lrCost !== undefined) dc.lrCost = req.body.lrCost;
+
+    // Sync linked DcOrder when warehouse updates school/zone/cluster/contact
+    const dcOrderId = dc.dcOrderId?._id || dc.dcOrderId;
+    if (dcOrderId) {
+      const orderPatch = {};
+      if (req.body.school_type !== undefined) orderPatch.school_type = req.body.school_type;
+      if (req.body.zone !== undefined) orderPatch.zone = req.body.zone;
+      const clusterVal = req.body.cluster_code !== undefined ? req.body.cluster_code : req.body.cluster;
+      if (clusterVal !== undefined) orderPatch.cluster_code = clusterVal;
+      if (req.body.contactPerson !== undefined) orderPatch.contact_person = req.body.contactPerson;
+      if (req.body.contactMobile !== undefined) orderPatch.contact_mobile = req.body.contactMobile;
+      if (req.body.remarks !== undefined) orderPatch.remarks = req.body.remarks;
+      if (req.body.dcOrderId && typeof req.body.dcOrderId === 'object' && !req.body.dcOrderId._bsontype) {
+        const nested = req.body.dcOrderId;
+        if (nested.school_type !== undefined) orderPatch.school_type = nested.school_type;
+        if (nested.address !== undefined) orderPatch.address = nested.address;
+        if (nested.zone !== undefined) orderPatch.zone = nested.zone;
+        if (nested.cluster_code !== undefined) orderPatch.cluster_code = nested.cluster_code;
+        if (nested.contact_person !== undefined) orderPatch.contact_person = nested.contact_person;
+        if (nested.contact_mobile !== undefined) orderPatch.contact_mobile = nested.contact_mobile;
+      }
+      if (Object.keys(orderPatch).length > 0) {
+        await DcOrder.findByIdAndUpdate(dcOrderId, orderPatch);
+      }
+    }
     
     // Save without validating required fields that might not be present during update
     await dc.save({ validateBeforeSave: false });

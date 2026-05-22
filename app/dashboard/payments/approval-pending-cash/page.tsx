@@ -9,6 +9,7 @@ import { apiRequest } from '@/lib/api'
 import { toast } from 'sonner'
 import { Pencil } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { Label } from '@/components/ui/label'
 
 type PaymentRow = {
   _id: string
@@ -105,18 +106,24 @@ export default function ApprovalPendingCashPage() {
             value={filters.mobileNo}
             onChange={(e) => setFilters({ ...filters, mobileNo: e.target.value })}
           />
-          <Input
-            type="date"
-            placeholder="From Date"
-            value={filters.fromDate}
-            onChange={(e) => setFilters({ ...filters, fromDate: e.target.value })}
-          />
-          <Input
-            type="date"
-            placeholder="To Date"
-            value={filters.toDate}
-            onChange={(e) => setFilters({ ...filters, toDate: e.target.value })}
-          />
+          <div className="space-y-2">
+            <Label htmlFor="cash-pending-from">From Date</Label>
+            <Input
+              id="cash-pending-from"
+              type="date"
+              value={filters.fromDate}
+              onChange={(e) => setFilters({ ...filters, fromDate: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="cash-pending-to">To Date</Label>
+            <Input
+              id="cash-pending-to"
+              type="date"
+              value={filters.toDate}
+              onChange={(e) => setFilters({ ...filters, toDate: e.target.value })}
+            />
+          </div>
           <select
             className="w-full border rounded px-2 py-2 bg-neutral-900 text-white"
             value={filters.paymentMode}
@@ -160,7 +167,7 @@ export default function ApprovalPendingCashPage() {
                 <TableHead>Amount</TableHead>
                 <TableHead>Payment Mode</TableHead>
                 <TableHead>Payment Fin Year</TableHead>
-                <TableHead>Chq Date</TableHead>
+                <TableHead>Payment Date</TableHead>
                 <TableHead>Submission No</TableHead>
                 <TableHead>Handover Remarks</TableHead>
                 <TableHead>Action</TableHead>

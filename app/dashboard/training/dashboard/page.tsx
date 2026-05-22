@@ -151,9 +151,16 @@ export default function TrainersDashboardPage() {
     return Array.from(trainerMap.values())
   }, [trainings, trainers])
 
+  const visibleTrainerData = useMemo(() => {
+    if (filters.trainerId) {
+      return trainerData.filter((t) => t.id === filters.trainerId)
+    }
+    return trainerData
+  }, [trainerData, filters.trainerId])
+
   // Sort trainer data
   const sortedTrainerData = useMemo(() => {
-    const sorted = [...trainerData]
+    const sorted = [...visibleTrainerData]
     
     if (sortBy === 'name') {
       sorted.sort((a, b) => {
@@ -168,7 +175,7 @@ export default function TrainersDashboardPage() {
     }
     
     return sorted
-  }, [trainerData, sortBy, sortOrder])
+  }, [visibleTrainerData, sortBy, sortOrder])
 
   const exportToExcel = () => {
     const headers = ['Trainer Name', 'Trainer Type', 'Levels', ...dateColumns]
@@ -257,8 +264,8 @@ export default function TrainersDashboardPage() {
             <Input className="bg-white text-neutral-900" placeholder="School Code" value={filters.schoolCode} onChange={(e) => setFilters(f => ({ ...f, schoolCode: e.target.value }))} />
           </div>
           <div>
-            <label className="text-sm font-medium text-neutral-700 mb-1 block">By School Name</label>
-            <Input className="bg-white text-neutral-900" placeholder="By School Name" value={filters.schoolName} onChange={(e) => setFilters(f => ({ ...f, schoolName: e.target.value }))} />
+            <label className="text-sm font-medium text-neutral-700 mb-1 block">School Name</label>
+            <Input className="bg-white text-neutral-900" placeholder="School Name" value={filters.schoolName} onChange={(e) => setFilters(f => ({ ...f, schoolName: e.target.value }))} />
           </div>
           <div>
             <label className="text-sm font-medium text-neutral-700 mb-1 block">Select Trainer Type</label>

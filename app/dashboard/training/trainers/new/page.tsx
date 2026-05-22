@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -8,8 +8,10 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { SearchableSelect } from '@/components/ui/searchable-select'
 import { toast } from 'sonner'
 import { apiRequest } from '@/lib/api'
+import { INDIAN_STATES } from '@/lib/indianStatesCities'
 
 export default function AddTrainerPage() {
   const router = useRouter()
@@ -27,6 +29,50 @@ export default function AddTrainerPage() {
   const [mobileError, setMobileError] = useState<string | null>(null)
   const [checkingMobile, setCheckingMobile] = useState(false)
   const debounceTimer = useRef<NodeJS.Timeout | null>(null)
+  const [zones, setZones] = useState<string[]>([])
+  const [clustersByZone, setClustersByZone] = useState<Record<string, string[]>>({})
+
+  useEffect(() => {
+    ;(async () => {
+      try {
+        const [pairsRaw, zonesRaw] = await Promise.all([
+          apiRequest<{ zone?: string; cluster?: string }[]>('/zones-clusters').catch(() => []),
+          apiRequest<{ name?: string }[]>('/zones').catch(() => []),
+        ])
+        const pairs = Array.isArray(pairsRaw) ? pairsRaw : []
+        const zoneDocs = Array.isArray(zonesRaw) ? zonesRaw : []
+        const zoneMap: Record<string, string[]> = {}
+        pairs.forEach((zc) => {
+          const zone = (zc.zone || '').trim()
+          if (!zone) return
+          if (!zoneMap[zone]) zoneMap[zone] = []
+          const cl = (zc.cluster || '').trim()
+          if (cl && !zoneMap[zone].includes(cl)) zoneMap[zone].push(cl)
+        })
+        const zoneNamesFromApi = zoneDocs.map((z) => (z.name || '').trim()).filter(Boolean)
+        const allZones = [...new Set([...Object.keys(zoneMap), ...zoneNamesFromApi])].sort((a, b) =>
+          a.localeCompare(b)
+        )
+        setZones(allZones)
+        setClustersByZone(zoneMap)
+      } catch (e) {
+        console.error('Failed to load zones for trainer', e)
+      }
+    })()
+  }, [])
+
+  const stateOptions = useMemo(
+    () => INDIAN_STATES.map((s) => ({ value: s, label: s })),
+    []
+  )
+  const zoneOptions = useMemo(
+    () => zones.map((z) => ({ value: z, label: z })),
+    [zones]
+  )
+  const clusterOptions = useMemo(() => {
+    const list = form.zone ? clustersByZone[form.zone] || [] : []
+    return list.map((c) => ({ value: c, label: c }))
+  }, [form.zone, clustersByZone])
 
   const checkMobileDuplicate = async (mobile: string) => {
     if (!mobile || mobile.length < 10) {
@@ -143,17 +189,45 @@ export default function AddTrainerPage() {
               </SelectContent>
             </Select>
           </div>
-          <div>
-            <Label>State</Label>
-            <Input className="bg-white text-neutral-900" value={form.state} onChange={(e)=>setForm(f=>({...f,state:e.target.value}))} />
+          <div className="space-y-2">
+            <Label htmlFor="trainer-state">State</Label>
+            <SearchableSelect
+              id="trainer-state"
+              value={form.state}
+              onValueChange={(v) => setForm((f) => ({ ...f, state: v }))}
+              placeholder="Select State"
+              searchPlaceholder="Search states…"
+              options={stateOptions}
+            />
           </div>
-          <div>
-            <Label>Zone</Label>
-            <Input className="bg-white text-neutral-900" value={form.zone} onChange={(e)=>setForm(f=>({...f,zone:e.target.value}))} />
+          <div className="space-y-2">
+            <Label htmlFor="trainer-zone">Zone</Label>
+            <SearchableSelect
+              id="trainer-zone"
+              value={form.zone}
+              onValueChange={(v) => setForm((f) => ({ ...f, zone: v, cluster: '' }))}
+              placeholder="Select Zone"
+              searchPlaceholder="Search zones…"
+              options={zoneOptions}
+              emptyText={zones.length === 0 ? 'Add zones under Users → Zones' : 'No results found.'}
+            />
           </div>
-          <div>
-            <Label>Cluster</Label>
-            <Input className="bg-white text-neutral-900" value={form.cluster} onChange={(e)=>setForm(f=>({...f,cluster:e.target.value}))} />
+          <div className="space-y-2">
+            <Label htmlFor="trainer-cluster">Cluster</Label>
+            <SearchableSelect
+              id="trainer-cluster"
+              value={form.cluster}
+              onValueChange={(v) => setForm((f) => ({ ...f, cluster: v }))}
+              placeholder={form.zone ? 'Select Cluster' : 'Select zone first'}
+              searchPlaceholder="Search clusters…"
+              options={clusterOptions}
+              disabled={!form.zone}
+              emptyText={
+                form.zone && clusterOptions.length === 0
+                  ? 'Link clusters to this zone in Users → Zones'
+                  : 'No results found.'
+              }
+            />
           </div>
           <div className="md:col-span-2">
             <Label>Address</Label>

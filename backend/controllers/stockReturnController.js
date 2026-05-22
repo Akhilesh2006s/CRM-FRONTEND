@@ -530,7 +530,8 @@ const managerAction = async (req, res) => {
       // Update stock for approved products
       const Warehouse = require('../models/Warehouse');
       const StockMovement = require('../models/StockMovement');
-      
+      let stockWasUpdated = false;
+
       for (const product of returnDoc.products) {
         if ((product.managerDecision === 'Approve' || product.managerDecision === 'Partial Approve') && 
             product.approvedQty > 0 && product.stockBucket) {
@@ -560,7 +561,8 @@ const managerAction = async (req, res) => {
               }
               
               await warehouseItem.save();
-              
+              stockWasUpdated = true;
+
               // Record stock movement
               await StockMovement.create({
                 productId: warehouseItem._id,
@@ -579,9 +581,11 @@ const managerAction = async (req, res) => {
         }
       }
       
-      returnDoc.stockUpdatedAt = new Date();
-      returnDoc.stockUpdatedBy = req.user._id;
-      newStatus = 'Stock Updated';
+      if (stockWasUpdated) {
+        returnDoc.stockUpdatedAt = new Date();
+        returnDoc.stockUpdatedBy = req.user._id;
+        newStatus = 'Stock Updated';
+      }
     } else if (action === 'reject') {
       newStatus = 'Rejected';
       returnDoc.rejectionReason = rejectionReason || managerRemarks;

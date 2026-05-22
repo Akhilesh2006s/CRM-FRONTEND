@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { apiRequest } from '@/lib/api'
 import { toast } from 'sonner'
+import { Label } from '@/components/ui/label'
+import { PAYMENT_METHOD_OPTIONS } from '@/lib/paymentOptions'
 
 type PaymentRow = {
   _id: string
@@ -35,7 +37,7 @@ type PaymentRow = {
   txnNo?: string
 }
 
-const PAYMENT_MODES = ['Cash', 'Cheque', 'Online Payment']
+const PAYMENT_MODES = [...PAYMENT_METHOD_OPTIONS]
 
 export default function ApprovedPaymentsPage() {
   const [rows, setRows] = useState<PaymentRow[]>([])
@@ -104,18 +106,24 @@ export default function ApprovedPaymentsPage() {
             value={filters.mobileNo}
             onChange={(e) => setFilters({ ...filters, mobileNo: e.target.value })}
           />
-          <Input
-            type="date"
-            placeholder="From Date"
-            value={filters.fromDate}
-            onChange={(e) => setFilters({ ...filters, fromDate: e.target.value })}
-          />
-          <Input
-            type="date"
-            placeholder="To Date"
-            value={filters.toDate}
-            onChange={(e) => setFilters({ ...filters, toDate: e.target.value })}
-          />
+          <div className="space-y-2">
+            <Label htmlFor="approved-from-date">From Date</Label>
+            <Input
+              id="approved-from-date"
+              type="date"
+              value={filters.fromDate}
+              onChange={(e) => setFilters({ ...filters, fromDate: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="approved-to-date">To Date</Label>
+            <Input
+              id="approved-to-date"
+              type="date"
+              value={filters.toDate}
+              onChange={(e) => setFilters({ ...filters, toDate: e.target.value })}
+            />
+          </div>
           <select
             className="w-full border rounded px-2 py-2 bg-neutral-900 text-white"
             value={filters.paymentMode}

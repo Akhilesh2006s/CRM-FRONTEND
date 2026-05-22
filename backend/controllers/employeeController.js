@@ -2,13 +2,17 @@ const User = require('../models/User');
 const Leave = require('../models/Leave');
 const DC = require('../models/DC');
 const Lead = require('../models/Lead');
+const Attendance = require('../models/Attendance');
 const ExcelJS = require('exceljs');
+const { syncEmployeesAfterLeave } = require('../utils/leaveStatusSync');
 
 // @desc    Get all employees
 // @route   GET /api/employees
 // @access  Private
 const getEmployees = async (req, res) => {
   try {
+    await syncEmployeesAfterLeave();
+
     const { isActive, role, department } = req.query;
     const filter = {};
 
@@ -18,6 +22,7 @@ const getEmployees = async (req, res) => {
 
     const employees = await User.find(filter)
       .select('-password')
+      .populate('executiveManagerId', 'name email')
       .sort({ createdAt: -1 });
 
     res.json(employees);
@@ -67,6 +72,13 @@ const createEmployee = async (req, res) => {
       }
     }
     
+    if (body.mobile && (!body.phone || body.phone === '0')) {
+      body.phone = body.mobile;
+    }
+    if (!body.phone) {
+      body.phone = body.mobile || '';
+    }
+
     const employee = await User.create(body);
     const employeeData = await User.findById(employee._id).select('-password');
     res.status(201).json(employeeData);
@@ -111,12 +123,21 @@ const updateEmployee = async (req, res) => {
       }
     }
 
+    if (req.body.isActive === true) {
+      employee.isActive = true;
+      employee.inactiveReason = undefined;
+    }
+
     // Update fields
     Object.keys(req.body).forEach(key => {
-      if (key !== '_id' && key !== '__v') {
+      if (key !== '_id' && key !== '__v' && key !== 'inactiveReason') {
         employee[key] = req.body[key];
       }
     });
+
+    if (req.body.isActive === false && req.body.inactiveReason) {
+      employee.inactiveReason = req.body.inactiveReason;
+    }
 
     // If password is being updated, ensure it's set (will be hashed by pre-save hook)
     if (req.body.password) {
@@ -167,86 +188,119 @@ const getEmployeeLeaves = async (req, res) => {
   }
 };
 
+function formatAttendanceLocation(att) {
+  if (att.town && att.pincode) return `${att.town} (${att.pincode})`;
+  if (att.town) return att.town;
+  if (att.latitude != null && att.longitude != null) {
+    return `${att.latitude.toFixed(5)}, ${att.longitude.toFixed(5)}`;
+  }
+  return '';
+}
+
+async function buildEmployeeTrackingRow(employee, fromDate, toDate) {
+  const dcFilter = {
+    $or: [{ employeeId: employee._id }, { createdBy: employee._id }],
+  };
+
+  const leadFilter = {
+    $or: [
+      { createdBy: employee._id },
+      { managed_by: employee._id },
+      { assigned_by: employee._id },
+    ],
+  };
+
+  const attendanceFilter = { employeeId: employee._id };
+
+  if (fromDate || toDate) {
+    const dateFilter = {};
+    if (fromDate) dateFilter.$gte = new Date(fromDate);
+    if (toDate) dateFilter.$lte = new Date(toDate + 'T23:59:59.999Z');
+
+    dcFilter.createdAt = dateFilter;
+    leadFilter.createdAt = dateFilter;
+    attendanceFilter.$or = [
+      { startTime: dateFilter },
+      { endTime: dateFilter },
+      { createdAt: dateFilter },
+    ];
+  }
+
+  const [dcs, leads, attendances] = await Promise.all([
+    DC.find(dcFilter).populate('dcOrderId', 'location zone').sort({ createdAt: 1 }),
+    Lead.find(leadFilter).sort({ createdAt: 1 }),
+    Attendance.find(attendanceFilter).sort({ startTime: 1 }),
+  ]);
+
+  const allActivities = [
+    ...dcs.map((dc) => ({
+      type: 'DC',
+      date: dc.createdAt,
+      location: dc.dcOrderId?.location || dc.customerAddress || '',
+    })),
+    ...leads.map((lead) => ({
+      type: 'Lead',
+      date: lead.createdAt,
+      location: lead.location || '',
+    })),
+    ...attendances.map((att) => ({
+      type: 'Attendance',
+      date: att.endTime || att.startTime || att.createdAt,
+      location: formatAttendanceLocation(att),
+      latitude: att.latitude,
+      longitude: att.longitude,
+    })),
+  ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  const started =
+    allActivities.length > 0 ? allActivities[0].date : employee.createdAt;
+  const lastActivity =
+    allActivities.length > 0 ? allActivities[allActivities.length - 1] : null;
+  const lastUsed = lastActivity
+    ? lastActivity.date
+    : employee.lastLogin || employee.updatedAt;
+  let lastLocation = lastActivity?.location || '';
+  const lastLat = lastActivity?.latitude;
+  const lastLng = lastActivity?.longitude;
+
+  if (!lastLocation && employee.zone) {
+    lastLocation = employee.zone;
+  }
+
+  return {
+    _id: employee._id,
+    employeeName: employee.name,
+    mobileNo: employee.mobile || employee.phone || '',
+    zone: employee.zone || '',
+    started,
+    lastUsed,
+    lastLocation,
+    lastLatitude: lastLat,
+    lastLongitude: lastLng,
+    logCount: allActivities.length,
+  };
+}
+
 // @desc    Get employee tracking data
 // @route   GET /api/employees/tracking
 // @access  Private
 const getEmployeeTracking = async (req, res) => {
   try {
     const { employeeId, fromDate, toDate } = req.query;
-    
-    // Get all active employees
-    const employeeFilter = { isActive: true, role: { $in: ['Executive', 'Manager'] } };
-    if (employeeId) employeeFilter._id = employeeId;
-    
+
+    const employeeFilter = { isActive: true };
+    if (employeeId) {
+      employeeFilter._id = employeeId;
+    } else {
+      employeeFilter.role = { $in: ['Executive', 'Manager'] };
+    }
+
     const employees = await User.find(employeeFilter).select('-password');
-    
-    // Get tracking data for each employee
+
     const trackingData = await Promise.all(
-      employees.map(async (employee) => {
-        // Get DCs created by or assigned to employee
-        const dcFilter = {
-          $or: [
-            { employeeId: employee._id },
-            { createdBy: employee._id }
-          ]
-        };
-        
-        // Get Leads created by or managed by employee
-        const leadFilter = {
-          $or: [
-            { createdBy: employee._id },
-            { managed_by: employee._id },
-            { assigned_by: employee._id }
-          ]
-        };
-        
-        if (fromDate || toDate) {
-          const dateFilter = {};
-          if (fromDate) dateFilter.$gte = new Date(fromDate);
-          if (toDate) dateFilter.$lte = new Date(toDate + 'T23:59:59.999Z');
-          
-          dcFilter.createdAt = dateFilter;
-          leadFilter.createdAt = dateFilter;
-        }
-        
-        const dcs = await DC.find(dcFilter)
-          .populate('dcOrderId', 'location zone')
-          .sort({ createdAt: 1 });
-        
-        const leads = await Lead.find(leadFilter).sort({ createdAt: 1 });
-        
-        // Combine all activities
-        const allActivities = [
-          ...dcs.map(dc => ({
-            type: 'DC',
-            date: dc.createdAt,
-            location: dc.dcOrderId?.location || dc.customerAddress || ''
-          })),
-          ...leads.map(lead => ({
-            type: 'Lead',
-            date: lead.createdAt,
-            location: lead.location || ''
-          }))
-        ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-        
-        const started = allActivities.length > 0 ? allActivities[0].date : employee.createdAt;
-        const lastUsed = allActivities.length > 0 ? allActivities[allActivities.length - 1].date : employee.lastLogin || employee.updatedAt;
-        const lastLocation = allActivities.length > 0 ? allActivities[allActivities.length - 1].location : '';
-        const logCount = allActivities.length;
-        
-        return {
-          _id: employee._id,
-          employeeName: employee.name,
-          mobileNo: employee.mobile || employee.phone || '',
-          zone: employee.zone || '',
-          started: started,
-          lastUsed: lastUsed,
-          lastLocation: lastLocation,
-          logCount: logCount,
-        };
-      })
+      employees.map((employee) => buildEmployeeTrackingRow(employee, fromDate, toDate))
     );
-    
+
     res.json(trackingData);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -259,72 +313,18 @@ const getEmployeeTracking = async (req, res) => {
 const exportEmployeeTracking = async (req, res) => {
   try {
     const { employeeId, fromDate, toDate } = req.query;
-    
-    const employeeFilter = { isActive: true, role: { $in: ['Executive', 'Manager'] } };
-    if (employeeId) employeeFilter._id = employeeId;
-    
+
+    const employeeFilter = { isActive: true };
+    if (employeeId) {
+      employeeFilter._id = employeeId;
+    } else {
+      employeeFilter.role = { $in: ['Executive', 'Manager'] };
+    }
+
     const employees = await User.find(employeeFilter).select('-password');
-    
+
     const trackingData = await Promise.all(
-      employees.map(async (employee) => {
-        const dcFilter = {
-          $or: [
-            { employeeId: employee._id },
-            { createdBy: employee._id }
-          ]
-        };
-        
-        const leadFilter = {
-          $or: [
-            { createdBy: employee._id },
-            { managed_by: employee._id },
-            { assigned_by: employee._id }
-          ]
-        };
-        
-        if (fromDate || toDate) {
-          const dateFilter = {};
-          if (fromDate) dateFilter.$gte = new Date(fromDate);
-          if (toDate) dateFilter.$lte = new Date(toDate + 'T23:59:59.999Z');
-          
-          dcFilter.createdAt = dateFilter;
-          leadFilter.createdAt = dateFilter;
-        }
-        
-        const dcs = await DC.find(dcFilter)
-          .populate('dcOrderId', 'location zone')
-          .sort({ createdAt: 1 });
-        
-        const leads = await Lead.find(leadFilter).sort({ createdAt: 1 });
-        
-        const allActivities = [
-          ...dcs.map(dc => ({
-            type: 'DC',
-            date: dc.createdAt,
-            location: dc.dcOrderId?.location || dc.customerAddress || ''
-          })),
-          ...leads.map(lead => ({
-            type: 'Lead',
-            date: lead.createdAt,
-            location: lead.location || ''
-          }))
-        ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-        
-        const started = allActivities.length > 0 ? allActivities[0].date : employee.createdAt;
-        const lastUsed = allActivities.length > 0 ? allActivities[allActivities.length - 1].date : employee.lastLogin || employee.updatedAt;
-        const lastLocation = allActivities.length > 0 ? allActivities[allActivities.length - 1].location : '';
-        const logCount = allActivities.length;
-        
-        return {
-          employeeName: employee.name,
-          mobileNo: employee.mobile || employee.phone || '',
-          zone: employee.zone || '',
-          started: started,
-          lastUsed: lastUsed,
-          lastLocation: lastLocation,
-          logCount: logCount,
-        };
-      })
+      employees.map((employee) => buildEmployeeTrackingRow(employee, fromDate, toDate))
     );
     
     const workbook = new ExcelJS.Workbook();

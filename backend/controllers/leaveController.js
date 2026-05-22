@@ -1,18 +1,31 @@
 const Leave = require('../models/Leave');
+const User = require('../models/User');
+const { syncEmployeesAfterLeave, setEmployeeOnLeave } = require('../utils/leaveStatusSync');
 
-// @desc    Get all leaves
-// @route   GET /api/leaves
-// @access  Private
+const LEAVE_ORG_VIEW_ROLES = ['Admin', 'Super Admin', 'Executive Manager', 'Manager'];
+
 const getLeaves = async (req, res) => {
   try {
+    await syncEmployeesAfterLeave();
+
     const { status, employeeId } = req.query;
     const filter = {};
+    const role = req.user?.role;
 
     if (status) filter.status = status;
-    if (employeeId) filter.employeeId = employeeId;
+
+    if (LEAVE_ORG_VIEW_ROLES.includes(role)) {
+      if (employeeId) filter.employeeId = employeeId;
+    } else {
+      filter.employeeId = req.user._id;
+    }
 
     const leaves = await Leave.find(filter)
-      .populate('employeeId', 'name email')
+      .populate({
+        path: 'employeeId',
+        select: 'name email phone mobile executiveManagerId',
+        populate: { path: 'executiveManagerId', select: 'name email' },
+      })
       .populate('approvedBy', 'name email')
       .sort({ createdAt: -1 });
 
@@ -22,9 +35,6 @@ const getLeaves = async (req, res) => {
   }
 };
 
-// @desc    Create leave request
-// @route   POST /api/leaves/create
-// @access  Private
 const createLeave = async (req, res) => {
   try {
     const { startDate, endDate } = req.body;
@@ -46,12 +56,24 @@ const createLeave = async (req, res) => {
   }
 };
 
-// @desc    Approve/Reject leave
-// @route   PUT /api/leaves/:id/approve
-// @access  Private
 const approveLeave = async (req, res) => {
   try {
     const { status, rejectionReason } = req.body;
+
+    const leave = await Leave.findById(req.params.id).populate('employeeId');
+    if (!leave) {
+      return res.status(404).json({ message: 'Leave not found' });
+    }
+
+    const approverRole = req.user.role;
+    if (approverRole === 'Executive Manager') {
+      const emp = leave.employeeId;
+      if (!emp || emp.executiveManagerId?.toString() !== req.user._id.toString()) {
+        return res.status(403).json({
+          message: 'You can only approve leaves for employees assigned to you',
+        });
+      }
+    }
 
     const updateData = {
       status,
@@ -63,19 +85,17 @@ const approveLeave = async (req, res) => {
       updateData.rejectionReason = rejectionReason;
     }
 
-    const leave = await Leave.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true }
-    )
-      .populate('employeeId', 'name email')
+    const updatedLeave = await Leave.findByIdAndUpdate(req.params.id, updateData, { new: true })
+      .populate('employeeId', 'name email phone mobile executiveManagerId')
       .populate('approvedBy', 'name email');
 
-    if (!leave) {
-      return res.status(404).json({ message: 'Leave not found' });
+    if (status === 'Approved' && leave.employeeId?._id) {
+      await setEmployeeOnLeave(leave.employeeId._id);
     }
 
-    res.json(leave);
+    await syncEmployeesAfterLeave();
+
+    res.json(updatedLeave);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -86,4 +106,3 @@ module.exports = {
   createLeave,
   approveLeave,
 };
-

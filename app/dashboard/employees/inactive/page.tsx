@@ -5,8 +5,18 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { apiRequest } from '@/lib/api'
+import { toast } from 'sonner'
 
-type Employee = { _id: string; name: string; email: string; phone?: string; role: string; department?: string }
+type Employee = {
+  _id: string
+  name: string
+  email: string
+  phone?: string
+  mobile?: string
+  role: string
+  department?: string
+  inactiveReason?: string
+}
 
 export default function InactiveEmployeesPage() {
   const [items, setItems] = useState<Employee[]>([])
@@ -25,13 +35,42 @@ export default function InactiveEmployeesPage() {
 
   useEffect(() => { load() }, [])
 
-  const filtered = items.filter(e => e.name.toLowerCase().includes(q.toLowerCase()) || e.email.toLowerCase().includes(q.toLowerCase()) || (e.phone || '').includes(q))
+  const displayMobile = (e: Employee) =>
+    e.mobile || (e.phone && e.phone !== '0' ? e.phone : '') || '-'
+
+  const reasonLabel = (r?: string) => {
+    if (r === 'on_leave') return 'On leave'
+    if (r === 'manual') return 'Deactivated'
+    return r || '-'
+  }
+
+  const reactivate = async (id: string, name: string) => {
+    if (!confirm(`Reactivate ${name}?`)) return
+    try {
+      await apiRequest(`/employees/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ isActive: true, inactiveReason: null }),
+      })
+      toast.success(`${name} reactivated`)
+      load()
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to reactivate')
+    }
+  }
+
+  const filtered = items.filter(
+    (e) =>
+      e.name.toLowerCase().includes(q.toLowerCase()) ||
+      e.email.toLowerCase().includes(q.toLowerCase()) ||
+      (e.phone || '').includes(q) ||
+      (e.mobile || '').includes(q)
+  )
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Inactive Employees List</h1>
       <div className="flex gap-2">
-        <Input placeholder="Search name/email/phone" value={q} onChange={(e) => setQ(e.target.value)} />
+        <Input placeholder="Search name/email/mobile" value={q} onChange={(e) => setQ(e.target.value)} />
         <Button onClick={load}>Refresh</Button>
       </div>
       <Card className="p-0 overflow-x-auto">
@@ -40,33 +79,34 @@ export default function InactiveEmployeesPage() {
             <tr className="text-neutral-600 border-b bg-neutral-50">
               <th className="py-2 px-3 text-left">Name</th>
               <th className="py-2 px-3 text-left">Email</th>
-              <th className="py-2 px-3">Phone</th>
+              <th className="py-2 px-3">Mobile</th>
               <th className="py-2 px-3">Role</th>
-              <th className="py-2 px-3">Department</th>
+              <th className="py-2 px-3">Reason</th>
+              <th className="py-2 px-3">Action</th>
             </tr>
           </thead>
           <tbody>
-            {!loading && filtered.map((e) => (
-              <tr key={e._id} className="border-b last:border-0">
-                <td className="py-2 px-3">{e.name}</td>
-                <td className="py-2 px-3">{e.email}</td>
-                <td className="py-2 px-3 text-center">{e.phone || '-'}</td>
-                <td className="py-2 px-3 text-center">{e.role}</td>
-                <td className="py-2 px-3 text-center">{e.department || '-'}</td>
-              </tr>
-            ))}
+            {!loading &&
+              filtered.map((e) => (
+                <tr key={e._id} className="border-b last:border-0">
+                  <td className="py-2 px-3">{e.name}</td>
+                  <td className="py-2 px-3">{e.email}</td>
+                  <td className="py-2 px-3 text-center">{displayMobile(e)}</td>
+                  <td className="py-2 px-3 text-center">{e.role}</td>
+                  <td className="py-2 px-3 text-center">{reasonLabel(e.inactiveReason)}</td>
+                  <td className="py-2 px-3 text-right">
+                    <Button size="sm" onClick={() => reactivate(e._id, e.name)}>
+                      Reactivate
+                    </Button>
+                  </td>
+                </tr>
+              ))}
           </tbody>
         </table>
-        {!loading && filtered.length === 0 && <div className="p-4 text-neutral-500">No inactive employees</div>}
+        {!loading && filtered.length === 0 && (
+          <div className="p-4 text-neutral-500">No inactive employees</div>
+        )}
       </Card>
     </div>
   )
 }
-
-
-
-
-
-
-
-

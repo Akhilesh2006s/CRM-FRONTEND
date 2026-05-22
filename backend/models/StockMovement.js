@@ -18,6 +18,9 @@ const stockMovementSchema = new mongoose.Schema({
   reason: {
     type: String,
   },
+  vendor: {
+    type: String,
+  },
   relatedSaleId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Sale',

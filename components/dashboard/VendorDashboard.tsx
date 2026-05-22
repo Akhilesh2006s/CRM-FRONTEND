@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Package, Truck, Clock, RefreshCw, TrendingUp, PieChart as PieChartIcon, BarChart3 } from 'lucide-react'
 import { apiRequest } from '@/lib/api'
@@ -24,10 +25,10 @@ type PartnerDashboardData = {
 }
 
 const SUMMARY_CARDS = [
-  { key: 'totalAssignedProducts', label: 'Total Assigned Products', icon: Package, color: 'from-indigo-50 to-indigo-100', border: 'border-indigo-200', text: 'text-indigo-700' },
-  { key: 'totalDcQuantityLast30Days', label: 'Total DC Quantity (Last 30 Days)', icon: Truck, color: 'from-emerald-50 to-emerald-100', border: 'border-emerald-200', text: 'text-emerald-700' },
-  { key: 'pendingDcQuantity', label: 'Pending DC Quantity', icon: Clock, color: 'from-amber-50 to-amber-100', border: 'border-amber-200', text: 'text-amber-700' },
-  { key: 'totalReturns', label: 'Total Returns', icon: RefreshCw, color: 'from-rose-50 to-rose-100', border: 'border-rose-200', text: 'text-rose-700' },
+  { key: 'totalAssignedProducts', label: 'Total Assigned Products', icon: Package, color: 'from-indigo-50 to-indigo-100', border: 'border-indigo-200', text: 'text-indigo-700', href: '/dashboard/stocks' },
+  { key: 'totalDcQuantityLast30Days', label: 'Total DC Quantity (Last 30 Days)', icon: Truck, color: 'from-emerald-50 to-emerald-100', border: 'border-emerald-200', text: 'text-emerald-700', href: '/dashboard/dcs' },
+  { key: 'pendingDcQuantity', label: 'Pending DC Quantity', icon: Clock, color: 'from-amber-50 to-amber-100', border: 'border-amber-200', text: 'text-amber-700', href: '/dashboard/dcs' },
+  { key: 'totalReturns', label: 'Total Returns', icon: RefreshCw, color: 'from-rose-50 to-rose-100', border: 'border-rose-200', text: 'text-rose-700', href: '/dashboard/dcs' },
 ]
 
 export default function PartnerDashboard() {
@@ -89,8 +90,10 @@ export default function PartnerDashboard() {
         {SUMMARY_CARDS.map((config) => {
           const Icon = config.icon
           const value = summary[config.key as keyof typeof summary] ?? 0
-          return (
-            <Card key={config.key} className={`p-5 bg-gradient-to-br ${config.color} border-2 ${config.border} shadow-lg`}>
+          const card = (
+            <Card
+              className={`p-5 bg-gradient-to-br ${config.color} border-2 ${config.border} shadow-lg hover:shadow-xl transition-all cursor-pointer h-full`}
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <div className={`text-xs font-semibold ${config.text} mb-1 uppercase tracking-wide`}>{config.label}</div>
@@ -99,6 +102,13 @@ export default function PartnerDashboard() {
                 <Icon className={`w-8 h-8 ${config.text.replace('700', '500')}`} />
               </div>
             </Card>
+          )
+          return config.href ? (
+            <Link key={config.key} href={config.href} className="block">
+              {card}
+            </Link>
+          ) : (
+            <div key={config.key}>{card}</div>
           )
         })}
       </div>

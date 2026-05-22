@@ -61,7 +61,6 @@ export default function PaymentsDonePage() {
   const [filteredPayments, setFilteredPayments] = useState<Payment[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
-  const [statusFilter, setStatusFilter] = useState<string>('all')
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<string>('all')
 
   useEffect(() => {
@@ -70,7 +69,7 @@ export default function PaymentsDonePage() {
 
   useEffect(() => {
     filterPayments()
-  }, [payments, searchTerm, statusFilter, paymentMethodFilter])
+  }, [payments, searchTerm, paymentMethodFilter])
 
   async function loadPayments() {
     try {
@@ -173,45 +172,36 @@ export default function PaymentsDonePage() {
   }
 
   const totalAmount = filteredPayments.reduce((sum, p) => sum + (p.amount || 0), 0)
-  const approvedAmount = filteredPayments
-    .filter((p) => p.status === 'Approved')
-    .reduce((sum, p) => sum + (p.amount || 0), 0)
-  const pendingAmount = filteredPayments
-    .filter((p) => p.status === 'Pending')
-    .reduce((sum, p) => sum + (p.amount || 0), 0)
+  const approvedAmount = filteredPayments.reduce((sum, p) => sum + (p.amount || 0), 0)
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Payments Done</h1>
+        <div>
+          <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Payments Done</h1>
+          <p className="text-sm text-neutral-500 mt-1">Approved payments only</p>
+        </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="p-4">
-          <div className="text-sm text-neutral-600 mb-1">Total Payments</div>
+          <div className="text-sm text-neutral-600 mb-1">Total Approved</div>
           <div className="text-2xl font-semibold text-neutral-900">{filteredPayments.length}</div>
           <div className="text-sm text-neutral-500 mt-1">₹{totalAmount.toLocaleString('en-IN')}</div>
         </Card>
         <Card className="p-4">
-          <div className="text-sm text-neutral-600 mb-1">Approved</div>
+          <div className="text-sm text-neutral-600 mb-1">Approved Amount</div>
           <div className="text-2xl font-semibold text-green-600">
-            {filteredPayments.filter((p) => p.status === 'Approved').length}
+            {filteredPayments.length}
           </div>
           <div className="text-sm text-neutral-500 mt-1">₹{approvedAmount.toLocaleString('en-IN')}</div>
-        </Card>
-        <Card className="p-4">
-          <div className="text-sm text-neutral-600 mb-1">Pending</div>
-          <div className="text-2xl font-semibold text-yellow-600">
-            {filteredPayments.filter((p) => p.status === 'Pending').length}
-          </div>
-          <div className="text-sm text-neutral-500 mt-1">₹{pendingAmount.toLocaleString('en-IN')}</div>
         </Card>
       </div>
 
       {/* Filters */}
       <Card className="p-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-neutral-400 w-4 h-4" />
             <Input
@@ -221,18 +211,6 @@ export default function PaymentsDonePage() {
               className="pl-10 bg-white text-neutral-900"
             />
           </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="bg-white text-neutral-900">
-              <SelectValue placeholder="Filter by Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="Pending">Pending</SelectItem>
-              <SelectItem value="Approved">Approved</SelectItem>
-              <SelectItem value="Hold">Hold</SelectItem>
-              <SelectItem value="Rejected">Rejected</SelectItem>
-            </SelectContent>
-          </Select>
           <Select value={paymentMethodFilter} onValueChange={setPaymentMethodFilter}>
             <SelectTrigger className="bg-white text-neutral-900">
               <SelectValue placeholder="Filter by Payment Method" />

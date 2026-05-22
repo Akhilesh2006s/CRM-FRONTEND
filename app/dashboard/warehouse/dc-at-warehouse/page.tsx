@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Input } from '@/components/ui/input'
@@ -10,7 +10,9 @@ import { Textarea } from '@/components/ui/textarea'
 import { apiRequest } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
 import { Pencil } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { SearchableSelect } from '@/components/ui/searchable-select'
+import { SCHOOL_TYPE_OPTIONS, loadZoneClusterOptions } from '@/lib/warehouseOptions'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useProducts } from '@/hooks/useProducts'
@@ -62,6 +64,7 @@ type DC = {
     contact_person?: string
     contact_mobile?: string
     zone?: string
+    cluster_code?: string
   } | string
   customerName?: string
   customerPhone?: string
@@ -96,7 +99,10 @@ type DC = {
 
 export default function WarehouseDcAtWarehouse() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [rows, setRows] = useState<DC[]>([])
+  const [zones, setZones] = useState<string[]>([])
+  const [clustersByZone, setClustersByZone] = useState<Record<string, string[]>>({})
   const [loading, setLoading] = useState(true)
   const [selectedDC, setSelectedDC] = useState<DC | null>(null)
   const [productRows, setProductRows] = useState<ProductDetail[]>([])
@@ -118,6 +124,25 @@ export default function WarehouseDcAtWarehouse() {
   const [warehouseInventory, setWarehouseInventory] = useState<WarehouseItem[]>([])
   
   const { productNames: availableProducts } = useProducts()
+
+  const clusterOptions = useMemo(() => {
+    if (!zone) return []
+    return (clustersByZone[zone] || []).map((c) => ({ value: c, label: c }))
+  }, [zone, clustersByZone])
+
+  const zoneOptions = useMemo(
+    () => zones.map((z) => ({ value: z, label: z })),
+    [zones]
+  )
+
+  useEffect(() => {
+    loadZoneClusterOptions()
+      .then(({ zones: z, clustersByZone: map }) => {
+        setZones(z)
+        setClustersByZone(map)
+      })
+      .catch(() => {})
+  }, [])
   const availableClasses = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'NA']
   const availableCategories = ['New Students', 'Existing Students', 'Both', 'Training-Material']
 
@@ -145,6 +170,17 @@ export default function WarehouseDcAtWarehouse() {
   useEffect(() => {
     load()
   }, [])
+
+  useEffect(() => {
+    const openDcId = searchParams?.get('openDcId')
+    if (!openDcId || loading || rows.length === 0) return
+    const dc = rows.find((r) => r._id === openDcId)
+    if (dc) {
+      openProcessDialog(dc)
+      router.replace('/dashboard/warehouse/dc-at-warehouse')
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, rows, loading])
 
   const openProcessDialog = async (dc: DC) => {
     try {
@@ -405,9 +441,8 @@ export default function WarehouseDcAtWarehouse() {
       setContactMobile(fullDC.contactMobile || fullDC.customerPhone || '')
       setSchoolType(dcOrder?.school_type || '')
       setSchoolAddress(dcOrder?.address || '')
-      setZone(fullDC.zone || '')
-      // Load cluster from DC (it's stored directly in the DC, not in dcOrderId)
-      setCluster(fullDC.cluster || '')
+      setZone(dcOrder?.zone || fullDC.zone || '')
+      setCluster(dcOrder?.cluster_code || fullDC.cluster || '')
       setRemarks(fullDC.remarks || '')
       setInsufficientQuantity(false)
       setOpenDialog(true)
@@ -656,10 +691,11 @@ export default function WarehouseDcAtWarehouse() {
           contactPerson: contactPerson || undefined,
           contactMobile: contactMobile || undefined,
           zone: zone || undefined,
-          cluster: cluster || undefined,
+          cluster_code: cluster || undefined,
+          school_type: schoolType || undefined,
           remarks: remarks || undefined,
           dcOrderId: selectedDC.dcOrderId && typeof selectedDC.dcOrderId === 'object' 
-            ? { ...selectedDC.dcOrderId, school_type: schoolType || undefined, address: schoolAddress || undefined }
+            ? { ...selectedDC.dcOrderId, school_type: schoolType || undefined, address: schoolAddress || undefined, zone: zone || undefined, cluster_code: cluster || undefined }
             : selectedDC.dcOrderId,
         }),
       })
@@ -768,10 +804,11 @@ export default function WarehouseDcAtWarehouse() {
           contactPerson: contactPerson || undefined,
           contactMobile: contactMobile || undefined,
           zone: zone || undefined,
-          cluster: cluster || undefined,
+          cluster_code: cluster || undefined,
+          school_type: schoolType || undefined,
           remarks: remarks || undefined,
           dcOrderId: selectedDC.dcOrderId && typeof selectedDC.dcOrderId === 'object' 
-            ? { ...selectedDC.dcOrderId, school_type: schoolType || undefined, address: schoolAddress || undefined }
+            ? { ...selectedDC.dcOrderId, school_type: schoolType || undefined, address: schoolAddress || undefined, zone: zone || undefined, cluster_code: cluster || undefined }
             : selectedDC.dcOrderId,
         }),
       })
@@ -897,13 +934,16 @@ export default function WarehouseDcAtWarehouse() {
                 </div>
                 <div>
                       <Label className="text-sm text-neutral-600">School Type <span className="text-red-500">*</span></Label>
-                      <Input
-                        value={schoolType}
-                        onChange={(e) => setSchoolType(e.target.value)}
-                        placeholder="School Type"
-                        className={`mt-1 ${!schoolType ? 'border-red-300' : ''}`}
-                        required
-                      />
+                      <Select value={schoolType} onValueChange={setSchoolType}>
+                        <SelectTrigger className={`mt-1 ${!schoolType ? 'border-red-300' : ''}`}>
+                          <SelectValue placeholder="Select School Type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {SCHOOL_TYPE_OPTIONS.map((t) => (
+                            <SelectItem key={t} value={t}>{t}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                 <div>
                       <Label className="text-sm text-neutral-600">Executive</Label>
@@ -932,21 +972,34 @@ export default function WarehouseDcAtWarehouse() {
                     </div>
                     <div>
                       <Label className="text-sm text-neutral-600">Zone</Label>
-                      <Input
-                        value={zone}
-                        onChange={(e) => setZone(e.target.value)}
-                        placeholder="Zone"
+                      <SearchableSelect
                         className="mt-1"
+                        value={zone}
+                        onValueChange={(v) => {
+                          setZone(v)
+                          setCluster('')
+                        }}
+                        placeholder="Select Zone"
+                        searchPlaceholder="Search zones…"
+                        options={zoneOptions}
+                        emptyText={zones.length === 0 ? 'Add zones under Users → Zones' : 'No results found.'}
                       />
                 </div>
                 <div>
                       <Label className="text-sm text-neutral-600">Cluster</Label>
-                      <Input
+                      <SearchableSelect
+                        className="mt-1"
                         value={cluster}
-                        readOnly
-                        disabled
-                        className="mt-1 bg-neutral-50"
-                        placeholder="Cluster"
+                        onValueChange={setCluster}
+                        placeholder={zone ? 'Select Cluster' : 'Select zone first'}
+                        searchPlaceholder="Search clusters…"
+                        options={clusterOptions}
+                        disabled={!zone}
+                        emptyText={
+                          zone && clusterOptions.length === 0
+                            ? 'Link clusters to this zone in Users → Zones'
+                            : 'No results found.'
+                        }
                       />
                 </div>
                 </div>

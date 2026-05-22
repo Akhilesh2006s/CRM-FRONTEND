@@ -226,14 +226,14 @@ export default function CreateDealPage() {
       <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Create Deal (Sale)</h1>
       <Card className="p-4 md:p-6 bg-neutral-50 border border-neutral-200 text-neutral-900">
         <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label>School name *</Label>
-            <Input className="bg-white text-neutral-900" name="school_name" value={form.school_name} onChange={onChange} required />
+          <div className="space-y-2">
+            <Label htmlFor="school_name">School name *</Label>
+            <Input id="school_name" className="bg-white text-neutral-900" name="school_name" value={form.school_name} onChange={onChange} required />
           </div>
-          <div>
-            <Label>School Type</Label>
+          <div className="space-y-2">
+            <Label htmlFor="school_type">School Type</Label>
             <Select value={form.school_type} onValueChange={(v) => setForm((f) => ({ ...f, school_type: v }))}>
-              <SelectTrigger className="bg-white text-neutral-900">
+              <SelectTrigger id="school_type" className="bg-white text-neutral-900">
                 <SelectValue placeholder="Select Type" />
               </SelectTrigger>
               <SelectContent>
@@ -246,39 +246,39 @@ export default function CreateDealPage() {
               </SelectContent>
             </Select>
           </div>
-          <div>
-            <Label>Contact person *</Label>
-            <Input className="bg-white text-neutral-900" name="contact_person" value={form.contact_person} onChange={onChange} required />
+          <div className="space-y-2">
+            <Label htmlFor="contact_person">Contact person *</Label>
+            <Input id="contact_person" className="bg-white text-neutral-900" name="contact_person" value={form.contact_person} onChange={onChange} required />
           </div>
-          <div>
-            <Label>Contact mobile *</Label>
-            <Input className="bg-white text-neutral-900" name="contact_mobile" value={form.contact_mobile} onChange={onChange} required />
+          <div className="space-y-2">
+            <Label htmlFor="contact_mobile">Contact mobile *</Label>
+            <Input id="contact_mobile" className="bg-white text-neutral-900" name="contact_mobile" value={form.contact_mobile} onChange={onChange} required />
           </div>
-          <div>
-            <Label>Email</Label>
-            <Input className="bg-white text-neutral-900" type="email" name="email" value={form.email} onChange={onChange} />
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input id="email" className="bg-white text-neutral-900" type="email" name="email" value={form.email} onChange={onChange} />
           </div>
-          <div>
-            <Label>Contact Person 2</Label>
-            <Input className="bg-white text-neutral-900" name="contact_person2" value={form.contact_person2} onChange={onChange} />
+          <div className="space-y-2">
+            <Label htmlFor="contact_person2">Contact Person 2</Label>
+            <Input id="contact_person2" className="bg-white text-neutral-900" name="contact_person2" value={form.contact_person2} onChange={onChange} />
           </div>
-          <div>
-            <Label>Contact Mobile 2</Label>
-            <Input className="bg-white text-neutral-900" name="contact_mobile2" value={form.contact_mobile2} onChange={onChange} />
+          <div className="space-y-2">
+            <Label htmlFor="contact_mobile2">Contact Mobile 2</Label>
+            <Input id="contact_mobile2" className="bg-white text-neutral-900" name="contact_mobile2" value={form.contact_mobile2} onChange={onChange} />
           </div>
-          <div>
-            <Label>Location/Town</Label>
-            <Input className="bg-white text-neutral-900" name="location" value={form.location} onChange={onChange} />
+          <div className="space-y-2">
+            <Label htmlFor="location">Location/Town</Label>
+            <Input id="location" className="bg-white text-neutral-900" name="location" value={form.location} onChange={onChange} />
           </div>
-          <div className="md:col-span-2">
-            <Label>Address</Label>
-            <Textarea className="bg-white text-neutral-900" name="address" value={form.address} onChange={onChange} />
+          <div className="md:col-span-2 space-y-2">
+            <Label htmlFor="address">Address</Label>
+            <Textarea id="address" className="bg-white text-neutral-900" name="address" value={form.address} onChange={onChange} />
           </div>
           
           {/* Products Section with Checkboxes and Price/Quantity */}
-          <div className="md:col-span-2">
+          <div className="md:col-span-2 space-y-2">
             <Label>Products *</Label>
-            <div className="space-y-3 mt-2 p-4 bg-white rounded border">
+            <div className="space-y-3 p-4 bg-white rounded border">
               {products.map((product, index) => (
                 <div key={product.name} className="flex items-center gap-4 p-2 border rounded hover:bg-gray-50">
                   <div className="flex items-center space-x-2 min-w-[200px]">
@@ -294,9 +294,10 @@ export default function CreateDealPage() {
                   
                   {product.checked && (
                     <div className="flex-1 grid grid-cols-2 md:grid-cols-3 gap-3">
-                      <div>
-                        <Label className="text-xs">Price (₹)</Label>
+                      <div className="space-y-2">
+                        <Label htmlFor={`product-price-${index}`} className="text-xs">Price (₹)</Label>
                         <Input
+                          id={`product-price-${index}`}
                           type="number"
                           className="bg-white text-neutral-900 h-8"
                           value={product.price || ''}
@@ -305,9 +306,10 @@ export default function CreateDealPage() {
                           min="0"
                         />
                       </div>
-                      <div>
-                        <Label className="text-xs">Quantity</Label>
+                      <div className="space-y-2">
+                        <Label htmlFor={`product-qty-${index}`} className="text-xs">Quantity</Label>
                         <Input
+                          id={`product-qty-${index}`}
                           type="number"
                           className="bg-white text-neutral-900 h-8"
                           value={product.quantity || ''}
@@ -316,9 +318,10 @@ export default function CreateDealPage() {
                           min="1"
                         />
                       </div>
-                      <div>
-                        <Label className="text-xs">Strength</Label>
+                      <div className="space-y-2">
+                        <Label htmlFor={`product-strength-${index}`} className="text-xs">Strength</Label>
                         <Input
+                          id={`product-strength-${index}`}
                           type="number"
                           className="bg-white text-neutral-900 h-8"
                           value={product.strength || ''}
@@ -337,10 +340,10 @@ export default function CreateDealPage() {
             </p>
           </div>
 
-          <div>
-            <Label>Lead Status</Label>
+          <div className="space-y-2">
+            <Label htmlFor="lead_status">Lead Status</Label>
             <Select value={form.lead_status} onValueChange={(v) => setForm((f) => ({ ...f, lead_status: v }))}>
-              <SelectTrigger className="bg-white text-neutral-900">
+              <SelectTrigger id="lead_status" className="bg-white text-neutral-900">
                 <SelectValue placeholder="Select status" />
               </SelectTrigger>
               <SelectContent>
@@ -350,18 +353,18 @@ export default function CreateDealPage() {
               </SelectContent>
             </Select>
           </div>
-          <div>
-            <Label>Zone</Label>
-            <Input className="bg-white text-neutral-900" name="zone" value={form.zone} onChange={onChange} />
+          <div className="space-y-2">
+            <Label htmlFor="zone">Zone</Label>
+            <Input id="zone" className="bg-white text-neutral-900" name="zone" value={form.zone} onChange={onChange} />
           </div>
-          <div>
-            <Label>No. of Branches</Label>
-            <Input className="bg-white text-neutral-900" type="number" name="branches" value={form.branches} onChange={onChange} />
+          <div className="space-y-2">
+            <Label htmlFor="branches">No. of Branches</Label>
+            <Input id="branches" className="bg-white text-neutral-900" type="number" name="branches" value={form.branches} onChange={onChange} />
           </div>
-          <div>
-            <Label>Assign to (Executive) *</Label>
+          <div className="space-y-2">
+            <Label htmlFor="assigned_to">Assign to (Executive) *</Label>
             <Select value={form.assigned_to} onValueChange={(v) => setForm((f) => ({ ...f, assigned_to: v }))} disabled={loadingEmployees} required>
-              <SelectTrigger className="bg-white text-neutral-900">
+              <SelectTrigger id="assigned_to" className="bg-white text-neutral-900">
                 <SelectValue placeholder={loadingEmployees ? "Loading employees..." : employees.length === 0 ? "No employees found" : "Select executive *"} />
               </SelectTrigger>
               <SelectContent>
@@ -378,17 +381,17 @@ export default function CreateDealPage() {
               <p className="text-xs text-red-600 mt-1">Create employees first in Users / Employees → New Employee</p>
             )}
           </div>
-          <div>
-            <Label>School strength (students)</Label>
-            <Input className="bg-white text-neutral-900" type="number" name="strength" value={form.strength} onChange={onChange} />
+          <div className="space-y-2">
+            <Label htmlFor="strength">School strength (students)</Label>
+            <Input id="strength" className="bg-white text-neutral-900" type="number" name="strength" value={form.strength} onChange={onChange} />
           </div>
-          <div>
-            <Label>Follow-up date</Label>
-            <Input className="bg-white text-neutral-900 placeholder:text-neutral-500" placeholder="dd-mm-yyyy" name="follow_up_date" value={form.follow_up_date} onChange={onChange} />
+          <div className="space-y-2">
+            <Label htmlFor="follow_up_date">Follow-up date</Label>
+            <Input id="follow_up_date" className="bg-white text-neutral-900 placeholder:text-neutral-500" placeholder="dd-mm-yyyy" name="follow_up_date" value={form.follow_up_date} onChange={onChange} />
           </div>
-          <div className="md:col-span-2">
-            <Label>Remarks</Label>
-            <Textarea className="bg-white text-neutral-900" name="remarks" value={form.remarks} onChange={onChange} />
+          <div className="md:col-span-2 space-y-2">
+            <Label htmlFor="remarks">Remarks</Label>
+            <Textarea id="remarks" className="bg-white text-neutral-900" name="remarks" value={form.remarks} onChange={onChange} />
           </div>
           {error && <div className="md:col-span-2 text-red-600 text-sm">{error}</div>}
           <div className="md:col-span-2">

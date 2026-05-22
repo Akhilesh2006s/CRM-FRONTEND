@@ -553,7 +553,11 @@ const getManagerEmployeeLeaves = async (req, res) => {
     }
 
     const leaves = await Leave.find(filter)
-      .populate('employeeId', 'name email phone mobile assignedCity assignedArea')
+      .populate({
+        path: 'employeeId',
+        select: 'name email phone mobile assignedCity assignedArea executiveManagerId',
+        populate: { path: 'executiveManagerId', select: 'name email' },
+      })
       .populate('approvedBy', 'name email')
       .sort({ createdAt: -1 });
 
@@ -594,6 +598,12 @@ const approveManagerEmployeeLeave = async (req, res) => {
     const updatedLeave = await Leave.findByIdAndUpdate(leaveId, updateData, { new: true })
       .populate('employeeId', 'name email phone mobile assignedCity assignedArea')
       .populate('approvedBy', 'name email');
+
+    const { setEmployeeOnLeave, syncEmployeesAfterLeave } = require('../utils/leaveStatusSync');
+    if (status === 'Approved' && leave.employeeId?._id) {
+      await setEmployeeOnLeave(leave.employeeId._id);
+    }
+    await syncEmployeesAfterLeave();
 
     res.json(updatedLeave);
   } catch (error) {

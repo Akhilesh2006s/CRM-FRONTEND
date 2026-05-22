@@ -29,6 +29,8 @@ export default function AddPaymentPage() {
   const [amount, setAmount] = useState('')
   const [mode, setMode] = useState('Cash')
   const [financialYear, setFinancialYear] = useState('2024-25')
+  const [submissionNo, setSubmissionNo] = useState('')
+  const [handoverRemarks, setHandoverRemarks] = useState('')
   const [remarks, setRemarks] = useState('')
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -181,6 +183,8 @@ export default function AddPaymentPage() {
         amount: Number(amount),
         paymentMethod: mode,
         financialYear,
+        submissionNo: submissionNo.trim() || undefined,
+        handoverRemarks: handoverRemarks.trim() || undefined,
         description: remarks,
         paymentDate: new Date().toISOString(),
         status: 'Pending',
@@ -234,6 +238,8 @@ export default function AddPaymentPage() {
       setSchool(undefined)
       setAmount('')
       setMode('Cash')
+      setSubmissionNo('')
+      setHandoverRemarks('')
       setRemarks('')
       setUpiId('')
       setTransactionId('')
@@ -329,6 +335,24 @@ export default function AddPaymentPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <Label>Submission No</Label>
+              <Input
+                placeholder="Submission / handover number"
+                value={submissionNo}
+                onChange={(e) => setSubmissionNo(e.target.value)}
+                className="bg-white text-neutral-900"
+              />
+            </div>
+            <div>
+              <Label>Handover Remarks</Label>
+              <Input
+                placeholder="Handover remarks"
+                value={handoverRemarks}
+                onChange={(e) => setHandoverRemarks(e.target.value)}
+                className="bg-white text-neutral-900"
+              />
             </div>
             
             {/* Payment Mode Specific Fields */}

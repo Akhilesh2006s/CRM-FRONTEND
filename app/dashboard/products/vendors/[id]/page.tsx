@@ -12,12 +12,13 @@ import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
 import { ArrowLeft } from 'lucide-react'
 
-type Vendor = {
+type Partner = {
   _id: string
   name: string
   email: string
   isActive?: boolean
   createdAt?: string
+  partnerAssignedProducts?: Array<{ _id: string; productName: string }>
   vendorAssignedProducts?: Array<{ _id: string; productName: string }>
 }
 
@@ -26,7 +27,7 @@ export default function VendorDetailPage() {
   const params = useParams()
   const id = params.id as string
   const currentUser = getCurrentUser()
-  const [vendor, setVendor] = useState<Vendor | null>(null)
+  const [vendor, setVendor] = useState<Partner | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -40,7 +41,7 @@ export default function VendorDetailPage() {
 
   const loadVendor = async () => {
     try {
-      const data = await apiRequest<Vendor>(`/vendors/${id}`)
+      const data = await apiRequest<Partner>(`/partners/${id}`)
       setVendor(data)
     } catch (err: any) {
       toast.error(err?.message || 'Failed to load vendor')
@@ -62,7 +63,7 @@ export default function VendorDetailPage() {
     return null
   }
 
-  const products = vendor.vendorAssignedProducts || []
+  const products = vendor.partnerAssignedProducts || vendor.vendorAssignedProducts || []
   const productNames = products.map(p => (typeof p === 'object' && p?.productName) || String(p))
 
   return (

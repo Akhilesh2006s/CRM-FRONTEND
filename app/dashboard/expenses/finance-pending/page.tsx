@@ -100,7 +100,7 @@ export default function FinancePendingExpensesPage() {
   }
 
   const handleEdit = (expenseId: string) => {
-    router.push(`/dashboard/expenses/edit/${expenseId}`)
+    router.push(`/dashboard/expenses/edit/${expenseId}?returnTo=finance-pending`)
   }
 
   const getPendingMonth = (expense: Expense) => {
@@ -112,10 +112,6 @@ export default function FinancePendingExpensesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Finance Pending Expenses List</h1>
-      </div>
-
       {/* Filter Section */}
       <Card className="p-4 shadow-sm">
         <div className="flex flex-wrap items-center gap-4">

@@ -255,40 +255,84 @@ const getRevenueTrends = async (req, res) => {
 // @access  Private
 const getLeadsVolume = async (req, res) => {
   try {
-    const volume = [];
-    const today = new Date();
+    const range = String(req.query.range || '24h').toLowerCase();
+    const isExecutive = req.user.role === 'Executive';
+    const executiveFilter = isExecutive
+      ? {
+          $or: [
+            { createdBy: req.user._id },
+            { managed_by: req.user._id },
+          ],
+        }
+      : null;
+
+    const now = new Date();
+    const today = new Date(now);
     today.setHours(0, 0, 0, 0);
+
+    if (range === '7d' || range === '30d') {
+      const days = range === '7d' ? 7 : 30;
+      const start = new Date(today);
+      start.setDate(start.getDate() - (days - 1));
+
+      const leadsFilter = {
+        createdAt: { $gte: start, $lt: new Date(today.getTime() + 24 * 60 * 60 * 1000) },
+      };
+      if (executiveFilter) Object.assign(leadsFilter, executiveFilter);
+
+      const leads = await Lead.find(leadsFilter).select('createdAt').lean();
+      const buckets = [];
+
+      for (let i = 0; i < days; i++) {
+        const dayStart = new Date(start);
+        dayStart.setDate(start.getDate() + i);
+        dayStart.setHours(0, 0, 0, 0);
+        const label = dayStart.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+        buckets.push({
+          hour: label,
+          value: 0,
+          dayStart: dayStart.getTime(),
+        });
+      }
+
+      leads.forEach((lead) => {
+        const t = new Date(lead.createdAt).getTime();
+        for (let i = buckets.length - 1; i >= 0; i--) {
+          const dayStart = buckets[i].dayStart;
+          const dayEnd = dayStart + 24 * 60 * 60 * 1000;
+          if (t >= dayStart && t < dayEnd) {
+            buckets[i].value++;
+            break;
+          }
+        }
+      });
+
+      return res.json(buckets.map(({ hour, value }) => ({ hour, value })));
+    }
+
+    // Default: 24h hourly buckets for today
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    
-    // Filter by executive if user is an Executive
+
     const leadsFilter = {
-      createdAt: { $gte: today, $lt: tomorrow }
+      createdAt: { $gte: today, $lt: tomorrow },
     };
-    
-    if (req.user.role === 'Executive') {
-      leadsFilter.$or = [
-        { createdBy: req.user._id },
-        { managed_by: req.user._id }
-      ];
-    }
-    
-    // Get leads created today and group by hour
-    const leads = await Lead.find(leadsFilter);
-    
-    // Initialize all hours with 0
+    if (executiveFilter) Object.assign(leadsFilter, executiveFilter);
+
+    const leads = await Lead.find(leadsFilter).select('createdAt').lean();
+    const volume = [];
+
     for (let hour = 1; hour <= 24; hour++) {
       volume.push({ hour: `${hour.toString().padStart(2, '0')}:00`, value: 0 });
     }
-    
-    // Count leads by hour
-    leads.forEach(lead => {
-      const hour = new Date(lead.createdAt).getHours() + 1;
-      if (hour >= 1 && hour <= 24) {
-        volume[hour - 1].value++;
+
+    leads.forEach((lead) => {
+      const h = new Date(lead.createdAt).getHours() + 1;
+      if (h >= 1 && h <= 24) {
+        volume[h - 1].value++;
       }
     });
-    
+
     res.json(volume);
   } catch (error) {
     res.status(500).json({ message: error.message });

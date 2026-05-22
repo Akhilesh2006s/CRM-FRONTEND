@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { getCurrentUser } from '@/lib/auth'
 import { useSidebar } from '@/contexts/SidebarContext'
+import { isChildNavActive } from '@/lib/navActive'
 import {
   LayoutDashboard,
   Truck,
@@ -93,21 +94,9 @@ function HoverTooltip({ item, pathname, onClose }: { item: NavItem; pathname: st
         </div>
         <ul className="py-1">
           {item.children.map((c) => {
-            // More precise active check: exact match only, or check if this is the longest matching route
-            let isActive = pathname === c.href
-            
-            // If not exact match, check if pathname starts with this href
-            // But only mark as active if no other child route is a better match (longer prefix)
-            if (!isActive && c.href !== '/dashboard' && pathname.startsWith(c.href + '/')) {
-              // Check if any other child has a longer matching prefix
-              const hasBetterMatch = item.children.some(otherChild => 
-                otherChild.href !== c.href && 
-                pathname.startsWith(otherChild.href + '/') &&
-                otherChild.href.length > c.href.length
-              )
-              // Only mark as active if no better match exists
-              isActive = !hasBetterMatch
-            }
+            const isActive = c.href
+              ? isChildNavActive(pathname, c.href, item.children)
+              : false
             return (
               <li key={c.label}>
                 <Link 
@@ -257,7 +246,6 @@ const NAV: NavItem[] = [
     icon: Package,
     children: [
       { label: 'All Products', href: '/dashboard/products', icon: Database },
-      { label: 'Add New Product', href: '/dashboard/products/new', icon: PlusCircle },
       { label: 'Deliverables', href: '/dashboard/products/deliverables', icon: Eye, adminOnly: true },
       { label: 'Partner', href: '/dashboard/products/vendors', icon: Building2, adminOnly: true },
     ],
@@ -303,6 +291,7 @@ export function Sidebar() {
   }, [])
 
   const isEmployee = user?.role === 'Executive'
+  const isSalesBDE = user?.role === 'Sales BDE'
   const isManager = user?.role === 'Manager'
   const isCoordinator = user?.role === 'Coordinator'
   const isSeniorCoordinator = user?.role === 'Senior Coordinator'
@@ -315,11 +304,11 @@ export function Sidebar() {
 
   // Add employee leave menu if employee, replace admin Leave Management
   const employeeLeavesMenu: NavItem = {
-    label: 'My Leaves',
+    label: 'Leave Management',
     icon: CalendarCheck2,
     children: [
-      { label: 'Leave Request', href: '/dashboard/leaves/request', icon: PlusCircle },
-      { label: 'Leaves', href: '/dashboard/leaves/approved', icon: CheckCircle2 },
+      { label: 'Apply for Leave', href: '/dashboard/leaves/request', icon: PlusCircle },
+      { label: 'My Leaves', href: '/dashboard/leaves/approved', icon: CheckCircle2 },
     ],
   }
 
@@ -376,6 +365,15 @@ export function Sidebar() {
       { label: 'Sign out', icon: LogOut, href: '/auth/login' },
     ]
   } else if (isManager) {
+    const managerLeavesMenu: NavItem = {
+      label: 'Leave Management',
+      icon: CalendarCheck2,
+      children: [
+        { label: 'Pending Leaves', href: '/dashboard/leaves/pending', icon: Clock },
+        { label: 'Apply for Leave', href: '/dashboard/leaves/request', icon: PlusCircle },
+        { label: 'My Leaves', href: '/dashboard/leaves/approved', icon: CheckCircle2 },
+      ],
+    }
     // For Manager role, only show: Dashboard, Clients, Warehouse, Expenses, Reports, Settings, Sign out
     const allowedMenuItems = ['Dashboard', 'Clients', 'Warehouse', 'Expenses', 'Reports', 'Settings', 'Sign out']
     finalNav = NAV.filter(item => allowedMenuItems.includes(item.label))
@@ -420,6 +418,12 @@ export function Sidebar() {
         }
         return item
       })
+    const signOutIdx = finalNav.findIndex((item) => item.label === 'Sign out')
+    if (signOutIdx >= 0) {
+      finalNav.splice(signOutIdx, 0, managerLeavesMenu)
+    } else {
+      finalNav.push(managerLeavesMenu)
+    }
   } else if (isCoordinator) {
     // For Coordinator role, only show: Dashboard, Clients, Users / Employees, Trainings & Services, Warehouse, Payments, Reports, Settings, Sign out
     const allowedMenuItems = ['Dashboard', 'Clients', 'Users / Employees', 'Trainings & Services', 'Warehouse', 'Payments', 'Reports', 'Settings', 'Sign out']
@@ -540,7 +544,7 @@ export function Sidebar() {
         label: 'Leave Management',
         icon: CalendarCheck2,
         children: [
-          { label: 'Leave Request', href: '/dashboard/leaves/request', icon: PlusCircle },
+          { label: 'Apply for Leave', href: '/dashboard/leaves/request', icon: PlusCircle },
           { label: 'My Leaves', href: '/dashboard/leaves/approved', icon: CheckCircle2 },
         ],
       },
@@ -627,6 +631,12 @@ export function Sidebar() {
       }
       return item
     })
+    if (isSalesBDE) {
+      const withoutAdminLeave = finalNav.filter((item) => item.label !== 'Leave Management')
+      const signOut = withoutAdminLeave.find((item) => item.label === 'Sign out')
+      const rest = withoutAdminLeave.filter((item) => item.label !== 'Sign out')
+      finalNav = [...rest, employeeLeavesMenu, ...(signOut ? [signOut] : [])]
+    }
   }
 
   // Auto-expand menu sections based on current route
@@ -696,7 +706,7 @@ export function Sidebar() {
   return (
     <>
       {/* Sidebar - Premium Linear-style design */}
-      <aside className={`${sidebarOpen ? 'w-64' : 'w-16'} bg-[#0F0F0F] text-white min-h-screen fixed md:sticky top-0 left-0 z-50 border-r border-white/5 transition-all duration-300 ease-out relative backdrop-blur-xl`}>
+      <aside className={`${sidebarOpen ? 'w-64' : 'w-16'} shrink-0 bg-[#0F0F0F] text-white fixed md:sticky top-16 left-0 z-50 self-start h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)] overflow-y-auto border-r border-white/5 transition-all duration-300 ease-out backdrop-blur-xl`}>
         {/* User Profile Section - Premium styling */}
         <div className={`py-5 border-b border-white/5 ${sidebarOpen ? 'px-4' : 'px-0'} hidden md:block`}>
           {sidebarOpen ? (
@@ -786,22 +796,9 @@ export function Sidebar() {
                     <div className={`overflow-hidden transition-all duration-300 ease-out ${open[item.label] ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
                       <ul className="ml-6 mt-1 mb-2 space-y-1 border-l border-white/5 pl-3">
                         {item.children.map((c) => {
-                          // More precise active check: exact match only, or check if this is the longest matching route
-                          // This prevents "My Clients" (/dashboard/dc/client-dc) from being active when on "Term-Wise DC" (/dashboard/dc/client-dc/term-wise)
-                          let isActive = pathname === c.href
-                          
-                          // If not exact match, check if pathname starts with this href
-                          // But only mark as active if no other child route is a better match (longer prefix)
-                          if (!isActive && c.href !== '/dashboard' && pathname.startsWith(c.href + '/')) {
-                            // Check if any other child has a longer matching prefix
-                            const hasBetterMatch = item.children.some(otherChild => 
-                              otherChild.href !== c.href && 
-                              pathname.startsWith(otherChild.href + '/') &&
-                              otherChild.href.length > c.href.length
-                            )
-                            // Only mark as active if no better match exists
-                            isActive = !hasBetterMatch
-                          }
+                          const isActive = c.href
+                            ? isChildNavActive(pathname, c.href, item.children)
+                            : false
                           
                           return (
                             <li key={c.label}>

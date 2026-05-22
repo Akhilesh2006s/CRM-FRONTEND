@@ -8,9 +8,15 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { apiRequest } from '@/lib/api'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { apiRequest, API_BASE_URL, resolveUploadUrl } from '@/lib/api'
 import { toast } from 'sonner'
-import { ExternalLink } from 'lucide-react'
+import { ExternalLink, Upload } from 'lucide-react'
 
 type Expense = {
   _id: string
@@ -38,6 +44,12 @@ type Expense = {
   }
 }
 
+type ExpenseFormState = {
+  approvedAmount: string
+  managerRemarks: string
+  employeeRemarks: string
+}
+
 export default function ManagerExpenseUpdatePage() {
   const router = useRouter()
   const params = useParams()
@@ -49,12 +61,10 @@ export default function ManagerExpenseUpdatePage() {
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [employeeName, setEmployeeName] = useState('')
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [uploadingBillId, setUploadingBillId] = useState<string | null>(null)
 
-  // Form state for each expense
-  const [expenseForms, setExpenseForms] = useState<Record<string, {
-    approvedAmount: string
-    managerRemarks: string
-  }>>({})
+  const [expenseForms, setExpenseForms] = useState<Record<string, ExpenseFormState>>({})
 
   useEffect(() => {
     if (employeeId) {
@@ -65,25 +75,27 @@ export default function ManagerExpenseUpdatePage() {
   const loadExpenses = async () => {
     setLoading(true)
     try {
-      const params = new URLSearchParams()
-      if (fromDate) params.append('fromDate', fromDate)
-      if (toDate) params.append('toDate', toDate)
+      const qs = new URLSearchParams()
+      qs.append('status', 'Executive Manager Approved')
+      if (fromDate) qs.append('fromDate', fromDate)
+      if (toDate) qs.append('toDate', toDate)
 
-      const data = await apiRequest<Expense[]>(`/expenses/employee/${employeeId}${params.toString() ? `?${params.toString()}` : ''}`)
-      
+      const data = await apiRequest<Expense[]>(
+        `/expenses/employee/${employeeId}?${qs.toString()}`
+      )
+
       setExpenses(data || [])
-      
-      // Initialize form state
-      const initialForms: Record<string, { approvedAmount: string; managerRemarks: string }> = {}
-      data.forEach(exp => {
+
+      const initialForms: Record<string, ExpenseFormState> = {}
+      data.forEach((exp) => {
         initialForms[exp._id] = {
           approvedAmount: exp.approvedAmount?.toString() || exp.amount.toString(),
           managerRemarks: exp.managerRemarks || '',
+          employeeRemarks: exp.employeeRemarks || '',
         }
       })
       setExpenseForms(initialForms)
 
-      // Set employee name from first expense
       if (data.length > 0) {
         setEmployeeName(data[0].employeeId?.name || data[0].trainerId?.name || '')
       }
@@ -99,14 +111,68 @@ export default function ManagerExpenseUpdatePage() {
     loadExpenses()
   }
 
-  const handleFormChange = (expenseId: string, field: 'approvedAmount' | 'managerRemarks', value: string) => {
-    setExpenseForms(prev => ({
+  const handleFormChange = (
+    expenseId: string,
+    field: keyof ExpenseFormState,
+    value: string
+  ) => {
+    setExpenseForms((prev) => ({
       ...prev,
       [expenseId]: {
         ...prev[expenseId],
         [field]: value,
-      }
+      },
     }))
+  }
+
+  const handleViewEmployeeTrack = () => {
+    const qs = new URLSearchParams()
+    qs.set('employeeId', employeeId)
+    if (fromDate) qs.set('fromDate', fromDate)
+    if (toDate) qs.set('toDate', toDate)
+    if (employeeName) qs.set('employeeName', employeeName)
+    qs.set('returnTo', `/dashboard/expenses/manager-update/${employeeId}`)
+    router.push(`/dashboard/reports/employee-track?${qs.toString()}`)
+  }
+
+  const handleBillUpload = async (expenseId: string, file: File) => {
+    setUploadingBillId(expenseId)
+    try {
+      const formData = new FormData()
+      formData.append('bill', file)
+
+      const token =
+        typeof window !== 'undefined' ? localStorage.getItem('authToken') : null
+      const response = await fetch(`${API_BASE_URL}/api/expenses/upload-bill`, {
+        method: 'POST',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: formData,
+      })
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error(err.message || 'Upload failed')
+      }
+
+      const data = await response.json()
+      const fileUrl = data.fileUrl || data.url
+
+      await apiRequest(`/expenses/${expenseId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ receipt: fileUrl }),
+      })
+
+      setExpenses((prev) =>
+        prev.map((e) => (e._id === expenseId ? { ...e, receipt: fileUrl } : e))
+      )
+      toast.success('Bill image updated')
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to upload bill')
+    } finally {
+      setUploadingBillId(null)
+    }
   }
 
   const handleApprove = async () => {
@@ -117,12 +183,13 @@ export default function ManagerExpenseUpdatePage() {
 
     setSubmitting(true)
     try {
-      const expensesToApprove = expenses.map(exp => ({
+      const expensesToApprove = expenses.map((exp) => ({
         id: exp._id,
-        approvedAmount: expenseForms[exp._id]?.approvedAmount 
-          ? parseFloat(expenseForms[exp._id].approvedAmount) 
+        approvedAmount: expenseForms[exp._id]?.approvedAmount
+          ? parseFloat(expenseForms[exp._id].approvedAmount)
           : exp.amount,
         managerRemarks: expenseForms[exp._id]?.managerRemarks || '',
+        employeeRemarks: expenseForms[exp._id]?.employeeRemarks ?? exp.employeeRemarks ?? '',
       }))
 
       await apiRequest('/expenses/approve-multiple', {
@@ -149,32 +216,32 @@ export default function ManagerExpenseUpdatePage() {
   }
 
   const getExpenseType = (category: string) => {
-    // Map to match expected values
     if (category === 'Travel') return 'Travel'
     if (category === 'Food') return 'Food'
     return category
   }
 
   const totalAmount = expenses.reduce((sum, exp) => {
-    const approvedAmount = expenseForms[exp._id]?.approvedAmount 
-      ? parseFloat(expenseForms[exp._id].approvedAmount) 
+    const approvedAmount = expenseForms[exp._id]?.approvedAmount
+      ? parseFloat(expenseForms[exp._id].approvedAmount)
       : exp.amount
     return sum + approvedAmount
   }, 0)
 
   const totalGpsDistance = expenses.reduce((sum, exp) => sum + (exp.gpsDistance || 0), 0)
 
+  const isImageReceipt = (url: string) =>
+    /\.(jpe?g|png|gif|webp|bmp)$/i.test(url) || url.includes('/uploads/')
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Manager Expense Update</h1>
-      </div>
-
       {/* Date Filters */}
       <Card className="p-4 shadow-sm">
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">
-            <Label htmlFor="fromDate" className="whitespace-nowrap">From Date:</Label>
+            <Label htmlFor="fromDate" className="whitespace-nowrap">
+              From Date:
+            </Label>
             <Input
               id="fromDate"
               type="date"
@@ -184,7 +251,9 @@ export default function ManagerExpenseUpdatePage() {
             />
           </div>
           <div className="flex items-center gap-2">
-            <Label htmlFor="toDate" className="whitespace-nowrap">To Date:</Label>
+            <Label htmlFor="toDate" className="whitespace-nowrap">
+              To Date:
+            </Label>
             <Input
               id="toDate"
               type="date"
@@ -199,22 +268,24 @@ export default function ManagerExpenseUpdatePage() {
         </div>
       </Card>
 
-      {/* Employee Info */}
       <Card className="p-4 shadow-sm">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-4">
-            <span className="text-neutral-600 font-medium">Manager Expense Update</span>
-            <Button variant="outline" className="bg-white">
+            <Button
+              variant="outline"
+              className="bg-white"
+              onClick={handleViewEmployeeTrack}
+            >
               View Employee Track
             </Button>
           </div>
           <div className="text-lg font-semibold text-neutral-900">
-            Employee: <span className="text-blue-600">{employeeName || 'Loading...'}</span>
+            Employee:{' '}
+            <span className="text-blue-600">{employeeName || 'Loading...'}</span>
           </div>
         </div>
       </Card>
 
-      {/* Expenses Table */}
       <Card className="shadow-sm">
         <div className="overflow-x-auto">
           <Table>
@@ -248,82 +319,150 @@ export default function ManagerExpenseUpdatePage() {
                 </TableRow>
               ) : (
                 <>
-                  {expenses.map((expense, index) => (
-                    <TableRow
-                      key={expense._id}
-                      className={`${index % 2 === 0 ? 'bg-white' : 'bg-neutral-50/50'}`}
-                    >
-                      <TableCell>{index + 1}</TableCell>
-                      <TableCell className="font-medium">
-                        {expense.expItemId || expense._id.slice(-5)}
-                      </TableCell>
-                      <TableCell>{getExpenseType(expense.category)}</TableCell>
-                      <TableCell className="text-right">
-                        {expense.gpsDistance ? `${expense.gpsDistance.toFixed(1)} Kms` : '-'}
-                      </TableCell>
-                      <TableCell className="max-w-xs">
-                        <Textarea
-                          value={expense.description || expense.title || ''}
-                          readOnly
-                          className="min-h-[60px] resize-none bg-neutral-50 text-sm border-0"
-                          rows={2}
-                        />
-                      </TableCell>
-                      <TableCell>{formatDate(expense.date)}</TableCell>
-                      <TableCell className="text-right font-medium">
-                        {expense.amount.toFixed(2)}
-                      </TableCell>
-                      <TableCell className="max-w-xs">
-                        <Textarea
-                          value={expense.employeeRemarks || ''}
-                          readOnly
-                          className="min-h-[60px] resize-none bg-neutral-50 text-sm border-0"
-                          rows={2}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={expenseForms[expense._id]?.approvedAmount || expense.amount.toString()}
-                          onChange={(e) => handleFormChange(expense._id, 'approvedAmount', e.target.value)}
-                          className="w-32 bg-white text-sm font-medium"
-                          placeholder="Approved P"
-                        />
-                      </TableCell>
-                      <TableCell className="max-w-xs">
-                        <Textarea
-                          value={expenseForms[expense._id]?.managerRemarks || ''}
-                          onChange={(e) => handleFormChange(expense._id, 'managerRemarks', e.target.value)}
-                          placeholder="Manager Remarks"
-                          className="min-h-[60px] resize-none bg-white text-sm"
-                          rows={2}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        {expense.receipt ? (
-                          <a
-                            href={expense.receipt}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:text-blue-700 flex items-center gap-1 text-sm"
-                          >
-                            Image 1
-                            <ExternalLink className="h-3 w-3" />
-                          </a>
-                        ) : (
-                          <span className="text-neutral-400 text-sm">-</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {/* Total Row */}
+                  {expenses.map((expense, index) => {
+                    const receiptUrl = expense.receipt
+                      ? resolveUploadUrl(expense.receipt)
+                      : ''
+                    return (
+                      <TableRow
+                        key={expense._id}
+                        className={index % 2 === 0 ? 'bg-white' : 'bg-neutral-50/50'}
+                      >
+                        <TableCell>{index + 1}</TableCell>
+                        <TableCell className="font-medium">
+                          {expense.expItemId || expense._id.slice(-5)}
+                        </TableCell>
+                        <TableCell>{getExpenseType(expense.category)}</TableCell>
+                        <TableCell className="text-right">
+                          {expense.gpsDistance
+                            ? `${expense.gpsDistance.toFixed(1)} Kms`
+                            : '-'}
+                        </TableCell>
+                        <TableCell className="max-w-xs">
+                          <Textarea
+                            value={expense.description || expense.title || ''}
+                            readOnly
+                            className="min-h-[60px] resize-none bg-neutral-50 text-sm border-0"
+                            rows={2}
+                          />
+                        </TableCell>
+                        <TableCell>{formatDate(expense.date)}</TableCell>
+                        <TableCell className="text-right font-medium">
+                          {expense.amount.toFixed(2)}
+                        </TableCell>
+                        <TableCell className="max-w-xs">
+                          <Textarea
+                            value={
+                              expenseForms[expense._id]?.employeeRemarks ??
+                              expense.employeeRemarks ??
+                              ''
+                            }
+                            onChange={(e) =>
+                              handleFormChange(
+                                expense._id,
+                                'employeeRemarks',
+                                e.target.value
+                              )
+                            }
+                            placeholder="Employee Remarks"
+                            className="min-h-[60px] resize-none bg-white text-sm"
+                            rows={2}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={
+                              expenseForms[expense._id]?.approvedAmount ||
+                              expense.amount.toString()
+                            }
+                            onChange={(e) =>
+                              handleFormChange(
+                                expense._id,
+                                'approvedAmount',
+                                e.target.value
+                              )
+                            }
+                            className="w-32 bg-white text-sm font-medium"
+                            placeholder="Approved P"
+                          />
+                        </TableCell>
+                        <TableCell className="max-w-xs">
+                          <Textarea
+                            value={expenseForms[expense._id]?.managerRemarks || ''}
+                            onChange={(e) =>
+                              handleFormChange(
+                                expense._id,
+                                'managerRemarks',
+                                e.target.value
+                              )
+                            }
+                            placeholder="Manager Remarks"
+                            className="min-h-[60px] resize-none bg-white text-sm"
+                            rows={2}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-2 min-w-[120px]">
+                            {receiptUrl ? (
+                              <div className="flex flex-col gap-1">
+                                {isImageReceipt(receiptUrl) ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setPreviewUrl(receiptUrl)}
+                                    className="block"
+                                  >
+                                    <img
+                                      src={receiptUrl}
+                                      alt="Bill"
+                                      className="h-14 w-14 object-cover rounded border border-neutral-200 hover:opacity-90"
+                                    />
+                                  </button>
+                                ) : null}
+                                <a
+                                  href={receiptUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:text-blue-700 flex items-center gap-1 text-sm"
+                                >
+                                  View bill
+                                  <ExternalLink className="h-3 w-3" />
+                                </a>
+                              </div>
+                            ) : (
+                              <span className="text-neutral-400 text-sm">No bill</span>
+                            )}
+                            <label className="cursor-pointer">
+                              <input
+                                type="file"
+                                accept="image/*,.pdf"
+                                className="hidden"
+                                disabled={uploadingBillId === expense._id}
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0]
+                                  if (file) handleBillUpload(expense._id, file)
+                                  e.target.value = ''
+                                }}
+                              />
+                              <span className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+                                <Upload className="h-3 w-3" />
+                                {uploadingBillId === expense._id ? 'Uploading…' : 'Upload'}
+                              </span>
+                            </label>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
                   <TableRow className="bg-neutral-100 font-semibold">
                     <TableCell colSpan={3} className="text-right">
                       Total:
                     </TableCell>
                     <TableCell className="text-right">
-                      {totalGpsDistance > 0 ? `${totalGpsDistance.toFixed(1)} Kms` : '0 Kms'}
+                      {totalGpsDistance > 0
+                        ? `${totalGpsDistance.toFixed(1)} Kms`
+                        : '0 Kms'}
                     </TableCell>
                     <TableCell colSpan={4}></TableCell>
                     <TableCell className="text-right">
@@ -337,7 +476,6 @@ export default function ManagerExpenseUpdatePage() {
           </Table>
         </div>
 
-        {/* Pagination Info */}
         {expenses.length > 0 && (
           <div className="px-4 py-2 text-sm text-neutral-600 border-t">
             Showing 1 to {expenses.length} of {expenses.length} entries
@@ -345,7 +483,6 @@ export default function ManagerExpenseUpdatePage() {
         )}
       </Card>
 
-      {/* Approve Button */}
       {expenses.length > 0 && (
         <div className="flex justify-center">
           <Button
@@ -357,7 +494,21 @@ export default function ManagerExpenseUpdatePage() {
           </Button>
         </div>
       )}
+
+      <Dialog open={!!previewUrl} onOpenChange={(open) => !open && setPreviewUrl(null)}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle>Bill Image</DialogTitle>
+          </DialogHeader>
+          {previewUrl && (
+            <img
+              src={previewUrl}
+              alt="Bill preview"
+              className="w-full h-auto max-h-[70vh] object-contain rounded"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
-

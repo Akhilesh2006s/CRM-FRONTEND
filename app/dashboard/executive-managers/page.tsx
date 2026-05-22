@@ -36,7 +36,23 @@ type Employee = {
   role: string
   assignedCity?: string
   assignedArea?: string
-  executiveManagerId?: string
+  executiveManagerId?: string | { _id?: string; name?: string } | null
+}
+
+function isEmployeeUnassigned(emp: Employee): boolean {
+  const mgr = emp.executiveManagerId
+  if (mgr == null || mgr === '') return true
+  if (typeof mgr === 'object') return !mgr._id
+  return false
+}
+
+function isAssignableExecutive(emp: Employee): boolean {
+  const isExecutive = emp.role === 'Executive' || emp.role === 'Employee'
+  const notManager =
+    emp.role !== 'Executive Manager' &&
+    emp.role !== 'Admin' &&
+    emp.role !== 'Super Admin'
+  return isExecutive && notManager && isEmployeeUnassigned(emp)
 }
 
 export default function ExecutiveManagersPage() {
@@ -83,14 +99,7 @@ export default function ExecutiveManagersPage() {
       console.log('All employees:', allEmployees.length)
       
       // Filter: Only Executive role (or old Employee role), not assigned to any Executive Manager
-      const unassignedEmployees = allEmployees.filter(
-        emp => {
-          const isExecutive = emp.role === 'Executive' || emp.role === 'Employee' // Support old Employee role
-          const notAssigned = !emp.executiveManagerId
-          const notManager = emp.role !== 'Executive Manager' && emp.role !== 'Admin' && emp.role !== 'Super Admin'
-          return isExecutive && notAssigned && notManager
-        }
-      )
+      const unassignedEmployees = allEmployees.filter(isAssignableExecutive)
       
       console.log('Unassigned executives:', unassignedEmployees.length)
       setEmployees(unassignedEmployees)
@@ -223,29 +232,69 @@ export default function ExecutiveManagersPage() {
               </div>
             ) : (
               <>
-                <div className="flex justify-between items-center mb-2">
+                <div className="flex justify-between items-center mb-2 gap-2 flex-wrap">
                   <p className="text-xs text-neutral-500">
                     Showing {employees.length} unassigned employee(s) with Executive role
                   </p>
-                  <Link href="/dashboard/employees/active">
-                    <Button variant="ghost" size="sm" className="text-xs">
-                      View All Employees
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs"
+                      onClick={() => setSelectedEmployeeIds(employees.map((e) => e._id))}
+                    >
+                      Select all
                     </Button>
-                  </Link>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs"
+                      onClick={() => setSelectedEmployeeIds([])}
+                    >
+                      Clear
+                    </Button>
+                    <Link href="/dashboard/employees/active">
+                      <Button variant="ghost" size="sm" className="text-xs">
+                        View All Employees
+                      </Button>
+                    </Link>
+                  </div>
                 </div>
-                {employees.map((employee) => (
-                  <div key={employee._id} className="flex items-center space-x-2 p-2 border rounded hover:bg-neutral-50">
+                {employees.map((employee) => {
+                  const selected = selectedEmployeeIds.includes(employee._id)
+                  const toggle = () => {
+                    setSelectedEmployeeIds((prev) =>
+                      selected ? prev.filter((id) => id !== employee._id) : [...prev, employee._id]
+                    )
+                  }
+                  return (
+                  <div
+                    key={employee._id}
+                    role="button"
+                    tabIndex={0}
+                    className="flex items-center space-x-2 p-2 border rounded hover:bg-neutral-50 cursor-pointer"
+                    onClick={toggle}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        toggle()
+                      }
+                    }}
+                  >
                     <Checkbox
-                      checked={selectedEmployeeIds.includes(employee._id)}
+                      checked={selected}
                       onCheckedChange={(checked) => {
-                        if (checked) {
-                          setSelectedEmployeeIds([...selectedEmployeeIds, employee._id])
-                        } else {
-                          setSelectedEmployeeIds(selectedEmployeeIds.filter(id => id !== employee._id))
-                        }
+                        setSelectedEmployeeIds((prev) =>
+                          checked === true
+                            ? [...prev, employee._id]
+                            : prev.filter((id) => id !== employee._id)
+                        )
                       }}
+                      onClick={(e) => e.stopPropagation()}
                     />
-                    <div className="flex-1">
+                    <div className="flex-1 pointer-events-none">
                       <p className="font-medium">{employee.name}</p>
                       <p className="text-sm text-neutral-600">{employee.email} • {employee.role === 'Employee' ? 'Executive' : employee.role}</p>
                       {employee.assignedCity && (
@@ -253,7 +302,7 @@ export default function ExecutiveManagersPage() {
                       )}
                     </div>
                   </div>
-                ))}
+                )})}
               </>
             )}
           </div>

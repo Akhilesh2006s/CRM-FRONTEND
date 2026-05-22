@@ -6,7 +6,19 @@ const Lead = require('../models/Lead');
 // @access  Private
 const getInventoryOptions = async (req, res) => {
   try {
-    // These could be stored in a database, but for now returning defaults
+    let vendorNames = ['Vendor 1', 'Vendor 2', 'Vendor 3'];
+    try {
+      const vendorUsers = await User.find({ role: 'Vendor', isActive: { $ne: false } })
+        .select('name email')
+        .lean();
+      const fromDb = vendorUsers
+        .map((v) => (v.name || v.email || '').trim())
+        .filter(Boolean);
+      if (fromDb.length > 0) vendorNames = [...new Set(fromDb)].sort();
+    } catch (_) {
+      /* keep defaults */
+    }
+
     const options = {
       products: [
         'Abacus',
@@ -22,11 +34,7 @@ const getInventoryOptions = async (req, res) => {
       ],
       uoms: ['Pieces (pcs)', 'boxes'],
       itemTypes: ['Books', 'Question Paper', 'Instruments'],
-      vendors: [
-        'Vendor 1',
-        'Vendor 2',
-        'Vendor 3',
-      ],
+      vendors: vendorNames,
     };
 
     res.json(options);

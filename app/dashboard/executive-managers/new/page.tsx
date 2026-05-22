@@ -6,11 +6,11 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { apiRequest } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
 import { INDIAN_STATES, getCitiesForState } from '@/lib/indianStatesCities'
+import { SearchableSelect } from '@/components/ui/searchable-select'
 
 export default function NewExecutiveManagerPage() {
   const router = useRouter()
@@ -102,29 +102,18 @@ export default function NewExecutiveManagerPage() {
             <Label>Mobile *</Label>
             <Input className="bg-white text-neutral-900" name="mobile" value={form.mobile} onChange={onChange} placeholder="Mobile Number" required />
           </div>
-          <div>
-            <Label>State *</Label>
-            <Select 
-              value={form.state || undefined} 
-              onValueChange={(value) => {
-                if (value) {
-                  onSelectChange('state', value)
-                }
-              }}
-            >
-              <SelectTrigger className="bg-white text-neutral-900">
-                <SelectValue placeholder="Select State" />
-              </SelectTrigger>
-              <SelectContent className="max-h-[300px]">
-                {INDIAN_STATES.map((state) => (
-                  <SelectItem key={state} value={state}>
-                    {state}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="space-y-2">
+            <Label htmlFor="em-state">State *</Label>
+            <SearchableSelect
+              id="em-state"
+              value={form.state}
+              onValueChange={(value) => onSelectChange('state', value)}
+              placeholder="Select State"
+              searchPlaceholder="Search states…"
+              options={INDIAN_STATES.map((state) => ({ value: state, label: state }))}
+            />
             {form.state && (
-              <p className="text-xs text-neutral-500 mt-1">
+              <p className="text-xs text-neutral-500">
                 {getCitiesForState(form.state).length} zone(s) (cities) will be available in {form.state}
               </p>
             )}

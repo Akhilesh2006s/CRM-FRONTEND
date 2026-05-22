@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { apiRequest } from '@/lib/api'
+import { toast } from 'sonner'
 
 type Cluster = { _id?: string; name: string }
 
@@ -35,7 +36,12 @@ export default function ClustersPage() {
     e.preventDefault()
     const trimmed = name.trim()
     if (!trimmed) {
-      alert('Cluster is required')
+      toast.error('Cluster is required')
+      return
+    }
+    const dup = clusters.some((c) => c.name.trim().toLowerCase() === trimmed.toLowerCase())
+    if (dup) {
+      toast.error('Cluster already exists')
       return
     }
     setSaving(true)
@@ -45,9 +51,10 @@ export default function ClustersPage() {
         body: JSON.stringify({ name: trimmed }),
       })
       setName('')
+      toast.success('Cluster added')
       load()
     } catch (e: any) {
-      alert(e?.message || 'Failed to save cluster')
+      toast.error(e?.message || 'Failed to save cluster')
     } finally {
       setSaving(false)
     }

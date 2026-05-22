@@ -1,13 +1,14 @@
 const express = require('express');
 const router = express.Router();
-const vendorController = require('../controllers/vendorController');
+const partnerController = require('../controllers/vendorController');
 const { authMiddleware, roleMiddleware } = require('../middleware/authMiddleware');
 
 router.use(authMiddleware);
 router.use(roleMiddleware('Admin', 'Super Admin'));
 
-router.get('/', vendorController.list);
-router.get('/:id', vendorController.getOne);
-router.post('/', vendorController.create);
+router.get('/', partnerController.list);
+router.post('/', partnerController.create);
+router.put('/:id/products', partnerController.updateProducts);
+router.get('/:id', partnerController.getOne);
 
 module.exports = router;

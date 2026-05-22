@@ -8,7 +8,17 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card } from '@/components/ui/card'
 import { toast } from '@/hooks/use-toast'
 
-type WarehouseReturn = { _id: string; returnNumber: number; returnDate: string; createdAt: string; createdBy?: { name?: string }; remarks?: string; lrNumber?: string; finYear?: string }
+type WarehouseReturn = {
+  _id: string
+  returnNumber: number
+  returnDate: string
+  createdAt: string
+  status?: string
+  createdBy?: { name?: string }
+  remarks?: string
+  lrNumber?: string
+  finYear?: string
+}
 
 export default function WarehouseReturnsPage() {
   const [returnDate, setReturnDate] = useState('')
@@ -21,8 +31,8 @@ export default function WarehouseReturnsPage() {
   const load = async () => {
     setLoading(true)
     try {
-      const data = await apiRequest<WarehouseReturn[]>(`/stock-returns/warehouse`)
-      setList(data)
+      const data = await apiRequest<WarehouseReturn[] | { data?: WarehouseReturn[] }>(`/stock-returns/warehouse`)
+      setList(Array.isArray(data) ? data : data?.data ?? [])
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' })
     } finally { setLoading(false) }
@@ -65,11 +75,12 @@ export default function WarehouseReturnsPage() {
       <Card className="p-4">
         <div className="flex items-center justify-between mb-3"><h2 className="font-medium">All Warehouse Returns</h2>{loading && <span className="text-sm text-muted-foreground">Loading…</span>}</div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm"><thead><tr className="text-left border-b"><th className="py-2 pr-2">Return #</th><th className="py-2 pr-2">Return Date</th><th className="py-2 pr-2">LR No</th><th className="py-2 pr-2">Fin Year</th><th className="py-2 pr-2">Submitted By</th><th className="py-2 pr-2">Remarks</th><th className="py-2 pr-2">Created</th></tr></thead>
+          <table className="w-full text-sm"><thead><tr className="text-left border-b"><th className="py-2 pr-2">Return #</th><th className="py-2 pr-2">Status</th><th className="py-2 pr-2">Return Date</th><th className="py-2 pr-2">LR No</th><th className="py-2 pr-2">Fin Year</th><th className="py-2 pr-2">Submitted By</th><th className="py-2 pr-2">Remarks</th><th className="py-2 pr-2">Created</th></tr></thead>
             <tbody>
               {list.map((r) => (
                 <tr key={r._id} className="border-b">
                   <td className="py-2 pr-2">{r.returnNumber}</td>
+                  <td className="py-2 pr-2">{r.status || '-'}</td>
                   <td className="py-2 pr-2">{new Date(r.returnDate).toLocaleDateString()}</td>
                   <td className="py-2 pr-2">{r.lrNumber || '-'}</td>
                   <td className="py-2 pr-2">{r.finYear || '-'}</td>
@@ -78,7 +89,7 @@ export default function WarehouseReturnsPage() {
                   <td className="py-2 pr-2">{new Date(r.createdAt).toLocaleString()}</td>
                 </tr>
               ))}
-              {list.length === 0 && (<tr><td className="py-3 text-muted-foreground" colSpan={7}>No returns</td></tr>)}
+              {list.length === 0 && (<tr><td className="py-3 text-muted-foreground" colSpan={8}>No returns</td></tr>)}
             </tbody>
           </table>
         </div>

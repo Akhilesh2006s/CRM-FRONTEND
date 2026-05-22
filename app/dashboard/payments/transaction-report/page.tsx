@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { apiRequest, API_BASE_URL } from '@/lib/api'
 import { toast } from 'sonner'
+import { Label } from '@/components/ui/label'
+import { PAYMENT_METHOD_OPTIONS, PAYMENT_STATUS_OPTIONS } from '@/lib/paymentOptions'
 
 type PaymentRow = {
   _id: string
@@ -14,7 +16,6 @@ type PaymentRow = {
   customerName: string
   contactName?: string
   mobileNumber?: string
-  avgStrength?: number
   location?: string
   amount: number
   refNo?: string
@@ -25,8 +26,8 @@ type PaymentRow = {
   status: string
 }
 
-const PAYMENT_MODES = ['Cash', 'Bank Transfer', 'Credit Card', 'Debit Card', 'Online Payment', 'Other']
-const STATUS_OPTIONS = ['Pending', 'Approved', 'Rejected']
+const PAYMENT_MODES = [...PAYMENT_METHOD_OPTIONS]
+const STATUS_OPTIONS = [...PAYMENT_STATUS_OPTIONS]
 
 export default function PaymentsTransactionReport() {
   const [rows, setRows] = useState<PaymentRow[]>([])
@@ -167,18 +168,24 @@ export default function PaymentsTransactionReport() {
               </option>
             ))}
           </select>
-          <Input
-            type="date"
-            placeholder="From Date"
-            value={filters.fromDate}
-            onChange={(e) => setFilters({ ...filters, fromDate: e.target.value })}
-          />
-          <Input
-            type="date"
-            placeholder="To Date"
-            value={filters.toDate}
-            onChange={(e) => setFilters({ ...filters, toDate: e.target.value })}
-          />
+          <div className="space-y-2">
+            <Label htmlFor="report-from-date">From Date</Label>
+            <Input
+              id="report-from-date"
+              type="date"
+              value={filters.fromDate}
+              onChange={(e) => setFilters({ ...filters, fromDate: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="report-to-date">To Date</Label>
+            <Input
+              id="report-to-date"
+              type="date"
+              value={filters.toDate}
+              onChange={(e) => setFilters({ ...filters, toDate: e.target.value })}
+            />
+          </div>
         </div>
         <div className="mt-3 flex gap-3">
           <Button onClick={load}>Search</Button>
@@ -197,7 +204,6 @@ export default function PaymentsTransactionReport() {
                 <TableHead>School Name</TableHead>
                 <TableHead>Contact Name</TableHead>
                 <TableHead>Mobile</TableHead>
-                <TableHead>Avg Strength</TableHead>
                 <TableHead>Location</TableHead>
                 <TableHead>Amount</TableHead>
                 <TableHead>Ref No</TableHead>
@@ -210,7 +216,7 @@ export default function PaymentsTransactionReport() {
             <TableBody>
               {!loading && rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={13} className="text-center text-neutral-500">
+                  <TableCell colSpan={12} className="text-center text-neutral-500">
                     No payments found
                   </TableCell>
                 </TableRow>
@@ -222,7 +228,6 @@ export default function PaymentsTransactionReport() {
                   <TableCell className="whitespace-nowrap">{r.customerName || '-'}</TableCell>
                   <TableCell className="whitespace-nowrap">{r.contactName || '-'}</TableCell>
                   <TableCell className="whitespace-nowrap">{r.mobileNumber || '-'}</TableCell>
-                  <TableCell className="whitespace-nowrap">{r.avgStrength || '-'}</TableCell>
                   <TableCell className="truncate max-w-[200px]">{r.location || '-'}</TableCell>
                   <TableCell className="whitespace-nowrap">{r.amount?.toFixed(2) || '0.00'}</TableCell>
                   <TableCell className="whitespace-nowrap">{r.refNo || r.referenceNumber || '-'}</TableCell>

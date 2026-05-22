@@ -36,7 +36,11 @@ const getWarehouse = async (req, res) => {
 // @access  Private
 const updateStock = async (req, res) => {
   try {
-    const { productId, quantity, movementType, reason, relatedSaleId } = req.body;
+    const { productId, quantity, movementType, reason, relatedSaleId, vendor } = req.body;
+
+    if (movementType === 'In' && (!reason || !String(reason).trim())) {
+      return res.status(400).json({ message: 'Comments are required when adding stock' });
+    }
 
     const product = await Warehouse.findById(productId);
     if (!product) {
@@ -55,6 +59,9 @@ const updateStock = async (req, res) => {
     product.currentStock = newStock;
     if (movementType === 'In') {
       product.lastRestocked = new Date();
+      if (vendor && String(vendor).trim()) {
+        product.supplier = String(vendor).trim();
+      }
     }
     await product.save();
 
@@ -64,6 +71,7 @@ const updateStock = async (req, res) => {
       movementType,
       quantity,
       reason,
+      vendor: vendor && String(vendor).trim() ? String(vendor).trim() : undefined,
       relatedSaleId,
       createdBy: req.user._id,
     });

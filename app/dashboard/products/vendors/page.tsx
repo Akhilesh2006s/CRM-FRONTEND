@@ -286,6 +286,7 @@ export default function PartnersPage() {
                         id={`product-${product._id}`}
                         checked={isSelected}
                         onCheckedChange={() => handleProductToggle(product._id)}
+                        className="border-neutral-400 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600 data-[state=checked]:text-white"
                       />
                       <Label
                         htmlFor={`product-${product._id}`}

@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { apiRequest } from '@/lib/api'
 import { toast } from 'sonner'
+import { Label } from '@/components/ui/label'
+import { PAYMENT_METHOD_OPTIONS } from '@/lib/paymentOptions'
 
 // Row type aligned with enriched payments API
 type PaymentRow = {
@@ -30,7 +32,7 @@ type PaymentRow = {
   description?: string
 }
 
-const PAYMENT_MODES = ['Cash', 'Cheque', 'Online Payment']
+const PAYMENT_MODES = [...PAYMENT_METHOD_OPTIONS]
 
 export default function HoldPaymentsPage() {
   const [rows, setRows] = useState<PaymentRow[]>([])
@@ -50,7 +52,7 @@ export default function HoldPaymentsPage() {
     setLoading(true)
     const qs = new URLSearchParams()
     // Always filter for Hold/Duplicate status
-    qs.append('status', 'hold/duplicate')
+    qs.append('status', 'Hold')
 
     Object.entries(filters).forEach(([k, v]) => {
       if (v) {
@@ -99,18 +101,24 @@ export default function HoldPaymentsPage() {
             value={filters.mobileNo}
             onChange={(e) => setFilters({ ...filters, mobileNo: e.target.value })}
           />
-          <Input
-            type="date"
-            placeholder="From Date"
-            value={filters.fromDate}
-            onChange={(e) => setFilters({ ...filters, fromDate: e.target.value })}
-          />
-          <Input
-            type="date"
-            placeholder="To Date"
-            value={filters.toDate}
-            onChange={(e) => setFilters({ ...filters, toDate: e.target.value })}
-          />
+          <div className="space-y-2">
+            <Label htmlFor="hold-from-date">From Date</Label>
+            <Input
+              id="hold-from-date"
+              type="date"
+              value={filters.fromDate}
+              onChange={(e) => setFilters({ ...filters, fromDate: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="hold-to-date">To Date</Label>
+            <Input
+              id="hold-to-date"
+              type="date"
+              value={filters.toDate}
+              onChange={(e) => setFilters({ ...filters, toDate: e.target.value })}
+            />
+          </div>
           <select
             className="w-full border rounded px-2 py-2 bg-neutral-900 text-white"
             value={filters.paymentMode}

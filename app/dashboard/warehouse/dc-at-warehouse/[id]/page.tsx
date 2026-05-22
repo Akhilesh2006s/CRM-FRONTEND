@@ -1,80 +1,179 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useParams, useSearchParams } from 'next/navigation'
+import { useEffect, useMemo, useState } from 'react'
+import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { apiRequest } from '@/lib/api'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { SearchableSelect } from '@/components/ui/searchable-select'
+import { SCHOOL_TYPE_OPTIONS, loadZoneClusterOptions } from '@/lib/warehouseOptions'
+import { toast } from 'sonner'
 
 export default function DcFormUpdatePage() {
   const params = useParams<{ id: string }>()
   const id = (params?.id || '').toString()
   const search = useSearchParams()
+  const router = useRouter()
   const isEdit = (search?.get('mode') || '') === 'edit'
+  const isView = (search?.get('mode') || '') === 'view'
+  const readOnly = isView || !isEdit
+
   const [dc, setDc] = useState<any | null>(null)
-  const [productOptions, setProductOptions] = useState<string[]>([])
-  const CATEGORY_OPTIONS = ['New Students', 'Old Students', 'Reorder']
-  const CLASS_OPTIONS = Array.from({ length: 12 }).map((_, i) => i + 1)
-  const PRODUCT_NAME_OPTIONS = [
-    'STAR JUNIOR LEVEL-2',
-    'STAR JUNIOR LEVEL-4',
-    'JUNIOR LEVEL-2',
-    'JUNIOR LEVEL-4',
-    'SENIOR LEVEL-2',
-    'VOLUME 2',
-    'VOLUME 4',
-  ]
+  const [saving, setSaving] = useState(false)
+  const [zones, setZones] = useState<string[]>([])
+  const [clustersByZone, setClustersByZone] = useState<Record<string, string[]>>({})
 
   useEffect(() => {
+    loadZoneClusterOptions()
+      .then(({ zones: z, clustersByZone: map }) => {
+        setZones(z)
+        setClustersByZone(map)
+      })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    if (!id) return
     ;(async () => {
       try {
         const data = await apiRequest<any>(`/warehouse/dc/${id}`)
         setDc(data)
-        if (isEdit) {
-          try {
-            const opts = await apiRequest<any>(`/metadata/inventory-options`)
-            if (Array.isArray(opts?.products)) setProductOptions(opts.products)
-          } catch (_) {}
-        }
-      } catch (_) {}
+      } catch (err: any) {
+        toast.error(err?.message || 'Failed to load DC')
+      }
     })()
   }, [id])
+
+  const zoneOptions = useMemo(() => zones.map((z) => ({ value: z, label: z })), [zones])
+  const clusterOptions = useMemo(() => {
+    const z = dc?.zone || ''
+    return (clustersByZone[z] || []).map((c) => ({ value: c, label: c }))
+  }, [dc?.zone, clustersByZone])
+
+  async function handleSave() {
+    if (!dc || readOnly) return
+    setSaving(true)
+    try {
+      await apiRequest(`/warehouse/dc/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          dcNo: dc.dcNo,
+          schoolName: dc.schoolName,
+          schoolCode: dc.schoolCode,
+          schoolType: dc.schoolType,
+          contactPersonName: dc.contactPersonName,
+          contactMobile: dc.contactMobile,
+          town: dc.town,
+          address: dc.address,
+          zone: dc.zone,
+          cluster_code: dc.cluster,
+          remarks: dc.remarks,
+          dcNotes: dc.dcNotes,
+          dcRemarks: dc.dcRemarks,
+          dcDate: dc.dcDate,
+        }),
+      })
+      toast.success('DC updated')
+      router.push('/dashboard/warehouse/dc-at-warehouse')
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to save DC')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!dc) {
+    return (
+      <div className="container mx-auto px-4 py-6">
+        <Card className="p-6">Loading DC…</Card>
+      </div>
+    )
+  }
 
   return (
     <div className="container mx-auto px-4 md:px-6 lg:px-8 py-6">
       <Card className="p-6 space-y-6">
-        <h1 className="text-2xl font-semibold">DC Form Update</h1>
-        <p className="text-sm text-neutral-600">DC No: {dc?.dcNo}</p>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold">DC Form Update</h1>
+          {!readOnly && (
+            <Button onClick={handleSave} disabled={saving}>
+              {saving ? 'Saving…' : 'Save'}
+            </Button>
+          )}
+        </div>
 
-        {/* School Information */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card className="p-4 space-y-3">
             <div className="font-medium">School Information</div>
             <div className="grid grid-cols-1 gap-3">
-              <div>
-                <div className="text-xs text-neutral-500">School Type (read-only)</div>
-                <Input value={dc?.schoolType || ''} readOnly />
+              <div className="space-y-1">
+                <Label>DC Number</Label>
+                <Input
+                  value={dc.dcNo || ''}
+                  onChange={(e) => setDc({ ...dc, dcNo: e.target.value })}
+                  readOnly={readOnly}
+                />
               </div>
-              <div>
-                <div className="text-xs text-neutral-500">School Name</div>
-                <Input value={dc?.schoolName || ''} onChange={(e) => setDc({ ...dc, schoolName: e.target.value })} readOnly={!isEdit} />
+              <div className="space-y-1">
+                <Label>School Type</Label>
+                {readOnly ? (
+                  <Input value={dc.schoolType || ''} readOnly />
+                ) : (
+                  <Select
+                    value={dc.schoolType || ''}
+                    onValueChange={(v) => setDc({ ...dc, schoolType: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select School Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SCHOOL_TYPE_OPTIONS.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {t}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
-              <div>
-                <div className="text-xs text-neutral-500">School Code</div>
-                <Input value={dc?.schoolCode || ''} onChange={(e) => setDc({ ...dc, schoolCode: e.target.value })} readOnly={!isEdit} />
+              <div className="space-y-1">
+                <Label>School Name</Label>
+                <Input
+                  value={dc.schoolName || ''}
+                  onChange={(e) => setDc({ ...dc, schoolName: e.target.value })}
+                  readOnly={readOnly}
+                />
               </div>
-              <div>
-                <div className="text-xs text-neutral-500">Contact Person Name</div>
-                <Input value={dc?.contactPersonName || ''} onChange={(e) => setDc({ ...dc, contactPersonName: e.target.value })} readOnly={!isEdit} />
+              <div className="space-y-1">
+                <Label>School Code</Label>
+                <Input
+                  value={dc.schoolCode || ''}
+                  onChange={(e) => setDc({ ...dc, schoolCode: e.target.value })}
+                  readOnly={readOnly}
+                />
               </div>
-              <div>
-                <div className="text-xs text-neutral-500">Contact Mobile</div>
-                <Input value={dc?.contactMobile || ''} onChange={(e) => setDc({ ...dc, contactMobile: e.target.value })} readOnly={!isEdit} />
+              <div className="space-y-1">
+                <Label>Contact Person Name</Label>
+                <Input
+                  value={dc.contactPersonName || ''}
+                  onChange={(e) => setDc({ ...dc, contactPersonName: e.target.value })}
+                  readOnly={readOnly}
+                />
               </div>
-              <div>
-                <div className="text-xs text-neutral-500">Executive (read-only)</div>
-                <Input value={dc?.executive || ''} readOnly />
+              <div className="space-y-1">
+                <Label>Contact Mobile</Label>
+                <Input
+                  value={dc.contactMobile || ''}
+                  onChange={(e) => setDc({ ...dc, contactMobile: e.target.value })}
+                  readOnly={readOnly}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Executive</Label>
+                <Input value={dc.executive || ''} readOnly className="bg-neutral-50" />
               </div>
             </div>
           </Card>
@@ -82,45 +181,86 @@ export default function DcFormUpdatePage() {
           <Card className="p-4 space-y-3">
             <div className="font-medium">More Information</div>
             <div className="grid grid-cols-1 gap-3">
-              <div>
-                <div className="text-xs text-neutral-500">Town</div>
-                <Input value={dc?.town || ''} onChange={(e) => setDc({ ...dc, town: e.target.value })} readOnly={!isEdit} />
+              <div className="space-y-1">
+                <Label>Town</Label>
+                <Input
+                  value={dc.town || ''}
+                  onChange={(e) => setDc({ ...dc, town: e.target.value })}
+                  readOnly={readOnly}
+                />
               </div>
-              <div>
-                <div className="text-xs text-neutral-500">Address</div>
-                <Input value={dc?.address || ''} onChange={(e) => setDc({ ...dc, address: e.target.value })} readOnly={!isEdit} />
+              <div className="space-y-1">
+                <Label>Address</Label>
+                <Input
+                  value={dc.address || ''}
+                  onChange={(e) => setDc({ ...dc, address: e.target.value })}
+                  readOnly={readOnly}
+                />
               </div>
-              <div>
-                <div className="text-xs text-neutral-500">Zone</div>
-                <Input value={dc?.zone || ''} onChange={(e) => setDc({ ...dc, zone: e.target.value })} readOnly={!isEdit} />
+              <div className="space-y-1">
+                <Label>Zone</Label>
+                {readOnly ? (
+                  <Input value={dc.zone || ''} readOnly />
+                ) : (
+                  <SearchableSelect
+                    value={dc.zone || ''}
+                    onValueChange={(v) => setDc({ ...dc, zone: v, cluster: '' })}
+                    placeholder="Select Zone"
+                    searchPlaceholder="Search zones…"
+                    options={zoneOptions}
+                  />
+                )}
               </div>
-              <div>
-                <div className="text-xs text-neutral-500">Cluster</div>
-                <Input value={dc?.cluster || ''} onChange={(e) => setDc({ ...dc, cluster: e.target.value })} readOnly={!isEdit} />
+              <div className="space-y-1">
+                <Label>Cluster</Label>
+                {readOnly ? (
+                  <Input value={dc.cluster || ''} readOnly />
+                ) : (
+                  <SearchableSelect
+                    value={dc.cluster || ''}
+                    onValueChange={(v) => setDc({ ...dc, cluster: v })}
+                    placeholder={dc.zone ? 'Select Cluster' : 'Select zone first'}
+                    searchPlaceholder="Search clusters…"
+                    options={clusterOptions}
+                    disabled={!dc.zone}
+                  />
+                )}
               </div>
-              <div>
-                <div className="text-xs text-neutral-500">Remarks</div>
-                <Input value={dc?.remarks || ''} onChange={(e) => setDc({ ...dc, remarks: e.target.value })} readOnly={!isEdit} />
+              <div className="space-y-1">
+                <Label>Remarks</Label>
+                <Input
+                  value={dc.remarks || ''}
+                  onChange={(e) => setDc({ ...dc, remarks: e.target.value })}
+                  readOnly={readOnly}
+                />
               </div>
             </div>
           </Card>
         </div>
 
-        {/* DC Information Update */}
         <Card className="p-4 space-y-4">
-          <div className="font-medium">DC Information Update</div>
+          <div className="font-medium">DC Information</div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div>
-              <div className="text-xs text-neutral-500">DC Date</div>
-              <Input type="date" value={dc?.dcDate ? new Date(dc.dcDate).toISOString().slice(0,10) : ''} onChange={(e) => setDc({ ...dc, dcDate: e.target.value })} readOnly={!isEdit} />
+            <div className="space-y-1">
+              <Label>DC Date</Label>
+              <Input
+                type="date"
+                value={dc.dcDate ? new Date(dc.dcDate).toISOString().slice(0, 10) : ''}
+                onChange={(e) => setDc({ ...dc, dcDate: e.target.value })}
+                readOnly={readOnly}
+              />
             </div>
-            <div>
-              <div className="text-xs text-neutral-500">DC Remarks</div>
-              <Input value={dc?.dcRemarks || ''} onChange={(e) => setDc({ ...dc, dcRemarks: e.target.value })} readOnly={!isEdit} />
+            <div className="space-y-1">
+              <Label>DC Remarks</Label>
+              <Input
+                value={dc.dcRemarks || ''}
+                onChange={(e) => setDc({ ...dc, dcRemarks: e.target.value })}
+                readOnly={readOnly}
+              />
             </div>
-            <div>
-              <div className="text-xs text-neutral-500">DC Category (read-only)</div>
-              <Input value={dc?.dcCategory || ''} readOnly />
+            <div className="space-y-1">
+              <Label>DC Category</Label>
+              <Input value={dc.dcCategory || ''} readOnly className="bg-neutral-50" />
             </div>
           </div>
 
@@ -140,112 +280,30 @@ export default function DcFormUpdatePage() {
                 {dc?.items?.map((it: any, idx: number) => (
                   <tr key={idx}>
                     <td className="py-1 pr-4">
-                      {isEdit ? (
-                        <select className="w-full border rounded px-2 py-1" value={it.product || ''} onChange={(e) => {
-                          const items = [...(dc?.items || [])]; items[idx] = { ...items[idx], product: e.target.value }; setDc({ ...dc, items })
-                        }}>
-                          {[it.product, ...productOptions].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).map((p: string) => (
-                            <option key={p} value={p}>{p}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <Input value={it.product} readOnly />
-                      )}
+                      <Input value={it.product || ''} readOnly className="min-w-[120px]" />
                     </td>
                     <td className="py-1 pr-4">
-                      {isEdit ? (
-                        <select className="w-full border rounded px-2 py-1" value={it.class ?? ''} onChange={(e) => {
-                          const items = [...(dc?.items || [])]; items[idx] = { ...items[idx], class: Number(e.target.value) || 0 }; setDc({ ...dc, items })
-                        }}>
-                          {[it.class, ...CLASS_OPTIONS].filter((v) => v !== undefined).filter((v, i, a) => a.indexOf(v) === i).map((c: any) => (
-                            <option key={c} value={c}>{c}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <Input value={it.class} readOnly />
-                      )}
+                      <Input value={it.class ?? ''} readOnly />
                     </td>
                     <td className="py-1 pr-4">
-                      {isEdit ? (
-                        <select className="w-full border rounded px-2 py-1" value={it.category || ''} onChange={(e) => {
-                          const items = [...(dc?.items || [])]; items[idx] = { ...items[idx], category: e.target.value }; setDc({ ...dc, items })
-                        }}>
-                          {[it.category, ...CATEGORY_OPTIONS].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).map((c: string) => (
-                            <option key={c} value={c}>{c}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <Input value={it.category} readOnly />
-                      )}
+                      <Input value={it.category || ''} readOnly />
                     </td>
                     <td className="py-1 pr-4">
-                      {isEdit ? (
-                        <select className="w-full border rounded px-2 py-1" value={it.productName || ''} onChange={(e) => {
-                          const items = [...(dc?.items || [])]; items[idx] = { ...items[idx], productName: e.target.value }; setDc({ ...dc, items })
-                        }}>
-                          {[it.productName, ...PRODUCT_NAME_OPTIONS].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).map((n: string) => (
-                            <option key={n} value={n}>{n}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <Input value={it.productName} readOnly />
-                      )}
+                      <Input value={it.productName || ''} readOnly />
                     </td>
                     <td className="py-1 pr-4">
-                      {isEdit ? (
-                        <Input type="number" value={it.qty} onChange={(e) => {
-                          const items = [...(dc?.items || [])]; items[idx] = { ...items[idx], qty: Number(e.target.value) || 0 }; setDc({ ...dc, items })
-                        }} />
-                      ) : (
-                        <Input value={it.qty} readOnly />
-                      )}
+                      <Input value={it.qty ?? ''} readOnly />
                     </td>
-                    <td className="py-1 pr-4"><Input type="number" value={it.whQty ?? 0} onChange={(e) => {
-                      const items = [...(dc?.items || [])]
-                      items[idx] = { ...items[idx], whQty: Number(e.target.value) }
-                      setDc({ ...dc, items })
-                    }} /></td>
+                    <td className="py-1 pr-4">
+                      <Input value={it.whQty ?? 0} readOnly />
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-
-          <div className="flex justify-end gap-2">
-            <Button onClick={async () => {
-              const payload: any = {
-                schoolName: dc?.schoolName,
-                schoolCode: dc?.schoolCode,
-                contactPersonName: dc?.contactPersonName,
-                contactMobile: dc?.contactMobile,
-                town: dc?.town,
-                address: dc?.address,
-                zone: dc?.zone,
-                cluster: dc?.cluster,
-                remarks: dc?.remarks,
-                dcNotes: dc?.dcNotes,
-                dcRemarks: dc?.dcRemarks,
-              }
-              if (isEdit) {
-                payload.fullItems = true
-                payload.items = (dc?.items || []).map((it: any) => ({
-                  product: it.product,
-                  class: it.class,
-                  category: it.category,
-                  productName: it.productName,
-                  qty: it.qty,
-                  whQty: it.whQty ?? 0,
-                }))
-              } else {
-                payload.items = (dc?.items || []).map((it: any) => ({ whQty: it.whQty }))
-              }
-              await apiRequest(`/warehouse/dc/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
-            }}>Save</Button>
           </div>
         </Card>
       </Card>
     </div>
   )
 }
-
-

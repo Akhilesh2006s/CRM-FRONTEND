@@ -30,6 +30,10 @@ const vendorUserRoutes = require('./routes/vendorUserRoutes');
 const executiveManagerRoutes = require('./routes/executiveManagerRoutes');
 const sampleRequestRoutes = require('./routes/sampleRequestRoutes');
 const aiRoutes = require('./routes/aiRoutes');
+const zoneRoutes = require('./routes/zoneRoutes');
+const clusterRoutes = require('./routes/clusterRoutes');
+const zoneClusterRoutes = require('./routes/zoneClusterRoutes');
+const settingsRoutes = require('./routes/settingsRoutes');
 
 dotenv.config();
 
@@ -57,6 +61,14 @@ if (!fs.existsSync(trainingFeedbackDir)) {
 }
 if (!fs.existsSync(serviceFeedbackDir)) {
   fs.mkdirSync(serviceFeedbackDir, { recursive: true });
+}
+const dashboardDataDir = path.join(__dirname, 'uploads', 'dashboard-data');
+const backupsDir = path.join(__dirname, 'uploads', 'backups');
+if (!fs.existsSync(dashboardDataDir)) {
+  fs.mkdirSync(dashboardDataDir, { recursive: true });
+}
+if (!fs.existsSync(backupsDir)) {
+  fs.mkdirSync(backupsDir, { recursive: true });
 }
 
 // Database connection
@@ -153,8 +165,12 @@ app.use('/api/metadata', metadataRoutes);
 app.use('/api/stock-returns', stockReturnRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/location', locationRoutes);
+app.use('/api/zones', zoneRoutes);
+app.use('/api/clusters', clusterRoutes);
+app.use('/api/zones-clusters', zoneClusterRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/deliverables', deliverableRoutes);
+app.use('/api/partners', vendorRoutes);
 app.use('/api/vendors', vendorRoutes);
 app.use('/api/vendor-user', vendorUserRoutes);
 // Explicit route so PO change list is never 404 (mobile: GET /api/executive-managers/po-change-requests)
@@ -165,6 +181,7 @@ app.get('/api/executive-managers/po-change-requests', authMiddleware, listPoChan
 app.use('/api/executive-managers', executiveManagerRoutes);
 app.use('/api/sample-requests', sampleRequestRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

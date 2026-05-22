@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { apiRequest } from '@/lib/api'
@@ -141,10 +142,18 @@ const AI_TOOLS = [
 ]
 
 export default function AIDashboardPage() {
+  const searchParams = useSearchParams()
   const [activeTool, setActiveTool] = useState('narrative-bi')
   const [data, setData] = useState<any>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const toolParam = searchParams.get('tool')
+    if (toolParam && AI_TOOLS.some((t) => t.id === toolParam)) {
+      setActiveTool(toolParam)
+    }
+  }, [searchParams])
 
   useEffect(() => {
     loadAIData()

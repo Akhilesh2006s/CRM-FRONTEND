@@ -109,7 +109,12 @@ export default function ExecutiveStockReturnsPage() {
     try {
       const response = await apiRequest<any>(`/stock-returns/executive/list`)
       const returnsList = Array.isArray(response) ? response : (response?.data || [])
-      setReturns(returnsList)
+      setReturns(
+        returnsList.map((r: any) => ({
+          ...r,
+          returnStatus: r.status || r.returnStatus || 'Submitted',
+        }))
+      )
     } catch (e: any) {
       toast.error(e.message || 'Failed to load returns')
       setReturns([])

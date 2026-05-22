@@ -102,7 +102,7 @@ export default function NewVendorPage() {
     }
 
     try {
-      await apiRequest('/vendors', {
+      await apiRequest('/partners', {
         method: 'POST',
         body: JSON.stringify({
           name: form.name.trim(),
@@ -111,7 +111,7 @@ export default function NewVendorPage() {
           assignedProducts: form.assignedProducts,
         }),
       })
-      toast.success('Vendor created successfully!')
+      toast.success('Partner created successfully!')
       router.push('/dashboard/products/vendors')
     } catch (err: any) {
       setError(err?.message || 'Failed to create vendor')
@@ -140,44 +140,44 @@ export default function NewVendorPage() {
         className="inline-flex items-center gap-2 text-sm text-neutral-600 hover:text-neutral-900"
       >
         <ArrowLeft className="w-4 h-4" />
-        Back to Vendors
+        Back to Partners
       </Link>
 
       <div>
-        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Add Vendor</h1>
-        <p className="text-sm text-neutral-600 mt-1">Create a new vendor account and assign products</p>
+        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Add Partner</h1>
+        <p className="text-sm text-neutral-600 mt-1">Create a new partner account and assign products</p>
       </div>
 
       <Card className="p-4 md:p-6 bg-neutral-50 border border-neutral-200">
         <form onSubmit={onSubmit} className="space-y-6">
           <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-neutral-900">Vendor Basic Details</h2>
+            <h2 className="text-lg font-semibold text-neutral-900">Partner Basic Details</h2>
 
             <div>
-              <Label htmlFor="name">Vendor Name *</Label>
+              <Label htmlFor="name">Partner Name *</Label>
               <Input
                 id="name"
                 className="bg-white text-neutral-900 mt-1"
                 value={form.name}
                 onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                placeholder="Enter vendor name"
+                placeholder="Enter partner name"
                 required
               />
             </div>
             <div>
-              <Label htmlFor="email">Vendor Email *</Label>
+              <Label htmlFor="email">Partner Email *</Label>
               <Input
                 id="email"
                 type="email"
                 className="bg-white text-neutral-900 mt-1"
                 value={form.email}
                 onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                placeholder="Enter vendor email (used for login)"
+                placeholder="Enter partner email (used for login)"
                 required
               />
             </div>
             <div>
-              <Label htmlFor="password">Vendor Password *</Label>
+              <Label htmlFor="password">Partner Password *</Label>
               <Input
                 id="password"
                 type="password"
@@ -212,6 +212,7 @@ export default function NewVendorPage() {
                       id={`product-${product._id}`}
                       checked={form.assignedProducts.includes(product._id)}
                       onCheckedChange={() => toggleProduct(product._id)}
+                      className="border-neutral-400 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600 data-[state=checked]:text-white"
                     />
                     <Label
                       htmlFor={`product-${product._id}`}
@@ -250,7 +251,7 @@ export default function NewVendorPage() {
               ) : (
                 <>
                   <Save className="w-4 h-4 mr-2" />
-                  Save Vendor
+                  Save Partner
                 </>
               )}
             </Button>

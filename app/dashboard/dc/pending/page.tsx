@@ -679,7 +679,7 @@ export default function PendingDCPage() {
     // Show detailed form view
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="no-print flex items-center justify-between">
           <div>
             <h1 className="text-2xl md:text-3xl font-semibold text-gray-900">Viswam Edutech - Raise DC</h1>
             <div className="flex items-center gap-4 mt-2 text-sm">
@@ -704,7 +704,23 @@ export default function PendingDCPage() {
           </Button>
         </div>
 
-        <Card className="p-6 bg-white">
+        <Card id="dc-print-root" className="p-6 bg-white">
+          <div className="hidden print:block mb-6 border-b border-gray-300 pb-4">
+            <h1 className="text-xl font-bold text-black">Viswam Edutech — Delivery Challan</h1>
+            <p className="text-sm mt-2 text-black">
+              DC No: <strong>{getDCNumber(selectedDC)}</strong>
+              {' · '}
+              Products: <strong>{getProductsSummary(selectedDC)}</strong>
+              {' · '}
+              Due: <strong>
+                {typeof selectedDC.dcOrderId === 'object' && selectedDC.dcOrderId !== null
+                  ? `${selectedDC.dcOrderId.due_amount || 0} (${selectedDC.dcOrderId.due_percentage || 0}%)`
+                  : '0 (0%)'}
+              </strong>
+            </p>
+            {dcDate && <p className="text-sm mt-1 text-black">DC Date: {dcDate}</p>}
+            {smeRemarks && <p className="text-sm mt-1 text-black">SME Remarks: {smeRemarks}</p>}
+          </div>
           {/* Lead Information and More Information */}
           {selectedDC.dcOrderId && typeof selectedDC.dcOrderId === 'object' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
@@ -937,8 +953,48 @@ export default function PendingDCPage() {
             </div>
           </div>
 
-          {/* Products Table */}
-          <div className="border-t pt-6 mb-6">
+          {/* Print-only products table */}
+          <div className="hidden print:block border-t pt-4 mb-4 dc-print-section">
+            <h3 className="font-semibold text-black mb-2">Products</h3>
+            <table className="w-full text-sm border-collapse dc-print-table">
+              <thead>
+                <tr className="border-b border-gray-400">
+                  <th className="py-2 px-2 text-left border border-gray-300">Product</th>
+                  <th className="py-2 px-2 text-left border border-gray-300">Class</th>
+                  <th className="py-2 px-2 text-left border border-gray-300">Product Category</th>
+                  <th className="py-2 px-2 text-left border border-gray-300">Category</th>
+                  <th className="py-2 px-2 text-left border border-gray-300">Specs</th>
+                  <th className="py-2 px-2 text-left border border-gray-300">Subject</th>
+                  <th className="py-2 px-2 text-left border border-gray-300">Strength</th>
+                  <th className="py-2 px-2 text-left border border-gray-300">Level</th>
+                </tr>
+              </thead>
+              <tbody>
+                {productRows.map((row) => (
+                  <tr key={`print-${row.id}`} className="border-b border-gray-200">
+                    <td className="py-2 px-2 border border-gray-300">{row.product}</td>
+                    <td className="py-2 px-2 border border-gray-300">{row.class}</td>
+                    <td className="py-2 px-2 border border-gray-300">{row.productCategory || '-'}</td>
+                    <td className="py-2 px-2 border border-gray-300">{row.category || '-'}</td>
+                    <td className="py-2 px-2 border border-gray-300">{row.specs || '-'}</td>
+                    <td className="py-2 px-2 border border-gray-300">{row.subject || '-'}</td>
+                    <td className="py-2 px-2 border border-gray-300">{row.strength ?? 0}</td>
+                    <td className="py-2 px-2 border border-gray-300">{row.level || '-'}</td>
+                  </tr>
+                ))}
+                <tr className="font-semibold bg-gray-50">
+                  <td colSpan={6} className="py-2 px-2 text-right border border-gray-300">Total Strength:</td>
+                  <td className="py-2 px-2 border border-gray-300">
+                    {productRows.reduce((sum, row) => sum + (Number(row.strength) || 0), 0)}
+                  </td>
+                  <td className="py-2 px-2 border border-gray-300" />
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* Products Table (screen) */}
+          <div className="border-t pt-6 mb-6 print:hidden">
             <div className="flex items-center justify-between mb-3">
               <Label className="text-lg font-semibold text-gray-900">Products</Label>
               {!isShortageDcDetail && (
@@ -1173,7 +1229,7 @@ export default function PendingDCPage() {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex justify-between items-center border-t pt-4">
+          <div className="no-print flex justify-between items-center border-t pt-4">
             <div className="flex gap-2">
               <Button 
                 type="button"
