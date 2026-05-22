@@ -124,6 +124,22 @@ export async function lookupPincodeFromIndiaPost(
   }
 }
 
+async function lookupPincodeViaNextProxy(
+  pincode: string,
+): Promise<PincodeLookupResult> {
+  const res = await fetch(`/api/pincode?pincode=${pincode}`, { cache: 'no-store' })
+  const data = (await res.json()) as BackendGetTown
+  if (res.ok && data.success && data.town) {
+    return fromBackend(data)
+  }
+  return {
+    success: false,
+    message:
+      (data as { message?: string }).message ||
+      'Pincode not found. Enter location manually.',
+  }
+}
+
 export async function lookupPincode(pincode: string): Promise<PincodeLookupResult> {
   const code = pincode.replace(/\D/g, '').slice(0, 6)
   if (code.length !== 6) {
@@ -138,11 +154,20 @@ export async function lookupPincode(pincode: string): Promise<PincodeLookupResul
       return fromBackend(data)
     }
   } catch {
-    // fall through to direct API
+    // fall through
   }
 
   try {
-    return await lookupPincodeFromIndiaPost(code)
+    const proxied = await lookupPincodeViaNextProxy(code)
+    if (proxied.success) return proxied
+  } catch {
+    // fall through
+  }
+
+  try {
+    const direct = await lookupPincodeFromIndiaPost(code)
+    if (direct.success) return direct
+    return direct
   } catch {
     return {
       success: false,
