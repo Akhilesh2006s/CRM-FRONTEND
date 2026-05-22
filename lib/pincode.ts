@@ -87,43 +87,6 @@ function fromBackend(data: BackendGetTown): PincodeLookupResult {
   }
 }
 
-export async function lookupPincodeFromIndiaPost(
-  pincode: string,
-): Promise<PincodeLookupResult> {
-  const res = await fetch(`https://api.postalpincode.in/pincode/${pincode}`, {
-    cache: 'no-store',
-  })
-  if (!res.ok) {
-    return {
-      success: false,
-      message: 'Could not reach pincode service. Enter location manually.',
-    }
-  }
-
-  const data = (await res.json()) as IndiaPostResponse
-  const block = data?.[0]
-  if (
-    block?.Status !== 'Success' ||
-    !block.PostOffice ||
-    block.PostOffice.length === 0
-  ) {
-    return {
-      success: false,
-      message: 'Pincode not found. Check the code or enter location manually.',
-    }
-  }
-
-  const first = block.PostOffice[0]
-  return {
-    success: true,
-    town: first.Name,
-    district: first.District,
-    state: first.State,
-    region: first.Division || first.Region || first.District,
-    postOffices: mapPostOffices(block.PostOffice),
-  }
-}
-
 async function lookupPincodeViaNextProxy(
   pincode: string,
 ): Promise<PincodeLookupResult> {
@@ -147,6 +110,13 @@ export async function lookupPincode(pincode: string): Promise<PincodeLookupResul
   }
 
   try {
+    const proxied = await lookupPincodeViaNextProxy(code)
+    if (proxied.success) return proxied
+  } catch {
+    // fall through
+  }
+
+  try {
     const data = await apiRequest<BackendGetTown>(
       `/location/get-town?pincode=${code}`,
     )
@@ -157,22 +127,9 @@ export async function lookupPincode(pincode: string): Promise<PincodeLookupResul
     // fall through
   }
 
-  try {
-    const proxied = await lookupPincodeViaNextProxy(code)
-    if (proxied.success) return proxied
-  } catch {
-    // fall through
-  }
-
-  try {
-    const direct = await lookupPincodeFromIndiaPost(code)
-    if (direct.success) return direct
-    return direct
-  } catch {
-    return {
-      success: false,
-      message:
-        'Pincode lookup failed. Check your connection or enter state, district, and area manually.',
-    }
+  return {
+    success: false,
+    message:
+      'Pincode lookup failed. Enter state, district, and area manually, or redeploy the latest frontend.',
   }
 }
