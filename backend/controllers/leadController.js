@@ -25,8 +25,66 @@ function normalizeLeadProducts(products) {
   return products.map((p) => {
     const product = { ...p };
     product.term = normalizeProductTerm(product.term);
+    if (product.renewal_pct != null) {
+      product.renewal_pct = Math.max(0, Math.min(100, Number(product.renewal_pct) || 0));
+    }
+    if (product.is_from_previous_dc != null) {
+      product.is_from_previous_dc = Boolean(product.is_from_previous_dc);
+    }
     return product;
   });
+}
+
+function parseRenewalPct(row) {
+  const raw = row.renewal_pct ?? row.chance;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return null;
+  return Math.max(0, Math.min(100, n));
+}
+
+function mapRenewalProducts(productsInput) {
+  if (!Array.isArray(productsInput)) return [];
+  return productsInput
+    .filter((p) => p && (p.product_name || p.product))
+    .map((p) => {
+      const renewalPct = parseRenewalPct(p);
+      return {
+        product_name: String(p.product_name || p.product || '').trim(),
+        quantity: 1,
+        unit_price: Number(p.unit_price) || 0,
+        term: normalizeProductTerm(p.term),
+        deliverables: Array.isArray(p.deliverables) ? p.deliverables : [],
+        renewal_pct: renewalPct,
+        is_from_previous_dc: Boolean(p.is_from_previous_dc ?? p.isFromPreviousDc),
+      };
+    });
+}
+
+function normalizeRenewalProductsInterested(rows = []) {
+  return rows
+    .filter((row) => row && (row.product_name || row.product))
+    .map((row) => {
+      const pct = parseRenewalPct(row) ?? 0;
+      return {
+        product_name: String(row.product_name || row.product || '').trim(),
+        term: normalizeProductTerm(row.term),
+        status: 'Warm',
+        strength: 1,
+        chance: pct,
+        is_from_previous_dc: Boolean(row.is_from_previous_dc ?? row.isFromPreviousDc),
+      };
+    });
+}
+
+function renewalInterestedToLeadProducts(rows = []) {
+  return rows.map((row) => ({
+    product_name: row.product_name,
+    term: row.term,
+    quantity: 1,
+    unit_price: 0,
+    renewal_pct: row.chance,
+    is_from_previous_dc: Boolean(row.is_from_previous_dc),
+  }));
 }
 
 // @desc    Get all leads
@@ -296,9 +354,17 @@ const createRenewalLead = async (req, res) => {
     }
 
     const code = String(order.school_code || order.dc_code || '').trim();
-    const productsFromBody = mapProductsFromInterested(req.body.products || req.body.productsInterested);
+    const productsFromBody = mapRenewalProducts(req.body.products || req.body.productsInterested);
     if (productsFromBody.length === 0) {
       return res.status(400).json({ message: 'Add at least one product interested for this renewal.' });
+    }
+    const invalidPct = productsFromBody.some(
+      (row) => row.renewal_pct == null || row.renewal_pct < 1 || row.renewal_pct > 100
+    );
+    if (invalidPct) {
+      return res.status(400).json({
+        message: 'Each product must have Renewal % between 1 and 100.',
+      });
     }
     let productsNormalized;
     try {
@@ -386,6 +452,8 @@ const updateLead = async (req, res) => {
     const hasFollowUpDate = req.body.follow_up_date !== undefined;
     const hasRemarks = req.body.remarks !== undefined;
     const hasProductsInterested = Array.isArray(req.body.productsInterested);
+    const isRenewalLead = lead.lead_type === 'renewal';
+
     const normalizeProductsInterested = (rows = []) =>
       rows
         .filter((row) => row && (row.product_name || row.product))
@@ -400,29 +468,49 @@ const updateLead = async (req, res) => {
           quantity: Number(row.strength) || 0,
           unit_price: 0,
         }));
+
     const normalizedProductsInterested = hasProductsInterested
-      ? normalizeProductsInterested(req.body.productsInterested)
+      ? isRenewalLead
+        ? normalizeRenewalProductsInterested(req.body.productsInterested)
+        : normalizeProductsInterested(req.body.productsInterested)
       : [];
+
     const isFollowUpSubmission = hasFollowUpDate && hasRemarks;
-    if (isFollowUpSubmission) {
+    if (isFollowUpSubmission && hasProductsInterested) {
       if (normalizedProductsInterested.length === 0) {
         return res.status(400).json({
-          message: 'At least one product with Strength (quantity) and Chance % is required',
+          message: isRenewalLead
+            ? 'At least one product with Renewal % is required'
+            : 'At least one product with Strength (quantity) and Chance % is required',
         });
       }
-      const invalidProductRows = normalizedProductsInterested.some(
-        (row) => row.strength <= 0 || row.chance <= 0
-      );
-      if (invalidProductRows) {
-        return res.status(400).json({
-          message: 'Each product must have Strength greater than 0 and Chance % greater than 0',
-        });
+      if (isRenewalLead) {
+        const invalidRenewalRows = normalizedProductsInterested.some(
+          (row) => row.chance < 1 || row.chance > 100
+        );
+        if (invalidRenewalRows) {
+          return res.status(400).json({
+            message: 'Each product must have Renewal % between 1 and 100',
+          });
+        }
+      } else {
+        const invalidProductRows = normalizedProductsInterested.some(
+          (row) => row.strength <= 0 || row.chance <= 0
+        );
+        if (invalidProductRows) {
+          return res.status(400).json({
+            message: 'Each product must have Strength greater than 0 and Chance % greater than 0',
+          });
+        }
       }
     }
 
-    const derivedLeadPriority = derivePriorityFromFollowUpProducts(normalizedProductsInterested);
-    if (normalizedProductsInterested.length > 0 && derivedLeadPriority) {
-      req.body.priority = derivedLeadPriority;
+    let derivedLeadPriority = null;
+    if (!isRenewalLead && normalizedProductsInterested.length > 0) {
+      derivedLeadPriority = derivePriorityFromFollowUpProducts(normalizedProductsInterested);
+      if (derivedLeadPriority) {
+        req.body.priority = derivedLeadPriority;
+      }
     }
     const hasPriority = req.body.priority !== undefined;
 
@@ -431,7 +519,11 @@ const updateLead = async (req, res) => {
       req.body.products = normalizeLeadProducts(req.body.products);
     }
     if (hasProductsInterested) {
-      req.body.products = normalizeLeadProducts(normalizedProductsInterested);
+      req.body.products = normalizeLeadProducts(
+        isRenewalLead
+          ? renewalInterestedToLeadProducts(normalizedProductsInterested)
+          : normalizedProductsInterested
+      );
     }
 
     // Remove transient payload key, not a Lead top-level field

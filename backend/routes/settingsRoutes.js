@@ -11,6 +11,8 @@ const {
   updateBackupSettings,
   runBackup,
   downloadBackup,
+  getExpensePolicyAdmin,
+  updateExpensePolicyAdmin,
 } = require('../controllers/settingsController');
 
 const adminOnly = roleMiddleware('Admin', 'Super Admin');
@@ -34,5 +36,8 @@ router.get('/backup', adminOnly, getBackupSettings);
 router.put('/backup', adminOnly, updateBackupSettings);
 router.post('/backup/run', adminOnly, runBackup);
 router.get('/backup/download/:filename', adminOnly, downloadBackup);
+
+router.get('/expense-policy', adminOnly, getExpensePolicyAdmin);
+router.put('/expense-policy', adminOnly, updateExpensePolicyAdmin);
 
 module.exports = router;

@@ -7,6 +7,12 @@ const connectDB = async (retryCount = 0, maxRetries = 3) => {
     process.env.DATABASE_URL ||
     'mongodb://127.0.0.1:27017/crm_system'
 
+  mongoURI = String(mongoURI).trim()
+  if (/^mmongodb/i.test(mongoURI)) {
+    console.warn('⚠️  Fixing typo in MONGO_URI: mmongodb → mongodb')
+    mongoURI = mongoURI.replace(/^mmongodb/i, 'mongodb')
+  }
+
   try {
     if (retryCount > 0) {
       console.log(`Attempting to connect to MongoDB... (Retry ${retryCount}/${maxRetries})`)

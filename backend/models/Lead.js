@@ -16,6 +16,8 @@ const productSchema = new mongoose.Schema(
     subject: { type: String, trim: true },
     selected_subjects: { type: [String], default: [] },
     levels_snapshot: { type: [String], default: [] },
+    renewal_pct: { type: Number, min: 0, max: 100 },
+    is_from_previous_dc: { type: Boolean, default: false },
   },
   { _id: false }
 );
@@ -31,6 +33,7 @@ const followUpProductSchema = new mongoose.Schema(
     },
     strength: { type: Number, default: 0, min: 0 },
     chance: { type: Number, default: 0, min: 0, max: 100 },
+    is_from_previous_dc: { type: Boolean, default: false },
   },
   { _id: false }
 );

@@ -275,6 +275,41 @@ const runBackup = async (req, res) => {
   }
 };
 
+const getExpensePolicyAdmin = async (req, res) => {
+  try {
+    const doc = await getOrCreateSettings();
+    const expense = doc.expense || {};
+    res.json({
+      skipFinanceStage: Boolean(expense.skipFinanceStage),
+      foodBillMandatoryAbove: Number(expense.foodBillMandatoryAbove) || 500,
+      requireTicketForModes: Array.isArray(expense.requireTicketForModes)
+        ? expense.requireTicketForModes
+        : ['Bus', 'Train', 'Flight', 'Other'],
+    });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+};
+
+const updateExpensePolicyAdmin = async (req, res) => {
+  try {
+    const { skipFinanceStage, foodBillMandatoryAbove, requireTicketForModes } = req.body;
+    const doc = await getOrCreateSettings();
+    doc.expense = {
+      skipFinanceStage: Boolean(skipFinanceStage),
+      foodBillMandatoryAbove: Math.max(0, Number(foodBillMandatoryAbove) || 500),
+      requireTicketForModes: Array.isArray(requireTicketForModes)
+        ? requireTicketForModes.filter(Boolean)
+        : ['Bus', 'Train', 'Flight', 'Other'],
+    };
+    doc.updatedBy = req.user._id;
+    await doc.save();
+    res.json(doc.expense);
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+};
+
 const downloadBackup = async (req, res) => {
   try {
     const fileName = path.basename(req.params.filename || '');
@@ -303,4 +338,6 @@ module.exports = {
   updateBackupSettings,
   runBackup,
   downloadBackup,
+  getExpensePolicyAdmin,
+  updateExpensePolicyAdmin,
 };

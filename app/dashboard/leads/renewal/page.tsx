@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { apiRequest } from '@/lib/api'
 import { Input } from '@/components/ui/input'
@@ -60,6 +60,8 @@ type Lead = {
     status?: string
     strength?: number
     chance?: number
+    renewal_pct?: number
+    is_from_previous_dc?: boolean
     quantity?: number
   }> | string
 }
@@ -67,15 +69,54 @@ type Lead = {
 type ProductInterested = {
   product_name: string
   term: string
-  status: string
-  strength: number
-  chance: number
+  renewal_pct: number | ''
+  isFromPreviousDc: boolean
 }
 
-type ProductLine = {
+type RenewalProductLine = {
   product_name: string
-  quantity: number
   term: string
+  renewal_pct: number | ''
+  isFromPreviousDc: boolean
+}
+
+function dedupeSchoolProducts(products?: DcOrderSearchRow['products']) {
+  const seen = new Set<string>()
+  const out: Array<{ product_name: string; term: string }> = []
+  for (const p of products || []) {
+    const name = (p.product_name || '').trim()
+    if (!name) continue
+    const term = p.term || 'Term 1'
+    const key = `${name}::${term}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({ product_name: name, term })
+  }
+  return out
+}
+
+function buildRenewProductsFromSchool(school: DcOrderSearchRow | null): RenewalProductLine[] {
+  const deduped = dedupeSchoolProducts(school?.products)
+  if (deduped.length > 0) {
+    return deduped.map((p) => ({
+      product_name: p.product_name,
+      term: p.term,
+      renewal_pct: '',
+      isFromPreviousDc: true,
+    }))
+  }
+  return [{ product_name: '', term: 'Term 1', renewal_pct: 100, isFromPreviousDc: false }]
+}
+
+function productRenewalPctDisplay(p: {
+  renewal_pct?: number
+  chance?: number
+}): string | null {
+  const raw = p.renewal_pct ?? p.chance
+  if (raw == null || raw === '') return null
+  const n = Number(raw)
+  if (!Number.isFinite(n)) return null
+  return `${n}%`
 }
 
 export default function RenewalLeadsPage() {
@@ -115,8 +156,8 @@ export default function RenewalLeadsPage() {
   const [renewContactPerson, setRenewContactPerson] = useState('')
   const [renewContactMobile, setRenewContactMobile] = useState('')
   const [renewRemarks, setRenewRemarks] = useState('')
-  const [renewProducts, setRenewProducts] = useState<ProductLine[]>([
-    { product_name: '', quantity: 1, term: 'Term 1' },
+  const [renewProducts, setRenewProducts] = useState<RenewalProductLine[]>([
+    { product_name: '', term: 'Term 1', renewal_pct: 100, isFromPreviousDc: false },
   ])
   const [creatingRenewal, setCreatingRenewal] = useState(false)
 
@@ -236,6 +277,7 @@ export default function RenewalLeadsPage() {
     setSearchResults([])
     setSchoolQuery(row.school_name || '')
     setSelectedSchool(row)
+    setRenewProducts(buildRenewProductsFromSchool(row))
     setRenewContactPerson(row.contact_person || '')
     setRenewContactMobile(row.contact_mobile || '')
     setSchoolDetailLoading(true)
@@ -244,6 +286,7 @@ export default function RenewalLeadsPage() {
       if (full && typeof full === 'object' && (full as { _id?: string })._id) {
         const merged = mergeDcOrderIntoRow(row, full)
         setSelectedSchool(merged)
+        setRenewProducts(buildRenewProductsFromSchool(merged))
         setRenewContactPerson(
           String((full as { contact_person?: string }).contact_person || '').trim() ||
             row.contact_person ||
@@ -254,6 +297,8 @@ export default function RenewalLeadsPage() {
             row.contact_mobile ||
             ''
         )
+      } else {
+        setRenewProducts(buildRenewProductsFromSchool(row))
       }
     } catch {
       toast.error('Could not load full school record; showing search summary.')
@@ -268,18 +313,28 @@ export default function RenewalLeadsPage() {
   }
 
   const addRenewProduct = () => {
-    setRenewProducts((p) => [...p, { product_name: '', quantity: 1, term: 'Term 1' }])
+    setRenewProducts((p) => [
+      ...p,
+      { product_name: '', term: 'Term 1', renewal_pct: 100, isFromPreviousDc: false },
+    ])
   }
 
   const removeRenewProduct = (i: number) => {
     setRenewProducts((p) => p.filter((_, idx) => idx !== i))
   }
 
-  const updateRenewProduct = (i: number, field: keyof ProductLine, value: string | number) => {
+  const updateRenewProduct = (
+    i: number,
+    field: keyof RenewalProductLine,
+    value: string | number | boolean
+  ) => {
     setRenewProducts((p) =>
       p.map((row, idx) => (idx === i ? { ...row, [field]: value } : row))
     )
   }
+
+  const priorDcProducts = renewProducts.filter((r) => r.isFromPreviousDc)
+  const additionalProducts = renewProducts.filter((r) => !r.isFromPreviousDc)
 
   const submitRenewalLead = async () => {
     if (!selectedSchool?._id) {
@@ -290,18 +345,27 @@ export default function RenewalLeadsPage() {
       toast.error('Contact person and mobile are required')
       return
     }
-    const products = renewProducts
-      .filter((r) => r.product_name.trim())
-      .map((r) => ({
-        product_name: r.product_name.trim(),
-        quantity: Math.max(1, Number(r.quantity) || 1),
-        term: r.term,
-        unit_price: 0,
-      }))
-    if (products.length === 0) {
+    const rows = renewProducts.filter((r) => r.product_name.trim())
+    if (rows.length === 0) {
       toast.error('Add at least one product')
       return
     }
+    const invalidPct = rows.some((r) => {
+      const pct = Number(r.renewal_pct)
+      return !Number.isFinite(pct) || pct < 1 || pct > 100
+    })
+    if (invalidPct) {
+      toast.error('Each product must have Renewal % between 1 and 100')
+      return
+    }
+    const products = rows.map((r) => ({
+      product_name: r.product_name.trim(),
+      quantity: 1,
+      term: r.term,
+      unit_price: 0,
+      renewal_pct: Number(r.renewal_pct),
+      is_from_previous_dc: r.isFromPreviousDc,
+    }))
     setCreatingRenewal(true)
     try {
       await apiRequest('/leads/create', {
@@ -319,7 +383,7 @@ export default function RenewalLeadsPage() {
       setSelectedSchool(null)
       setSchoolQuery('')
       setRenewRemarks('')
-      setRenewProducts([{ product_name: '', quantity: 1, term: 'Term 1' }])
+      setRenewProducts([{ product_name: '', term: 'Term 1', renewal_pct: 100, isFromPreviousDc: false }])
       await loadLeads()
     } catch (e: any) {
       toast.error(e?.message || 'Failed to create renewal lead')
@@ -386,13 +450,16 @@ export default function RenewalLeadsPage() {
       remarks: '',
       productsInterested: (() => {
         if (Array.isArray(lead.products) && lead.products.length > 0) {
-          return lead.products.map((p: any) => ({
-            product_name: p.product_name || p.product || '',
-            term: p.term || 'Term 1',
-            status: p.status || lead.priority || 'Warm',
-            strength: Number(p.strength ?? p.quantity ?? 0) || 0,
-            chance: Number(p.chance ?? 0) || 0,
-          }))
+          return lead.products.map((p: any) => {
+            const pct = p.renewal_pct ?? p.chance
+            return {
+              product_name: p.product_name || p.product || '',
+              term: p.term || 'Term 1',
+              renewal_pct:
+                pct != null && pct !== '' && Number.isFinite(Number(pct)) ? Number(pct) : '',
+              isFromPreviousDc: Boolean(p.is_from_previous_dc),
+            }
+          })
         }
         return []
       })(),
@@ -420,6 +487,19 @@ export default function RenewalLeadsPage() {
       toast.error('Remarks is required')
       return
     }
+    const productRows = updateForm.productsInterested.filter((p) => p.product_name?.trim())
+    if (productRows.length === 0) {
+      toast.error('Add at least one product with Renewal %')
+      return
+    }
+    const invalidPct = productRows.some((p) => {
+      const pct = Number(p.renewal_pct)
+      return !Number.isFinite(pct) || pct < 1 || pct > 100
+    })
+    if (invalidPct) {
+      toast.error('Each product must have Renewal % between 1 and 100')
+      return
+    }
     setUpdating(true)
     try {
       const payload: any = {
@@ -427,18 +507,16 @@ export default function RenewalLeadsPage() {
         priority: updateForm.status,
         remarks: updateForm.remarks,
       }
-      const validProducts = updateForm.productsInterested
-        .filter((p) => p.product_name?.trim())
-        .map((p) => ({
-          product_name: p.product_name.trim(),
-          term: p.term || 'Term 1',
-          status: p.status || 'Warm',
-          strength: Number(p.strength) || 0,
-          chance: Number(p.chance) || 0,
-          quantity: Number(p.strength) || 0,
-          unit_price: 0,
-        }))
-      if (validProducts.length > 0) payload.productsInterested = validProducts
+      const validProducts = productRows.map((p) => ({
+        product_name: p.product_name.trim(),
+        term: p.term || 'Term 1',
+        renewal_pct: Number(p.renewal_pct),
+        chance: Number(p.renewal_pct),
+        is_from_previous_dc: p.isFromPreviousDc,
+        quantity: 1,
+        unit_price: 0,
+      }))
+      payload.productsInterested = validProducts
 
       await apiRequest(`/leads/${selectedLead._id}`, {
         method: 'PUT',
@@ -492,7 +570,7 @@ export default function RenewalLeadsPage() {
       ...prev,
       productsInterested: [
         ...prev.productsInterested,
-        { product_name: '', term: 'Term 1', status: 'Warm', strength: 0, chance: 0 },
+        { product_name: '', term: 'Term 1', renewal_pct: 100, isFromPreviousDc: false },
       ],
     }))
   }
@@ -512,11 +590,6 @@ export default function RenewalLeadsPage() {
       ),
     }))
   }
-
-  const pastProductsPreview = useMemo(() => {
-    if (!selectedSchool?.products?.length) return null
-    return selectedSchool.products.slice(0, 5)
-  }, [selectedSchool])
 
   return (
     <div className="space-y-6">
@@ -620,18 +693,6 @@ export default function RenewalLeadsPage() {
                 <div>
                   <span className="text-neutral-500">Location:</span> {displayField(selectedSchool.location)}
                 </div>
-                {pastProductsPreview && pastProductsPreview.length > 0 && (
-                  <div>
-                    <span className="text-neutral-500">Recent products on file:</span>
-                    <ul className="list-disc ml-4 mt-1 text-xs text-neutral-700">
-                      {pastProductsPreview.map((p, i) => (
-                        <li key={i}>
-                          {p.product_name} × {p.quantity ?? '—'} ({p.term || 'Term 1'})
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -656,67 +717,136 @@ export default function RenewalLeadsPage() {
               </div>
             </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <Label>Products interested</Label>
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              Percentages are entered manually. Products from the previous DC have no default %.
+              New products default to 100% and can be edited.
+            </div>
+
+            {selectedSchool && priorDcProducts.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-neutral-800">Previous DC products</Label>
+                <p className="text-xs text-neutral-500">Enter renewal likelihood manually for each product on file.</p>
+                <div className="space-y-2">
+                  {renewProducts.map((row, i) =>
+                    !row.isFromPreviousDc ? null : (
+                      <div key={`prior-${i}`} className="flex flex-wrap gap-2 items-center">
+                        <span className="flex-1 min-w-[140px] text-sm font-medium text-neutral-800 py-2">
+                          {row.product_name}
+                          <span className="text-xs font-normal text-neutral-500 ml-1">({row.term})</span>
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <Input
+                            type="number"
+                            min={1}
+                            max={100}
+                            className="w-20"
+                            placeholder="%"
+                            value={row.renewal_pct === '' ? '' : row.renewal_pct}
+                            onChange={(e) => {
+                              const v = e.target.value
+                              updateRenewProduct(
+                                i,
+                                'renewal_pct',
+                                v === '' ? '' : Number(v) || ''
+                              )
+                            }}
+                            disabled={!selectedSchool}
+                          />
+                          <span className="text-sm text-neutral-500">%</span>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeRenewProduct(i)}
+                          disabled={!selectedSchool}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-neutral-800">Additional products</Label>
                 <Button type="button" size="sm" variant="outline" onClick={addRenewProduct} disabled={!selectedSchool}>
-                  Add line
+                  Add product
                 </Button>
               </div>
               <div className="space-y-2">
-                {renewProducts.map((row, i) => (
-                  <div key={i} className="flex flex-wrap gap-2 items-end">
-                    <div className="flex-1 min-w-[140px]">
+                {renewProducts.map((row, i) =>
+                  row.isFromPreviousDc ? null : (
+                    <div key={`new-${i}`} className="flex flex-wrap gap-2 items-end">
+                      <div className="flex-1 min-w-[140px]">
+                        <Select
+                          value={row.product_name || undefined}
+                          onValueChange={(v) => updateRenewProduct(i, 'product_name', v)}
+                          disabled={!selectedSchool}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Product" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableProductNames.map((name) => (
+                              <SelectItem key={name} value={name}>
+                                {name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                       <Select
-                        value={row.product_name || undefined}
-                        onValueChange={(v) => updateRenewProduct(i, 'product_name', v)}
+                        value={row.term}
+                        onValueChange={(v) => updateRenewProduct(i, 'term', v)}
                         disabled={!selectedSchool}
                       >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Product" />
+                        <SelectTrigger className="w-[120px]">
+                          <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {availableProductNames.map((name) => (
-                            <SelectItem key={name} value={name}>
-                              {name}
-                            </SelectItem>
-                          ))}
+                          <SelectItem value="Term 1">Term 1</SelectItem>
+                          <SelectItem value="Term 2">Term 2</SelectItem>
+                          <SelectItem value="Both">Both</SelectItem>
                         </SelectContent>
                       </Select>
+                      <div className="flex items-center gap-1">
+                        <Input
+                          type="number"
+                          min={1}
+                          max={100}
+                          className="w-20"
+                          value={row.renewal_pct === '' ? '' : row.renewal_pct}
+                          onChange={(e) => {
+                            const v = e.target.value
+                            updateRenewProduct(
+                              i,
+                              'renewal_pct',
+                              v === '' ? '' : Number(v) || 100
+                            )
+                          }}
+                          disabled={!selectedSchool}
+                        />
+                        <span className="text-sm text-neutral-500 pb-2">%</span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeRenewProduct(i)}
+                        disabled={!selectedSchool || additionalProducts.length <= 1}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
                     </div>
-                    <Input
-                      type="number"
-                      min={1}
-                      className="w-24"
-                      value={row.quantity}
-                      onChange={(e) => updateRenewProduct(i, 'quantity', Number(e.target.value) || 1)}
-                      disabled={!selectedSchool}
-                    />
-                    <Select
-                      value={row.term}
-                      onValueChange={(v) => updateRenewProduct(i, 'term', v)}
-                      disabled={!selectedSchool}
-                    >
-                      <SelectTrigger className="w-[120px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Term 1">Term 1</SelectItem>
-                        <SelectItem value="Term 2">Term 2</SelectItem>
-                        <SelectItem value="Both">Both</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeRenewProduct(i)}
-                      disabled={!selectedSchool || renewProducts.length <= 1}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
+                  )
+                )}
+                {selectedSchool && additionalProducts.length === 0 && priorDcProducts.length > 0 && (
+                  <p className="text-xs text-neutral-500">Use Add product for new lines (defaults to 100%).</p>
+                )}
               </div>
             </div>
 
@@ -870,6 +1000,26 @@ export default function RenewalLeadsPage() {
                       <span className="text-neutral-600">Status:</span>
                       <span className="ml-2 font-medium">{lead.status || '—'}</span>
                     </div>
+                    {Array.isArray(lead.products) && lead.products.length > 0 && (
+                      <div>
+                        <span className="text-neutral-600">Products:</span>
+                        <div className="flex flex-wrap gap-1.5 mt-1">
+                          {lead.products.map((p, idx) => {
+                            const pct = productRenewalPctDisplay(p)
+                            const name = p.product_name || (p as { product?: string }).product || 'Product'
+                            return (
+                              <span
+                                key={idx}
+                                className="inline-flex items-center rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-xs text-emerald-900"
+                              >
+                                {name}
+                                {pct ? ` · ${pct}` : ''}
+                              </span>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex flex-wrap gap-2 pt-2 border-t">
@@ -937,55 +1087,85 @@ export default function RenewalLeadsPage() {
             </div>
             <div>
               <div className="flex justify-between items-center mb-1">
-                <Label>Products interested</Label>
+                <Label>Products interested *</Label>
                 <Button type="button" size="sm" variant="outline" onClick={addInterestedProduct}>
                   Add
                 </Button>
               </div>
+              <p className="text-xs text-neutral-500 mb-2">
+                Enter Renewal % manually (1–100). New lines default to 100%.
+              </p>
               <div className="space-y-2 border rounded-md p-2">
-                {updateForm.productsInterested.map((product, index) => (
-                  <div key={index} className="flex flex-wrap gap-2 items-center">
-                    <Select
-                      value={product.product_name || undefined}
-                      onValueChange={(v) => updateInterestedProduct(index, 'product_name', v)}
-                    >
-                      <SelectTrigger className="flex-1 min-w-[120px]">
-                        <SelectValue placeholder="Product" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableProductNames.map((name) => (
-                          <SelectItem key={name} value={name}>
-                            {name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Select
-                      value={product.term}
-                      onValueChange={(v) => updateInterestedProduct(index, 'term', v)}
-                    >
-                      <SelectTrigger className="w-[100px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Term 1">Term 1</SelectItem>
-                        <SelectItem value="Term 2">Term 2</SelectItem>
-                        <SelectItem value="Both">Both</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      type="number"
-                      className="w-20"
-                      value={product.strength}
-                      onChange={(e) =>
-                        updateInterestedProduct(index, 'strength', Number(e.target.value) || 0)
-                      }
-                    />
-                    <Button type="button" variant="ghost" size="icon" onClick={() => removeInterestedProduct(index)}>
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
+                {updateForm.productsInterested.length === 0 ? (
+                  <p className="text-xs text-neutral-500">No products on this lead yet.</p>
+                ) : (
+                  updateForm.productsInterested.map((product, index) => (
+                    <div key={index} className="flex flex-wrap gap-2 items-center">
+                      {product.isFromPreviousDc ? (
+                        <span className="flex-1 min-w-[120px] text-sm font-medium">
+                          {product.product_name}
+                          <span className="ml-1 text-xs font-normal text-emerald-700">(prior DC)</span>
+                        </span>
+                      ) : (
+                        <Select
+                          value={product.product_name || undefined}
+                          onValueChange={(v) => updateInterestedProduct(index, 'product_name', v)}
+                        >
+                          <SelectTrigger className="flex-1 min-w-[120px]">
+                            <SelectValue placeholder="Product" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableProductNames.map((name) => (
+                              <SelectItem key={name} value={name}>
+                                {name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                      <Select
+                        value={product.term}
+                        onValueChange={(v) => updateInterestedProduct(index, 'term', v)}
+                      >
+                        <SelectTrigger className="w-[100px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Term 1">Term 1</SelectItem>
+                          <SelectItem value="Term 2">Term 2</SelectItem>
+                          <SelectItem value="Both">Both</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <div className="flex items-center gap-1">
+                        <Input
+                          type="number"
+                          min={1}
+                          max={100}
+                          className="w-20"
+                          placeholder="%"
+                          value={product.renewal_pct === '' ? '' : product.renewal_pct}
+                          onChange={(e) => {
+                            const v = e.target.value
+                            updateInterestedProduct(
+                              index,
+                              'renewal_pct',
+                              v === '' ? '' : Number(v) || ''
+                            )
+                          }}
+                        />
+                        <span className="text-xs text-neutral-500">%</span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeInterestedProduct(index)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
             <div>
@@ -1024,6 +1204,22 @@ export default function RenewalLeadsPage() {
                   {h.priority && <div>Priority: {h.priority}</div>}
                   {h.remarks && <div className="mt-1">{h.remarks}</div>}
                   {h.follow_up_date && <div className="mt-1">Next: {formatDate(h.follow_up_date)}</div>}
+                  {Array.isArray(h.productsInterested) && h.productsInterested.length > 0 && (
+                    <ul className="mt-2 space-y-1 text-xs text-neutral-700">
+                      {h.productsInterested.map((p: any, j: number) => {
+                        const name = p.product_name || p.product || 'Product'
+                        const term = p.term ? ` (${p.term})` : ''
+                        const pct = productRenewalPctDisplay(p)
+                        return (
+                          <li key={j}>
+                            {name}
+                            {term}
+                            {pct ? ` — ${pct}` : ''}
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )}
                 </Card>
               ))
             )}

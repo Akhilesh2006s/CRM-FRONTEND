@@ -30,8 +30,14 @@ type Expense = {
   managerRemarks?: string
   date: string
   gpsDistance?: number
+  approxKms?: number
+  claimedDistanceKm?: number
+  transportType?: string
+  travelFrom?: string
+  travelTo?: string
   expItemId?: string
   receipt?: string
+  ticketReceipt?: string
   employeeId?: {
     _id: string
     name: string
@@ -42,6 +48,24 @@ type Expense = {
     name: string
     email: string
   }
+}
+
+function normalizeCategory(cat: string) {
+  const c = (cat || '').toLowerCase()
+  if (c === 'travel') return 'travel'
+  if (c === 'food') return 'food'
+  if (c === 'accommodation' || c === 'accomodation') return 'accommodation'
+  return 'other'
+}
+
+function claimedKm(exp: Expense) {
+  return exp.approxKms ?? exp.claimedDistanceKm ?? null
+}
+
+function travelSummary(exp: Expense) {
+  if (normalizeCategory(exp.category) !== 'travel') return exp.description || exp.title || ''
+  const parts = [exp.transportType, exp.travelFrom && exp.travelTo ? `${exp.travelFrom} → ${exp.travelTo}` : '']
+  return parts.filter(Boolean).join(' · ') || exp.title
 }
 
 type ExpenseFormState = {
@@ -175,6 +199,35 @@ export default function ManagerExpenseUpdatePage() {
     }
   }
 
+  const handleRowDecision = async (expenseId: string, status: 'Needs Correction' | 'Rejected') => {
+    const remarks = expenseForms[expenseId]?.managerRemarks?.trim()
+    if (!remarks) {
+      toast.error('Enter manager remarks before sending back or rejecting')
+      return
+    }
+    setSubmitting(true)
+    try {
+      await apiRequest('/expenses/approve-multiple', {
+        method: 'POST',
+        body: JSON.stringify({
+          expenses: [
+            {
+              id: expenseId,
+              status,
+              managerRemarks: remarks,
+            },
+          ],
+        }),
+      })
+      toast.success(status === 'Rejected' ? 'Expense rejected' : 'Sent back for correction')
+      await loadExpenses()
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Action failed')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   const handleApprove = async () => {
     if (expenses.length === 0) {
       toast.error('No expenses to approve')
@@ -229,6 +282,7 @@ export default function ManagerExpenseUpdatePage() {
   }, 0)
 
   const totalGpsDistance = expenses.reduce((sum, exp) => sum + (exp.gpsDistance || 0), 0)
+  const totalClaimedKm = expenses.reduce((sum, exp) => sum + (claimedKm(exp) || 0), 0)
 
   const isImageReceipt = (url: string) =>
     /\.(jpe?g|png|gif|webp|bmp)$/i.test(url) || url.includes('/uploads/')
@@ -294,26 +348,28 @@ export default function ManagerExpenseUpdatePage() {
                 <TableHead className="font-semibold">S.No</TableHead>
                 <TableHead className="font-semibold">Exp Item ID</TableHead>
                 <TableHead className="font-semibold">Expense Type</TableHead>
-                <TableHead className="font-semibold">GPS Dist</TableHead>
-                <TableHead className="font-semibold">Description</TableHead>
+                <TableHead className="font-semibold">Claimed km</TableHead>
+                <TableHead className="font-semibold">GPS km</TableHead>
+                <TableHead className="font-semibold">Details</TableHead>
                 <TableHead className="font-semibold">Date of Expense</TableHead>
                 <TableHead className="font-semibold text-right">Amount</TableHead>
                 <TableHead className="font-semibold">Emp.Remarks</TableHead>
                 <TableHead className="font-semibold">Approval Amount</TableHead>
                 <TableHead className="font-semibold">Mngr.Remarks</TableHead>
-                <TableHead className="font-semibold">Bill Image</TableHead>
+                <TableHead className="font-semibold">Proofs</TableHead>
+                <TableHead className="font-semibold">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="text-center py-8 text-neutral-500">
+                  <TableCell colSpan={13} className="text-center py-8 text-neutral-500">
                     Loading expenses...
                   </TableCell>
                 </TableRow>
               ) : expenses.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="text-center py-8 text-neutral-500">
+                  <TableCell colSpan={13} className="text-center py-8 text-neutral-500">
                     No pending expenses found for this employee
                   </TableCell>
                 </TableRow>
@@ -334,17 +390,26 @@ export default function ManagerExpenseUpdatePage() {
                         </TableCell>
                         <TableCell>{getExpenseType(expense.category)}</TableCell>
                         <TableCell className="text-right">
-                          {expense.gpsDistance
-                            ? `${expense.gpsDistance.toFixed(1)} Kms`
-                            : '-'}
+                          {claimedKm(expense) != null ? `${claimedKm(expense)} km` : '—'}
                         </TableCell>
-                        <TableCell className="max-w-xs">
-                          <Textarea
-                            value={expense.description || expense.title || ''}
-                            readOnly
-                            className="min-h-[60px] resize-none bg-neutral-50 text-sm border-0"
-                            rows={2}
-                          />
+                        <TableCell className="text-right">
+                          {expense.gpsDistance ? (
+                            <span
+                              className={
+                                claimedKm(expense) != null &&
+                                Math.abs((claimedKm(expense) || 0) - expense.gpsDistance) > 20
+                                  ? 'text-amber-700 font-medium'
+                                  : ''
+                              }
+                            >
+                              {expense.gpsDistance.toFixed(1)} km
+                            </span>
+                          ) : (
+                            '—'
+                          )}
+                        </TableCell>
+                        <TableCell className="max-w-xs text-xs">
+                          {travelSummary(expense)}
                         </TableCell>
                         <TableCell>{formatDate(expense.date)}</TableCell>
                         <TableCell className="text-right font-medium">
@@ -426,12 +491,23 @@ export default function ManagerExpenseUpdatePage() {
                                   rel="noopener noreferrer"
                                   className="text-blue-600 hover:text-blue-700 flex items-center gap-1 text-sm"
                                 >
-                                  View bill
+                                  Bill
                                   <ExternalLink className="h-3 w-3" />
                                 </a>
                               </div>
                             ) : (
                               <span className="text-neutral-400 text-sm">No bill</span>
+                            )}
+                            {expense.ticketReceipt && (
+                              <a
+                                href={resolveUploadUrl(expense.ticketReceipt)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 text-xs flex items-center gap-1"
+                              >
+                                Ticket
+                                <ExternalLink className="h-3 w-3" />
+                              </a>
                             )}
                             <label className="cursor-pointer">
                               <input
@@ -452,6 +528,30 @@ export default function ManagerExpenseUpdatePage() {
                             </label>
                           </div>
                         </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-1 min-w-[100px]">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="text-orange-700 border-orange-300 text-xs"
+                              disabled={submitting}
+                              onClick={() => handleRowDecision(expense._id, 'Needs Correction')}
+                            >
+                              Send back
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="text-red-700 border-red-300 text-xs"
+                              disabled={submitting}
+                              onClick={() => handleRowDecision(expense._id, 'Rejected')}
+                            >
+                              Reject
+                            </Button>
+                          </div>
+                        </TableCell>
                       </TableRow>
                     )
                   })}
@@ -460,9 +560,12 @@ export default function ManagerExpenseUpdatePage() {
                       Total:
                     </TableCell>
                     <TableCell className="text-right">
+                      {totalClaimedKm > 0 ? `${totalClaimedKm.toFixed(1)} km` : '—'}
+                    </TableCell>
+                    <TableCell className="text-right">
                       {totalGpsDistance > 0
-                        ? `${totalGpsDistance.toFixed(1)} Kms`
-                        : '0 Kms'}
+                        ? `${totalGpsDistance.toFixed(1)} km`
+                        : '—'}
                     </TableCell>
                     <TableCell colSpan={4}></TableCell>
                     <TableCell className="text-right">

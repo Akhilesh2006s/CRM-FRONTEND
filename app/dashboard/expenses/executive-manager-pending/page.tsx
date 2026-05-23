@@ -97,6 +97,30 @@ export default function ExecutiveManagerPendingExpensesPage() {
     loadExpenses()
   }
 
+  const handleSendBack = async (expenseId: string) => {
+    const remarks = window.prompt('Remarks for the executive (required):')
+    if (!remarks?.trim()) {
+      toast.error('Remarks are required to send back')
+      return
+    }
+    setApproving(expenseId)
+    try {
+      await apiRequest(`/expenses/${expenseId}/approve`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          status: 'Needs Correction',
+          managerRemarks: remarks.trim(),
+        }),
+      })
+      toast.success('Sent back for correction')
+      loadExpenses()
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Failed to send back')
+    } finally {
+      setApproving(null)
+    }
+  }
+
   const handleApprove = async (expenseId: string) => {
     setApproving(expenseId)
     try {
@@ -209,7 +233,7 @@ export default function ExecutiveManagerPendingExpensesPage() {
                 <TableHead className="font-semibold">Exp Type</TableHead>
                 <TableHead className="font-semibold text-right">Amount</TableHead>
                 <TableHead className="font-semibold">Action</TableHead>
-                <TableHead className="font-semibold">Approve</TableHead>
+                <TableHead className="font-semibold">Approve / Return</TableHead>
                 <TableHead className="font-semibold">Pending Months</TableHead>
               </TableRow>
             </TableHeader>
@@ -253,21 +277,33 @@ export default function ExecutiveManagerPendingExpensesPage() {
                       </button>
                     </TableCell>
                     <TableCell>
-                      <Button
-                        onClick={() => handleApprove(expense._id)}
-                        disabled={approving === expense._id}
-                        size="sm"
-                        className="bg-green-600 hover:bg-green-700 text-white"
-                      >
-                        {approving === expense._id ? (
-                          'Approving...'
-                        ) : (
-                          <>
-                            <CheckCircle className="h-4 w-4 mr-1" />
-                            Approve
-                          </>
-                        )}
-                      </Button>
+                      <div className="flex flex-col gap-1">
+                        <Button
+                          onClick={() => handleApprove(expense._id)}
+                          disabled={approving === expense._id}
+                          size="sm"
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                        >
+                          {approving === expense._id ? (
+                            'Working…'
+                          ) : (
+                            <>
+                              <CheckCircle className="h-4 w-4 mr-1" />
+                              Approve
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="text-orange-700 border-orange-300"
+                          disabled={approving === expense._id}
+                          onClick={() => handleSendBack(expense._id)}
+                        >
+                          Send back
+                        </Button>
+                      </div>
                     </TableCell>
                     <TableCell>{getPendingMonth(expense)}</TableCell>
                   </TableRow>

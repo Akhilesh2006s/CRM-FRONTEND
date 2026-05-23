@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -10,505 +10,617 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { apiRequest, LOCAL_API_BASE_URL } from '@/lib/api'
 import { toast } from 'sonner'
+import { Plus, Trash2 } from 'lucide-react'
 
-type DC = {
-  _id: string
-  dcOrderId?: {
-    school_name?: string
-    school_code?: string
-    zone?: string
-  }
-  saleId?: {
-    customerName?: string
-  }
+type ExpensePolicy = {
+  skipFinanceStage: boolean
+  foodBillMandatoryAbove: number
+  requireTicketForModes: string[]
 }
 
-export default function CreateExpensePage() {
-  const router = useRouter()
-  const [submitting, setSubmitting] = useState(false)
-  const [myDCs, setMyDCs] = useState<DC[]>([])
-  const [loadingDCs, setLoadingDCs] = useState(true)
-  const [billUrl, setBillUrl] = useState<string>('')
+type CartLine = {
+  id: string
+  category: 'travel' | 'food' | 'accommodation' | 'other'
+  date: string
+  amount: string
+  remarks: string
+  transportType: string
+  travelFrom: string
+  travelTo: string
+  approxKms: string
+  travelDate: string
+  gpsDistance: number | null
+  lodgeName: string
+  city: string
+  stayDate: string
+  restaurantName: string
+  mealDate: string
+  otherExpenseType: string
+  expenseName: string
+  description: string
+  billFile: File | null
+  ticketFile: File | null
+}
 
-  const [form, setForm] = useState({
-    type: '', // travel, food, accommodation, others
-    date: new Date().toISOString().split('T')[0],
-    amount: '',
-    receiptNumber: '',
+const OTHER_TYPES = ['Parking', 'Toll', 'Courier', 'Printing', 'Miscellaneous', 'Other'] as const
+
+function emptyLine(category: CartLine['category'] = 'travel'): CartLine {
+  const today = new Date().toISOString().split('T')[0]
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    category,
+    date: today,
+    amount: category === 'other' ? '' : category === 'travel' ? '' : '',
     remarks: '',
-    // Travel-specific fields
     transportType: '',
     travelFrom: '',
     travelTo: '',
     approxKms: '',
-    dcId: '',
-    hotelName: '',
-    hotelAddress: '',
-    accommodationDate: '',
-    checkInDate: '',
-    checkOutDate: '',
-  })
+    travelDate: today,
+    gpsDistance: null,
+    lodgeName: '',
+    city: '',
+    stayDate: today,
+    restaurantName: '',
+    mealDate: today,
+    otherExpenseType: 'Miscellaneous',
+    expenseName: '',
+    description: '',
+    billFile: null,
+    ticketFile: null,
+  }
+}
 
-  // Fetch employee's assigned DCs
-  useEffect(() => {
-    const fetchMyDCs = async () => {
-      try {
-        setLoadingDCs(true)
-        const dcs = await apiRequest<DC[]>('/dc/employee/my')
-        setMyDCs(dcs || [])
-      } catch (error: any) {
-        console.error('Error fetching DCs:', error)
-      } finally {
-        setLoadingDCs(false)
-      }
-    }
+function calcTravelAmount(mode: string, kms: number) {
+  if (mode === 'Bike') return (kms * 2.8).toFixed(2)
+  if (mode === 'Car') return (kms * 8).toFixed(2)
+  return ''
+}
 
-    fetchMyDCs()
-  }, [])
-
-  const handleBillUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    // Validate file type
-    if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
-      toast.error('Only image files (JPG, PNG) and PDF files are allowed')
-      return
-    }
-
-    // Validate file size (5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('File size must be less than 5MB')
-      return
-    }
-
-    // File will be uploaded with the form submission
-    setBillUrl('')
+async function submitOneExpense(line: CartLine, batchId: string, policy: ExpensePolicy) {
+  const formData = new FormData()
+  const payload: Record<string, string | number> = {
+    category: line.category,
+    date: line.date,
+    amount: parseFloat(line.amount) || 0,
+    employeeRemarks: line.remarks,
+    submissionBatchId: batchId,
+    title: `${line.category} expense`,
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSubmitting(true)
+  if (line.category === 'travel') {
+    payload.transportType = line.transportType
+    payload.travelFrom = line.travelFrom
+    payload.travelTo = line.travelTo
+    payload.approxKms = parseFloat(line.approxKms) || 0
+    payload.travelDate = line.travelDate
+    if (line.gpsDistance != null) {
+      payload.gpsDistance = line.gpsDistance
+      payload.gpsProvider = 'google'
+    }
+  }
+  if (line.category === 'accommodation') {
+    payload.lodgeName = line.lodgeName
+    payload.city = line.city
+    payload.stayDate = line.stayDate
+  }
+  if (line.category === 'food') {
+    payload.restaurantName = line.restaurantName
+    payload.mealDate = line.mealDate
+  }
+  if (line.category === 'other') {
+    payload.otherExpenseType = line.otherExpenseType
+    payload.expenseName = line.expenseName || line.otherExpenseType
+    payload.description = line.description
+  }
 
+  Object.entries(payload).forEach(([k, v]) => formData.append(k, String(v)))
+  if (line.billFile) formData.append('bill', line.billFile)
+  if (line.ticketFile) formData.append('ticket', line.ticketFile)
+
+  const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null
+  const headers: HeadersInit = {}
+  if (token) headers.Authorization = `Bearer ${token}`
+
+  const base = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, '') || LOCAL_API_BASE_URL
+  const res = await fetch(`${base}/api/expenses/create`, { method: 'POST', headers, body: formData })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data?.message || 'Failed to submit expense')
+  }
+  return res.json()
+}
+
+export default function CreateExpensePage() {
+  const router = useRouter()
+  const [policy, setPolicy] = useState<ExpensePolicy | null>(null)
+  const [draft, setDraft] = useState<CartLine>(emptyLine('travel'))
+  const [cart, setCart] = useState<CartLine[]>([])
+  const [submitting, setSubmitting] = useState(false)
+  const [gpsLoading, setGpsLoading] = useState(false)
+  const [gpsNote, setGpsNote] = useState('')
+
+  useEffect(() => {
+    apiRequest<ExpensePolicy>('/expenses/policy')
+      .then(setPolicy)
+      .catch(() =>
+        setPolicy({
+          skipFinanceStage: false,
+          foodBillMandatoryAbove: 500,
+          requireTicketForModes: ['Bus', 'Train', 'Flight', 'Other'],
+        })
+      )
+  }, [])
+
+  const ticketRequired = useMemo(() => {
+    if (!policy || draft.category !== 'travel') return false
+    return (
+      draft.transportType === 'Other' ||
+      policy.requireTicketForModes.includes(draft.transportType)
+    )
+  }, [draft, policy])
+
+  const billRequired = useMemo(() => {
+    if (draft.category === 'accommodation') return true
+    const amt = parseFloat(draft.amount) || 0
+    if (draft.category === 'food' && policy) return amt >= policy.foodBillMandatoryAbove
+    if (draft.category === 'other') {
+      return ['Parking', 'Toll', 'Courier', 'Printing'].includes(draft.otherExpenseType)
+    }
+    return false
+  }, [draft, policy])
+
+  const totals = useMemo(() => {
+    const t = { travel: 0, accommodation: 0, food: 0, other: 0, grandTotal: 0 }
+    for (const line of cart) {
+      const a = parseFloat(line.amount) || 0
+      t[line.category] += a
+      t.grandTotal += a
+    }
+    return t
+  }, [cart])
+
+  const fetchGpsDistance = async () => {
+    if (!draft.travelFrom.trim() || !draft.travelTo.trim()) {
+      toast.error('Enter From and To locations first')
+      return
+    }
+    setGpsLoading(true)
+    setGpsNote('')
     try {
-      // Validate required fields
-      if (!form.type || !form.amount || !form.date) {
-        toast.error('Please fill in all required fields (Type, Date, Amount)')
-        setSubmitting(false)
-        return
-      }
-
-      // Validate travel-specific fields if type is travel
-      if (form.type === 'travel') {
-        if (!form.transportType || !form.travelFrom || !form.travelTo) {
-          toast.error('Please fill in all required travel fields (Transport Type, From, To)')
-          setSubmitting(false)
-          return
-        }
-      }
-
-      // Validate DC selection if DCs are available
-      if (myDCs.length > 0 && (!form.dcId || form.dcId === 'none')) {
-        toast.error('Please select a School/DC for this expense')
-        setSubmitting(false)
-        return
-      }
-
-      const expenseData: any = {
-        title: `${form.type.charAt(0).toUpperCase() + form.type.slice(1)} Expense`,
-        category: form.type,
-        amount: parseFloat(form.amount),
-        date: form.date,
-        receiptNumber: form.receiptNumber || undefined,
-        employeeRemarks: form.remarks || undefined,
-        status: 'Pending',
-        dcId: form.dcId && form.dcId !== 'none' ? form.dcId : undefined,
-      }
-
-      // Add travel-specific fields
-      if (form.type === 'travel') {
-        expenseData.transportType = form.transportType
-        expenseData.travelFrom = form.travelFrom
-        expenseData.travelTo = form.travelTo
-        if (form.approxKms) {
-          expenseData.approxKms = parseFloat(form.approxKms)
-        }
-      }
-
-      // Add food/accommodation/others fields
-      if (form.hotelName) expenseData.hotelName = form.hotelName
-      if (form.hotelAddress) expenseData.hotelAddress = form.hotelAddress
-      if (form.accommodationDate) expenseData.accommodationDate = form.accommodationDate
-      if (form.checkInDate) expenseData.checkInDate = form.checkInDate
-      if (form.checkOutDate) expenseData.checkOutDate = form.checkOutDate
-      if (form.type === 'travel' && form.approxKms) expenseData.approxKms = parseFloat(form.approxKms)
-
-      // Add bill URL if uploaded separately
-      if (billUrl) {
-        expenseData.receipt = billUrl
-      }
-
-      // Get the file input element
-      const fileInput = document.getElementById('bill') as HTMLInputElement
-      const file = fileInput?.files?.[0]
-
-      // If we have a file, use FormData, otherwise use JSON
-      if (file) {
-        const formData = new FormData()
-        Object.keys(expenseData).forEach((key) => {
-          if (expenseData[key] !== undefined && expenseData[key] !== null) {
-            formData.append(key, expenseData[key].toString())
-          }
-        })
-        formData.append('bill', file)
-
-        const token = typeof window !== "undefined" ? localStorage.getItem("authToken") : null
-        const headers: HeadersInit = {}
-        if (token) {
-          headers["Authorization"] = `Bearer ${token}`
-        }
-
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || LOCAL_API_BASE_URL}/api/expenses/create`, {
-          method: 'POST',
-          headers,
-          body: formData,
-        })
-
-        if (!res.ok) {
-          let message = "Request failed"
-          try {
-            const data = await res.json()
-            message = data?.message || message
-          } catch (_) {}
-          throw new Error(message)
-        }
-
-        await res.json()
+      const res = await apiRequest<{
+        gpsDistance: number | null
+        error?: string
+      }>('/expenses/calculate-distance', {
+        method: 'POST',
+        body: JSON.stringify({ from: draft.travelFrom, to: draft.travelTo }),
+      })
+      if (res.gpsDistance != null) {
+        setDraft((d) => ({ ...d, gpsDistance: res.gpsDistance }))
+        setGpsNote(`System estimate: ${res.gpsDistance} km`)
       } else {
-        // No file, use regular JSON request
-        await apiRequest('/expenses/create', {
-          method: 'POST',
-          body: JSON.stringify(expenseData),
-        })
+        setGpsNote(res.error || 'GPS distance unavailable — manager can verify manually.')
       }
+    } catch (e: unknown) {
+      setGpsNote(e instanceof Error ? e.message : 'Could not calculate GPS distance')
+    } finally {
+      setGpsLoading(false)
+    }
+  }
 
-      toast.success('Expense created successfully')
+  const addToCart = () => {
+    if (!draft.amount || parseFloat(draft.amount) <= 0) {
+      toast.error('Enter a valid amount')
+      return
+    }
+    if (draft.category === 'travel') {
+      if (!draft.transportType || !draft.travelFrom || !draft.travelTo || !draft.approxKms) {
+        toast.error('Complete all travel fields including distance claimed')
+        return
+      }
+      if (ticketRequired && !draft.ticketFile) {
+        toast.error('Ticket/proof upload is required for this travel mode')
+        return
+      }
+    }
+    if (draft.category === 'accommodation') {
+      if (!draft.lodgeName || !draft.city || !draft.stayDate) {
+        toast.error('Lodge name, city, and stay date are required')
+        return
+      }
+      if (!draft.billFile) {
+        toast.error('Bill upload is required for accommodation')
+        return
+      }
+    }
+    if (draft.category === 'food') {
+      if (!draft.restaurantName || !draft.mealDate) {
+        toast.error('Restaurant and meal date are required')
+        return
+      }
+      if (billRequired && !draft.billFile) {
+        toast.error(`Bill required for food expenses of ₹${policy?.foodBillMandatoryAbove ?? 500}+`)
+        return
+      }
+    }
+    if (draft.category === 'other') {
+      if (!draft.description.trim()) {
+        toast.error('Description is required')
+        return
+      }
+      if (billRequired && !draft.billFile) {
+        toast.error('Proof upload is required for this expense type')
+        return
+      }
+    }
+
+    setCart((c) => [...c, { ...draft, id: `${Date.now()}-${Math.random().toString(36).slice(2)}` }])
+    setDraft(emptyLine(draft.category))
+    toast.success('Added to submission list')
+  }
+
+  const submitAll = async () => {
+    if (cart.length === 0) {
+      toast.error('Add at least one expense line before submitting')
+      return
+    }
+    setSubmitting(true)
+    const batchId = `batch-${Date.now()}`
+    try {
+      for (const line of cart) {
+        await submitOneExpense(line, batchId, policy!)
+      }
+      toast.success(`${cart.length} expense(s) submitted for approval`)
       router.push('/dashboard/expenses/my')
-    } catch (error: any) {
-      toast.error(error?.message || 'Failed to create expense')
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Submit failed')
     } finally {
       setSubmitting(false)
     }
   }
 
-  const isTravelType = form.type === 'travel'
-  const isFoodType = form.type === 'food'
-  const isAccommodationType = form.type === 'accommodation'
-  const isOthersType = form.type === 'others'
-
-  // Auto-calculate amount for Bike/Car based on kms
-  const handleKmsChange = (kms: string) => {
-    const k = parseFloat(kms) || 0
-    let calculated = ''
-    if (form.transportType === 'Bike') calculated = (k * 2.8).toFixed(2)
-    else if (form.transportType === 'Car') calculated = (k * 8).toFixed(2)
-    setForm({ ...form, approxKms: kms, amount: calculated || form.amount })
-  }
-
-  const handleTransportChange = (value: string) => {
-    const k = parseFloat(form.approxKms) || 0
-    let calculated = ''
-    if (value === 'Bike') calculated = (k * 2.8).toFixed(2)
-    else if (value === 'Car') calculated = (k * 8).toFixed(2)
-    setForm({ ...form, transportType: value, amount: calculated || form.amount })
-  }
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-3xl">
       <div>
-        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Create Expense</h1>
+        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Submit reimbursement</h1>
+        <p className="text-sm text-neutral-600 mt-1">
+          Add one or more expense lines, then submit for manager approval.
+        </p>
       </div>
 
-      <Card className="p-6 shadow-sm">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Type Dropdown */}
-          <div>
-            <Label htmlFor="type">Type *</Label>
-            <Select
-              value={form.type}
-              onValueChange={(value) => setForm({ 
-                ...form, type: value, 
-                transportType: '', travelFrom: '', travelTo: '', approxKms: '',
-                hotelName: '', hotelAddress: '', accommodationDate: '',
-                checkInDate: '', checkOutDate: '',
-              })}
-              required
-            >
-              <SelectTrigger className="bg-white">
-                <SelectValue placeholder="Select expense type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="travel">Travel</SelectItem>
-                <SelectItem value="food">Food</SelectItem>
-                <SelectItem value="accommodation">Accommodation</SelectItem>
-                <SelectItem value="others">Others</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+      <Card className="p-6 space-y-4">
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          Proof rules: accommodation always needs a bill; food above ₹
+          {policy?.foodBillMandatoryAbove ?? 500} needs a bill; Bus/Train/Flight/Other travel needs a
+          ticket upload. Use GPS verify on travel to compare claimed distance with maps.
+        </div>
 
-          {/* Date */}
+        <div>
+          <Label>Category *</Label>
+          <Select
+            value={draft.category}
+            onValueChange={(v) => setDraft(emptyLine(v as CartLine['category']))}
+          >
+            <SelectTrigger className="bg-white mt-1">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="travel">Travel</SelectItem>
+              <SelectItem value="accommodation">Accommodation</SelectItem>
+              <SelectItem value="food">Food</SelectItem>
+              <SelectItem value="other">Other expenses</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <Label htmlFor="date">Date *</Label>
+            <Label>Date *</Label>
             <Input
-              id="date"
               type="date"
-              value={form.date}
-              onChange={(e) => setForm({ ...form, date: e.target.value })}
-              required
-              className="bg-white"
+              className="bg-white mt-1"
+              value={draft.date}
+              onChange={(e) => setDraft({ ...draft, date: e.target.value })}
             />
           </div>
-
-          {/* Amount */}
           <div>
-            <Label htmlFor="amount">Amount *</Label>
+            <Label>Amount (₹) *</Label>
             <Input
-              id="amount"
               type="number"
               step="0.01"
-              value={form.amount}
-              onChange={(e) => setForm({ ...form, amount: e.target.value })}
-              required
-              className="bg-white"
-              placeholder="0.00"
+              className="bg-white mt-1"
+              value={draft.amount}
+              onChange={(e) => setDraft({ ...draft, amount: e.target.value })}
             />
           </div>
+        </div>
 
-          {/* Receipt Number */}
-          <div>
-            <Label htmlFor="receiptNumber">Receipt No.</Label>
-            <Input
-              id="receiptNumber"
-              type="text"
-              value={form.receiptNumber}
-              onChange={(e) => setForm({ ...form, receiptNumber: e.target.value })}
-              className="bg-white"
-              placeholder="Enter receipt number"
-            />
-          </div>
-
-          {/* Remarks */}
-          <div>
-            <Label htmlFor="remarks">Remarks</Label>
-            <Textarea
-              id="remarks"
-              value={form.remarks}
-              onChange={(e) => setForm({ ...form, remarks: e.target.value })}
-              className="bg-white"
-              placeholder="Enter remarks"
-              rows={3}
-            />
-          </div>
-
-          {/* Bill Upload */}
-          <div>
-            <Label htmlFor="bill">Upload Bill</Label>
-            <Input
-              id="bill"
-              type="file"
-              accept="image/*,.pdf"
-              onChange={handleBillUpload}
-              disabled={submitting}
-              className="bg-white"
-            />
-            <p className="text-sm text-neutral-500 mt-1">Accepted formats: JPG, PNG, PDF (Max 5MB)</p>
-          </div>
-
-          {/* Food Fields */}
-          {isFoodType && (
-            <div className="space-y-4 p-4 border border-orange-200 rounded-lg bg-orange-50">
-              <h3 className="font-semibold text-orange-900">Food Details</h3>
-              <div>
-                <Label>Food Date</Label>
-                <Input type="date" value={form.accommodationDate}
-                  onChange={(e) => setForm({ ...form, accommodationDate: e.target.value })}
-                  className="bg-white" />
-              </div>
-              <div>
-                <Label>Hotel Name</Label>
-                <Input type="text" value={form.hotelName}
-                  onChange={(e) => setForm({ ...form, hotelName: e.target.value })}
-                  className="bg-white" placeholder="Enter hotel name" />
-              </div>
-              <div>
-                <Label>Hotel Address</Label>
-                <Input type="text" value={form.hotelAddress}
-                  onChange={(e) => setForm({ ...form, hotelAddress: e.target.value })}
-                  className="bg-white" placeholder="Enter hotel address" />
-              </div>
-            </div>
-          )}
-
-          {/* Accommodation Fields */}
-          {isAccommodationType && (
-            <div className="space-y-4 p-4 border border-purple-200 rounded-lg bg-purple-50">
-              <h3 className="font-semibold text-purple-900">Accommodation Details</h3>
-              <div>
-                <Label>Accommodation Date</Label>
-                <Input type="date" value={form.accommodationDate}
-                  onChange={(e) => setForm({ ...form, accommodationDate: e.target.value })}
-                  className="bg-white" />
-              </div>
-              <div>
-                <Label>Check In Date</Label>
-                <Input type="date" value={form.checkInDate}
-                  onChange={(e) => setForm({ ...form, checkInDate: e.target.value })}
-                  className="bg-white" />
-              </div>
-              <div>
-                <Label>Check Out Date</Label>
-                <Input type="date" value={form.checkOutDate}
-                  onChange={(e) => setForm({ ...form, checkOutDate: e.target.value })}
-                  className="bg-white" />
-              </div>
-              <div>
-                <Label>Hotel Name</Label>
-                <Input type="text" value={form.hotelName}
-                  onChange={(e) => setForm({ ...form, hotelName: e.target.value })}
-                  className="bg-white" placeholder="Enter hotel name" />
-              </div>
-              <div>
-                <Label>Hotel Address</Label>
-                <Input type="text" value={form.hotelAddress}
-                  onChange={(e) => setForm({ ...form, hotelAddress: e.target.value })}
-                  className="bg-white" placeholder="Enter hotel address" />
-              </div>
-            </div>
-          )}
-
-          {/* Others Fields */}
-          {isOthersType && (
-            <div className="space-y-4 p-4 border border-gray-200 rounded-lg bg-gray-50">
-              <h3 className="font-semibold text-gray-900">Other Details</h3>
-              <div>
-                <Label>Date</Label>
-                <Input type="date" value={form.accommodationDate}
-                  onChange={(e) => setForm({ ...form, accommodationDate: e.target.value })}
-                  className="bg-white" />
-              </div>
-            </div>
-          )}
-
-          {/* Travel Fields */}
-          {isTravelType && (
-            <div className="space-y-4 p-4 border border-blue-200 rounded-lg bg-blue-50">
-              <h3 className="font-semibold text-blue-900">Travel Details</h3>
-              <div>
-                <Label>Transport Type *</Label>
-                <Select value={form.transportType} onValueChange={handleTransportChange} required>
-                  <SelectTrigger className="bg-white">
-                    <SelectValue placeholder="Select transport type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Bike">Bike</SelectItem>
-                    <SelectItem value="Car">Car</SelectItem>
-                    <SelectItem value="Bus">Bus</SelectItem>
-                    <SelectItem value="Train">Train</SelectItem>
-                    <SelectItem value="Auto">Auto</SelectItem>
-                    <SelectItem value="Flight">Flight</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Travel Date</Label>
-                <Input type="date" value={form.accommodationDate}
-                  onChange={(e) => setForm({ ...form, accommodationDate: e.target.value })}
-                  className="bg-white" />
-              </div>
-              <div>
-                <Label>From *</Label>
-                <Input type="text" value={form.travelFrom}
-                  onChange={(e) => setForm({ ...form, travelFrom: e.target.value })}
-                  required className="bg-white" placeholder="Enter origin location" />
-              </div>
-              <div>
-                <Label>To *</Label>
-                <Input type="text" value={form.travelTo}
-                  onChange={(e) => setForm({ ...form, travelTo: e.target.value })}
-                  required className="bg-white" placeholder="Enter destination location" />
-              </div>
-              {/* Approx Kms — only for Bike/Car */}
-              {(form.transportType === 'Bike' || form.transportType === 'Car') && (
-                <div>
-                  <Label>Approx Kms</Label>
-                  <Input type="number" step="0.01" value={form.approxKms}
-                    onChange={(e) => handleKmsChange(e.target.value)}
-                    className="bg-white" placeholder="Enter kilometers" />
-                  <p className="text-xs text-blue-700 mt-1">
-                    Rate: {form.transportType === 'Bike' ? '₹2.8/km' : '₹8/km'} — amount auto-calculated
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* School/DC Selection */}
-          {myDCs.length > 0 && (
+        {draft.category === 'travel' && (
+          <div className="space-y-3 p-4 border border-blue-200 rounded-lg bg-blue-50/50">
+            <h3 className="font-semibold text-blue-900">Travel</h3>
             <div>
-              <Label htmlFor="dcId">
-                School / DC *
-              </Label>
+              <Label>Travel mode *</Label>
               <Select
-                value={form.dcId}
-                onValueChange={(value) => setForm({ ...form, dcId: value })}
-                required
-                disabled={loadingDCs}
+                value={draft.transportType || undefined}
+                onValueChange={(v) => {
+                  const kms = parseFloat(draft.approxKms) || 0
+                  const amt = calcTravelAmount(v, kms)
+                  setDraft({
+                    ...draft,
+                    transportType: v,
+                    amount: amt || draft.amount,
+                  })
+                }}
               >
-                <SelectTrigger className="bg-white">
-                  <SelectValue placeholder={
-                    loadingDCs 
-                      ? "Loading assigned DCs..." 
-                      : "Select school/DC"
-                  } />
+                <SelectTrigger className="bg-white mt-1">
+                  <SelectValue placeholder="Select mode" />
                 </SelectTrigger>
                 <SelectContent>
-                  {myDCs.map((dc) => {
-                    const schoolName = dc.dcOrderId?.school_name || dc.saleId?.customerName || 'Unknown School'
-                    const schoolCode = dc.dcOrderId?.school_code || ''
-                    const zone = dc.dcOrderId?.zone || ''
-                    const displayName = schoolCode ? `${schoolCode} - ${schoolName}` : schoolName
-                    const displayText = zone ? `${displayName} (${zone})` : displayName
-                    
-                    return (
-                      <SelectItem key={dc._id} value={dc._id}>
-                        {displayText}
-                      </SelectItem>
-                    )
-                  })}
+                  {['Bike', 'Car', 'Bus', 'Train', 'Flight', 'Other'].map((m) => (
+                    <SelectItem key={m} value={m}>
+                      {m}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
-          )}
-
-          <div className="flex gap-4">
-            <Button
-              type="submit"
-              disabled={submitting}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              {submitting ? 'Creating...' : 'Create Expense'}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => router.back()}
-              disabled={submitting}
-            >
-              Cancel
-            </Button>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div>
+                <Label>From *</Label>
+                <Input
+                  className="bg-white mt-1"
+                  value={draft.travelFrom}
+                  onChange={(e) => setDraft({ ...draft, travelFrom: e.target.value })}
+                  placeholder="Hyderabad"
+                />
+              </div>
+              <div>
+                <Label>To *</Label>
+                <Input
+                  className="bg-white mt-1"
+                  value={draft.travelTo}
+                  onChange={(e) => setDraft({ ...draft, travelTo: e.target.value })}
+                  placeholder="Vijayawada"
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Total distance claimed (km) *</Label>
+              <Input
+                type="number"
+                className="bg-white mt-1"
+                value={draft.approxKms}
+                onChange={(e) => {
+                  const kms = e.target.value
+                  const amt =
+                    draft.transportType === 'Bike' || draft.transportType === 'Car'
+                      ? calcTravelAmount(draft.transportType, parseFloat(kms) || 0)
+                      : draft.amount
+                  setDraft({ ...draft, approxKms: kms, amount: amt || draft.amount })
+                }}
+              />
+              {(draft.transportType === 'Bike' || draft.transportType === 'Car') && (
+                <p className="text-xs text-blue-700 mt-1">
+                  Rate: {draft.transportType === 'Bike' ? '₹2.8/km' : '₹8/km'} (auto-calculated)
+                </p>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2 items-end">
+              <Button type="button" variant="outline" onClick={fetchGpsDistance} disabled={gpsLoading}>
+                {gpsLoading ? 'Calculating…' : 'Verify distance (GPS)'}
+              </Button>
+              {gpsNote && <span className="text-sm text-neutral-700">{gpsNote}</span>}
+            </div>
+            {ticketRequired && (
+              <div>
+                <Label>Ticket / proof upload *</Label>
+                <Input
+                  type="file"
+                  accept="image/*,.pdf"
+                  className="bg-white mt-1"
+                  onChange={(e) =>
+                    setDraft({ ...draft, ticketFile: e.target.files?.[0] || null })
+                  }
+                />
+              </div>
+            )}
           </div>
-        </form>
+        )}
+
+        {draft.category === 'accommodation' && (
+          <div className="space-y-3 p-4 border border-purple-200 rounded-lg bg-purple-50/50">
+            <h3 className="font-semibold text-purple-900">Accommodation</h3>
+            <div>
+              <Label>Lodge / hotel name *</Label>
+              <Input
+                className="bg-white mt-1"
+                value={draft.lodgeName}
+                onChange={(e) => setDraft({ ...draft, lodgeName: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>City *</Label>
+              <Input
+                className="bg-white mt-1"
+                value={draft.city}
+                onChange={(e) => setDraft({ ...draft, city: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Stay date *</Label>
+              <Input
+                type="date"
+                className="bg-white mt-1"
+                value={draft.stayDate}
+                onChange={(e) => setDraft({ ...draft, stayDate: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Bill photo *</Label>
+              <Input
+                type="file"
+                accept="image/*,.pdf"
+                className="bg-white mt-1"
+                onChange={(e) => setDraft({ ...draft, billFile: e.target.files?.[0] || null })}
+              />
+            </div>
+          </div>
+        )}
+
+        {draft.category === 'food' && (
+          <div className="space-y-3 p-4 border border-orange-200 rounded-lg bg-orange-50/50">
+            <h3 className="font-semibold text-orange-900">Food</h3>
+            <div>
+              <Label>Restaurant name *</Label>
+              <Input
+                className="bg-white mt-1"
+                value={draft.restaurantName}
+                onChange={(e) => setDraft({ ...draft, restaurantName: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Meal date *</Label>
+              <Input
+                type="date"
+                className="bg-white mt-1"
+                value={draft.mealDate}
+                onChange={(e) => setDraft({ ...draft, mealDate: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Bill upload{billRequired ? ' *' : ''}</Label>
+              <Input
+                type="file"
+                accept="image/*,.pdf"
+                className="bg-white mt-1"
+                onChange={(e) => setDraft({ ...draft, billFile: e.target.files?.[0] || null })}
+              />
+            </div>
+          </div>
+        )}
+
+        {draft.category === 'other' && (
+          <div className="space-y-3 p-4 border border-neutral-200 rounded-lg bg-neutral-50">
+            <h3 className="font-semibold">Other expenses</h3>
+            <div>
+              <Label>Type *</Label>
+              <Select
+                value={draft.otherExpenseType}
+                onValueChange={(v) => setDraft({ ...draft, otherExpenseType: v })}
+              >
+                <SelectTrigger className="bg-white mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {OTHER_TYPES.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {draft.otherExpenseType === 'Other' && (
+              <div>
+                <Label>Name *</Label>
+                <Input
+                  className="bg-white mt-1"
+                  value={draft.expenseName}
+                  onChange={(e) => setDraft({ ...draft, expenseName: e.target.value })}
+                />
+              </div>
+            )}
+            <div>
+              <Label>Description *</Label>
+              <Textarea
+                className="bg-white mt-1"
+                value={draft.description}
+                onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+                rows={2}
+              />
+            </div>
+            <div>
+              <Label>Proof upload{billRequired ? ' *' : ''}</Label>
+              <Input
+                type="file"
+                accept="image/*,.pdf"
+                className="bg-white mt-1"
+                onChange={(e) => setDraft({ ...draft, billFile: e.target.files?.[0] || null })}
+              />
+            </div>
+          </div>
+        )}
+
+        <div>
+          <Label>Remarks</Label>
+          <Textarea
+            className="bg-white mt-1"
+            value={draft.remarks}
+            onChange={(e) => setDraft({ ...draft, remarks: e.target.value })}
+            rows={2}
+          />
+        </div>
+
+        {!ticketRequired && draft.category !== 'accommodation' && (
+          <div>
+            <Label>Bill / receipt upload{billRequired ? ' *' : ''}</Label>
+            <Input
+              type="file"
+              accept="image/*,.pdf"
+              className="bg-white mt-1"
+              onChange={(e) => setDraft({ ...draft, billFile: e.target.files?.[0] || null })}
+            />
+          </div>
+        )}
+
+        <Button type="button" variant="outline" onClick={addToCart} className="w-full">
+          <Plus className="w-4 h-4 mr-2" />
+          Add to list
+        </Button>
       </Card>
+
+      {cart.length > 0 && (
+        <Card className="p-6 space-y-4">
+          <h2 className="font-semibold">Submission list ({cart.length})</h2>
+          <ul className="space-y-2 text-sm">
+            {cart.map((line) => (
+              <li
+                key={line.id}
+                className="flex justify-between items-center border rounded-md px-3 py-2"
+              >
+                <span>
+                  {line.category} — ₹{line.amount}
+                  {line.category === 'travel' && line.approxKms
+                    ? ` (${line.approxKms} km claimed)`
+                    : ''}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setCart((c) => c.filter((x) => x.id !== line.id))}
+                >
+                  <Trash2 className="h-4 w-4 text-red-600" />
+                </Button>
+              </li>
+            ))}
+          </ul>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-sm border-t pt-3">
+            <div>Travel: ₹{totals.travel.toFixed(2)}</div>
+            <div>Stay: ₹{totals.accommodation.toFixed(2)}</div>
+            <div>Food: ₹{totals.food.toFixed(2)}</div>
+            <div>Other: ₹{totals.other.toFixed(2)}</div>
+            <div className="font-semibold">Total: ₹{totals.grandTotal.toFixed(2)}</div>
+          </div>
+          <Button
+            className="bg-blue-600 hover:bg-blue-700 text-white w-full"
+            disabled={submitting}
+            onClick={submitAll}
+          >
+            {submitting ? 'Submitting…' : 'Submit all for approval'}
+          </Button>
+        </Card>
+      )}
     </div>
   )
 }

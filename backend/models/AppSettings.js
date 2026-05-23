@@ -31,6 +31,14 @@ const appSettingsSchema = new mongoose.Schema(
       lastRunAt: { type: Date },
       lastBackupFile: { type: String, trim: true },
     },
+    expense: {
+      skipFinanceStage: { type: Boolean, default: false },
+      foodBillMandatoryAbove: { type: Number, default: 500, min: 0 },
+      requireTicketForModes: {
+        type: [String],
+        default: ['Bus', 'Train', 'Flight', 'Other'],
+      },
+    },
     uploads: [uploadEntrySchema],
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },

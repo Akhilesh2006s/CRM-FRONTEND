@@ -4,6 +4,9 @@ const ExcelJS = require('exceljs');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { getExpensePolicy } = require('../utils/expensePolicy');
+const { validateExpensePayload, summarizeBatchTotals } = require('../utils/expenseValidation');
+const { calculateRouteDistanceKm } = require('../utils/expenseDistance');
 
 // Configure multer for expense bill uploads
 const storage = multer.diskStorage({
@@ -40,6 +43,46 @@ const upload = multer({
   },
   fileFilter: fileFilter
 });
+
+function parseExpenseBody(body) {
+  const bodyData = { ...body };
+  const numericFields = ['amount', 'approxKms', 'claimedDistanceKm', 'gpsDistance'];
+  for (const key of numericFields) {
+    if (bodyData[key] !== undefined && bodyData[key] !== '') {
+      bodyData[key] = parseFloat(bodyData[key]);
+    }
+  }
+  Object.keys(bodyData).forEach((key) => {
+    if (bodyData[key] === 'undefined' || bodyData[key] === 'null' || bodyData[key] === '') {
+      delete bodyData[key];
+    }
+  });
+  return bodyData;
+}
+
+function applyUploadedFiles(expenseData, files) {
+  const billFile = files?.bill?.[0] || (files?.bill && !Array.isArray(files.bill) ? files.bill : null);
+  const ticketFile = files?.ticket?.[0] || (files?.ticket && !Array.isArray(files.ticket) ? files.ticket : null);
+  if (billFile) expenseData.receipt = `/uploads/expenses/${billFile.filename}`;
+  if (ticketFile) expenseData.ticketReceipt = `/uploads/expenses/${ticketFile.filename}`;
+}
+
+async function finalizeManagerApproval(updateData, expenseId, userId, approvedAmount) {
+  const policy = await getExpensePolicy();
+  if (policy.skipFinanceStage) {
+    updateData.approvedBy = userId;
+    updateData.approvedAt = new Date();
+  }
+  if (approvedAmount !== undefined && approvedAmount !== null) {
+    updateData.approvedAmount = approvedAmount;
+  } else {
+    const expense = await Expense.findById(expenseId);
+    if (expense) {
+      updateData.approvedAmount = expense.approvedAmount ?? expense.amount;
+      if (!expense.employeeAmount) updateData.employeeAmount = expense.amount;
+    }
+  }
+}
 
 // @desc    Get all expenses
 // @route   GET /api/expenses
@@ -106,69 +149,161 @@ const getExpense = async (req, res) => {
   }
 };
 
+// @desc    Calculate GPS/route distance for travel
+// @route   POST /api/expenses/calculate-distance
+// @access  Private
+const calculateRouteDistance = async (req, res) => {
+  try {
+    const { from, to } = req.body;
+    const result = await calculateRouteDistanceKm(from, to);
+    if (result.error && result.gpsDistance == null) {
+      return res.status(200).json(result);
+    }
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get expense policy (for create UI + finance nav)
+// @route   GET /api/expenses/policy
+// @access  Private
+const getExpensePolicySettings = async (req, res) => {
+  try {
+    const policy = await getExpensePolicy();
+    res.json(policy);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // @desc    Create expense
 // @route   POST /api/expenses/create
 // @access  Private
 const createExpense = async (req, res) => {
   try {
-    // Handle both JSON and FormData
-    // When using multer, FormData fields are parsed and available in req.body
-    let bodyData = req.body;
-    
-    // If FormData was used, parse numeric fields
-    if (req.file || (typeof bodyData.amount === 'string' && bodyData.amount)) {
-      if (bodyData.amount) {
-        bodyData.amount = parseFloat(bodyData.amount);
-      }
-      if (bodyData.approxKms) {
-        bodyData.approxKms = parseFloat(bodyData.approxKms);
-      }
-      // Remove undefined/null string values
-      Object.keys(bodyData).forEach(key => {
-        if (bodyData[key] === 'undefined' || bodyData[key] === 'null' || bodyData[key] === '') {
-          delete bodyData[key];
-        }
-      });
+    const policy = await getExpensePolicy();
+    const bodyData = parseExpenseBody(req.body);
+    const { errors, data } = validateExpensePayload(bodyData, policy, req.files);
+    if (errors.length) {
+      return res.status(400).json({ message: errors.join(' ') });
     }
 
     const expenseData = {
-      ...bodyData,
+      ...data,
+      status: 'Pending',
       createdBy: req.user._id,
     };
 
-    // If user is an employee, automatically set employeeId to their ID
-    if (req.user.role === 'Executive' && !expenseData.employeeId) {
+    if (['Executive', 'Sales BDE', 'Employee', 'Trainer'].includes(req.user.role) && !expenseData.employeeId) {
       expenseData.employeeId = req.user._id;
     }
 
-    // Handle file upload if present
-    if (req.file) {
-      expenseData.receipt = `/uploads/expenses/${req.file.filename}`;
-    }
-
-    // Normalize category to lowercase for consistency
-    if (expenseData.category) {
-      const categoryMap = {
-        'Travel': 'travel',
-        'Food': 'food',
-        'Accommodation': 'accommodation',
-        'Accomodation': 'accommodation',
-        'Other': 'others',
-        'Others': 'others',
-      };
-      if (categoryMap[expenseData.category]) {
-        expenseData.category = categoryMap[expenseData.category];
-      }
-    }
+    applyUploadedFiles(expenseData, req.files);
 
     const expense = await Expense.create(expenseData);
-
     const populatedExpense = await Expense.findById(expense._id)
       .populate('employeeId', 'name email')
       .populate('trainerId', 'name email')
       .populate('createdBy', 'name email');
 
     res.status(201).json(populatedExpense);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Create multiple expenses in one submission (JSON; receipts via separate create or pre-uploaded URLs)
+// @route   POST /api/expenses/create-batch
+// @access  Private
+const createExpenseBatch = async (req, res) => {
+  try {
+    const policy = await getExpensePolicy();
+    const { expenses: lines, submissionBatchId } = req.body;
+    if (!Array.isArray(lines) || lines.length === 0) {
+      return res.status(400).json({ message: 'expenses array is required' });
+    }
+
+    const batchId =
+      submissionBatchId ||
+      `batch-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    const created = [];
+
+    for (const line of lines) {
+      const bodyData = parseExpenseBody({ ...line, submissionBatchId: batchId });
+      const { errors, data } = validateExpensePayload(bodyData, policy, {});
+      if (errors.length) {
+        return res.status(400).json({ message: errors.join(' '), line });
+      }
+      const expenseData = {
+        ...data,
+        status: 'Pending',
+        createdBy: req.user._id,
+        submissionBatchId: batchId,
+      };
+      if (line.receipt) expenseData.receipt = line.receipt;
+      if (line.ticketReceipt) expenseData.ticketReceipt = line.ticketReceipt;
+      if (['Executive', 'Sales BDE', 'Employee', 'Trainer'].includes(req.user.role)) {
+        expenseData.employeeId = req.user._id;
+      }
+      const expense = await Expense.create(expenseData);
+      created.push(expense);
+    }
+
+    const populated = await Expense.find({ _id: { $in: created.map((e) => e._id) } })
+      .populate('createdBy', 'name email')
+      .populate('employeeId', 'name email');
+
+    res.status(201).json({
+      submissionBatchId: batchId,
+      expenses: populated,
+      totals: summarizeBatchTotals(populated),
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Resubmit expense after Needs Correction
+// @route   PUT /api/expenses/:id/resubmit
+// @access  Private
+const resubmitExpense = async (req, res) => {
+  try {
+    const expense = await Expense.findById(req.params.id);
+    if (!expense) return res.status(404).json({ message: 'Expense not found' });
+    if (expense.status !== 'Needs Correction') {
+      return res.status(400).json({ message: 'Only expenses marked Needs Correction can be resubmitted' });
+    }
+    if (String(expense.createdBy) !== String(req.user._id)) {
+      return res.status(403).json({ message: 'Only the submitter can resubmit this expense' });
+    }
+
+    const policy = await getExpensePolicy();
+    const bodyData = parseExpenseBody(req.body);
+    const { errors, data } = validateExpensePayload(bodyData, policy, req.files);
+    if (errors.length) return res.status(400).json({ message: errors.join(' ') });
+
+    applyUploadedFiles(data, req.files);
+
+    Object.assign(expense, data, {
+      status: 'Pending',
+      rejectionReason: '',
+      returnedBy: undefined,
+      returnedAt: undefined,
+      executiveManagerApprovedBy: undefined,
+      executiveManagerApprovedAt: undefined,
+      managerApprovedBy: undefined,
+      managerApprovedAt: undefined,
+      approvedBy: undefined,
+      approvedAt: undefined,
+      approvedAmount: undefined,
+    });
+    await expense.save();
+
+    const populated = await Expense.findById(expense._id)
+      .populate('employeeId', 'name email')
+      .populate('createdBy', 'name email');
+    res.json(populated);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -284,33 +419,54 @@ const approveMultipleExpenses = async (req, res) => {
     }
 
     // Determine approval type based on user role or explicit parameter
+    const policy = await getExpensePolicy();
     const isExecutiveManager = req.user.role === 'Executive Manager';
-    const targetStatus = (approvalType === 'executive-manager' || isExecutiveManager) 
-      ? 'Executive Manager Approved' 
-      : 'Approved';
+    let targetStatus =
+      approvalType === 'executive-manager' || isExecutiveManager
+        ? 'Executive Manager Approved'
+        : 'Approved';
 
     const updatedExpenses = [];
 
     for (const exp of expenses) {
-      const { id, approvedAmount, managerRemarks, employeeRemarks } = exp;
-      
-      const updateData = {
-        status: targetStatus,
-      };
+      const { id, approvedAmount, managerRemarks, employeeRemarks, status: rowStatus } = exp;
+
+      if (rowStatus === 'Needs Correction' || rowStatus === 'Rejected') {
+        const rowUpdate = {
+          status: rowStatus,
+          managerRemarks: managerRemarks || '',
+        };
+        if (rowStatus === 'Rejected') {
+          rowUpdate.rejectionReason = managerRemarks || 'Rejected';
+        } else {
+          rowUpdate.returnedBy = req.user._id;
+          rowUpdate.returnedAt = new Date();
+          rowUpdate.rejectionReason = managerRemarks || 'Sent back for correction';
+        }
+        const updated = await Expense.findByIdAndUpdate(id, rowUpdate, { new: true })
+          .populate('employeeId', 'name email')
+          .populate('createdBy', 'name email');
+        if (updated) updatedExpenses.push(updated);
+        continue;
+      }
+
+      const updateData = { status: targetStatus };
 
       if (targetStatus === 'Executive Manager Approved') {
         updateData.executiveManagerApprovedBy = req.user._id;
         updateData.executiveManagerApprovedAt = new Date();
       } else if (targetStatus === 'Approved') {
-        // Manager approval - set to Approved
         updateData.managerApprovedBy = req.user._id;
         updateData.managerApprovedAt = new Date();
+        if (policy.skipFinanceStage) {
+          updateData.approvedBy = req.user._id;
+          updateData.approvedAt = new Date();
+        }
       }
 
       if (approvedAmount !== undefined && approvedAmount !== null) {
         updateData.approvedAmount = approvedAmount;
       } else {
-        // If no approved amount specified, use original amount
         const expense = await Expense.findById(id);
         if (expense) {
           updateData.approvedAmount = expense.amount;
@@ -441,9 +597,15 @@ const getExecutiveManagerPendingExpenses = async (req, res) => {
 // @access  Private
 const getFinancePendingExpenses = async (req, res) => {
   try {
+    const policy = await getExpensePolicy();
+    if (policy.skipFinanceStage) {
+      return res.json([]);
+    }
+
     const { employeeId, trainerId } = req.query;
     const filter = {
       status: 'Approved',
+      approvedBy: { $exists: false },
     };
 
     if (employeeId && employeeId !== 'all') {
@@ -526,7 +688,21 @@ const approveExpense = async (req, res) => {
         updateData.approvedAt = new Date();
       }
     } else if (status === 'Rejected') {
-      updateData.rejectionReason = rejectionReason;
+      updateData.rejectionReason = rejectionReason || req.body.managerRemarks || '';
+    } else if (status === 'Needs Correction') {
+      updateData.rejectionReason = rejectionReason || req.body.managerRemarks || 'Sent back for correction';
+      updateData.managerRemarks = req.body.managerRemarks || updateData.rejectionReason;
+      updateData.returnedBy = req.user._id;
+      updateData.returnedAt = new Date();
+    }
+
+    if (status === 'Approved') {
+      const policy = await getExpensePolicy();
+      const isManager = req.user.role === 'Manager' || req.user.role === 'Super Admin' || req.user.role === 'Admin';
+      if (isManager && policy.skipFinanceStage) {
+        updateData.approvedBy = req.user._id;
+        updateData.approvedAt = new Date();
+      }
     }
 
     const updatedExpense = await Expense.findByIdAndUpdate(
@@ -706,6 +882,15 @@ const exportExpenses = async (req, res) => {
 // @access  Private
 const updateExpense = async (req, res) => {
   try {
+    const existing = await Expense.findById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Expense not found' });
+
+    if (existing.status === 'Needs Correction') {
+      if (String(existing.createdBy) !== String(req.user._id)) {
+        return res.status(403).json({ message: 'Only the submitter can edit this expense' });
+      }
+    }
+
     const expense = await Expense.findByIdAndUpdate(
       req.params.id,
       req.body,
@@ -730,6 +915,10 @@ module.exports = {
   getExpenses,
   getExpense,
   createExpense,
+  createExpenseBatch,
+  calculateRouteDistance,
+  getExpensePolicySettings,
+  resubmitExpense,
   approveExpense,
   getManagerPendingExpenses,
   getExecutiveManagerPendingExpenses,
@@ -740,6 +929,10 @@ module.exports = {
   exportExpenses,
   updateExpense,
   uploadExpenseBill,
-  uploadExpenseBillMiddleware: upload.single('bill'),
+  uploadExpenseBillMiddleware: upload.fields([
+    { name: 'bill', maxCount: 1 },
+    { name: 'ticket', maxCount: 1 },
+  ]),
+  uploadExpenseBillSingleMiddleware: upload.single('bill'),
 };
 

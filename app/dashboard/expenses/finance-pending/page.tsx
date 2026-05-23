@@ -57,6 +57,13 @@ export default function FinancePendingExpensesPage() {
     employeeId: 'all',
     trainerId: 'all',
   })
+  const [skipFinance, setSkipFinance] = useState(false)
+
+  useEffect(() => {
+    apiRequest<{ skipFinanceStage?: boolean }>('/expenses/policy')
+      .then((p) => setSkipFinance(Boolean(p.skipFinanceStage)))
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     // Load employees and trainers
@@ -108,6 +115,17 @@ export default function FinancePendingExpensesPage() {
     // Fallback: calculate from createdAt date
     const date = new Date(expense.createdAt)
     return date.toLocaleString('en-US', { month: 'long' })
+  }
+
+  if (skipFinance) {
+    return (
+      <Card className="p-8 text-center text-neutral-600">
+        <p className="font-medium text-neutral-900">Finance review is disabled</p>
+        <p className="text-sm mt-2">
+          Manager approval is final for reimbursements. Change this under Settings → Expense policy.
+        </p>
+      </Card>
+    )
   }
 
   return (

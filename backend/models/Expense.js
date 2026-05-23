@@ -1,142 +1,104 @@
 const mongoose = require('mongoose');
 
-const expenseSchema = new mongoose.Schema({
-  title: {
-    type: String,
-    required: true,
+const expenseSchema = new mongoose.Schema(
+  {
+    title: { type: String, required: true },
+    description: { type: String, default: '' },
+    category: {
+      type: String,
+      enum: [
+        'travel',
+        'food',
+        'accommodation',
+        'other',
+        'Travel',
+        'Food',
+        'Accommodation',
+        'others',
+        'Other',
+        'Others',
+      ],
+      required: true,
+    },
+    expItemId: { type: String },
+    submissionBatchId: { type: String, index: true },
+
+    gpsDistance: { type: Number, default: 0 },
+    gpsProvider: { type: String, enum: ['google', 'manual', 'none', ''], default: '' },
+    gpsCalculatedAt: { type: Date },
+
+    employeeRemarks: { type: String },
+    managerRemarks: { type: String },
+    amount: { type: Number, required: true, min: 0 },
+    employeeAmount: { type: Number, min: 0 },
+    approvedAmount: { type: Number, min: 0 },
+    date: { type: Date, default: Date.now },
+
+    paymentMethod: {
+      type: String,
+      enum: ['Cash', 'Bank Transfer', 'Credit Card', 'Debit Card', 'Other'],
+    },
+    receipt: { type: String },
+    ticketReceipt: { type: String },
+    receiptNumber: { type: String },
+
+    transportType: {
+      type: String,
+      enum: ['Bike', 'Car', 'Bus', 'Train', 'Flight', 'Other', 'Auto'],
+    },
+    travelFrom: { type: String },
+    travelTo: { type: String },
+    approxKms: { type: Number, default: 0, min: 0 },
+    claimedDistanceKm: { type: Number, min: 0 },
+    travelDate: { type: Date },
+
+    lodgeName: { type: String },
+    city: { type: String },
+    stayDate: { type: Date },
+    hotelAddress: { type: String },
+
+    restaurantName: { type: String },
+    mealDate: { type: Date },
+
+    otherExpenseType: {
+      type: String,
+      enum: ['Parking', 'Toll', 'Courier', 'Printing', 'Miscellaneous', 'Other'],
+    },
+    expenseName: { type: String },
+    otherDate: { type: Date },
+
+    dcId: { type: String },
+
+    employeeId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    trainerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    department: { type: String },
+
+    status: {
+      type: String,
+      enum: [
+        'Pending',
+        'Executive Manager Approved',
+        'Manager Approved',
+        'Approved',
+        'Rejected',
+        'Needs Correction',
+      ],
+      default: 'Pending',
+    },
+    pendingMonth: { type: String },
+    rejectionReason: { type: String },
+    returnedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    returnedAt: { type: Date },
+
+    executiveManagerApprovedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    executiveManagerApprovedAt: { type: Date },
+    managerApprovedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    managerApprovedAt: { type: Date },
+    approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    approvedAt: { type: Date },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   },
-  description: {
-    type: String,
-  },
-  category: {
-    type: String,
-    enum: [
-      'Office Supplies',
-      'Travel',
-      'travel',
-      'Marketing',
-      'Utilities',
-      'Salary',
-      'Rent',
-      'Other',
-      'Others',
-      'Food',
-      'food',
-      'Accommodation',
-      'accommodation',
-      'Accomodation',
-      'others',
-    ],
-    required: true,
-  },
-  expItemId: {
-    type: String,
-    // Expense item ID (like 95165, 95166)
-  },
-  gpsDistance: {
-    type: Number,
-    // GPS distance in kilometers
-    default: 0,
-  },
-  employeeRemarks: {
-    type: String,
-    // Employee remarks/notes
-  },
-  managerRemarks: {
-    type: String,
-    // Manager remarks/notes
-  },
-  amount: {
-    type: Number,
-    required: true,
-  },
-  employeeAmount: {
-    type: Number,
-    // Original amount submitted by employee
-  },
-  approvedAmount: {
-    type: Number,
-    // Amount approved by manager
-  },
-  date: {
-    type: Date,
-    default: Date.now,
-  },
-  paymentMethod: {
-    type: String,
-    enum: ['Cash', 'Bank Transfer', 'Credit Card', 'Debit Card', 'Other'],
-  },
-  receipt: {
-    type: String,
-  },
-  receiptNumber: {
-    type: String,
-  },
-  transportType: {
-    type: String,
-    enum: ['Auto', 'Bike', 'Bus', 'Car', 'Flight', 'Train'],
-  },
-  travelFrom: {
-    type: String,
-  },
-  travelTo: {
-    type: String,
-  },
-  approxKms: {
-    type: Number,
-    default: 0,
-  },
-  employeeId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-  },
-  trainerId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-  },
-  department: {
-    type: String,
-  },
-  status: {
-    type: String,
-    enum: ['Pending', 'Executive Manager Approved', 'Manager Approved', 'Approved', 'Rejected'],
-    default: 'Pending',
-  },
-  pendingMonth: {
-    type: String,
-    // Format: "November", "October", etc.
-  },
-  executiveManagerApprovedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    // Executive Manager who approved the expense
-  },
-  executiveManagerApprovedAt: {
-    type: Date,
-  },
-  managerApprovedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    // Manager who approved the expense
-  },
-  managerApprovedAt: {
-    type: Date,
-  },
-  approvedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    // Finance manager who approved
-  },
-  approvedAt: {
-    type: Date,
-  },
-  createdBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true,
-  },
-}, {
-  timestamps: true,
-});
+  { timestamps: true }
+);
 
 module.exports = mongoose.model('Expense', expenseSchema);

@@ -8,6 +8,7 @@ const SETTINGS_LABELS: Record<string, string> = {
   upload: 'App Dashboard Data Upload',
   sms: 'SMS Settings',
   backup: 'DB Backup',
+  expenses: 'Expense policy',
 }
 
 function getSettingsPageLabel(pathname: string): string {

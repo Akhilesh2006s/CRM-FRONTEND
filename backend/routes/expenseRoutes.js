@@ -5,6 +5,10 @@ const {
   getExpenses,
   getExpense,
   createExpense,
+  createExpenseBatch,
+  calculateRouteDistance,
+  getExpensePolicySettings,
+  resubmitExpense,
   approveExpense,
   getManagerPendingExpenses,
   getExecutiveManagerPendingExpenses,
@@ -16,6 +20,7 @@ const {
   updateExpense,
   uploadExpenseBill,
   uploadExpenseBillMiddleware,
+  uploadExpenseBillSingleMiddleware,
 } = require('../controllers/expenseController');
 const { authMiddleware } = require('../middleware/authMiddleware');
 
@@ -27,9 +32,12 @@ router.get('/finance-pending', authMiddleware, getFinancePendingExpenses);
 router.get('/report', authMiddleware, getExpensesReport);
 router.get('/export', authMiddleware, exportExpenses);
 router.get('/employee/:employeeId', authMiddleware, getExpensesByEmployee);
+router.get('/policy', authMiddleware, getExpensePolicySettings);
+router.post('/calculate-distance', authMiddleware, calculateRouteDistance);
+router.post('/create-batch', authMiddleware, createExpenseBatch);
 // File upload - must be before /:id routes to avoid route conflicts
 router.post('/upload-bill', authMiddleware, (req, res, next) => {
-  uploadExpenseBillMiddleware(req, res, (err) => {
+  uploadExpenseBillSingleMiddleware(req, res, (err) => {
     if (err) {
       // Handle multer errors
       if (err instanceof multer.MulterError) {
@@ -57,6 +65,17 @@ router.post('/create', authMiddleware, (req, res, next) => {
   });
 }, createExpense);
 router.post('/approve-multiple', authMiddleware, approveMultipleExpenses);
+router.put('/:id/resubmit', authMiddleware, (req, res, next) => {
+  uploadExpenseBillMiddleware(req, res, (err) => {
+    if (err) {
+      if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ message: 'File size too large. Maximum size is 5MB.' });
+      }
+      return res.status(400).json({ message: err.message || 'File upload error' });
+    }
+    next();
+  });
+}, resubmitExpense);
 router.put('/:id/approve', authMiddleware, approveExpense);
 // Parameterized routes must come last
 router.get('/:id', authMiddleware, getExpense);

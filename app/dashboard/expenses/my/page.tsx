@@ -8,13 +8,14 @@ import { Button } from '@/components/ui/button'
 import { Plus, Eye } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { expenseStatusLabel } from '@/lib/expenseAccess'
 
 type Expense = {
   _id: string
   title: string
   amount: number
   category: string
-  status: 'Pending' | 'Executive Manager Approved' | 'Manager Approved' | 'Approved' | 'Rejected'
+  status: string
   date: string
   createdAt: string
   employeeRemarks?: string
@@ -66,16 +67,11 @@ export default function MyExpensesPage() {
         return 'bg-amber-100 text-amber-700'
       case 'Rejected':
         return 'bg-red-100 text-red-700'
+      case 'Needs Correction':
+        return 'bg-orange-100 text-orange-800'
       default:
         return 'bg-gray-100 text-gray-700'
     }
-  }
-
-  const getStatusDisplay = (status: string) => {
-    if (status === 'Pending') return 'Pending at Executive Manager'
-    if (status === 'Executive Manager Approved') return 'Approved by Executive Manager, Pending at Manager'
-    if (status === 'Approved') return 'Approved'
-    return status
   }
 
   const getExpenseType = (category: string) => {
@@ -149,15 +145,22 @@ export default function MyExpensesPage() {
                     </TableCell>
                     <TableCell>
                       <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(expense.status)}`}>
-                        {getStatusDisplay(expense.status)}
+                        {expenseStatusLabel(expense.status)}
                       </span>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="flex gap-1">
                       <Link href={`/dashboard/expenses/${expense._id}`}>
                         <Button variant="ghost" size="sm" className="text-blue-600 hover:text-blue-700">
                           <Eye className="h-4 w-4" />
                         </Button>
                       </Link>
+                      {expense.status === 'Needs Correction' && (
+                        <Link href={`/dashboard/expenses/resubmit/${expense._id}`}>
+                          <Button variant="outline" size="sm" className="text-orange-700 border-orange-300">
+                            Resubmit
+                          </Button>
+                        </Link>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))

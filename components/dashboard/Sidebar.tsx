@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { getCurrentUser } from '@/lib/auth'
+import { apiRequest } from '@/lib/api'
 import { useSidebar } from '@/contexts/SidebarContext'
 import { isChildNavActive } from '@/lib/navActive'
 import {
@@ -258,6 +259,7 @@ const NAV: NavItem[] = [
       { label: 'App Dashboard Data Upload', href: '/dashboard/settings/upload' },
       { label: 'SMS', href: '/dashboard/settings/sms' },
       { label: 'DB Backup', href: '/dashboard/settings/backup' },
+      { label: 'Expense policy', href: '/dashboard/settings/expenses', adminOnly: true },
     ],
   },
   { label: 'Sign out', icon: LogOut, href: '/auth/login' },
@@ -270,6 +272,13 @@ export function Sidebar() {
   const [user, setUser] = useState<{ _id?: string; name?: string; email?: string; role?: string } | null>(null)
   const { sidebarOpen, setSidebarOpen, toggleSidebar: toggleSidebarContext } = useSidebar()
   const [hoveredItem, setHoveredItem] = useState<string | null>(null)
+  const [skipFinanceStage, setSkipFinanceStage] = useState(false)
+
+  useEffect(() => {
+    apiRequest<{ skipFinanceStage?: boolean }>('/expenses/policy')
+      .then((p) => setSkipFinanceStage(Boolean(p.skipFinanceStage)))
+      .catch(() => {})
+  }, [])
 
   // Load sidebar state from localStorage
   useEffect(() => {
@@ -627,6 +636,24 @@ export function Sidebar() {
             if (child.adminOnly && !isAdmin) return false
             return true
           })
+        }
+      }
+      if (item.label === 'Settings' && item.children) {
+        const isAdmin = user?.role === 'Admin' || user?.role === 'Super Admin'
+        return {
+          ...item,
+          children: item.children.filter((child) => {
+            if (child.adminOnly && !isAdmin) return false
+            return true
+          }),
+        }
+      }
+      if (item.label === 'Expenses' && item.children && skipFinanceStage) {
+        return {
+          ...item,
+          children: item.children.filter(
+            (child) => child.href !== '/dashboard/expenses/finance-pending'
+          ),
         }
       }
       return item
