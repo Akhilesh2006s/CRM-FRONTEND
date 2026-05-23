@@ -107,22 +107,22 @@ function HoverTooltip({ item, pathname, onClose }: { item: NavItem; pathname: st
                   onClick={onClose}
                   className={`flex items-center gap-2.5 text-sm px-3 py-2.5 font-medium transition-all duration-200 rounded-lg relative ${
                     isActive 
-                      ? 'bg-[#16A34A]/10 text-[#15803d] shadow-sm border border-[#16A34A]/25' 
+                      ? 'bg-neutral-100 text-neutral-900 shadow-sm border border-neutral-300' 
                       : 'text-neutral-700 hover:bg-neutral-50 hover:text-neutral-900'
                   }`}
                 >
                   {isActive && (
-                    <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-[#16A34A]/5 to-transparent pointer-events-none" />
+                    <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-white/5 to-transparent pointer-events-none" />
                   )}
                   {(() => {
                     const ChildIcon = resolveChildIcon(c.label, c.icon)
                     return (
-                      <ChildIcon size={14} className={`flex-shrink-0 relative z-10 ${isActive ? 'text-[#16A34A]' : 'text-neutral-500'}`} />
+                      <ChildIcon size={14} className={`flex-shrink-0 relative z-10 ${isActive ? 'text-neutral-900' : 'text-neutral-500'}`} />
                     )
                   })()}
                   <span className="relative z-10">{c.label}</span>
                   {isActive && (
-                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-[#16A34A] rounded-r-full" />
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-neutral-900 rounded-r-full" />
                   )}
                 </Link>
               </li>
@@ -747,28 +747,28 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Sidebar — AmenityForge green premium nav */}
+      {/* Sidebar — monochrome nav */}
       <aside
-        className={`${sidebarOpen ? 'w-64' : 'w-[4.25rem]'} flex flex-col shrink-0 bg-[#0b1210] text-white fixed md:sticky top-0 left-0 z-50 h-dvh min-h-dvh max-h-dvh border-r border-[#16A34A]/20 shadow-[inset_-1px_0_0_rgba(22,163,74,0.08),4px_0_24px_rgba(0,0,0,0.2)] transition-[width] duration-300 ease-out`}
+        className={`${sidebarOpen ? 'w-64' : 'w-[4.25rem]'} flex flex-col shrink-0 bg-[#0b1210] text-white fixed md:sticky top-0 left-0 z-50 h-dvh min-h-dvh max-h-dvh border-r border-white/10 shadow-[inset_-1px_0_0_rgba(255,255,255,0.06),4px_0_24px_rgba(0,0,0,0.2)] transition-[width] duration-300 ease-out`}
       >
         {/* User profile */}
-        <div className={`shrink-0 py-4 border-b border-[#16A34A]/15 ${sidebarOpen ? 'px-4' : 'px-2'} hidden md:block`}>
+        <div className={`shrink-0 py-4 border-b border-white/15 ${sidebarOpen ? 'px-4' : 'px-2'} hidden md:block`}>
           {sidebarOpen ? (
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#16A34A]/40 to-[#15803d]/30 flex items-center justify-center text-sm font-bold text-white ring-2 ring-[#16A34A]/40 shadow-[0_0_20px_rgba(22,163,74,0.25)]">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-white/25 to-white/10 flex items-center justify-center text-sm font-bold text-white ring-2 ring-white/25 shadow-[0_0_20px_rgba(255,255,255,0.08)]">
                 {user?.name?.charAt(0).toUpperCase() || 'U'}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-sm truncate text-white">{user?.name || 'User'}</div>
-                <div className="text-[11px] text-[#86efac]/80 flex items-center gap-1.5 mt-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A] shadow-[0_0_6px_rgba(22,163,74,0.9)]" />
+                <div className="text-[11px] text-white/70 flex items-center gap-1.5 mt-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_6px_rgba(255,255,255,0.5)]" />
                   <span>{user?.role || 'Active'}</span>
                 </div>
               </div>
             </div>
           ) : (
             <div className="flex justify-center">
-              <div className="w-10 h-10 rounded-xl bg-[#16A34A]/25 flex items-center justify-center text-sm font-bold text-white ring-2 ring-[#16A34A]/35">
+              <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center text-sm font-bold text-white ring-2 ring-white/20">
                 {user?.name?.charAt(0).toUpperCase() || 'U'}
               </div>
             </div>
@@ -776,14 +776,14 @@ export function Sidebar() {
         </div>
 
         <div
-          className={`shrink-0 py-3 border-b border-[#16A34A]/15 hidden md:flex items-center ${sidebarOpen ? 'px-4 justify-between' : 'px-2 justify-center'}`}
+          className={`shrink-0 py-3 border-b border-white/15 hidden md:flex items-center ${sidebarOpen ? 'px-4 justify-between' : 'px-2 justify-center'}`}
         >
           {sidebarOpen && (
-            <div className="text-[10px] tracking-[0.2em] text-[#86efac]/60 font-semibold uppercase">Menu</div>
+            <div className="text-[10px] tracking-[0.2em] text-white/60 font-semibold uppercase">Menu</div>
           )}
           <button
             onClick={toggleSidebar}
-            className="text-white/50 p-2 rounded-lg hover:bg-[#16A34A]/15 hover:text-[#86efac] transition-all"
+            className="text-white/50 p-2 rounded-lg hover:bg-white/15 hover:text-white transition-all"
             aria-label="Toggle sidebar"
           >
             {sidebarOpen ? <X size={16} /> : <Menu size={16} />}
@@ -795,7 +795,7 @@ export function Sidebar() {
           {finalNav.map((item) => (
             <li
               key={item.label}
-              className={`w-full ${item.label === 'Sign out' ? 'mt-2 pt-2 border-t border-[#16A34A]/15' : ''}`}
+              className={`w-full ${item.label === 'Sign out' ? 'mt-2 pt-2 border-t border-white/15' : ''}`}
               data-item={item.label}
             >
               {item.children ? (
@@ -824,8 +824,8 @@ export function Sidebar() {
                       sidebarOpen ? 'px-2.5 gap-2.5 justify-start' : 'px-0 justify-center'
                     } ${
                       hasActiveChild(pathname, item.children)
-                        ? `bg-[#16A34A]/15 text-white ${sidebarOpen ? 'border-l-2 border-[#16A34A] pl-2' : ''}`
-                        : 'hover:bg-[#16A34A]/10 hover:text-white border-l-2 border-transparent'
+                        ? `bg-white/15 text-white ${sidebarOpen ? 'border-l-2 border-white pl-2' : ''}`
+                        : 'hover:bg-white/10 hover:text-white border-l-2 border-transparent'
                     }`}
                     title={!sidebarOpen ? item.label : ''}
                   >
@@ -865,7 +865,7 @@ export function Sidebar() {
                         open[item.label] ? 'max-h-[min(28rem,70vh)] opacity-100' : 'max-h-0 opacity-0'
                       }`}
                     >
-                      <ul className="ml-2 mt-1 mb-2 space-y-0.5 border-l-2 border-[#16A34A]/30 pl-2">
+                      <ul className="ml-2 mt-1 mb-2 space-y-0.5 border-l-2 border-white/30 pl-2">
                         {item.children.map((c) => {
                           const isActive = c.href
                             ? isChildNavActive(pathname, c.href, item.children)
@@ -878,8 +878,8 @@ export function Sidebar() {
                                 href={c.href}
                                 className={`flex items-center gap-2 text-[12.5px] px-2 py-2 rounded-lg font-medium transition-all duration-150 ${
                                   isActive
-                                    ? 'bg-[#16A34A]/20 text-white'
-                                    : 'text-white/55 hover:bg-[#16A34A]/10 hover:text-white/95'
+                                    ? 'bg-white/20 text-white'
+                                    : 'text-white/55 hover:bg-white/10 hover:text-white/95'
                                 }`}
                               >
                                 <NavIconBadge icon={ChildIcon} active={isActive} size="sm" />
@@ -937,8 +937,8 @@ export function Sidebar() {
                         sidebarOpen ? 'px-2.5 gap-2.5 justify-start' : 'px-0 justify-center'
                       } ${
                         pathname === item.href 
-                          ? `bg-[#16A34A]/20 text-white ${sidebarOpen ? 'border-l-2 border-[#16A34A] pl-2' : ''}` 
-                          : 'hover:bg-[#16A34A]/10 hover:text-white border-l-2 border-transparent'
+                          ? `bg-white/20 text-white ${sidebarOpen ? 'border-l-2 border-white pl-2' : ''}` 
+                          : 'hover:bg-white/10 hover:text-white border-l-2 border-transparent'
                       }`}
                       title={!sidebarOpen ? item.label : ''}
                     >

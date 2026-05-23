@@ -64,7 +64,7 @@ export function NavIconBadge({ icon: Icon, active, size = 'md' }: NavIconBadgePr
     <span
       className={`inline-flex shrink-0 items-center justify-center rounded-lg transition-colors ${boxClass} ${
         active
-          ? 'bg-[#16A34A]/25 text-[#86efac] ring-1 ring-[#16A34A]/35'
+          ? 'bg-white/20 text-white ring-1 ring-white/30'
           : 'bg-white/5 text-white/55'
       }`}
     >
