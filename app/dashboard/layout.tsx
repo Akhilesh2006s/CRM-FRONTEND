@@ -10,7 +10,7 @@ import { SidebarProvider, useSidebar } from "@/contexts/SidebarContext"
 function MainContent({ children }: { children: React.ReactNode }) {
   return (
     <main 
-      className="flex-1 flex flex-col min-h-0 p-6 md:p-8 ml-16 md:ml-0 overflow-hidden min-w-0" 
+      className="flex-1 flex flex-col min-h-0 pt-16 p-6 md:p-8 ml-16 md:ml-0 overflow-hidden min-w-0" 
       id="main-content"
       style={{ minWidth: 0 }}
     >
@@ -26,9 +26,9 @@ function MainContent({ children }: { children: React.ReactNode }) {
 // Premium Dashboard layout - Apple x Notion x Linear x Stripe inspired
 function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-neutral-50/50">
+    <div className="min-h-dvh bg-neutral-50/50">
       <TopBar />
-      <div className="flex items-start min-h-[calc(100dvh-4rem)] pt-16">
+      <div className="flex min-h-dvh">
         <Sidebar />
         <MainContent>{children}</MainContent>
       </div>

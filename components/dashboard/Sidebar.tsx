@@ -749,7 +749,7 @@ export function Sidebar() {
     <>
       {/* Sidebar — AmenityForge green premium nav */}
       <aside
-        className={`${sidebarOpen ? 'w-64' : 'w-[4.25rem]'} flex flex-col shrink-0 bg-[#0b1210] text-white fixed md:sticky top-16 left-0 z-50 self-start h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)] border-r border-[#16A34A]/20 shadow-[inset_-1px_0_0_rgba(22,163,74,0.08),4px_0_24px_rgba(0,0,0,0.2)] transition-[width] duration-300 ease-out`}
+        className={`${sidebarOpen ? 'w-64' : 'w-[4.25rem]'} flex flex-col shrink-0 bg-[#0b1210] text-white fixed md:sticky top-0 left-0 z-50 h-dvh min-h-dvh max-h-dvh border-r border-[#16A34A]/20 shadow-[inset_-1px_0_0_rgba(22,163,74,0.08),4px_0_24px_rgba(0,0,0,0.2)] transition-[width] duration-300 ease-out`}
       >
         {/* User profile */}
         <div className={`shrink-0 py-4 border-b border-[#16A34A]/15 ${sidebarOpen ? 'px-4' : 'px-2'} hidden md:block`}>
