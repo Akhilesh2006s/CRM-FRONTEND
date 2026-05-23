@@ -175,6 +175,29 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+
+  .dashboard-sidebar-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(22, 163, 74, 0.45) transparent;
+  }
+
+  .dashboard-sidebar-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .dashboard-sidebar-scroll::-webkit-scrollbar-track {
+    background: transparent;
+    margin: 4px 0;
+  }
+
+  .dashboard-sidebar-scroll::-webkit-scrollbar-thumb {
+    background: rgba(22, 163, 74, 0.35);
+    border-radius: 9999px;
+  }
+
+  .dashboard-sidebar-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(22, 163, 74, 0.55);
+  }
 }
 
 @keyframes slide-in-from-top {
