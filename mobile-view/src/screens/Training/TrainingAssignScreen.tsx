@@ -54,33 +54,46 @@ export default function TrainingAssignScreen({ navigation }: any) {
       setLastScheduleLabel(null);
       return;
     }
-    const q = code
-      ? `schoolCode=${encodeURIComponent(code)}&status=Completed`
-      : `schoolName=${encodeURIComponent(name)}&status=Completed`;
+    const queries: string[] = [];
+    if (code) queries.push(`schoolCode=${encodeURIComponent(code)}`);
+    if (name) queries.push(`schoolName=${encodeURIComponent(name)}`);
     try {
-      const rows = await apiService.get<any[]>(`/training?${q}`);
-      const completed = (Array.isArray(rows) ? rows : []).filter((r) => r.status === 'Completed');
+      const byId = new Map<string, any>();
+      for (const q of queries) {
+        const rows = await apiService.get<any[]>(`/training?${q}`);
+        (Array.isArray(rows) ? rows : []).forEach((r) => {
+          const id = r._id || JSON.stringify(r);
+          if (!byId.has(id)) byId.set(id, r);
+        });
+      }
+      let completed = Array.from(byId.values()).filter((r) => r.status === 'Completed');
+      const subject = form.subject.trim();
+      if (subject) {
+        completed = completed.filter(
+          (r) => String(r.subject || '').trim().toLowerCase() === subject.toLowerCase()
+        );
+      }
       if (completed.length === 0) {
         setLastScheduleLabel(null);
         return;
       }
       const latest = completed.reduce((a, b) => {
-        const da = new Date(a.trainingDate || 0).getTime();
-        const db = new Date(b.trainingDate || 0).getTime();
+        const da = new Date(a.completionDate || a.trainingDate || 0).getTime();
+        const db = new Date(b.completionDate || b.trainingDate || 0).getTime();
         return db > da ? b : a;
       });
-      const d = new Date(latest.trainingDate || '');
-      setLastScheduleLabel(
-        `Last training completed: ${d.toLocaleDateString('en-IN', {
-          day: 'numeric',
-          month: 'short',
-          year: 'numeric',
-        })}`
-      );
+      const d = new Date(latest.completionDate || latest.trainingDate || '');
+      const dateStr = d.toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
+      const extra = [latest.subject, latest.term].filter(Boolean).join(' · ');
+      setLastScheduleLabel(extra ? `${dateStr} (${extra})` : dateStr);
     } catch {
       setLastScheduleLabel(null);
     }
-  }, [form.schoolCode, form.schoolName]);
+  }, [form.schoolCode, form.schoolName, form.subject]);
 
   useEffect(() => {
     const t = setTimeout(loadLastTraining, 400);
@@ -186,12 +199,6 @@ export default function TrainingAssignScreen({ navigation }: any) {
             onChangeText={(t) => setForm((f) => ({ ...f, schoolName: t }))}
             placeholder="Enter school name"
           />
-          {lastScheduleLabel ? (
-            <View style={styles.infoBox}>
-              <Text style={styles.infoText}>{lastScheduleLabel}</Text>
-            </View>
-          ) : null}
-
           <FormField label="Zone" value={form.zone} onChangeText={(t) => setForm((f) => ({ ...f, zone: t }))} />
           <FormField label="Town" value={form.town} onChangeText={(t) => setForm((f) => ({ ...f, town: t }))} />
           <FormField
@@ -199,6 +206,13 @@ export default function TrainingAssignScreen({ navigation }: any) {
             value={form.subject}
             onChangeText={(t) => setForm((f) => ({ ...f, subject: t }))}
           />
+          {lastScheduleLabel ? (
+            <FormField
+              label="Last training date"
+              value={lastScheduleLabel}
+              editable={false}
+            />
+          ) : null}
 
           <Text style={styles.label}>Trainer *</Text>
           <View style={styles.chipRow}>
@@ -271,22 +285,25 @@ function FormField({
   onChangeText,
   placeholder,
   multiline,
+  editable = true,
 }: {
   label: string;
   value: string;
-  onChangeText: (t: string) => void;
+  onChangeText?: (t: string) => void;
   placeholder?: string;
   multiline?: boolean;
+  editable?: boolean;
 }) {
   return (
     <View style={styles.fieldContainer}>
       <Text style={styles.label}>{label}</Text>
       <WebInput
-        style={[styles.input, multiline && styles.textArea]}
+        style={[styles.input, multiline && styles.textArea, !editable && styles.readOnlyInput]}
         value={value}
-        onChangeText={onChangeText}
+        onChangeText={onChangeText || (() => {})}
         placeholder={placeholder}
         multiline={multiline}
+        editable={editable}
       />
     </View>
   );
@@ -307,6 +324,7 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   textArea: { minHeight: 80, textAlignVertical: 'top' },
+  readOnlyInput: { backgroundColor: '#ecfdf5', borderColor: '#a7f3d0' },
   infoBox: {
     backgroundColor: '#ecfdf5',
     borderRadius: 10,

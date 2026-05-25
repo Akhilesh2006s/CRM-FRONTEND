@@ -10,6 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { apiRequest } from '@/lib/api'
+import {
+  fetchLastCompletedSchedule,
+  type LastScheduleInfo,
+} from '@/lib/trainingLastSchedule'
 import { ArrowUpDown } from 'lucide-react'
 
 type School = {
@@ -57,7 +61,8 @@ export default function AssignTrainingServicePage() {
   const [assignDialogOpen, setAssignDialogOpen] = useState(false)
   const [selectedSchool, setSelectedSchool] = useState<School | null>(null)
   const [assignType, setAssignType] = useState<'training' | 'service'>('training')
-  const [lastScheduleLabel, setLastScheduleLabel] = useState<string | null>(null)
+  const [lastScheduleInfo, setLastScheduleInfo] = useState<LastScheduleInfo | null>(null)
+  const [loadingLastSchedule, setLoadingLastSchedule] = useState(false)
   const todayMin = new Date().toISOString().split('T')[0]
   const [assignForm, setAssignForm] = useState({
     subject: '',
@@ -111,7 +116,7 @@ export default function AssignTrainingServicePage() {
         // Extract school information from dcOrderId (populated) or use direct fields
         const dcOrder = dc.dcOrderId || {}
         const schoolName = dcOrder.school_name || dc.customerName || ''
-        const schoolCode = dcOrder.dc_code || dcOrder.school_code || ''
+        const schoolCode = dcOrder.school_code || dcOrder.dc_code || ''
         const key = schoolName || schoolCode || dc._id
 
         if (key && !schoolMap.has(key)) {
@@ -269,52 +274,24 @@ export default function AssignTrainingServicePage() {
     }
   }
 
-  const loadLastCompletedSchedule = async (school: School, type: 'training' | 'service') => {
-    const code = school.school_code?.trim()
-    const name = school.school_name?.trim()
-    if (!code && !name) {
-      setLastScheduleLabel(null)
-      return
-    }
-    const base = code
-      ? `schoolCode=${encodeURIComponent(code)}&status=Completed`
-      : `schoolName=${encodeURIComponent(name!)}&status=Completed`
+  const loadLastCompletedSchedule = async (
+    school: School,
+    type: 'training' | 'service',
+    subject?: string
+  ) => {
+    setLoadingLastSchedule(true)
     try {
-      if (type === 'training') {
-        const rows = await apiRequest<{ trainingDate?: string; status?: string }[]>(`/training?${base}`)
-        const completed = (Array.isArray(rows) ? rows : []).filter((r) => r.status === 'Completed')
-        if (completed.length === 0) {
-          setLastScheduleLabel(null)
-          return
-        }
-        const latest = completed.reduce((a, b) => {
-          const da = new Date(a.trainingDate || 0).getTime()
-          const db = new Date(b.trainingDate || 0).getTime()
-          return db > da ? b : a
-        })
-        const d = new Date(latest.trainingDate || '')
-        setLastScheduleLabel(
-          `Last training completed: ${d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`
-        )
-      } else {
-        const rows = await apiRequest<{ serviceDate?: string; status?: string }[]>(`/services?${base}`)
-        const completed = (Array.isArray(rows) ? rows : []).filter((r) => r.status === 'Completed')
-        if (completed.length === 0) {
-          setLastScheduleLabel(null)
-          return
-        }
-        const latest = completed.reduce((a, b) => {
-          const da = new Date(a.serviceDate || 0).getTime()
-          const db = new Date(b.serviceDate || 0).getTime()
-          return db > da ? b : a
-        })
-        const d = new Date(latest.serviceDate || '')
-        setLastScheduleLabel(
-          `Last service completed: ${d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`
-        )
-      }
+      const info = await fetchLastCompletedSchedule(apiRequest, {
+        schoolCode: school.school_code,
+        schoolName: school.school_name,
+        type,
+        subject,
+      })
+      setLastScheduleInfo(info)
     } catch {
-      setLastScheduleLabel(null)
+      setLastScheduleInfo(null)
+    } finally {
+      setLoadingLastSchedule(false)
     }
   }
 
@@ -331,10 +308,22 @@ export default function AssignTrainingServicePage() {
       remarks: '',
       status: 'Scheduled',
     })
-    setLastScheduleLabel(null)
+    setLastScheduleInfo(null)
     setAssignDialogOpen(true)
     loadLastCompletedSchedule(school, type)
   }
+
+  useEffect(() => {
+    if (!assignDialogOpen || !selectedSchool) return
+    const t = setTimeout(() => {
+      loadLastCompletedSchedule(
+        selectedSchool,
+        assignType,
+        assignForm.subject || undefined
+      )
+    }, 200)
+    return () => clearTimeout(t)
+  }, [assignDialogOpen, selectedSchool, assignType, assignForm.subject])
 
   const handleAssignSubmit = async () => {
     if (!selectedSchool) return
@@ -696,10 +685,27 @@ export default function AssignTrainingServicePage() {
                 {selectedSchool.school_code ? ` (${selectedSchool.school_code})` : ''}
               </p>
             )}
-            {lastScheduleLabel && (
-              <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
-                {lastScheduleLabel}
+            {lastScheduleInfo && (
+              <div>
+                <Label>{lastScheduleInfo.fieldLabel}</Label>
+                <Input
+                  className="bg-emerald-50 text-neutral-900 border-emerald-200"
+                  readOnly
+                  value={
+                    lastScheduleInfo.detail
+                      ? `${lastScheduleInfo.formattedDate} (${lastScheduleInfo.detail})`
+                      : lastScheduleInfo.formattedDate
+                  }
+                />
+                <p className="text-xs text-neutral-500 mt-1">
+                  Shown only when this school already has a completed{' '}
+                  {assignType === 'training' ? 'training' : 'service'}
+                  {assignForm.subject ? ` for ${assignForm.subject}` : ''}.
+                </p>
               </div>
+            )}
+            {loadingLastSchedule && !lastScheduleInfo && (
+              <p className="text-xs text-neutral-500">Checking previous schedule…</p>
             )}
             <div>
               <Label>Product *</Label>

@@ -140,6 +140,14 @@ export function findMatchingOrderProduct(
   return null
 }
 
+/** Term for Request DC / My Clients tables (explicit term wins over level label). */
+export function resolveClientDCRowTerm(raw: { term?: unknown; level?: unknown }): string {
+  if (raw.term != null && String(raw.term).trim() !== '') {
+    return normalizeProductTerm(raw.term)
+  }
+  return termFromLevelLabel(raw.level) ?? 'Term 1'
+}
+
 function mapToClientDCProductRow(
   raw: Record<string, any>,
   id: string,
@@ -163,11 +171,7 @@ function mapToClientDCProductRow(
     quantity: quantityNum,
     strength: strengthNum,
     level: raw.level || raw.term || getDefaultLevel(product || 'Abacus'),
-    term: normalizeProductTerm(
-      raw.term != null && String(raw.term).trim() !== ''
-        ? raw.term
-        : (termFromLevelLabel(raw.level) ?? 'Term 1')
-    ),
+    term: resolveClientDCRowTerm(raw),
     subject: resolveProductSubject(raw),
   }
 }

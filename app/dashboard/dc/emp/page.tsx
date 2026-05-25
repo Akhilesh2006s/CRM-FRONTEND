@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { apiRequest } from '@/lib/api'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -19,43 +18,32 @@ type SampleRequest = {
   _id: string
   request_code: string
   employee_id: Emp | string
-  products: Array<{ product_name: string; quantity: number }>
+  school_name?: string
+  products: Array<{
+    product_name: string
+    quantity: number
+    class?: string
+    level?: string
+    specs?: string
+  }>
   purpose: string
   status: 'Pending' | 'Accepted' | 'Rejected'
   createdAt: string
+  transport_name?: string
+  transport_location?: string
+  pincode?: string
+  area?: string
+  city?: string
 }
 
 export default function EmployeeDCPage() {
-  const router = useRouter()
   const [list, setList] = useState<EmpDC[]>([])
   const [loading, setLoading] = useState(true)
   const [sampleRequests, setSampleRequests] = useState<SampleRequest[]>([])
   const [loadingSamples, setLoadingSamples] = useState(true)
-  const [employees, setEmployees] = useState<Emp[]>([])
-  const [loadingEmployees, setLoadingEmployees] = useState(true)
   const [form, setForm] = useState({ employee_id: '', kit_type: 'Sales', distribution_date: '', expected_return_date: '' })
   const [submitting, setSubmitting] = useState(false)
   const [processingRequest, setProcessingRequest] = useState<string | null>(null)
-
-  useEffect(() => {
-    ;(async () => {
-      setLoadingEmployees(true)
-      try {
-        const data = await apiRequest<any[]>('/employees?isActive=true')
-        const list = Array.isArray(data) ? data : []
-        setEmployees(
-          list
-            .map((u: any) => ({ _id: u._id || u.id, name: u.name || 'Unknown' }))
-            .filter((e) => e.name !== 'Unknown')
-        )
-      } catch (err: any) {
-        console.error('Failed to load employees:', err)
-        setEmployees([])
-      } finally {
-        setLoadingEmployees(false)
-      }
-    })()
-  }, [])
 
   const load = async () => {
     setLoading(true)
@@ -89,7 +77,7 @@ export default function EmployeeDCPage() {
     setProcessingRequest(requestId)
     try {
       await apiRequest(`/sample-requests/${requestId}/accept`, { method: 'PUT' })
-      toast.success('Sample request accepted and EmpDC created')
+      toast.success('Accepted — EmpDC created and sample DC sent to warehouse queue')
       loadSampleRequests()
       load() // Reload EmpDC list to show the new entry
     } catch (err: any) {
@@ -117,39 +105,13 @@ export default function EmployeeDCPage() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.employee_id) {
-      toast.error('Please select an employee')
-      return
-    }
-    if (!form.distribution_date) {
-      toast.error('Distribution date is required')
-      return
-    }
     setSubmitting(true)
     try {
-      const payload: Record<string, string> = {
-        employee_id: form.employee_id,
-        kit_type: form.kit_type,
-        distribution_date: new Date(form.distribution_date).toISOString(),
-      }
-      if (form.expected_return_date) {
-        payload.expected_return_date = new Date(form.expected_return_date).toISOString()
-      }
-      await apiRequest(`/emp-dc/create`, { method: 'POST', body: JSON.stringify(payload) })
+      await apiRequest(`/emp-dc/create`, { method: 'POST', body: JSON.stringify(form) })
       setForm({ employee_id: '', kit_type: 'Sales', distribution_date: '', expected_return_date: '' })
-      toast.success('EMP DC created successfully')
       load()
-    } catch (err: any) {
-      if (err?.status === 401) {
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('authToken')
-          localStorage.removeItem('authUser')
-        }
-        toast.error('Session expired. Please log in again.')
-        router.replace('/auth/login')
-        return
-      }
-      toast.error(err?.message || 'Failed to create EMP DC')
+    } catch (e) {
+      alert('Failed to create EMP DC. Ensure you are logged in.')
     } finally {
       setSubmitting(false)
     }
@@ -178,8 +140,10 @@ export default function EmployeeDCPage() {
                 <thead>
                   <tr className="bg-sky-50/70 border-b text-neutral-700">
                     <th className="py-2 px-3 text-left">Request Code</th>
+                    <th className="py-2 px-3 text-left">School</th>
                     <th className="py-2 px-3 text-left">Employee</th>
                     <th className="py-2 px-3 text-left">Products</th>
+                    <th className="py-2 px-3 text-left">Delivery / Transport</th>
                     <th className="py-2 px-3 text-left">Purpose</th>
                     <th className="py-2 px-3">Date</th>
                     <th className="py-2 px-3">Actions</th>
@@ -189,15 +153,26 @@ export default function EmployeeDCPage() {
                   {sampleRequests.map((request) => (
                     <tr key={request._id} className="border-b last:border-0">
                       <td className="py-2 px-3 font-medium">{request.request_code}</td>
+                      <td className="py-2 px-3 text-xs font-medium">{request.school_name || '—'}</td>
                       <td className="py-2 px-3">
                         {typeof request.employee_id === 'string' ? request.employee_id : request.employee_id?.name}
                       </td>
                       <td className="py-2 px-3">
                         <ul className="list-disc list-inside text-xs">
                           {request.products.map((p, idx) => (
-                            <li key={idx}>{p.product_name} (Qty: {p.quantity})</li>
+                            <li key={idx}>
+                              {p.product_name}
+                              {p.class ? ` · Cl ${p.class}` : ''}
+                              {p.level ? ` · ${p.level}` : ''} (Qty: {p.quantity})
+                            </li>
                           ))}
                         </ul>
+                      </td>
+                      <td className="py-2 px-3 text-xs max-w-[200px]">
+                        <div>{[request.area, request.city].filter(Boolean).join(', ') || '—'}</div>
+                        <div className="text-neutral-500">
+                          {[request.transport_name, request.pincode].filter(Boolean).join(' · ')}
+                        </div>
                       </td>
                       <td className="py-2 px-3 text-xs">{request.purpose}</td>
                       <td className="py-2 px-3 text-center text-xs">
@@ -237,38 +212,14 @@ export default function EmployeeDCPage() {
         <TabsContent value="kits">
           <Card className="p-4 space-y-4 text-neutral-900">
             <form onSubmit={submit} className="grid grid-cols-1 md:grid-cols-4 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="emp-dc-employee">Employee *</Label>
-                <Select
-                  value={form.employee_id}
-                  onValueChange={(v) => setForm({ ...form, employee_id: v })}
-                  disabled={loadingEmployees}
-                  required
-                >
-                  <SelectTrigger id="emp-dc-employee">
-                    <SelectValue
-                      placeholder={
-                        loadingEmployees
-                          ? 'Loading employees…'
-                          : employees.length === 0
-                            ? 'No employees found'
-                            : 'Select employee'
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {employees.map((e) => (
-                      <SelectItem key={e._id} value={e._id}>
-                        {e.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div>
+                <Label>Employee ID</Label>
+                <Input value={form.employee_id} onChange={(e) => setForm({ ...form, employee_id: e.target.value })} placeholder="User ObjectId" required />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="emp-dc-kit-type">Kit Type</Label>
+              <div>
+                <Label>Kit Type</Label>
                 <Select value={form.kit_type} onValueChange={(v) => setForm({ ...form, kit_type: v })}>
-                  <SelectTrigger id="emp-dc-kit-type"><SelectValue /></SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Sales">Sales</SelectItem>
                     <SelectItem value="Training">Training</SelectItem>
@@ -276,24 +227,13 @@ export default function EmployeeDCPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="emp-dc-distribution-date">Distribution Date *</Label>
-                <Input
-                  id="emp-dc-distribution-date"
-                  type="date"
-                  value={form.distribution_date}
-                  onChange={(e) => setForm({ ...form, distribution_date: e.target.value })}
-                  required
-                />
+              <div>
+                <Label>Distribution Date</Label>
+                <Input type="date" value={form.distribution_date} onChange={(e) => setForm({ ...form, distribution_date: e.target.value })} required />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="emp-dc-return-date">Expected Return</Label>
-                <Input
-                  id="emp-dc-return-date"
-                  type="date"
-                  value={form.expected_return_date}
-                  onChange={(e) => setForm({ ...form, expected_return_date: e.target.value })}
-                />
+              <div>
+                <Label>Expected Return</Label>
+                <Input type="date" value={form.expected_return_date} onChange={(e) => setForm({ ...form, expected_return_date: e.target.value })} />
               </div>
               <div className="md:col-span-4">
                 <Button type="submit" disabled={submitting}>{submitting ? 'Creating…' : 'Create Kit'}</Button>

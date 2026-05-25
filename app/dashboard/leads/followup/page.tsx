@@ -16,6 +16,11 @@ import { ArrowLeft, MapPin, Edit, History, X, AlertCircle, ChevronLeft, ChevronR
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { todayDateString } from '@/lib/todayDate'
+import {
+  isFollowUpProductLineComplete,
+  leadProductsToInterestedRows,
+  normalizeLeadProductLineStatus,
+} from '@/lib/leadProductsInterested'
 
 type Lead = { 
   _id: string
@@ -138,8 +143,7 @@ function leadProductsToHistorySnapshot(products: Lead['products']) {
   return products
     .filter((p: any) => p && (p.product_name || p.product))
     .map((p: any) => {
-      let status = String(p.status || '').trim() || 'Warm'
-      if (status === 'Management Not Met') status = 'Not Met Management'
+      let status = normalizeLeadProductLineStatus(p.status) || String(p.status || '').trim() || 'Warm'
       if (!HISTORY_SNAPSHOT_STATUSES.includes(status as any)) status = 'Warm'
       return {
         product_name: String(p.product_name || p.product || '').trim(),
@@ -432,36 +436,7 @@ export default function FollowupLeadsPage() {
       follow_up_time: '10:00',
       status: displayLeadDealPriority(lead), // Reflects per-product + deal priority
       remarks: '',
-      productsInterested: (() => {
-        if (Array.isArray(lead.products) && lead.products.length > 0) {
-          return lead.products.map((p: any) => ({
-            product_name: p.product_name || p.product || '',
-            term: p.term || 'Term 1',
-            status: p.status || displayLeadDealPriority(lead) || 'Warm',
-            strength:
-              Number(p.strength ?? p.quantity ?? 0) > 0
-                ? String(Number(p.strength ?? p.quantity ?? 0))
-                : '',
-            chance: Number(p.chance ?? 0) > 0 ? String(Number(p.chance ?? 0)) : '',
-          }))
-        }
-
-        if (typeof lead.products === 'string' && lead.products.trim()) {
-          return lead.products
-            .split(',')
-            .map((name: string) => name.trim())
-            .filter(Boolean)
-            .map((name: string) => ({
-              product_name: name,
-              term: 'Term 1',
-              status: displayLeadDealPriority(lead) || 'Warm',
-              strength: '',
-              chance: '',
-            }))
-        }
-
-        return []
-      })(),
+      productsInterested: leadProductsToInterestedRows(lead),
     })
     setUpdateModalOpen(true)
   }
@@ -503,16 +478,22 @@ export default function FollowupLeadsPage() {
       (p) => p.product_name && p.product_name.trim()
     )
     if (selectedProducts.length === 0) {
-      toast.error('Add at least one product with Strength (quantity) and Chance %')
+      toast.error('Add at least one product in Products Interested')
       return
     }
-    const missingStrengthOrChance = selectedProducts.some((p) => {
-      const strength = Number(p.strength) || 0
-      const chance = Number(p.chance) || 0
-      return strength <= 0 || chance <= 0
-    })
-    if (missingStrengthOrChance) {
-      toast.error('Each product must have Strength greater than 0 and Chance % greater than 0')
+    const incomplete = selectedProducts.find((p) => !isFollowUpProductLineComplete(p))
+    if (incomplete) {
+      if ((Number(incomplete.strength) || 0) <= 0 || (Number(incomplete.chance) || 0) <= 0) {
+        toast.error(
+          `Enter Strength and Chance % for "${incomplete.product_name}" (required for every product)`
+        )
+      } else if (incomplete.status === 'Hot' && Number(incomplete.chance) < 80) {
+        toast.error(`Chance % for "${incomplete.product_name}" must be at least 80 when status is Hot`)
+      } else if (incomplete.status === 'Warm' && Number(incomplete.chance) < 20) {
+        toast.error(`Chance % for "${incomplete.product_name}" must be at least 20 when status is Warm`)
+      } else {
+        toast.error('Complete Strength and Chance % for each product')
+      }
       return
     }
     
@@ -523,7 +504,7 @@ export default function FollowupLeadsPage() {
         .map((p) => ({
           product_name: p.product_name.trim(),
           term: p.term || 'Term 1',
-          status: p.status || 'Warm',
+          status: normalizeLeadProductLineStatus(p.status) || p.status || 'Warm',
           strength: Number(p.strength) || 0,
           chance: Number(p.chance) || 0,
           important: false,
@@ -897,6 +878,36 @@ export default function FollowupLeadsPage() {
                         </span>
                       </div>
                     )}
+                    {(() => {
+                      const interested = leadProductsToInterestedRows(lead)
+                      if (interested.length === 0) return null
+                      return (
+                        <div className="rounded-lg border border-violet-100 bg-violet-50/40 p-3">
+                          <p className="text-xs font-semibold text-violet-900 uppercase tracking-wide mb-2">
+                            Products interested
+                          </p>
+                          <ul className="space-y-1.5">
+                            {interested.map((row, pi) => (
+                              <li
+                                key={`${row.product_name}-${pi}`}
+                                className="flex flex-wrap items-center gap-2 text-sm"
+                              >
+                                <span className="font-medium text-neutral-900">{row.product_name}</span>
+                                <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-white border border-neutral-200">
+                                  {row.status}
+                                </span>
+                                {Number(row.strength) > 0 && (
+                                  <span className="text-xs text-neutral-600">Str {row.strength}</span>
+                                )}
+                                {Number(row.chance) > 0 && (
+                                  <span className="text-xs text-neutral-600">{row.chance}%</span>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )
+                    })()}
                   </div>
 
                   {/* Action Buttons */}
@@ -1058,8 +1069,9 @@ export default function FollowupLeadsPage() {
                             type="text"
                             inputMode="numeric"
                             className="h-9 text-center bg-white"
-                            placeholder="Qty"
+                            placeholder="Qty *"
                             value={product.strength}
+                            required
                             onChange={(e) =>
                               updateInterestedProduct(index, 'strength', e.target.value)
                             }
@@ -1068,8 +1080,9 @@ export default function FollowupLeadsPage() {
                             type="text"
                             inputMode="numeric"
                             className="h-9 text-center bg-white"
-                            placeholder="%"
+                            placeholder="% *"
                             value={product.chance}
+                            required
                             onChange={(e) =>
                               updateInterestedProduct(index, 'chance', e.target.value)
                             }
