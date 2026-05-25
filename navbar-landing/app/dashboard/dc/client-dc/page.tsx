@@ -1241,7 +1241,7 @@ export default function ClientDCPage() {
         const term1Payload: any = {
           productDetails: term1Products,
           requestedQuantity: term1Quantity,
-          status: 'pending_dc', // Goes to Pending DC for Senior Coordinator
+          status: 'po_submitted',
         }
         if (dcPoPhotoUrl) {
           term1Payload.poPhotoUrl = dcPoPhotoUrl
@@ -1296,11 +1296,11 @@ export default function ClientDCPage() {
       } else if (hasTerm1 || hasBothTerm) {
         // Case 1: Only Term 1 or "Both" - Goes to Closed Sales
         console.log('📦 DC has Term 1 or "Both" products - going to Closed Sales')
-        updatePayload.status = 'pending_dc' // Will be updated to dc_requested via DcOrder
+        updatePayload.status = 'po_submitted'
         updatedDC = await apiRequest(`/dc/${selectedDC._id}`, {
-        method: 'PUT',
-        body: JSON.stringify(updatePayload),
-      })
+          method: 'PUT',
+          body: JSON.stringify(updatePayload),
+        })
       } else if (hasTerm2 && !hasTerm1 && !hasBothTerm) {
         // Case 2: Only Term 2 (no Term 1, no "Both") - Goes to Term-Wise DC (NOT Closed Sales)
         console.log('📦 DC has only Term 2 products - going to Term-Wise DC (NOT Closed Sales)')
@@ -1310,8 +1310,7 @@ export default function ClientDCPage() {
           body: JSON.stringify(updatePayload),
         })
       } else {
-        // Fallback: Default to pending_dc
-        updatePayload.status = 'pending_dc'
+        updatePayload.status = 'po_submitted'
         updatedDC = await apiRequest(`/dc/${selectedDC._id}`, {
           method: 'PUT',
           body: JSON.stringify(updatePayload),

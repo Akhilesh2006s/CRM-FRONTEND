@@ -15,6 +15,7 @@ const ExcelJS = require('exceljs');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { validateSetPendingDc } = require('../utils/dcStatusFlow');
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -76,6 +77,14 @@ const qtyFromRow = (row = {}) => {
     : (Number.isFinite(strength) && strength > 0 ? strength : 0);
 };
 
+const STUDENT_ENROLLMENT_CATEGORIES = new Set([
+  'new students',
+  'existing students',
+  'both',
+  'new school',
+  'existing school',
+]);
+
 const normalizeProductDetails = (rows = [], { isShortage = false } = {}) =>
   (Array.isArray(rows) ? rows : []).map((p) => {
     const quantity = qtyFromRow(p);
@@ -85,16 +94,40 @@ const normalizeProductDetails = (rows = [], { isShortage = false } = {}) =>
       : (isShortage ? quantity : 0);
     const strength = Number.isFinite(Number(p.strength)) && Number(p.strength) > 0 ? Number(p.strength) : quantity;
     const price = Number(p.price) || 0;
+    const rawClass =
+      p.class !== undefined && p.class !== null && String(p.class).trim() !== ''
+        ? String(p.class).trim()
+        : '';
+    const classVal = rawClass && rawClass !== '0' ? rawClass : '1';
+    const catRaw = typeof p.category === 'string' ? p.category.trim() : '';
+    const catLower = catRaw.toLowerCase();
+    const studentLike = catLower && STUDENT_ENROLLMENT_CATEGORIES.has(catLower);
+    let productCategory =
+      typeof p.productCategory === 'string' ? p.productCategory.trim() : '';
+    if (productCategory && STUDENT_ENROLLMENT_CATEGORIES.has(productCategory.toLowerCase())) {
+      productCategory = '';
+    }
+    if (!productCategory && catRaw && !studentLike) {
+      productCategory = catRaw;
+    }
+    let specs =
+      p.specs !== undefined && p.specs !== null && String(p.specs).trim() !== ''
+        ? String(p.specs).trim()
+        : '';
+    if ((!specs || specs === 'Regular') && productCategory && !studentLike) {
+      specs = productCategory;
+    }
+    if (!specs) specs = 'Regular';
     return {
       product: p.product || p.productName || '',
-      class: p.class || '1',
+      class: classVal,
       category: (() => {
         const raw = String(p.category || '').trim();
         if (isShortage && (!raw || /^shortage$/i.test(raw))) return 'new Students';
         return raw || 'new Students';
       })(),
       productName: p.productName || p.product || '',
-      productCategory: p.productCategory || undefined,
+      productCategory: productCategory || undefined,
       quantity,
       deliveredQuantity,
       shortageQuantity,
@@ -102,7 +135,7 @@ const normalizeProductDetails = (rows = [], { isShortage = false } = {}) =>
       price,
       total: Number(p.total) || (price * strength),
       level: p.level || 'L2',
-      specs: p.specs || 'Regular',
+      specs,
       subject: p.subject || undefined,
       term: p.term || 'Term 1',
     };
@@ -314,7 +347,7 @@ const getDCs = async (req, res) => {
       try {
         const populatedPromise = DC.find({ _id: { $in: dcs.map(dc => dc._id) } })
           .populate('saleId', 'customerName product quantity status poDocument')
-          .populate('dcOrderId', 'school_name school_code school_type contact_person contact_mobile email address location zone cluster_code products dc_code')
+          .populate('dcOrderId', 'school_name school_code school_type contact_person contact_mobile email address location zone products dc_code')
           .populate('employeeId', 'name email')
           .populate('createdBy', 'name email')
           .populate('submittedBy', 'name email')
@@ -456,13 +489,18 @@ const raiseDC = async (req, res) => {
               class: p.class ? String(p.class).trim() : '1',
             }))
           : (lead.products && lead.products.length) ? lead.products : [{ product_name: 'Abacus', quantity: 1, unit_price: 0 }];
+        const { ensureSchoolCode } = require('../utils/clientSchoolCode');
+        const schoolCodeForClient = await ensureSchoolCode(lead);
         dcOrder = await DcOrder.create({
           school_name: lead.school_name || 'School',
+          school_code: schoolCodeForClient || lead.school_code,
           contact_person: lead.contact_person,
           contact_mobile: lead.contact_mobile,
           email: lead.email,
           location: lead.location,
           zone: lead.zone,
+          region: lead.region,
+          city: lead.city,
           school_type: lead.school_type || 'New',
           products: productsFromDetails,
           assigned_to: req.body.employeeId || req.user._id,
@@ -477,6 +515,15 @@ const raiseDC = async (req, res) => {
     if (!dcOrder) {
       console.log('❌ DcOrder/Lead not found:', dcOrderId);
       return res.status(404).json({ message: 'Deal/Lead not found' });
+    }
+
+    if (!dcOrder.school_code) {
+      const { ensureSchoolCode } = require('../utils/clientSchoolCode');
+      const code = await ensureSchoolCode(dcOrder);
+      if (code) {
+        dcOrder.school_code = code;
+        await dcOrder.save();
+      }
     }
 
     // Resolve employeeId once
@@ -687,7 +734,17 @@ const raiseDC = async (req, res) => {
     }
 
     // Single DC (no split)
-    const requestedStatus = (hasTerm2 && !hasTerm1 && !hasBothTerm) ? 'scheduled_for_later' : (req.body.status || 'pending_dc');
+    let requestedStatus =
+      hasTerm2 && !hasTerm1 && !hasBothTerm
+        ? 'scheduled_for_later'
+        : req.body.status || 'pending_dc';
+    if (requestedStatus === 'pending_dc') {
+      const existingForCheck = await DC.findOne({ dcOrderId: dcOrder._id }).sort({ createdAt: -1 });
+      const pendingCheck = validateSetPendingDc(existingForCheck, req.user?.role, 'pending_dc');
+      if (!pendingCheck.allowed) {
+        requestedStatus = pendingCheck.coercedStatus || 'po_submitted';
+      }
+    }
     let dc = await DC.findOne({ dcOrderId: dcOrder._id }).sort({ status: 1, createdAt: 1 });
     const isTerm2Only = requestedStatus === 'scheduled_for_later' && dc && dc.status !== 'scheduled_for_later';
     if (dc && !isTerm2Only) {
@@ -1067,7 +1124,7 @@ const getCompletedDCs = async (req, res) => {
         const populatedPromise = DC.find({ _id: { $in: dcs.map(dc => dc._id) }, status: 'completed' })
           .select('_id saleId dcOrderId parentDcId clusterId dcType fulfillmentStatus employeeId customerName customerPhone customerEmail customerAddress product requestedQuantity availableQuantity deliverableQuantity status poPhotoUrl poDocument productDetails dcDate dcRemarks dcCategory dcNotes transport lrNo lrDate lrCost boxes transportArea deliveryStatus financeRemarks splApproval smeRemarks warehouseProcessedAt warehouseProcessedBy completedAt completedBy createdAt updatedAt')
           .populate('saleId', 'customerName product quantity status')
-          .populate('dcOrderId', 'school_name school_code school_type contact_person contact_mobile email address location zone cluster_code products dc_code')
+          .populate('dcOrderId', 'school_name school_code school_type contact_person contact_mobile email address location zone products dc_code')
           .populate('parentDcId', '_id dc_code status requestedQuantity deliverableQuantity fulfillmentStatus dcType')
           .populate('employeeId', 'name email')
           .populate('completedBy', 'name email')
@@ -1394,9 +1451,6 @@ const warehouseProcess = async (req, res) => {
     
     if (remarks) {
       dc.deliveryNotes = remarks;
-    }
-    if (!dc.deliveryStatus) {
-      dc.deliveryStatus = 'Pending';
     }
     await dc.save();
 
@@ -1933,6 +1987,10 @@ const updateDC = async (req, res) => {
     }
     if (req.body.requestedQuantity !== undefined) dc.requestedQuantity = req.body.requestedQuantity;
     if (req.body.status !== undefined) {
+      const pendingCheck = validateSetPendingDc(dc, req.user?.role, req.body.status);
+      if (!pendingCheck.allowed) {
+        return res.status(400).json({ message: pendingCheck.message });
+      }
       dc.status = req.body.status;
       // When moving from hold to sent_to_manager (e.g. "Move to DC@Warehouse"), set timestamps so DC appears in DC @ Warehouse list
       if (req.body.status === 'sent_to_manager') {
@@ -1977,32 +2035,6 @@ const updateDC = async (req, res) => {
     if (req.body.boxes !== undefined) dc.boxes = req.body.boxes;
     if (req.body.transportArea !== undefined) dc.transportArea = req.body.transportArea;
     if (req.body.deliveryStatus !== undefined) dc.deliveryStatus = req.body.deliveryStatus;
-    if (req.body.lrCost !== undefined) dc.lrCost = req.body.lrCost;
-
-    // Sync linked DcOrder when warehouse updates school/zone/cluster/contact
-    const dcOrderId = dc.dcOrderId?._id || dc.dcOrderId;
-    if (dcOrderId) {
-      const orderPatch = {};
-      if (req.body.school_type !== undefined) orderPatch.school_type = req.body.school_type;
-      if (req.body.zone !== undefined) orderPatch.zone = req.body.zone;
-      const clusterVal = req.body.cluster_code !== undefined ? req.body.cluster_code : req.body.cluster;
-      if (clusterVal !== undefined) orderPatch.cluster_code = clusterVal;
-      if (req.body.contactPerson !== undefined) orderPatch.contact_person = req.body.contactPerson;
-      if (req.body.contactMobile !== undefined) orderPatch.contact_mobile = req.body.contactMobile;
-      if (req.body.remarks !== undefined) orderPatch.remarks = req.body.remarks;
-      if (req.body.dcOrderId && typeof req.body.dcOrderId === 'object' && !req.body.dcOrderId._bsontype) {
-        const nested = req.body.dcOrderId;
-        if (nested.school_type !== undefined) orderPatch.school_type = nested.school_type;
-        if (nested.address !== undefined) orderPatch.address = nested.address;
-        if (nested.zone !== undefined) orderPatch.zone = nested.zone;
-        if (nested.cluster_code !== undefined) orderPatch.cluster_code = nested.cluster_code;
-        if (nested.contact_person !== undefined) orderPatch.contact_person = nested.contact_person;
-        if (nested.contact_mobile !== undefined) orderPatch.contact_mobile = nested.contact_mobile;
-      }
-      if (Object.keys(orderPatch).length > 0) {
-        await DcOrder.findByIdAndUpdate(dcOrderId, orderPatch);
-      }
-    }
     
     // Save without validating required fields that might not be present during update
     await dc.save({ validateBeforeSave: false });
@@ -2104,7 +2136,8 @@ const exportSalesVisit = async (req, res) => {
     // Add data
     filteredDCs.forEach((dc, index) => {
       const schoolName = dc.dcOrderId?.school_name || dc.customerName || '';
-      const schoolCode = dc.dcOrderId?.dc_code || '';
+      const schoolCode =
+        dc.dcOrderId?.school_code || dc.dcOrderId?.dc_code || '';
       const schoolType = dc.dcOrderId?.school_type || (dc.dcOrderId ? 'Existing' : 'New');
       const zone = dc.dcOrderId?.zone || '';
       const executive = dc.employeeId?.name || dc.createdBy?.name || 'Not Assigned';

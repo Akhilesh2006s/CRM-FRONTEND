@@ -18,6 +18,55 @@ export type ResolveClientDCRowOpts = {
   getProductCategories: (product: string) => string[]
 }
 
+/** Stable key for duplicate product lines (Request DC / Edit PO). */
+export function productDetailLineKey(p: Record<string, any>): string {
+  const product = String(p.product || p.productName || '')
+    .trim()
+    .toLowerCase()
+  const klass = String(p.class ?? '').trim()
+  const level = String(p.level ?? '')
+    .trim()
+    .toLowerCase()
+  const specs = String(p.specs ?? 'Regular')
+    .trim()
+    .toLowerCase()
+  const productCategory = String(p.productCategory ?? '')
+    .trim()
+    .toLowerCase()
+  const term = String(p.term ?? '').trim()
+  const qty = String(p.quantity ?? p.strength ?? '')
+  return [product, klass, level, specs, productCategory, term, qty].join('|')
+}
+
+export function dedupeProductDetailLines(lines: any[]): any[] {
+  const seen = new Set<string>()
+  const out: any[] = []
+  for (const p of Array.isArray(lines) ? lines : []) {
+    if (!p || !(p.product || p.productName)) continue
+    const key = productDetailLineKey(p)
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(p)
+  }
+  return out
+}
+
+/** Current DC lines + sibling DCs on same order (excludes re-adding current DC). */
+export function mergeRequestDCProductDetails(
+  currentDcId: string,
+  currentDetails: any[],
+  relatedDcs: any[]
+): any[] {
+  const merged: any[] = Array.isArray(currentDetails) ? [...currentDetails] : []
+  for (const r of Array.isArray(relatedDcs) ? relatedDcs : []) {
+    if (!r?._id || String(r._id) === String(currentDcId)) continue
+    if (Array.isArray(r.productDetails)) {
+      merged.push(...r.productDetails)
+    }
+  }
+  return dedupeProductDetailLines(merged)
+}
+
 /** Normalize class / SKU category / specs for Client DC & Request DC tables. */
 export function resolveClientDCRowFields(
   row: Record<string, any>,
@@ -64,27 +113,12 @@ export function resolveClientDCRowFields(
     row.specs !== undefined && row.specs !== null && String(row.specs).trim() !== ''
       ? String(row.specs).trim()
       : ''
-  // SKU lines (e.g. IIT risers / eduapt) belong in Product Category, not Specs
   if ((!specs || specs === 'Regular') && catRaw && !studentLike && isSkuCategory(catRaw) && !hasSku) {
     specs = skuCats.find((s) => s.toLowerCase() === catRaw.toLowerCase()) || catRaw
   }
   if (!specs) specs = 'Regular'
 
   return { class: classDisplay, productCategory: productCategory || undefined, specs }
-}
-
-/** Subject from line `subject` or `selected_subjects` (close lead / DcOrder products). */
-export function resolveProductSubject(raw: Record<string, any> | null | undefined): string | undefined {
-  if (!raw) return undefined
-  if (raw.subject !== undefined && raw.subject !== null && String(raw.subject).trim() !== '') {
-    return String(raw.subject).trim()
-  }
-  const selected = raw.selected_subjects
-  if (Array.isArray(selected) && selected.length > 0) {
-    const joined = selected.map((s) => String(s).trim()).filter(Boolean).join(', ')
-    if (joined) return joined
-  }
-  return undefined
 }
 
 export function findMatchingOrderProduct(
@@ -172,171 +206,8 @@ function mapToClientDCProductRow(
     strength: strengthNum,
     level: raw.level || raw.term || getDefaultLevel(product || 'Abacus'),
     term: resolveClientDCRowTerm(raw),
-    subject: resolveProductSubject(raw),
+    subject: raw.subject || undefined,
   }
-}
-
-export type EditPOProductRow = {
-  id: string
-  product_name: string
-  quantity: number
-  unit_price: number
-  class?: string
-  specs?: string
-  productCategory?: string
-  category?: string
-  strength?: number
-  subject?: string
-  level?: string
-  term?: string
-}
-
-/** Prefer positive quantity; fall back to any defined numeric field. */
-export function resolveProductQuantity(
-  raw: Record<string, any>,
-  order?: Record<string, any> | null
-): number {
-  const candidates = [raw.quantity, raw.strength, order?.quantity, order?.strength]
-  for (const v of candidates) {
-    if (v === null || v === undefined || v === '') continue
-    const n = Number(v)
-    if (!Number.isNaN(n) && n > 0) return n
-  }
-  for (const v of candidates) {
-    if (v === null || v === undefined || v === '') continue
-    const n = Number(v)
-    if (!Number.isNaN(n)) return n
-  }
-  return 0
-}
-
-/** Unit price from DC line, DcOrder product, or total ÷ quantity. */
-export function resolveProductUnitPrice(
-  raw: Record<string, any>,
-  order?: Record<string, any> | null,
-  quantity?: number
-): number {
-  const qty = quantity ?? resolveProductQuantity(raw, order)
-  const candidates = [raw.price, raw.unit_price, order?.unit_price]
-  for (const v of candidates) {
-    if (v === null || v === undefined || v === '') continue
-    const n = Number(v)
-    if (!Number.isNaN(n) && n > 0) return n
-  }
-  const total = Number(raw.total)
-  if (!Number.isNaN(total) && total > 0 && qty > 0) return total / qty
-  for (const v of candidates) {
-    if (v === null || v === undefined || v === '') continue
-    const n = Number(v)
-    if (!Number.isNaN(n)) return n
-  }
-  return 0
-}
-
-export function computeEditPOTotalAmount(
-  rows: Array<{ quantity: number; unit_price: number }>
-): number {
-  return rows.reduce(
-    (sum, row) => sum + (Number(row.quantity) || 0) * (Number(row.unit_price) || 0),
-    0
-  )
-}
-
-export function buildEditPOProductRows(
-  dcProductDetails: any[],
-  dcOrderProducts: any[],
-  opts: ResolveClientDCRowOpts,
-  getDefaultLevel: (product: string) => string,
-  getAvailableLevels: (product: string) => string[]
-): EditPOProductRow[] {
-  const details = Array.isArray(dcProductDetails) ? dcProductDetails : []
-  const orders = Array.isArray(dcOrderProducts) ? dcOrderProducts : []
-  const usedOrderIdx = new Set<number>()
-
-  const fromDetails =
-    details.length > 0
-      ? details.map((p: any, idx: number) => {
-          const name = p.product || p.productName || p.product_name || ''
-          const order = findMatchingOrderProduct(orders, p, idx, usedOrderIdx)
-          const merged = order
-            ? {
-                ...p,
-                product: name,
-                class: p.class ?? order.class,
-                specs: p.specs ?? order.specs,
-                productCategory: p.productCategory ?? order.productCategory,
-                category: p.category ?? order.category,
-                fromClass: p.fromClass ?? order.fromClass,
-                toClass: p.toClass ?? order.toClass,
-                selected_classes: p.selected_classes ?? order.selected_classes,
-                quantity: p.quantity ?? order.quantity,
-                strength: p.strength ?? order.strength ?? order.quantity,
-                price: p.price ?? order.unit_price,
-                level: p.level || order.level,
-                term: p.term ?? order.term,
-                subject: p.subject ?? order.subject,
-                selected_subjects: p.selected_subjects ?? order.selected_subjects,
-              }
-            : p
-          const resolved = resolveClientDCRowFields(merged, name, opts)
-          const catalogLevels = getAvailableLevels(name)
-          const fallbackLevel = catalogLevels[0] || getDefaultLevel(name || 'Abacus')
-          const savedLevel = (merged.level && String(merged.level).trim()) || ''
-          const level = savedLevel || fallbackLevel
-          const term = normalizeProductTerm(
-            merged.term ?? termFromLevelLabel(savedLevel) ?? termFromLevelLabel(level)
-          )
-          const quantity = resolveProductQuantity(merged, order)
-          const unit_price = resolveProductUnitPrice(merged, order, quantity)
-          const strength = resolveProductQuantity(merged, order)
-
-          return {
-            id: String(idx + 1),
-            product_name: name,
-            quantity,
-            unit_price,
-            class: resolved.class,
-            specs: resolved.specs,
-            productCategory: resolved.productCategory,
-            category: merged.category,
-            strength,
-            subject: resolveProductSubject(merged),
-            level,
-            term,
-          }
-        })
-      : []
-
-  if (fromDetails.length > 0) return fromDetails
-
-  return orders.map((p: any, idx: number) => {
-    const name = p.product_name || ''
-    const resolved = resolveClientDCRowFields(p, name, opts)
-    const catalogLevels = getAvailableLevels(name)
-    const fallbackLevel = catalogLevels[0] || getDefaultLevel(name || 'Abacus')
-    const savedLevel = (p.level && String(p.level).trim()) || ''
-    const level = savedLevel || fallbackLevel
-    const term = normalizeProductTerm(
-      p.term ?? termFromLevelLabel(savedLevel) ?? termFromLevelLabel(level)
-    )
-    const quantity = resolveProductQuantity(p, null)
-    const unit_price = resolveProductUnitPrice(p, null, quantity)
-
-    return {
-      id: String(idx + 1),
-      product_name: name,
-      quantity,
-      unit_price,
-      class: resolved.class,
-      specs: resolved.specs,
-      productCategory: resolved.productCategory,
-      category: p.category,
-      strength: quantity,
-      subject: resolveProductSubject(p),
-      level,
-      term,
-    }
-  })
 }
 
 export function buildClientDCProductRows(
@@ -370,8 +241,6 @@ export function buildClientDCProductRows(
             level: p.level || order.level,
             term: p.term ?? order.term,
             price: p.price ?? order.unit_price,
-            subject: p.subject ?? order.subject,
-            selected_subjects: p.selected_subjects ?? order.selected_subjects,
           }
         : p
       return mapToClientDCProductRow(merged, `dc-${idx + 1}`, opts, getDefaultLevel)
@@ -391,8 +260,6 @@ export function buildClientDCProductRows(
           strength: p.quantity ?? p.strength,
           level: p.level,
           term: p.term,
-          subject: p.subject,
-          selected_subjects: p.selected_subjects,
         },
         `dcorder-${idx + 1}`,
         opts,

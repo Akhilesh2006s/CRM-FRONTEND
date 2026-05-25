@@ -109,7 +109,7 @@ export default function DCTermWiseRequestDCScreen({ navigation, route }: any) {
 
     setSubmitting(true);
     try {
-      await apiService.put(`/dc/${dcId}`, { status: 'pending_dc' });
+      await apiService.put(`/dc/${dcId}`, { status: 'po_submitted' });
       await apiService.put(`/dc-orders/${orderId}`, { status: 'dc_requested' });
       Alert.alert('Done', 'DC requested. It will appear in Closed Sales and follow the normal flow.', [
         { text: 'OK', onPress: () => navigation.goBack() },

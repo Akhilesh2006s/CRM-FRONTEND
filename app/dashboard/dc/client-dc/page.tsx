@@ -30,6 +30,8 @@ import {
   buildEditPOProductRows,
   computeEditPOTotalAmount,
   resolveProductSubject,
+  dedupeProductDetailLines,
+  mergeRequestDCProductDetails,
   type EditPOProductRow,
   type ResolveClientDCRowOpts,
 } from '@/lib/clientDcProductRows'
@@ -1018,7 +1020,7 @@ export default function ClientDCPage() {
     // Load full DC details (merge lines from this DC + sibling DCs on same order)
     try {
       const fullDC = await apiRequest<any>(`/dc/${dc._id}`)
-      const mergedDetails: any[] = Array.isArray(fullDC.productDetails)
+      let mergedDetails: any[] = Array.isArray(fullDC.productDetails)
         ? [...fullDC.productDetails]
         : []
       if (dcOrderId) {
@@ -1026,14 +1028,17 @@ export default function ClientDCPage() {
           const related = await apiRequest<any[]>(
             `/dc?dcOrderId=${encodeURIComponent(dcOrderId)}`
           )
-          ;(Array.isArray(related) ? related : []).forEach((r: any) => {
-            if (Array.isArray(r.productDetails)) {
-              mergedDetails.push(...r.productDetails)
-            }
-          })
+          mergedDetails = mergeRequestDCProductDetails(
+            fullDC._id,
+            fullDC.productDetails,
+            related
+          )
         } catch (relErr) {
           console.warn('Could not load related DC lines for Request DC:', relErr)
+          mergedDetails = dedupeProductDetailLines(mergedDetails)
         }
+      } else {
+        mergedDetails = dedupeProductDetailLines(mergedDetails)
       }
 
       const rowOpts: ResolveClientDCRowOpts = { hasProductCategories, getProductCategories }
@@ -1352,7 +1357,7 @@ export default function ClientDCPage() {
         const term1Payload: any = {
           productDetails: term1Products,
           requestedQuantity: term1Quantity,
-          status: 'pending_dc', // Goes to Pending DC for Senior Coordinator
+          status: 'po_submitted',
         }
         if (dcPoPhotoUrl) {
           term1Payload.poPhotoUrl = dcPoPhotoUrl
@@ -1407,7 +1412,7 @@ export default function ClientDCPage() {
       } else if (!term2Only) {
         // Term 1 only, Both terms together → Closed Sales (full product list)
         console.log('📦 Request DC → Closed Sales (all lines on this DC)')
-        updatePayload.status = 'pending_dc'
+        updatePayload.status = 'po_submitted'
         updatedDC = await apiRequest(`/dc/${selectedDC._id}`, {
           method: 'PUT',
           body: JSON.stringify(updatePayload),
@@ -1421,8 +1426,7 @@ export default function ClientDCPage() {
           body: JSON.stringify(updatePayload),
         })
       } else {
-        // Fallback: Default to pending_dc
-        updatePayload.status = 'pending_dc'
+        updatePayload.status = 'po_submitted'
         updatedDC = await apiRequest(`/dc/${selectedDC._id}`, {
           method: 'PUT',
           body: JSON.stringify(updatePayload),
@@ -1935,7 +1939,9 @@ export default function ClientDCPage() {
 
       const pe = dcOrder.pendingEdit?.status === 'pending' ? dcOrder.pendingEdit : null
       const orderProducts = (pe?.products?.length ? pe.products : dcOrder.products) || []
-      const dcDetails = Array.isArray(fullDC?.productDetails) ? fullDC.productDetails : []
+      const dcDetails = dedupeProductDetailLines(
+        Array.isArray(fullDC?.productDetails) ? fullDC.productDetails : []
+      )
       const rowOpts: ResolveClientDCRowOpts = { hasProductCategories, getProductCategories }
 
       // When a manager approval is pending, show that snapshot; otherwise last saved order
@@ -2664,7 +2670,12 @@ export default function ClientDCPage() {
                     const customerName = d.customerName || d.saleId?.customerName || d.dcOrderId?.school_name || 'Unknown Client'
                     const phone = d.customerPhone || d.dcOrderId?.contact_mobile || '-'
                     const product = getDcProductsText(d) || '-'
-                    const status = d.status || 'created'
+                    const dcOrderStatus =
+                      typeof d.dcOrderId === 'object' ? d.dcOrderId?.status : undefined
+                    const status =
+                      dcOrderStatus === 'dc_requested' && (d.status === 'po_submitted' || !d.status)
+                        ? 'dc_requested'
+                        : d.status || 'created'
                     const createdDate = d.createdAt ? new Date(d.createdAt).toLocaleDateString() : '-'
                     // Client turned date: use dcOrderId.createdAt for converted leads, otherwise use createdAt
                     const turnedDate = (typeof d.dcOrderId === 'object' && d.dcOrderId?.createdAt)
@@ -2686,6 +2697,8 @@ export default function ClientDCPage() {
                           <span className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap shadow-sm ${
                             status === 'created' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
                             status === 'po_submitted' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' :
+                            status === 'dc_requested' ? 'bg-amber-100 text-amber-800 border border-amber-200' :
+                            status === 'pending_dc' ? 'bg-slate-100 text-slate-800 border border-slate-200' :
                             status === 'sent_to_manager' ? 'bg-purple-100 text-purple-700 border border-purple-200' :
                             status === 'warehouse_processing' ? 'bg-orange-100 text-orange-700 border border-orange-200' :
                             status === 'completed' ? 'bg-green-100 text-green-700 border border-green-200' :
@@ -2724,7 +2737,7 @@ export default function ClientDCPage() {
                           )}
                         </TableCell>
                         <TableCell className="text-center">
-                          {status === 'created' || status === 'po_submitted' ? (
+                          {status === 'created' || status === 'po_submitted' || status === 'dc_requested' ? (
                           <div className="flex items-center gap-2 justify-center">
                             {d.poPhotoUrl && (
                               <Button 
@@ -2750,7 +2763,8 @@ export default function ClientDCPage() {
                                 </Button>
                               )}
                               {/* Request DC: transport via Edit PO, no pending PO edits */}
-                              {dcsWithCompleteTransport.has(d._id) &&
+                              {status !== 'dc_requested' &&
+                                dcsWithCompleteTransport.has(d._id) &&
                                 !dcsWithPendingChanges.has(d._id) &&
                                 !dcsWithPendingEditRequests.has(d._id) && (
                             <Button 
@@ -2761,6 +2775,11 @@ export default function ClientDCPage() {
                               <Package className="w-4 h-4 mr-2" />
                               Request DC
                             </Button>
+                              )}
+                              {status === 'dc_requested' && (
+                                <span className="text-xs text-amber-700 max-w-[140px] text-center">
+                                  Awaiting Closed Sales review
+                                </span>
                               )}
                               {!dcsWithCompleteTransport.has(d._id) &&
                                 !dcsWithPendingChanges.has(d._id) &&
