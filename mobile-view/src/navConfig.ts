@@ -148,7 +148,7 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
         title: 'Executive Manager',
         items: [
           { label: 'Dashboard', screen: 'ExecutiveManagerDashboard', params: { managerId: (user as any)?._id } },
-          { label: 'Managers', screen: 'ExecutiveManagers' },
+          { label: 'Executives', screen: 'ExecutiveManagerExecutives' },
           { label: 'Closed Sales', screen: 'ClientsClosedSales' },
           { label: 'Pending Expenses', screen: 'ExpenseExecutiveManagerPending' as const },
           { label: 'My Leaves', screen: 'ExecutiveManagerLeaves', params: { managerId: (user as any)?._id } },
@@ -265,16 +265,8 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
         { label: 'New Employee', screen: 'EmployeeNew', icon: '➕' },
         { label: 'Active Employees', screen: 'EmployeesActive', icon: '👥' },
         { label: 'Inactive Employees', screen: 'EmployeesInactive', icon: '🚫' },
-        { label: 'Pending Leaves', screen: 'EmployeesLeaves', icon: '📅' },
         { label: 'Zones', screen: 'EmployeesZones', icon: '🗺️' },
         { label: 'Clusters', screen: 'EmployeesClusters', icon: '🔗' },
-      ],
-    },
-    {
-      title: 'Executive Managers',
-      icon: I.managers,
-      items: [
-        { label: 'All Managers', screen: 'ExecutiveManagers', icon: '🛡️' },
       ],
     },
     {

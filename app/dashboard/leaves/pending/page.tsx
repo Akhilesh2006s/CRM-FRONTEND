@@ -161,10 +161,10 @@ export default function AdminPendingLeavesPage() {
       {!isExecutiveManager && (
         <p className="text-sm text-neutral-600">
           Assign employees to managers in{' '}
-          <Link href="/dashboard/executive-managers" className="text-blue-600 underline">
-            Executive Managers
+          <Link href="/dashboard/employees/active" className="text-blue-600 underline">
+            Active Employees
           </Link>{' '}
-          so managers can approve leaves for their team. Approved leaves temporarily mark employees inactive until the end date.
+          (Executive Manager role) so managers can approve leaves for their team. Approved leaves temporarily mark employees inactive until the end date.
         </p>
       )}
       <Card className="p-0 overflow-x-auto">

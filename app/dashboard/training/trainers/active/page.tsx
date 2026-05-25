@@ -11,7 +11,28 @@ import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { Eye, Edit, ArrowUpDown } from 'lucide-react'
 
-type Trainer = { _id: string; name: string; email?: string; mobile?: string; zone?: string; trainerProducts?: string[]; trainerLevels?: string; trainerType?: string; state?: string; cluster?: string }
+type Trainer = {
+  _id: string
+  name: string
+  email?: string
+  mobile?: string
+  zone?: string
+  trainerProducts?: string[]
+  trainerLevels?: string
+  trainerAbacusLevels?: string
+  trainerVedicLevels?: string
+  trainerType?: string
+  state?: string
+  cluster?: string
+}
+
+function formatTrainerLevels(t: Trainer): string {
+  const parts: string[] = []
+  if (t.trainerAbacusLevels?.trim()) parts.push(`Abacus: ${t.trainerAbacusLevels.trim()}`)
+  if (t.trainerVedicLevels?.trim()) parts.push(`Vedic: ${t.trainerVedicLevels.trim()}`)
+  if (t.trainerLevels?.trim()) parts.push(t.trainerLevels.trim())
+  return parts.length ? parts.join(' · ') : '—'
+}
 
 export default function ActiveTrainersPage() {
   const router = useRouter()
@@ -191,7 +212,7 @@ export default function ActiveTrainersPage() {
                       ))}
                     </div>
                   </td>
-                  <td className="py-2 px-3">{t.trainerLevels || '-'}</td>
+                  <td className="py-2 px-3 text-sm max-w-[220px]">{formatTrainerLevels(t)}</td>
                   <td className="py-2 px-3">
                     <span className="px-2 py-1 bg-neutral-100 text-neutral-700 rounded text-xs">{t.trainerType || '-'}</span>
                   </td>

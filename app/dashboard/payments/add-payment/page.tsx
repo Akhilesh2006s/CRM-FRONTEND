@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { apiRequest } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
+import { displayClientSchoolCode, schoolMapKey } from '@/lib/clientSchoolCode'
 import { toast } from 'sonner'
 
 const PAYMENT_MODES = ['Cash', 'UPI', 'NEFT/RTGS', 'Cheque', 'Bank Transfer', 'Credit Card', 'Debit Card', 'Online Payment', 'Other']
@@ -69,55 +70,58 @@ export default function AddPaymentPage() {
             apiRequest<any[]>(`/dc-orders?assigned_to=${currentUser._id}`).catch(() => []),
           ])
 
-          // Extract unique schools from all sources
           const schoolMap = new Map<string, School>()
-          
-          // From DCs
-          dcs.forEach((dc: any) => {
-            const schoolName = dc.customerName || dc.dcOrderId?.school_name || ''
-            if (schoolName && !schoolMap.has(schoolName)) {
-              schoolMap.set(schoolName, {
-                _id: dc._id || dc.dcOrderId?._id || '',
-                schoolCode: dc.dcOrderId?.dc_code || '',
-                schoolName: schoolName,
-                contactName: dc.dcOrderId?.contact_person || dc.customerName || '',
-                mobileNumber: dc.customerPhone || dc.dcOrderId?.contact_mobile || '',
-                location: dc.customerAddress || dc.dcOrderId?.location || '',
-              })
+          const addSchool = (row: School) => {
+            if (!row.schoolName?.trim() && !row.schoolCode?.trim()) return
+            const key = schoolMapKey(row.schoolCode, row._id)
+            const prev = schoolMap.get(key)
+            if (!prev || (row.schoolCode && !prev.schoolCode)) {
+              schoolMap.set(key, row)
             }
+          }
+
+          dcs.forEach((dc: any) => {
+            const order = dc.dcOrderId
+            if (!order) return
+            addSchool({
+              _id: order._id || dc._id || '',
+              schoolCode: displayClientSchoolCode(order),
+              schoolName: order.school_name || dc.customerName || '',
+              contactName: order.contact_person || '',
+              mobileNumber: order.contact_mobile || dc.customerPhone || '',
+              location: order.location || dc.customerAddress || '',
+            })
           })
-          
-          // From Leads
-          leads.forEach((lead: any) => {
-            const schoolName = lead.school_name || ''
-            if (schoolName && !schoolMap.has(schoolName)) {
-              schoolMap.set(schoolName, {
+
+          leads
+            .filter((lead: any) => lead.status === 'Closed' || lead.school_code)
+            .forEach((lead: any) => {
+              addSchool({
                 _id: lead._id || '',
-                schoolCode: lead.school_code || '',
-                schoolName: schoolName,
+                schoolCode: displayClientSchoolCode(lead),
+                schoolName: lead.school_name || '',
                 contactName: lead.contact_person || '',
                 mobileNumber: lead.contact_mobile || '',
                 location: lead.location || '',
               })
-            }
-          })
-          
-          // From DcOrders
+            })
+
           dcOrders.forEach((order: any) => {
-            const schoolName = order.school_name || ''
-            if (schoolName && !schoolMap.has(schoolName)) {
-              schoolMap.set(schoolName, {
-                _id: order._id || '',
-                schoolCode: order.dc_code || '',
-                schoolName: schoolName,
-                contactName: order.contact_person || '',
-                mobileNumber: order.contact_mobile || '',
-                location: order.location || '',
-              })
-            }
+            addSchool({
+              _id: order._id || '',
+              schoolCode: displayClientSchoolCode(order),
+              schoolName: order.school_name || '',
+              contactName: order.contact_person || '',
+              mobileNumber: order.contact_mobile || '',
+              location: order.location || '',
+            })
           })
-          
-          setSchools(Array.from(schoolMap.values()))
+
+          setSchools(
+            Array.from(schoolMap.values())
+              .filter((s) => s.schoolCode.trim())
+              .sort((a, b) => a.schoolName.localeCompare(b.schoolName))
+          )
         } else {
           // For admins/managers, show all schools
           const data = await apiRequest<School[]>('/schools')
@@ -136,6 +140,11 @@ export default function AddPaymentPage() {
     e.preventDefault()
     if (!school || !amount || !mode) {
       toast.error('Please fill all required fields (School, Amount, and Payment Mode)')
+      return
+    }
+    const selectedSchool = schools.find((s) => s.schoolCode === school)
+    if (!selectedSchool?.schoolCode?.trim()) {
+      toast.error('School code is required. Choose a converted client by school code.')
       return
     }
     
@@ -171,12 +180,10 @@ export default function AddPaymentPage() {
     
     setSaving(true)
     try {
-      const selectedSchool = schools.find(s => s.schoolName === school)
-      
       // Build payment details object based on mode
       const paymentDetails: any = {
-        customerName: school,
-        schoolCode: selectedSchool?.schoolCode || '',
+        customerName: selectedSchool.schoolName,
+        schoolCode: selectedSchool.schoolCode,
         contactName: selectedSchool?.contactName || '',
         mobileNumber: selectedSchool?.mobileNumber || '',
         location: selectedSchool?.location || '',
@@ -265,21 +272,23 @@ export default function AddPaymentPage() {
         <form onSubmit={onSubmit} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label>School *</Label>
+              <Label>School (school code) *</Label>
               <Select value={school} onValueChange={setSchool} disabled={loading}>
                 <SelectTrigger className="bg-white text-neutral-900">
-                  <SelectValue placeholder="Select School" />
+                  <SelectValue placeholder="Select by school code" />
                 </SelectTrigger>
                 <SelectContent>
                   {schools.length > 0 ? (
-                    schools.filter(s => s.schoolName && s.schoolName.trim()).map((s) => (
-                      <SelectItem key={s._id} value={s.schoolName}>
-                        {s.schoolName}
-                      </SelectItem>
-                    ))
+                    schools
+                      .filter((s) => s.schoolCode?.trim())
+                      .map((s) => (
+                        <SelectItem key={schoolMapKey(s.schoolCode, s._id)} value={s.schoolCode}>
+                          {s.schoolCode} — {s.schoolName}
+                        </SelectItem>
+                      ))
                   ) : (
                     <SelectItem value="loading" disabled>
-                      {loading ? 'Loading schools...' : 'No schools available'}
+                      {loading ? 'Loading schools...' : 'No converted clients with school code'}
                     </SelectItem>
                   )}
                 </SelectContent>

@@ -5,7 +5,7 @@ import { typography } from '../../theme/typography';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebInput } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
-import EmployeeTaggingPicker, { TAGGING_ROLES } from '../../components/EmployeeTaggingPicker';
+import EmployeeTaggingPicker, { supportsEmployeeTagging } from '../../components/EmployeeTaggingPicker';
 
 const roles = [
   'Executive', 'Trainer', 'Finance Manager', 'Coordinator', 'Senior Coordinator',
@@ -86,7 +86,7 @@ export default function EmployeeEditScreen({ navigation, route }: any) {
         mobile: form.mobile,
       };
       if (form.role !== 'Executive') delete payload.cluster;
-      if (!TAGGING_ROLES.includes(form.role)) delete payload.taggedEmployeeIds;
+      if (!supportsEmployeeTagging(form.role)) delete payload.taggedEmployeeIds;
       await apiService.put(`/employees/${id}`, payload);
       navigation.navigate('EmployeesActive');
     } catch (error: any) {
@@ -98,14 +98,14 @@ export default function EmployeeEditScreen({ navigation, route }: any) {
 
   if (loading) {
     return (
-      <ScreenShell title="Edit Employee" loading>
+      <ScreenShell title={`Edit ${form.role}`} loading>
         <View />
       </ScreenShell>
     );
   }
 
   return (
-    <ScreenShell title="Edit Employee">
+    <ScreenShell title={`Edit ${form.role}`}>
       <ScrollView ref={scrollRef} style={styles.content} contentContainerStyle={styles.contentContainer}>
         {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
         <FormField label="First Name *" value={form.firstName} onChangeText={(t: string) => setForm((f) => ({ ...f, firstName: t }))} />
@@ -129,7 +129,13 @@ export default function EmployeeEditScreen({ navigation, route }: any) {
             <TouchableOpacity
               key={role}
               style={[styles.roleOption, form.role === role && styles.roleOptionSelected]}
-              onPress={() => setForm((f) => ({ ...f, role, taggedEmployeeIds: TAGGING_ROLES.includes(role) ? f.taggedEmployeeIds : [] }))}
+              onPress={() =>
+                setForm((f) => ({
+                  ...f,
+                  role,
+                  taggedEmployeeIds: supportsEmployeeTagging(role) ? f.taggedEmployeeIds : [],
+                }))
+              }
             >
               <Text style={[styles.roleOptionText, form.role === role && styles.roleOptionTextSelected]}>{role}</Text>
             </TouchableOpacity>

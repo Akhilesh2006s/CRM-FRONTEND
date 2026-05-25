@@ -1,32 +1,56 @@
 const Lead = require('../models/Lead');
+const DcOrder = require('../models/DcOrder');
+const { displayClientSchoolCode } = require('../utils/clientSchoolCode');
 
-// @desc    Get all schools (from leads)
+// @desc    Get all client schools (converted — keyed by school_code)
 // @route   GET /api/schools
 // @access  Private
 const getSchools = async (req, res) => {
   try {
-    // Get unique schools from leads
-    const leads = await Lead.find({})
-      .select('school_name school_code contact_person contact_mobile location strength')
-      .sort({ school_name: 1 });
+    const [orders, closedLeads] = await Promise.all([
+      DcOrder.find({
+        school_code: { $exists: true, $ne: '' },
+      })
+        .select(
+          'school_name school_code contact_person contact_mobile location strength dc_code status'
+        )
+        .sort({ school_name: 1 })
+        .lean(),
+      Lead.find({
+        status: 'Closed',
+        school_code: { $exists: true, $ne: '' },
+      })
+        .select('school_name school_code contact_person contact_mobile location strength')
+        .sort({ school_name: 1 })
+        .lean(),
+    ]);
 
-    // Transform to school format
-    const schools = leads.map(lead => ({
-      _id: lead._id,
-      schoolCode: lead.school_code || '',
-      schoolName: lead.school_name || '',
-      contactName: lead.contact_person || '',
-      mobileNumber: lead.contact_mobile || '',
-      location: lead.location || '',
-      avgStrength: lead.strength || 0,
-    }));
+    const byCode = new Map();
 
-    // Remove duplicates by school name
-    const uniqueSchools = Array.from(
-      new Map(schools.map(s => [s.schoolName, s])).values()
+    const addRow = (row, id) => {
+      const schoolCode = displayClientSchoolCode(row);
+      if (!schoolCode) return;
+      const key = schoolCode.toLowerCase();
+      if (byCode.has(key)) return;
+      byCode.set(key, {
+        _id: id,
+        schoolCode,
+        schoolName: row.school_name || '',
+        contactName: row.contact_person || '',
+        mobileNumber: row.contact_mobile || '',
+        location: row.location || '',
+        avgStrength: row.strength || 0,
+      });
+    };
+
+    orders.forEach((o) => addRow(o, o._id));
+    closedLeads.forEach((l) => addRow(l, l._id));
+
+    const schools = Array.from(byCode.values()).sort((a, b) =>
+      a.schoolName.localeCompare(b.schoolName)
     );
 
-    res.json(uniqueSchools);
+    res.json(schools);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -35,4 +59,3 @@ const getSchools = async (req, res) => {
 module.exports = {
   getSchools,
 };
-

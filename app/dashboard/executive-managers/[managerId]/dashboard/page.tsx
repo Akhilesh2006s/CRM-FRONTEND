@@ -328,10 +328,10 @@ export default function ExecutiveManagerDashboardPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-4">
-          <Link href="/dashboard/executive-managers">
+          <Link href="/dashboard/employees/active">
             <Button variant="outline" size="sm">
               <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Managers
+              Back to Employees
             </Button>
           </Link>
           <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Executive Manager Dashboard</h1>

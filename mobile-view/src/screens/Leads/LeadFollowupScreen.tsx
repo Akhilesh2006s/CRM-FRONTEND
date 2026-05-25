@@ -22,11 +22,6 @@ import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
 
 const DEAL_PRODUCT_STATUS_ORDER = ['Hot', 'Warm', 'Visit Again', 'Not Met Management', 'Not Interested'] as const;
 const SCHOOL_LEAD_STATUSES = new Set(['Hot', 'Warm', 'Cold']);
-const TERM_OPTIONS = [
-  { label: 'Term 1', value: 'Term 1' },
-  { label: 'Term 2', value: 'Term 2' },
-  { label: 'Both', value: 'Both' },
-];
 const PRODUCT_LINE_STATUS_OPTIONS = [
   { label: 'Hot', value: 'Hot' },
   { label: 'Warm', value: 'Warm' },
@@ -39,10 +34,24 @@ type ProductInterested = {
   product_name: string;
   term: string;
   status: string;
-  strength: number;
-  chance: number;
-  important: boolean;
+  strength: string;
+  chance: string;
 };
+
+function todayDateString(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function combineFollowUpDateTime(dateStr: string, timeStr: string): string {
+  const [h, m] = (timeStr || '10:00').split(':').map((v) => parseInt(v, 10) || 0);
+  const d = new Date(`${dateStr}T00:00:00`);
+  d.setHours(h, m, 0, 0);
+  return d.toISOString();
+}
 
 function normalizeProductLineStatus(status?: string): string {
   const s = (status || '').trim();
@@ -86,9 +95,11 @@ function leadProductsToInterested(lead: any): ProductInterested[] {
       product_name: p.product_name || p.product || '',
       term: p.term || 'Term 1',
       status: p.status || displayLeadDealPriority(lead) || 'Warm',
-      strength: Number(p.strength ?? p.quantity ?? 0) || 0,
-      chance: Number(p.chance ?? 0) || 0,
-      important: Boolean(p.important),
+      strength:
+        Number(p.strength ?? p.quantity ?? 0) > 0
+          ? String(Number(p.strength ?? p.quantity ?? 0))
+          : '',
+      chance: Number(p.chance ?? 0) > 0 ? String(Number(p.chance ?? 0)) : '',
     }));
   }
   if (typeof lead.products === 'string' && lead.products.trim()) {
@@ -100,9 +111,8 @@ function leadProductsToInterested(lead: any): ProductInterested[] {
         product_name: name,
         term: 'Term 1',
         status: displayLeadDealPriority(lead) || 'Warm',
-        strength: 0,
-        chance: 0,
-        important: false,
+        strength: '',
+        chance: '',
       }));
   }
   return [];
@@ -116,9 +126,10 @@ function formatProductsSummary(products: any): string {
       .map((p: any) => {
         const name = p.product_name || p.product || p.name || '';
         if (!name) return '';
-        const term = p.term ? ` (${p.term})` : '';
-        const imp = p.important ? ' ★' : '';
-        return `${name}${term}${imp}`;
+        const parts = [name];
+        if (p.term) parts.push(p.term);
+        if (Number(p.chance) > 0) parts.push(`${p.chance}%`);
+        return parts.join(' · ');
       })
       .filter(Boolean)
       .join(', ');
@@ -140,6 +151,7 @@ export default function LeadFollowupScreen({ navigation }: any) {
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showFollowUpDatePicker, setShowFollowUpDatePicker] = useState(false);
+  const [showFollowUpTimePicker, setShowFollowUpTimePicker] = useState(false);
   const [selectedLead, setSelectedLead] = useState<any>(null);
   const [historyLead, setHistoryLead] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
@@ -148,6 +160,7 @@ export default function LeadFollowupScreen({ navigation }: any) {
   const [productNames, setProductNames] = useState<string[]>([]);
   const [updateForm, setUpdateForm] = useState({
     follow_up_date: '',
+    follow_up_time: '10:00',
     remarks: '',
     productsInterested: [] as ProductInterested[],
   });
@@ -291,6 +304,7 @@ export default function LeadFollowupScreen({ navigation }: any) {
     const prefilled = leadProductsToInterested(lead);
     setUpdateForm({
       follow_up_date: '',
+      follow_up_time: '10:00',
       remarks: '',
       productsInterested: prefilled.length > 0 ? prefilled : [],
     });
@@ -301,7 +315,12 @@ export default function LeadFollowupScreen({ navigation }: any) {
     setShowUpdateModal(false);
     setSelectedLead(null);
     setModalError(null);
-    setUpdateForm({ follow_up_date: '', remarks: '', productsInterested: [] });
+    setUpdateForm({
+      follow_up_date: '',
+      follow_up_time: '10:00',
+      remarks: '',
+      productsInterested: [],
+    });
   };
 
   const clearMessages = () => {
@@ -318,9 +337,8 @@ export default function LeadFollowupScreen({ navigation }: any) {
           product_name: '',
           term: 'Term 1',
           status: 'Warm',
-          strength: 0,
-          chance: 0,
-          important: false,
+          strength: '',
+          chance: '',
         },
       ],
     }));
@@ -354,6 +372,14 @@ export default function LeadFollowupScreen({ navigation }: any) {
       setModalError('Next Follow-up Date is required');
       return;
     }
+    if (updateForm.follow_up_date < todayDateString()) {
+      setModalError('Follow-up date cannot be in the past');
+      return;
+    }
+    if (!updateForm.follow_up_time?.trim()) {
+      setModalError('Follow-up time is required');
+      return;
+    }
     if (!updateForm.remarks?.trim()) {
       setModalError('Remarks is required');
       return;
@@ -382,7 +408,7 @@ export default function LeadFollowupScreen({ navigation }: any) {
         status: p.status || 'Warm',
         strength: Number(p.strength) || 0,
         chance: Number(p.chance) || 0,
-        important: Boolean(p.important),
+        important: false,
         quantity: Number(p.strength) || 0,
         unit_price: 0,
       }));
@@ -390,7 +416,10 @@ export default function LeadFollowupScreen({ navigation }: any) {
       const derivedPriority = deriveLeadPriorityFromDealProducts(validProducts);
       const schoolLeadStatus = (selectedLead.lead_status || '').trim();
       const payload: any = {
-        follow_up_date: new Date(updateForm.follow_up_date + 'T00:00:00').toISOString(),
+        follow_up_date: combineFollowUpDateTime(
+          updateForm.follow_up_date,
+          updateForm.follow_up_time
+        ),
         remarks: updateForm.remarks.trim(),
         productsInterested: validProducts,
       };
@@ -493,25 +522,6 @@ export default function LeadFollowupScreen({ navigation }: any) {
     }
   };
 
-  const getPriorityColor = (priority?: string) => {
-    switch (priority?.toLowerCase()) {
-      case 'hot':
-        return { bg: colors.error + '15', text: colors.error, border: colors.error + '30' };
-      case 'warm':
-        return { bg: colors.warning + '15', text: colors.warning, border: colors.warning + '30' };
-      case 'cold':
-        return { bg: colors.info + '15', text: colors.info, border: colors.info + '30' };
-      case 'visit again':
-        return { bg: '#fbbf24' + '15', text: '#fbbf24', border: '#fbbf24' + '30' };
-      default:
-        return {
-          bg: colors.textSecondary + '15',
-          text: colors.textSecondary,
-          border: colors.textSecondary + '30',
-        };
-    }
-  };
-
   const zoneItems = [
     { label: 'All Zones', value: 'all' },
     ...zones.map((z) => ({ label: z, value: z })),
@@ -580,8 +590,6 @@ export default function LeadFollowupScreen({ navigation }: any) {
           </View>
         ) : (
           leads.map((lead) => {
-            const dealPriority = displayLeadDealPriority(lead);
-            const priorityColors = getPriorityColor(dealPriority);
             const isOverdue =
               lead.follow_up_date && new Date(lead.follow_up_date) < new Date();
 
@@ -599,16 +607,6 @@ export default function LeadFollowupScreen({ navigation }: any) {
                           <Text style={styles.locationText}>{lead.location}</Text>
                         </View>
                       ) : null}
-                    </View>
-                    <View
-                      style={[
-                        styles.priorityBadge,
-                        { backgroundColor: priorityColors.bg, borderColor: priorityColors.border },
-                      ]}
-                    >
-                      <Text style={[styles.priorityText, { color: priorityColors.text }]}>
-                        {dealPriority}
-                      </Text>
                     </View>
                   </View>
                 </View>
@@ -751,15 +749,63 @@ export default function LeadFollowupScreen({ navigation }: any) {
                               : new Date()
                           }
                           mode="date"
+                          minimumDate={new Date()}
                           display={Platform.OS === 'ios' ? 'spinner' : 'calendar'}
                           onChange={(_, d) => {
                             if (d) {
+                              const y = d.getFullYear();
+                              const m = String(d.getMonth() + 1).padStart(2, '0');
+                              const day = String(d.getDate()).padStart(2, '0');
                               setUpdateForm((f) => ({
                                 ...f,
-                                follow_up_date: d.toISOString().split('T')[0],
+                                follow_up_date: `${y}-${m}-${day}`,
                               }));
                             }
                             if (Platform.OS === 'android') setShowFollowUpDatePicker(false);
+                          }}
+                        />
+                      </View>
+                    </Modal>
+                  )}
+
+                  <Text style={styles.modalLabel}>Follow-up Time *</Text>
+                  <TouchableOpacity
+                    style={styles.dateTouchable}
+                    onPress={() => setShowFollowUpTimePicker(true)}
+                  >
+                    <Text style={styles.dateText}>
+                      {updateForm.follow_up_time || '10:00'}
+                    </Text>
+                    <Text>🕐</Text>
+                  </TouchableOpacity>
+                  {showFollowUpTimePicker && (
+                    <Modal visible transparent animationType="slide">
+                      <TouchableOpacity
+                        style={styles.dateOverlay}
+                        activeOpacity={1}
+                        onPress={() => setShowFollowUpTimePicker(false)}
+                      />
+                      <View style={styles.datePickerBox}>
+                        <View style={styles.datePickerHeader}>
+                          <Text style={styles.datePickerTitle}>Follow-up time</Text>
+                          <TouchableOpacity onPress={() => setShowFollowUpTimePicker(false)}>
+                            <Text style={styles.doneText}>Done</Text>
+                          </TouchableOpacity>
+                        </View>
+                        <DateTimePicker
+                          value={new Date(`1970-01-01T${updateForm.follow_up_time || '10:00'}:00`)}
+                          mode="time"
+                          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                          onChange={(_, d) => {
+                            if (d) {
+                              const h = String(d.getHours()).padStart(2, '0');
+                              const min = String(d.getMinutes()).padStart(2, '0');
+                              setUpdateForm((f) => ({
+                                ...f,
+                                follow_up_time: `${h}:${min}`,
+                              }));
+                            }
+                            if (Platform.OS === 'android') setShowFollowUpTimePicker(false);
                           }}
                         />
                       </View>
@@ -796,12 +842,6 @@ export default function LeadFollowupScreen({ navigation }: any) {
                           placeholder="Select product"
                         />
                         <WebSelect
-                          label="Term"
-                          value={product.term}
-                          onValueChange={(v) => updateInterestedProduct(index, 'term', v)}
-                          items={TERM_OPTIONS}
-                        />
-                        <WebSelect
                           label="Status"
                           value={product.status}
                           onValueChange={(v) => updateInterestedProduct(index, 'status', v)}
@@ -809,36 +849,18 @@ export default function LeadFollowupScreen({ navigation }: any) {
                         />
                         <WebInput
                           style={styles.input}
-                          placeholder="Strength"
-                          value={String(product.strength || '')}
-                          onChangeText={(t) =>
-                            updateInterestedProduct(index, 'strength', Number(t) || 0)
-                          }
+                          placeholder="Strength (qty)"
+                          value={product.strength}
+                          onChangeText={(t) => updateInterestedProduct(index, 'strength', t)}
                           keyboardType="number-pad"
                         />
                         <WebInput
                           style={styles.input}
                           placeholder="Chance %"
-                          value={String(product.chance || '')}
-                          onChangeText={(t) =>
-                            updateInterestedProduct(
-                              index,
-                              'chance',
-                              Math.min(100, Math.max(0, Number(t) || 0))
-                            )
-                          }
+                          value={product.chance}
+                          onChangeText={(t) => updateInterestedProduct(index, 'chance', t)}
                           keyboardType="number-pad"
                         />
-                        <TouchableOpacity
-                          style={styles.importantToggle}
-                          onPress={() =>
-                            updateInterestedProduct(index, 'important', !product.important)
-                          }
-                        >
-                          <Text style={product.important ? styles.starOn : styles.starOff}>
-                            {product.important ? '★' : '☆'} Important
-                          </Text>
-                        </TouchableOpacity>
                         <TouchableOpacity onPress={() => removeInterestedProduct(index)}>
                           <Text style={styles.removeLink}>Remove</Text>
                         </TouchableOpacity>
@@ -919,7 +941,14 @@ export default function LeadFollowupScreen({ navigation }: any) {
                       <Text style={styles.historyProducts}>
                         Products:{' '}
                         {item.productsInterested
-                          .map((p: any) => p.product_name)
+                          .map((p: any) => {
+                            const name = p.product_name || '';
+                            if (!name) return '';
+                            const bits = [name];
+                            if (p.term) bits.push(p.term);
+                            if (Number(p.chance) > 0) bits.push(`${p.chance}%`);
+                            return bits.join(' · ');
+                          })
                           .filter(Boolean)
                           .join(', ')}
                       </Text>

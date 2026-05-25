@@ -12,9 +12,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { getCurrentUser } from '@/lib/auth'
 import { useProducts } from '@/hooks/useProducts'
 import { toast } from 'sonner'
-import { ArrowLeft, MapPin, Edit, History, X, AlertCircle, ChevronLeft, ChevronRight, Star } from 'lucide-react'
+import { ArrowLeft, MapPin, Edit, History, X, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { todayDateString } from '@/lib/todayDate'
 
 type Lead = { 
   _id: string
@@ -47,9 +48,15 @@ type ProductInterested = {
   product_name: string
   term: string
   status: string
-  strength: number
-  chance: number
-  important?: boolean
+  strength: string
+  chance: string
+}
+
+function combineFollowUpDateTime(dateStr: string, timeStr: string): string {
+  const [h, m] = (timeStr || '10:00').split(':').map((v) => parseInt(v, 10) || 0)
+  const d = new Date(`${dateStr}T00:00:00`)
+  d.setHours(h, m, 0, 0)
+  return d.toISOString()
 }
 
 /** Align product-line enums across Lead/DcOrder schemas */
@@ -138,7 +145,8 @@ function leadProductsToHistorySnapshot(products: Lead['products']) {
         product_name: String(p.product_name || p.product || '').trim(),
         term: String(p.term || 'Term 1').trim(),
         status,
-        important: Boolean((p as { important?: boolean }).important),
+        strength: Number(p.strength ?? p.quantity ?? 0) || 0,
+        chance: Number(p.chance ?? 0) || 0,
       }
     })
 }
@@ -169,6 +177,7 @@ export default function FollowupLeadsPage() {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
   const [updateForm, setUpdateForm] = useState({
     follow_up_date: '',
+    follow_up_time: '10:00',
     status: '',
     remarks: '',
     productsInterested: [] as ProductInterested[],
@@ -420,6 +429,7 @@ export default function FollowupLeadsPage() {
     // Clear form for creating a new follow-up entry (don't pre-fill with old data)
     setUpdateForm({
       follow_up_date: '',
+      follow_up_time: '10:00',
       status: displayLeadDealPriority(lead), // Reflects per-product + deal priority
       remarks: '',
       productsInterested: (() => {
@@ -428,9 +438,11 @@ export default function FollowupLeadsPage() {
             product_name: p.product_name || p.product || '',
             term: p.term || 'Term 1',
             status: p.status || displayLeadDealPriority(lead) || 'Warm',
-            strength: Number(p.strength ?? p.quantity ?? 0) || 0,
-            chance: Number(p.chance ?? 0) || 0,
-            important: Boolean((p as { important?: boolean }).important),
+            strength:
+              Number(p.strength ?? p.quantity ?? 0) > 0
+                ? String(Number(p.strength ?? p.quantity ?? 0))
+                : '',
+            chance: Number(p.chance ?? 0) > 0 ? String(Number(p.chance ?? 0)) : '',
           }))
         }
 
@@ -443,8 +455,8 @@ export default function FollowupLeadsPage() {
               product_name: name,
               term: 'Term 1',
               status: displayLeadDealPriority(lead) || 'Warm',
-              strength: 0,
-              chance: 0,
+              strength: '',
+              chance: '',
             }))
         }
 
@@ -457,7 +469,13 @@ export default function FollowupLeadsPage() {
   const closeUpdateModal = () => {
     setUpdateModalOpen(false)
     setSelectedLead(null)
-    setUpdateForm({ follow_up_date: '', status: '', remarks: '', productsInterested: [] })
+    setUpdateForm({
+      follow_up_date: '',
+      follow_up_time: '10:00',
+      status: '',
+      remarks: '',
+      productsInterested: [],
+    })
   }
 
   const handleUpdateLead = async () => {
@@ -466,6 +484,14 @@ export default function FollowupLeadsPage() {
     // Validate all required fields
     if (!updateForm.follow_up_date || !updateForm.follow_up_date.trim()) {
       toast.error('Next Follow-up Date is required')
+      return
+    }
+    if (updateForm.follow_up_date < todayDateString()) {
+      toast.error('Follow-up date cannot be in the past')
+      return
+    }
+    if (!updateForm.follow_up_time || !updateForm.follow_up_time.trim()) {
+      toast.error('Follow-up time is required')
       return
     }
     if (!updateForm.remarks || !updateForm.remarks.trim()) {
@@ -480,9 +506,11 @@ export default function FollowupLeadsPage() {
       toast.error('Add at least one product with Strength (quantity) and Chance %')
       return
     }
-    const missingStrengthOrChance = selectedProducts.some(
-      (p) => (Number(p.strength) || 0) <= 0 || (Number(p.chance) || 0) <= 0
-    )
+    const missingStrengthOrChance = selectedProducts.some((p) => {
+      const strength = Number(p.strength) || 0
+      const chance = Number(p.chance) || 0
+      return strength <= 0 || chance <= 0
+    })
     if (missingStrengthOrChance) {
       toast.error('Each product must have Strength greater than 0 and Chance % greater than 0')
       return
@@ -498,7 +526,7 @@ export default function FollowupLeadsPage() {
           status: p.status || 'Warm',
           strength: Number(p.strength) || 0,
           chance: Number(p.chance) || 0,
-          important: Boolean(p.important),
+          important: false,
           quantity: Number(p.strength) || 0,
           unit_price: 0,
         }))
@@ -506,7 +534,10 @@ export default function FollowupLeadsPage() {
       const derivedPriority = deriveLeadPriorityFromDealProducts(validProducts)
       const schoolLeadStatus = (selectedLead.lead_status || '').trim()
       const payload: any = {
-        follow_up_date: new Date(updateForm.follow_up_date).toISOString(),
+        follow_up_date: combineFollowUpDateTime(
+          updateForm.follow_up_date,
+          updateForm.follow_up_time
+        ),
         remarks: updateForm.remarks,
       }
       if (SCHOOL_LEAD_STATUSES.has(schoolLeadStatus)) {
@@ -690,7 +721,7 @@ export default function FollowupLeadsPage() {
       ...prev,
       productsInterested: [
         ...prev.productsInterested,
-        { product_name: '', term: 'Term 1', status: 'Warm', strength: 0, chance: 0, important: false },
+        { product_name: '', term: 'Term 1', status: 'Warm', strength: '', chance: '' },
       ],
     }))
   }
@@ -866,12 +897,6 @@ export default function FollowupLeadsPage() {
                         </span>
                       </div>
                     )}
-                    <div>
-                      <span className="text-neutral-600">Lead Status:</span>
-                      <span className={`ml-2 px-2 py-1 rounded text-xs font-medium ${getPriorityColor(displayLeadDealPriority(lead))}`}>
-                        {displayLeadDealPriority(lead)}
-                      </span>
-                    </div>
                   </div>
 
                   {/* Action Buttons */}
@@ -912,7 +937,7 @@ export default function FollowupLeadsPage() {
 
       {/* Update Lead Modal - Modern Professional Design */}
       <Dialog open={updateModalOpen} onOpenChange={setUpdateModalOpen}>
-        <DialogContent className="sm:max-w-[550px] max-h-[90vh] p-0 gap-0 overflow-hidden shadow-2xl border-0 flex flex-col">
+        <DialogContent className="sm:max-w-[720px] max-h-[90vh] p-0 gap-0 overflow-hidden shadow-2xl border-0 flex flex-col">
           {/* Elegant Header with Gradient */}
           <div className="shrink-0 bg-gradient-to-r from-purple-600 via-purple-700 to-indigo-700 px-6 py-5">
             <DialogHeader className="space-y-1">
@@ -928,18 +953,38 @@ export default function FollowupLeadsPage() {
           {/* Form Content with Professional Spacing */}
           <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 bg-gradient-to-b from-white to-neutral-50">
             <div className="space-y-5">
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold text-neutral-700 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-purple-500"></span>
-                  Follow-up Date *
-                </Label>
-                <Input
-                  type="date"
-                  className="h-11 bg-white border-neutral-300 focus:border-purple-500 focus:ring-purple-500/20 transition-all"
-                  value={updateForm.follow_up_date}
-                  onChange={(e) => setUpdateForm({ ...updateForm, follow_up_date: e.target.value })}
-                  required
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold text-neutral-700 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                    Follow-up Date *
+                  </Label>
+                  <Input
+                    type="date"
+                    min={todayDateString()}
+                    className="h-11 bg-white border-neutral-300 focus:border-purple-500 focus:ring-purple-500/20 transition-all"
+                    value={updateForm.follow_up_date}
+                    onChange={(e) => setUpdateForm({ ...updateForm, follow_up_date: e.target.value })}
+                    required
+                  />
+                  <p className="text-xs text-neutral-500">Past dates cannot be selected.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold text-neutral-700 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                    Follow-up Time *
+                  </Label>
+                  <Input
+                    type="time"
+                    className="h-11 bg-white border-neutral-300 focus:border-purple-500 focus:ring-purple-500/20 transition-all"
+                    value={updateForm.follow_up_time}
+                    onChange={(e) =>
+                      setUpdateForm({ ...updateForm, follow_up_time: e.target.value })
+                    }
+                    required
+                  />
+                  <p className="text-xs text-neutral-500">Choose when the executive will follow up.</p>
+                </div>
               </div>
               
               <div className="space-y-2">
@@ -958,13 +1003,11 @@ export default function FollowupLeadsPage() {
                     <p className="text-xs text-neutral-500 p-3">No products added yet.</p>
                   ) : (
                     <>
-                      <div className="sticky top-0 z-10 grid grid-cols-[2fr_1.3fr_1.5fr_1fr_1fr_2.5rem_auto] gap-2 text-xs font-medium text-neutral-500 px-3 py-2 border-b border-neutral-200 bg-white">
+                      <div className="sticky top-0 z-10 grid grid-cols-[minmax(140px,2fr)_minmax(120px,1.4fr)_minmax(88px,1fr)_minmax(88px,1fr)_2.5rem] gap-3 text-xs font-medium text-neutral-500 px-3 py-2 border-b border-neutral-200 bg-white">
                         <span>Product</span>
-                        <span>Term</span>
                         <span>Status</span>
                         <span className="text-center">Strength</span>
                         <span className="text-center">Chance %</span>
-                        <span className="text-center" title="Mark as important">★</span>
                         <span></span>
                       </div>
 
@@ -974,7 +1017,10 @@ export default function FollowupLeadsPage() {
                         aria-label="Products list"
                       >
                       {updateForm.productsInterested.map((product, index) => (
-                        <div key={`product-${index}`} className="grid grid-cols-[2fr_1.3fr_1.5fr_1fr_1fr_2.5rem_auto] gap-2 items-center">
+                        <div
+                          key={`product-${index}`}
+                          className="grid grid-cols-[minmax(140px,2fr)_minmax(120px,1.4fr)_minmax(88px,1fr)_minmax(88px,1fr)_2.5rem] gap-3 items-center"
+                        >
                           <Select
                             value={product.product_name || undefined}
                             onValueChange={(v) => updateInterestedProduct(index, 'product_name', v)}
@@ -994,19 +1040,6 @@ export default function FollowupLeadsPage() {
                             </SelectContent>
                           </Select>
                           <Select
-                            value={product.term}
-                            onValueChange={(v) => updateInterestedProduct(index, 'term', v)}
-                          >
-                            <SelectTrigger className="h-9">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="Term 1">Term 1</SelectItem>
-                              <SelectItem value="Term 2">Term 2</SelectItem>
-                              <SelectItem value="Both">Both</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <Select
                             value={product.status}
                             onValueChange={(v) => updateInterestedProduct(index, 'status', v)}
                           >
@@ -1022,39 +1055,25 @@ export default function FollowupLeadsPage() {
                             </SelectContent>
                           </Select>
                           <Input
-                            type="number"
-                            min="0"
-                            className="h-9 text-center"
+                            type="text"
+                            inputMode="numeric"
+                            className="h-9 text-center bg-white"
+                            placeholder="Qty"
                             value={product.strength}
-                            onChange={(e) => updateInterestedProduct(index, 'strength', Number(e.target.value) || 0)}
+                            onChange={(e) =>
+                              updateInterestedProduct(index, 'strength', e.target.value)
+                            }
                           />
                           <Input
-                            type="number"
-                            min="0"
-                            max="100"
-                            className="h-9 text-center"
+                            type="text"
+                            inputMode="numeric"
+                            className="h-9 text-center bg-white"
+                            placeholder="%"
                             value={product.chance}
-                            onChange={(e) => updateInterestedProduct(index, 'chance', Number(e.target.value) || 0)}
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className={`h-9 w-9 ${
-                              product.important
-                                ? 'text-amber-500 hover:text-amber-600'
-                                : 'text-neutral-300 hover:text-amber-500'
-                            }`}
-                            title={product.important ? 'Marked important' : 'Mark as important'}
-                            onClick={() =>
-                              updateInterestedProduct(index, 'important', !product.important)
+                            onChange={(e) =>
+                              updateInterestedProduct(index, 'chance', e.target.value)
                             }
-                          >
-                            <Star
-                              className="h-4 w-4"
-                              fill={product.important ? 'currentColor' : 'none'}
-                            />
-                          </Button>
+                          />
                           <Button
                             type="button"
                             variant="ghost"
@@ -1076,7 +1095,7 @@ export default function FollowupLeadsPage() {
                   </p>
                 )}
                 <p className="text-xs text-neutral-500">
-                  Required: add at least one product with Strength (quantity) and Chance % for each row. Tap ★ to mark a product as important.
+                  Required: add at least one product with Strength (quantity) and Chance % for each row.
                 </p>
               </div>
               
@@ -1274,15 +1293,18 @@ export default function FollowupLeadsPage() {
                                         className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-white/80 px-3 py-2 border border-neutral-100"
                                       >
                                         <div className="min-w-0 flex-1">
-                                          <span className="text-sm font-medium text-neutral-900 truncate block flex items-center gap-1.5">
-                                            {row.important ? (
-                                              <Star className="h-3.5 w-3.5 text-amber-500 shrink-0" fill="currentColor" />
-                                            ) : null}
+                                          <span className="text-sm font-medium text-neutral-900 truncate block">
                                             {row.product_name || 'Product'}
                                           </span>
-                                          {row.term ? (
-                                            <span className="text-xs text-neutral-500">{row.term}</span>
-                                          ) : null}
+                                          <span className="text-xs text-neutral-500">
+                                            {[
+                                              row.term ? row.term : null,
+                                              Number(row.strength) > 0 ? `Strength ${row.strength}` : null,
+                                              Number(row.chance) > 0 ? `${row.chance}% chance` : null,
+                                            ]
+                                              .filter(Boolean)
+                                              .join(' · ') || '—'}
+                                          </span>
                                         </div>
                                         <span
                                           className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-semibold border ${badgeClass}`}

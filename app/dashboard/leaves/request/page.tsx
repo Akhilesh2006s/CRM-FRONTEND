@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner'
 import { getCurrentUser } from '@/lib/auth'
 import { canApplyForLeave, getLeaveAccessDeniedRedirect } from '@/lib/leaveAccess'
+import { todayDateString, isBeforeToday } from '@/lib/todayDate'
 
 export default function LeaveRequestPage() {
   const router = useRouter()
@@ -50,6 +51,10 @@ export default function LeaveRequestPage() {
       setError('Start date and end date are required.')
       return
     }
+    if (isBeforeToday(form.startDate) || isBeforeToday(form.endDate)) {
+      setError('Past dates cannot be selected for leave.')
+      return
+    }
     if (new Date(form.endDate) < new Date(form.startDate)) {
       setError('End date must be on or after start date.')
       return
@@ -70,6 +75,8 @@ export default function LeaveRequestPage() {
   if (!currentUser || !canApplyForLeave(currentUser.role)) {
     return null
   }
+
+  const minDate = todayDateString()
 
   return (
     <div className="space-y-6">
@@ -107,6 +114,7 @@ export default function LeaveRequestPage() {
               type="date"
               name="startDate"
               value={form.startDate}
+              min={minDate}
               onChange={onChange}
               required
             />
@@ -119,7 +127,7 @@ export default function LeaveRequestPage() {
               type="date"
               name="endDate"
               value={form.endDate}
-              min={form.startDate || undefined}
+              min={form.startDate && form.startDate >= minDate ? form.startDate : minDate}
               onChange={onChange}
               required
             />

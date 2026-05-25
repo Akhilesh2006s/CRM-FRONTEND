@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter, useParams } from 'next/navigation'
+import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -10,8 +11,12 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { apiRequest } from '@/lib/api'
 import { toast } from 'sonner'
-
-const TAGGING_ROLES = ['Executive', 'Coordinator', 'Senior Coordinator', 'Finance Manager', 'Warehouse Manager']
+import { ArrowLeft } from 'lucide-react'
+import {
+  filterTagOptions,
+  getTaggingSectionLabel,
+  supportsEmployeeTagging,
+} from '@/lib/employeeTagging'
 
 type EmployeeOption = { _id: string; name: string; role: string }
 
@@ -43,6 +48,11 @@ export default function EditEmployeePage() {
   const [zones, setZones] = useState<string[]>([])
   const [clustersByZone, setClustersByZone] = useState<Record<string, string[]>>({})
   const [tagOptions, setTagOptions] = useState<EmployeeOption[]>([])
+
+  const filteredTagOptions = useMemo(
+    () => filterTagOptions(tagOptions, form.role),
+    [tagOptions, form.role]
+  )
 
   const loadZones = async () => {
     const [pairsRaw, zonesRaw] = await Promise.all([
@@ -133,7 +143,7 @@ export default function EditEmployeePage() {
         mobile: form.mobile,
       }
       if (form.role !== 'Executive') delete payload.cluster
-      if (!TAGGING_ROLES.includes(form.role)) payload.taggedEmployeeIds = []
+      if (!supportsEmployeeTagging(form.role)) payload.taggedEmployeeIds = []
       await apiRequest(`/employees/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
       toast.success('Employee updated')
       router.push('/dashboard/employees/active')
@@ -148,7 +158,17 @@ export default function EditEmployeePage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Edit Employee</h1>
+      <div className="flex items-center gap-4">
+        <Link href="/dashboard/employees/active">
+          <Button variant="ghost" size="sm">
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back
+          </Button>
+        </Link>
+        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">
+          Edit {form.role}
+        </h1>
+      </div>
       <Card className="p-4 md:p-6 bg-neutral-50 border border-neutral-200">
         <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="md:col-span-2 text-lg font-semibold mb-2">Personal Data</div>
@@ -220,7 +240,22 @@ export default function EditEmployeePage() {
           </div>
           <div>
             <Label>User Type *</Label>
-            <Select value={form.role} onValueChange={(v) => setForm((f) => ({ ...f, role: v, cluster: v === 'Executive' ? f.cluster : '' }))}>
+            <Select
+              value={form.role}
+              onValueChange={(v) =>
+                setForm((f) => {
+                  const allowed = new Set(filterTagOptions(tagOptions, v).map((e) => e._id))
+                  return {
+                    ...f,
+                    role: v,
+                    cluster: v === 'Executive' ? f.cluster : '',
+                    taggedEmployeeIds: supportsEmployeeTagging(v)
+                      ? f.taggedEmployeeIds.filter((id) => allowed.has(id))
+                      : [],
+                  }
+                })
+              }
+            >
               <SelectTrigger className="bg-white text-neutral-900"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {['Executive', 'Trainer', 'Finance Manager', 'Coordinator', 'Senior Coordinator', 'Manager', 'Executive Manager', 'Warehouse Executive', 'Warehouse Manager', 'Admin', 'Super Admin'].map((r) => (
@@ -230,14 +265,23 @@ export default function EditEmployeePage() {
             </Select>
           </div>
 
-          {TAGGING_ROLES.includes(form.role) && (
+          {supportsEmployeeTagging(form.role) && (
             <div className="md:col-span-2">
-              <Label className="mb-2 block">Employee tagging</Label>
+              <Label className="mb-2 block">{getTaggingSectionLabel(form.role)}</Label>
+              <p className="text-xs text-neutral-500 mb-2">
+                {form.role === 'Executive Manager' || form.role === 'Manager'
+                  ? 'Select executives assigned to this role.'
+                  : 'Select employees to tag under this role.'}
+              </p>
               <div className="max-h-48 overflow-y-auto border rounded p-3 bg-white space-y-2">
-                {tagOptions.length === 0 ? (
-                  <p className="text-sm text-neutral-500">No employees available to tag</p>
+                {filteredTagOptions.length === 0 ? (
+                  <p className="text-sm text-neutral-500">
+                    {form.role === 'Executive Manager' || form.role === 'Manager'
+                      ? 'No active executives available to tag'
+                      : 'No employees available to tag'}
+                  </p>
                 ) : (
-                  tagOptions.map((e) => (
+                  filteredTagOptions.map((e) => (
                     <label key={e._id} className="flex items-center gap-2 text-sm">
                       <input
                         type="checkbox"

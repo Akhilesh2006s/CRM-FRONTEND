@@ -137,6 +137,7 @@ type Lead = {
   estimated_delivery_date?: string
   average_fee?: number
   products?: Array<SavedProductRow | string> | string
+  status?: string
 }
 
 type RecordSource = 'leads' | 'dc-orders'
@@ -180,6 +181,7 @@ export default function EditLeadPage() {
   const [products, setProducts] = useState<ProductSelection[]>([])
   const [loadedLead, setLoadedLead] = useState<Lead | null>(null)
   const productsProcessedRef = useRef<string>('')
+  const showProductTerm = loadedLead?.status === 'Closed'
   
   const [loadingPincode, setLoadingPincode] = useState(false)
   const [areas, setAreas] = useState<Array<{ name: string; district: string; block?: string; branchType?: string }>>([])
@@ -676,9 +678,15 @@ export default function EditLeadPage() {
                 <p className="text-sm text-neutral-500">No products available.</p>
               ) : (
                 <>
-                  <div className="hidden md:grid md:grid-cols-[minmax(140px,1fr)_100px_140px_88px_88px] gap-2 px-2 pb-2 border-b border-neutral-200 text-xs font-semibold text-neutral-600">
+                  <div
+                    className={`hidden md:grid gap-2 px-2 pb-2 border-b border-neutral-200 text-xs font-semibold text-neutral-600 ${
+                      showProductTerm
+                        ? 'md:grid-cols-[minmax(140px,1fr)_100px_140px_88px_88px]'
+                        : 'md:grid-cols-[minmax(140px,1fr)_140px_88px_88px]'
+                    }`}
+                  >
                     <span>Product</span>
-                    <span>Term</span>
+                    {showProductTerm && <span>Term</span>}
                     <span>Status</span>
                     <span className="text-center">Strength</span>
                     <span className="text-center">Chance %</span>
@@ -689,7 +697,11 @@ export default function EditLeadPage() {
                       return (
                         <div
                           key={product.name}
-                          className="grid grid-cols-1 md:grid-cols-[minmax(140px,1fr)_100px_140px_88px_88px] gap-2 items-center p-2 rounded hover:bg-neutral-50 border border-transparent hover:border-neutral-100"
+                          className={`grid grid-cols-1 gap-2 items-center p-2 rounded hover:bg-neutral-50 border border-transparent hover:border-neutral-100 ${
+                            showProductTerm
+                              ? 'md:grid-cols-[minmax(140px,1fr)_100px_140px_88px_88px]'
+                              : 'md:grid-cols-[minmax(140px,1fr)_140px_88px_88px]'
+                          }`}
                         >
                           <div className="flex items-center gap-2 min-w-0">
                             <Checkbox
@@ -707,23 +719,25 @@ export default function EditLeadPage() {
                               {product.name}
                             </Label>
                           </div>
-                          <div className="flex flex-col gap-0.5 md:contents">
-                            <span className="text-xs text-neutral-500 md:hidden">Term</span>
-                            <Select
-                              value={product.term || 'Term 1'}
-                              onValueChange={(value) => handleProductTermChange(index, value)}
-                              disabled={!product.checked}
-                            >
-                              <SelectTrigger className="h-9 text-xs bg-white text-neutral-900 border-neutral-300">
-                                <SelectValue placeholder="Term" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Term 1">Term 1</SelectItem>
-                                <SelectItem value="Term 2">Term 2</SelectItem>
-                                <SelectItem value="Both">Both</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
+                          {showProductTerm && (
+                            <div className="flex flex-col gap-0.5 md:contents">
+                              <span className="text-xs text-neutral-500 md:hidden">Term</span>
+                              <Select
+                                value={product.term || 'Term 1'}
+                                onValueChange={(value) => handleProductTermChange(index, value)}
+                                disabled={!product.checked}
+                              >
+                                <SelectTrigger className="h-9 text-xs bg-white text-neutral-900 border-neutral-300">
+                                  <SelectValue placeholder="Term" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="Term 1">Term 1</SelectItem>
+                                  <SelectItem value="Term 2">Term 2</SelectItem>
+                                  <SelectItem value="Both">Both</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
                           <div className="flex flex-col gap-0.5 md:contents">
                             <span className="text-xs text-neutral-500 md:hidden">Status</span>
                             <Select

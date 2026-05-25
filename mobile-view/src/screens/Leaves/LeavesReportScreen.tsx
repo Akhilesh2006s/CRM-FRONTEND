@@ -110,6 +110,22 @@ export default function LeavesReportScreen({ navigation }: any) {
                     <Text style={styles.infoValue}>{leave.reason}</Text>
                   </View>
                 )}
+                {(leave.status === 'Approved' || leave.status === 'Rejected') && (
+                  <>
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Approved by:</Text>
+                      <Text style={styles.infoValue}>
+                        {typeof leave.approvedBy === 'object' && leave.approvedBy?.name
+                          ? leave.approvedBy.name
+                          : leave.approvedBy || '—'}
+                      </Text>
+                    </View>
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Approval date:</Text>
+                      <Text style={styles.infoValue}>{formatDate(leave.approvedAt)}</Text>
+                    </View>
+                  </>
+                )}
               </View>
             </View>
           ))

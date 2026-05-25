@@ -30,6 +30,8 @@ type Leave = {
   endDate: string
   reason?: string
   leaveType?: string
+  approvedBy?: { name?: string } | string
+  approvedAt?: string
 }
 
 export default function LeavesReportPage() {
@@ -115,6 +117,15 @@ export default function LeavesReportPage() {
     return mgr.name || '—'
   }
 
+  const approvedByName = (l: Leave) => {
+    if (!l.approvedBy) return '—'
+    if (typeof l.approvedBy === 'string') return l.approvedBy
+    return l.approvedBy.name || '—'
+  }
+
+  const approvalDate = (l: Leave) =>
+    l.approvedAt ? new Date(l.approvedAt).toLocaleDateString() : '—'
+
   if (!currentUser || !canViewLeavesReport(currentUser.role)) {
     return null
   }
@@ -195,13 +206,15 @@ export default function LeavesReportPage() {
                 <th className="py-2 px-3 text-left">Leave Type</th>
                 <th className="py-2 px-3">From</th>
                 <th className="py-2 px-3">To</th>
+                <th className="py-2 px-3 text-left">Approved by</th>
+                <th className="py-2 px-3">Approval date</th>
                 <th className="py-2 px-3 text-left">Reason</th>
               </tr>
             </thead>
             <tbody>
               {filteredLeaves.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-4 px-3 text-center text-neutral-500">
+                  <td colSpan={9} className="py-4 px-3 text-center text-neutral-500">
                     No leaves match filters
                   </td>
                 </tr>
@@ -218,6 +231,8 @@ export default function LeavesReportPage() {
                   <td className="py-2 px-3 text-center">
                     {new Date(l.endDate).toLocaleDateString()}
                   </td>
+                  <td className="py-2 px-3">{approvedByName(l)}</td>
+                  <td className="py-2 px-3 text-center">{approvalDate(l)}</td>
                   <td className="py-2 px-3">{l.reason || '-'}</td>
                 </tr>
               ))}

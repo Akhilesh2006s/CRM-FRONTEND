@@ -17,6 +17,16 @@ import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 
+const todayDateString = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const isBeforeToday = (dateStr: string) => dateStr && dateStr < todayDateString();
+
 const LEAVE_TYPE_OPTIONS = [
   { label: 'Sick Leave', value: 'Sick Leave' },
   { label: 'Annual Leave', value: 'Annual Leave' },
@@ -69,6 +79,11 @@ export default function LeaveRequestScreen({ navigation }: any) {
     }
     if (!form.endDate?.trim()) {
       setErrorMessage('End date is required');
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+      return;
+    }
+    if (isBeforeToday(form.startDate) || isBeforeToday(form.endDate)) {
+      setErrorMessage('Past dates cannot be selected for leave');
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
@@ -188,14 +203,26 @@ export default function LeaveRequestScreen({ navigation }: any) {
         <DatePickerModal
           title="Start date"
           value={form.startDate}
+          minimumDate={startOfToday()}
           onClose={() => setShowStartPicker(false)}
-          onChange={(d) => setForm((f) => ({ ...f, startDate: d }))}
+          onChange={(d) =>
+            setForm((f) => ({
+              ...f,
+              startDate: d,
+              endDate: f.endDate && f.endDate < d ? '' : f.endDate,
+            }))
+          }
         />
       )}
       {showEndPicker && (
         <DatePickerModal
           title="End date"
           value={form.endDate}
+          minimumDate={
+            form.startDate && form.startDate >= todayDateString()
+              ? startOfDayFromIso(form.startDate)
+              : startOfToday()
+          }
           onClose={() => setShowEndPicker(false)}
           onChange={(d) => setForm((f) => ({ ...f, endDate: d }))}
         />
@@ -228,14 +255,27 @@ function DateField({
   );
 }
 
+function startOfToday() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function startOfDayFromIso(iso: string) {
+  const d = new Date(iso + 'T00:00:00');
+  return isNaN(d.getTime()) ? startOfToday() : d;
+}
+
 function DatePickerModal({
   title,
   value,
+  minimumDate,
   onClose,
   onChange,
 }: {
   title: string;
   value: string;
+  minimumDate: Date;
   onClose: () => void;
   onChange: (isoDate: string) => void;
 }) {
@@ -250,11 +290,15 @@ function DatePickerModal({
           </TouchableOpacity>
         </View>
         <DateTimePicker
-          value={value ? new Date(value) : new Date()}
+          value={value ? startOfDayFromIso(value) : minimumDate}
           mode="date"
+          minimumDate={minimumDate}
           display={Platform.OS === 'ios' ? 'spinner' : 'calendar'}
           onChange={(_, d) => {
-            if (d) onChange(d.toISOString().split('T')[0]);
+            if (d) {
+              const picked = d.toISOString().split('T')[0];
+              if (!isBeforeToday(picked)) onChange(picked);
+            }
             if (Platform.OS === 'android') onClose();
           }}
         />

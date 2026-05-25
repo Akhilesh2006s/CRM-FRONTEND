@@ -574,9 +574,8 @@ export default function NewSchoolPage() {
                 <p className="text-sm text-neutral-500">No products available.</p>
               ) : (
                 <>
-                  <div className="hidden md:grid md:grid-cols-[minmax(140px,1fr)_100px_140px_88px_88px] gap-2 px-2 pb-2 border-b border-neutral-200 text-xs font-semibold text-neutral-600">
+                  <div className="hidden md:grid md:grid-cols-[minmax(140px,1fr)_140px_88px_88px] gap-2 px-2 pb-2 border-b border-neutral-200 text-xs font-semibold text-neutral-600">
                     <span>Product</span>
-                    <span>Term</span>
                     <span>Status</span>
                     <span className="text-center">Strength</span>
                     <span className="text-center">Chance %</span>
@@ -587,7 +586,7 @@ export default function NewSchoolPage() {
                       return (
                         <div
                           key={product.name}
-                          className="grid grid-cols-1 md:grid-cols-[minmax(140px,1fr)_100px_140px_88px_88px] gap-2 items-center p-2 rounded hover:bg-neutral-50 border border-transparent hover:border-neutral-100"
+                          className="grid grid-cols-1 md:grid-cols-[minmax(140px,1fr)_140px_88px_88px] gap-2 items-center p-2 rounded hover:bg-neutral-50 border border-transparent hover:border-neutral-100"
                         >
                           <div className="flex items-center gap-2 min-w-0">
                             <Checkbox
@@ -604,23 +603,6 @@ export default function NewSchoolPage() {
                             >
                               {product.name}
                             </Label>
-                          </div>
-                          <div className="flex flex-col gap-0.5 md:contents">
-                            <span className="text-xs text-neutral-500 md:hidden">Term</span>
-                            <Select
-                              value={product.term || 'Term 1'}
-                              onValueChange={(value) => handleProductTermChange(index, value)}
-                              disabled={!product.checked}
-                            >
-                              <SelectTrigger className="h-9 text-xs bg-white text-neutral-900 border-neutral-300">
-                                <SelectValue placeholder="Term" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Term 1">Term 1</SelectItem>
-                                <SelectItem value="Term 2">Term 2</SelectItem>
-                                <SelectItem value="Both">Both</SelectItem>
-                              </SelectContent>
-                            </Select>
                           </div>
                           <div className="flex flex-col gap-0.5 md:contents">
                             <span className="text-xs text-neutral-500 md:hidden">Status</span>
@@ -683,7 +665,7 @@ export default function NewSchoolPage() {
               )}
             </div>
             <p className="text-xs text-neutral-500 mt-2">
-              Select products, then set Term, Status, Strength, and Chance % for each.
+              Select products, then set Status, Strength, and Chance % for each. Term is set after the lead is closed.
               Strength is required when status is Hot or Warm; other statuses will always
               have 0 strength and 0% chance.
             </p>

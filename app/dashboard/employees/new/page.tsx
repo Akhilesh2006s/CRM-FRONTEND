@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -9,8 +9,11 @@ import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { apiRequest } from '@/lib/api'
-
-const TAGGING_ROLES = ['Executive', 'Coordinator', 'Senior Coordinator', 'Finance Manager', 'Warehouse Manager']
+import {
+  filterTagOptions,
+  getTaggingSectionLabel,
+  supportsEmployeeTagging,
+} from '@/lib/employeeTagging'
 
 type EmployeeOption = { _id: string; name: string; role: string }
 
@@ -35,6 +38,10 @@ export default function NewEmployeePage() {
     taggedEmployeeIds: [] as string[],
   })
   const [tagOptions, setTagOptions] = useState<EmployeeOption[]>([])
+  const filteredTagOptions = useMemo(
+    () => filterTagOptions(tagOptions, form.role),
+    [tagOptions, form.role]
+  )
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loadingPincode, setLoadingPincode] = useState(false)
@@ -163,7 +170,7 @@ export default function NewEmployeePage() {
       if (form.role !== 'Executive') {
         delete payload.cluster
       }
-      if (!TAGGING_ROLES.includes(form.role)) {
+      if (!supportsEmployeeTagging(form.role)) {
         delete payload.taggedEmployeeIds
       }
       await apiRequest('/employees/create', {
@@ -316,7 +323,22 @@ export default function NewEmployeePage() {
           </div>
           <div>
             <Label>User Type *</Label>
-            <Select value={form.role} onValueChange={(v) => setForm((f) => ({ ...f, role: v, cluster: v === 'Executive' ? f.cluster : '' }))}>
+            <Select
+              value={form.role}
+              onValueChange={(v) =>
+                setForm((f) => {
+                  const allowed = new Set(filterTagOptions(tagOptions, v).map((e) => e._id))
+                  return {
+                    ...f,
+                    role: v,
+                    cluster: v === 'Executive' ? f.cluster : '',
+                    taggedEmployeeIds: supportsEmployeeTagging(v)
+                      ? f.taggedEmployeeIds.filter((id) => allowed.has(id))
+                      : [],
+                  }
+                })
+              }
+            >
               <SelectTrigger className="bg-white text-neutral-900">
                 <SelectValue placeholder="Select Option" />
               </SelectTrigger>
@@ -340,14 +362,23 @@ export default function NewEmployeePage() {
             <Input className="bg-white text-neutral-900" type="password" name="password" value={form.password} onChange={onChange} required />
           </div>
 
-          {TAGGING_ROLES.includes(form.role) && (
+          {supportsEmployeeTagging(form.role) && (
             <div className="md:col-span-2">
-              <Label className="mb-2 block">Employee tagging</Label>
+              <Label className="mb-2 block">{getTaggingSectionLabel(form.role)}</Label>
+              <p className="text-xs text-neutral-500 mb-2">
+                {form.role === 'Executive Manager' || form.role === 'Manager'
+                  ? 'Select executives assigned to this role.'
+                  : 'Select employees to tag under this role.'}
+              </p>
               <div className="max-h-48 overflow-y-auto border rounded p-3 bg-white space-y-2">
-                {tagOptions.length === 0 ? (
-                  <p className="text-sm text-neutral-500">No employees available to tag</p>
+                {filteredTagOptions.length === 0 ? (
+                  <p className="text-sm text-neutral-500">
+                    {form.role === 'Executive Manager' || form.role === 'Manager'
+                      ? 'No active executives available to tag'
+                      : 'No employees available to tag'}
+                  </p>
                 ) : (
-                  tagOptions.map((e) => (
+                  filteredTagOptions.map((e) => (
                     <label key={e._id} className="flex items-center gap-2 text-sm">
                       <input
                         type="checkbox"

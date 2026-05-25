@@ -4,13 +4,14 @@ import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { apiService } from '../services/api';
 
-export const TAGGING_ROLES = [
-  'Executive',
-  'Coordinator',
-  'Senior Coordinator',
-  'Finance Manager',
-  'Warehouse Manager',
-];
+import {
+  TAGGING_ROLES,
+  filterTagOptions,
+  getTaggingSectionLabel,
+  supportsEmployeeTagging,
+} from '../lib/employeeTagging';
+
+export { TAGGING_ROLES, supportsEmployeeTagging };
 
 type Props = {
   role: string;
@@ -23,17 +24,26 @@ export default function EmployeeTaggingPicker({ role, selectedIds, onChange, exc
   const [options, setOptions] = useState<{ _id: string; name: string; role: string }[]>([]);
 
   useEffect(() => {
-    if (!TAGGING_ROLES.includes(role)) return;
+    if (!supportsEmployeeTagging(role)) return;
     apiService
       .get<any[]>('/employees?isActive=true')
       .then((data) => {
         const list = Array.isArray(data) ? data : [];
-        setOptions(list.filter((e) => e._id !== excludeId));
+        const withoutSelf = list.filter((e) => e._id !== excludeId);
+        setOptions(filterTagOptions(withoutSelf, role));
       })
       .catch(() => setOptions([]));
   }, [role, excludeId]);
 
-  if (!TAGGING_ROLES.includes(role)) return null;
+  useEffect(() => {
+    const allowed = new Set(options.map((o) => o._id));
+    const pruned = selectedIds.filter((id) => allowed.has(id));
+    if (pruned.length !== selectedIds.length) {
+      onChange(pruned);
+    }
+  }, [options, role]);
+
+  if (!supportsEmployeeTagging(role)) return null;
 
   const toggle = (id: string) => {
     if (selectedIds.includes(id)) {
@@ -45,9 +55,13 @@ export default function EmployeeTaggingPicker({ role, selectedIds, onChange, exc
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Employee tagging</Text>
+      <Text style={styles.title}>{getTaggingSectionLabel(role)}</Text>
       {options.length === 0 ? (
-        <Text style={styles.empty}>No employees available to tag</Text>
+        <Text style={styles.empty}>
+          {role === 'Executive Manager' || role === 'Manager'
+            ? 'No active executives available to tag'
+            : 'No employees available to tag'}
+        </Text>
       ) : (
         <ScrollView style={styles.list} nestedScrollEnabled>
           {options.map((e) => (

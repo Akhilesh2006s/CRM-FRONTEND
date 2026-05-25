@@ -783,7 +783,7 @@ export default function DashboardScreen({ navigation }: any) {
           </View>
           <Text style={styles.sectionTitle}>Executives</Text>
         </View>
-        <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('ExecutiveManagers')}>
+        <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('ExecutiveManagerExecutives')}>
           <View style={[styles.cardContent, styles.cardContentWhite]}>
             <View style={styles.cardIconContainer}><Text style={styles.cardIconWhite}>👥</Text></View>
             <View style={styles.cardTextContainer}>
@@ -1485,42 +1485,6 @@ export default function DashboardScreen({ navigation }: any) {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <View style={styles.sectionIconContainer}>
-            <View style={[styles.sectionIcon, { backgroundColor: '#6366F1' + '15' }]}>
-              <Text style={styles.sectionIconText}>🛡️</Text>
-            </View>
-          </View>
-          <Text style={styles.sectionTitle}>Executive Managers</Text>
-        </View>
-        <TouchableOpacity
-          style={styles.card}
-          activeOpacity={0.8}
-          onPress={() => navigation.navigate('ExecutiveManagers')}
-        >
-          <LinearGradient
-            colors={['#6366F1', '#4F46E5']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.cardGradient}
-          >
-            <View style={styles.cardContent}>
-              <View style={styles.cardIconContainer}>
-                <Text style={styles.cardIcon}>🛡️</Text>
-              </View>
-              <View style={styles.cardTextContainer}>
-                <Text style={styles.cardTitle}>All Managers</Text>
-                <Text style={styles.cardSubtitle}>View executive managers</Text>
-              </View>
-              <View style={styles.cardArrowContainer}>
-                <Text style={styles.cardArrow}>›</Text>
-              </View>
-            </View>
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionIconContainer}>
             <View style={[styles.sectionIcon, { backgroundColor: '#8B5CF6' + '15' }]}>
               <Text style={styles.sectionIconText}>👥</Text>
             </View>
@@ -1582,24 +1546,6 @@ export default function DashboardScreen({ navigation }: any) {
             <View style={styles.cardTextContainer}>
               <Text style={styles.cardTitleWhite}>Inactive Employees</Text>
               <Text style={styles.cardSubtitleWhite}>View inactive employees</Text>
-            </View>
-            <View style={styles.cardArrowContainer}>
-              <Text style={styles.cardArrowWhite}>›</Text>
-            </View>
-          </View>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.card}
-          activeOpacity={0.8}
-          onPress={() => navigation.navigate('EmployeesLeaves')}
-        >
-          <View style={[styles.cardContent, styles.cardContentWhite]}>
-            <View style={styles.cardIconContainer}>
-              <Text style={styles.cardIconWhite}>📅</Text>
-            </View>
-            <View style={styles.cardTextContainer}>
-              <Text style={styles.cardTitleWhite}>Pending Leaves</Text>
-              <Text style={styles.cardSubtitleWhite}>Employee leave requests</Text>
             </View>
             <View style={styles.cardArrowContainer}>
               <Text style={styles.cardArrowWhite}>›</Text>

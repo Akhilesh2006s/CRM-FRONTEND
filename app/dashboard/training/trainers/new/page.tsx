@@ -8,7 +8,6 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { SearchableSelect } from '@/components/ui/searchable-select'
 import { toast } from 'sonner'
 import { apiRequest } from '@/lib/api'
 import { INDIAN_STATES } from '@/lib/indianStatesCities'
@@ -65,17 +64,8 @@ export default function AddTrainerPage() {
     })()
   }, [])
 
-  const stateOptions = useMemo(
-    () => INDIAN_STATES.map((s) => ({ value: s, label: s })),
-    []
-  )
-  const zoneOptions = useMemo(
-    () => zones.map((z) => ({ value: z, label: z })),
-    [zones]
-  )
-  const clusterOptions = useMemo(() => {
-    const list = form.zone ? clustersByZone[form.zone] || [] : []
-    return list.map((c) => ({ value: c, label: c }))
+  const clusterList = useMemo(() => {
+    return form.zone ? clustersByZone[form.zone] || [] : []
   }, [form.zone, clustersByZone])
 
   const checkMobileDuplicate = async (mobile: string) => {
@@ -196,45 +186,65 @@ export default function AddTrainerPage() {
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-2">
+          <div>
             <Label htmlFor="trainer-state">State</Label>
-            <SearchableSelect
-              id="trainer-state"
-              value={form.state}
-              onValueChange={(v) => setForm((f) => ({ ...f, state: v }))}
-              placeholder="Select State"
-              searchPlaceholder="Search states…"
-              options={stateOptions}
-            />
+            <Select value={form.state} onValueChange={(v) => setForm((f) => ({ ...f, state: v }))}>
+              <SelectTrigger id="trainer-state" className="bg-white text-neutral-900">
+                <SelectValue placeholder="Select State" />
+              </SelectTrigger>
+              <SelectContent>
+                {INDIAN_STATES.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          <div className="space-y-2">
+          <div>
             <Label htmlFor="trainer-zone">Zone</Label>
-            <SearchableSelect
-              id="trainer-zone"
+            <Select
               value={form.zone}
               onValueChange={(v) => setForm((f) => ({ ...f, zone: v, cluster: '' }))}
-              placeholder="Select Zone"
-              searchPlaceholder="Search zones…"
-              options={zoneOptions}
-              emptyText={zones.length === 0 ? 'Add zones under Users → Zones' : 'No results found.'}
-            />
+            >
+              <SelectTrigger id="trainer-zone" className="bg-white text-neutral-900">
+                <SelectValue placeholder={zones.length === 0 ? 'Add zones under Users → Zones' : 'Select Zone'} />
+              </SelectTrigger>
+              <SelectContent>
+                {zones.map((z) => (
+                  <SelectItem key={z} value={z}>
+                    {z}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          <div className="space-y-2">
+          <div>
             <Label htmlFor="trainer-cluster">Cluster</Label>
-            <SearchableSelect
-              id="trainer-cluster"
+            <Select
               value={form.cluster}
               onValueChange={(v) => setForm((f) => ({ ...f, cluster: v }))}
-              placeholder={form.zone ? 'Select Cluster' : 'Select zone first'}
-              searchPlaceholder="Search clusters…"
-              options={clusterOptions}
               disabled={!form.zone}
-              emptyText={
-                form.zone && clusterOptions.length === 0
-                  ? 'Link clusters to this zone in Users → Zones'
-                  : 'No results found.'
-              }
-            />
+            >
+              <SelectTrigger id="trainer-cluster" className="bg-white text-neutral-900">
+                <SelectValue
+                  placeholder={
+                    !form.zone
+                      ? 'Select zone first'
+                      : clusterList.length === 0
+                        ? 'Link clusters in Users → Zones'
+                        : 'Select Cluster'
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {clusterList.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {c}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="md:col-span-2">
             <Label>Address</Label>

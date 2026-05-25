@@ -57,6 +57,18 @@ export default function TrainersActiveScreen({ navigation }: any) {
               {(trainer.trainerProducts || []).length > 0 && (
                 <Text style={styles.trainerMeta}>Products: {(trainer.trainerProducts || []).join(', ')}</Text>
               )}
+              {(trainer.trainerAbacusLevels || trainer.trainerVedicLevels || trainer.trainerLevels) && (
+                <Text style={styles.trainerMeta}>
+                  Levels:{' '}
+                  {[
+                    trainer.trainerAbacusLevels ? `Abacus: ${trainer.trainerAbacusLevels}` : '',
+                    trainer.trainerVedicLevels ? `Vedic: ${trainer.trainerVedicLevels}` : '',
+                    trainer.trainerLevels || '',
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </Text>
+              )}
               <TouchableOpacity
                 style={styles.editButton}
                 onPress={() => navigation.navigate('TrainersEdit', { id: trainer._id })}

@@ -543,12 +543,6 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
                   {product.checked ? (
                     <View style={styles.productFields}>
                       <WebSelect
-                        label="Term"
-                        value={product.term}
-                        onValueChange={(v) => updateProduct(index, { term: v })}
-                        items={TERM_OPTIONS}
-                      />
-                      <WebSelect
                         label="Status"
                         value={product.status}
                         onValueChange={(v) =>
@@ -585,7 +579,7 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
             })
           )}
           <Text style={styles.hint}>
-            Select products and set Term, Status, Strength, and Chance % (required for Hot/Warm).
+            Select products and set Status, Strength, and Chance % (required for Hot/Warm). Term is set after the lead is closed.
           </Text>
         </View>
 
