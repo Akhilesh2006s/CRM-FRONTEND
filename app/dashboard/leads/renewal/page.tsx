@@ -52,6 +52,7 @@ type Lead = {
   strength?: number
   createdAt?: string
   remarks?: string
+  recommendations?: string
   school_id?: string | DcOrderSearchRow
   products?: Array<{
     product_name?: string
@@ -69,6 +70,7 @@ type Lead = {
 type ProductInterested = {
   product_name: string
   term: string
+  strength: number | ''
   renewal_pct: number | ''
   isFromPreviousDc: boolean
 }
@@ -76,6 +78,7 @@ type ProductInterested = {
 type RenewalProductLine = {
   product_name: string
   term: string
+  strength: number | ''
   renewal_pct: number | ''
   isFromPreviousDc: boolean
 }
@@ -101,11 +104,14 @@ function buildRenewProductsFromSchool(school: DcOrderSearchRow | null): RenewalP
     return deduped.map((p) => ({
       product_name: p.product_name,
       term: p.term,
+      strength: '',
       renewal_pct: '',
       isFromPreviousDc: true,
     }))
   }
-  return [{ product_name: '', term: 'Term 1', renewal_pct: 100, isFromPreviousDc: false }]
+  return [
+    { product_name: '', term: 'Term 1', strength: '', renewal_pct: 100, isFromPreviousDc: false },
+  ]
 }
 
 function productRenewalPctDisplay(p: {
@@ -117,6 +123,26 @@ function productRenewalPctDisplay(p: {
   const n = Number(raw)
   if (!Number.isFinite(n)) return null
   return `${n}%`
+}
+
+function productStrengthDisplay(p: { strength?: number; quantity?: number }): number | null {
+  const n = Number(p.strength ?? p.quantity)
+  if (!Number.isFinite(n) || n <= 0) return null
+  return n
+}
+
+function formatRenewalProductMeta(p: {
+  strength?: number
+  quantity?: number
+  renewal_pct?: number
+  chance?: number
+}): string {
+  const parts: string[] = []
+  const strength = productStrengthDisplay(p)
+  const pct = productRenewalPctDisplay(p)
+  if (strength != null) parts.push(`Strength: ${strength}`)
+  if (pct) parts.push(`Chance: ${pct}`)
+  return parts.join(' · ')
 }
 
 export default function RenewalLeadsPage() {
@@ -139,6 +165,7 @@ export default function RenewalLeadsPage() {
     follow_up_date: '',
     status: '',
     remarks: '',
+    recommendations: '',
     productsInterested: [] as ProductInterested[],
   })
   const [updating, setUpdating] = useState(false)
@@ -156,8 +183,9 @@ export default function RenewalLeadsPage() {
   const [renewContactPerson, setRenewContactPerson] = useState('')
   const [renewContactMobile, setRenewContactMobile] = useState('')
   const [renewRemarks, setRenewRemarks] = useState('')
+  const [renewRecommendations, setRenewRecommendations] = useState('')
   const [renewProducts, setRenewProducts] = useState<RenewalProductLine[]>([
-    { product_name: '', term: 'Term 1', renewal_pct: 100, isFromPreviousDc: false },
+    { product_name: '', term: 'Term 1', strength: '', renewal_pct: 100, isFromPreviousDc: false },
   ])
   const [creatingRenewal, setCreatingRenewal] = useState(false)
 
@@ -315,7 +343,7 @@ export default function RenewalLeadsPage() {
   const addRenewProduct = () => {
     setRenewProducts((p) => [
       ...p,
-      { product_name: '', term: 'Term 1', renewal_pct: 100, isFromPreviousDc: false },
+      { product_name: '', term: 'Term 1', strength: '', renewal_pct: 100, isFromPreviousDc: false },
     ])
   }
 
@@ -350,17 +378,25 @@ export default function RenewalLeadsPage() {
       toast.error('Add at least one product')
       return
     }
-    const invalidPct = rows.some((r) => {
+    const invalidRows = rows.some((r) => {
+      const strength = Number(r.strength)
       const pct = Number(r.renewal_pct)
-      return !Number.isFinite(pct) || pct < 1 || pct > 100
+      return (
+        !Number.isFinite(strength) ||
+        strength <= 0 ||
+        !Number.isFinite(pct) ||
+        pct < 1 ||
+        pct > 100
+      )
     })
-    if (invalidPct) {
-      toast.error('Each product must have Renewal % between 1 and 100')
+    if (invalidRows) {
+      toast.error('Each product must have Strength > 0 and Chance % between 1 and 100')
       return
     }
     const products = rows.map((r) => ({
       product_name: r.product_name.trim(),
-      quantity: 1,
+      quantity: Number(r.strength) || 1,
+      strength: Number(r.strength) || 1,
       term: r.term,
       unit_price: 0,
       renewal_pct: Number(r.renewal_pct),
@@ -376,6 +412,7 @@ export default function RenewalLeadsPage() {
           contact_person: renewContactPerson.trim(),
           contact_mobile: renewContactMobile.trim(),
           remarks: renewRemarks,
+          recommendations: renewRecommendations,
           products,
         }),
       })
@@ -383,7 +420,10 @@ export default function RenewalLeadsPage() {
       setSelectedSchool(null)
       setSchoolQuery('')
       setRenewRemarks('')
-      setRenewProducts([{ product_name: '', term: 'Term 1', renewal_pct: 100, isFromPreviousDc: false }])
+      setRenewRecommendations('')
+      setRenewProducts([
+        { product_name: '', term: 'Term 1', strength: '', renewal_pct: 100, isFromPreviousDc: false },
+      ])
       await loadLeads()
     } catch (e: any) {
       toast.error(e?.message || 'Failed to create renewal lead')
@@ -448,13 +488,19 @@ export default function RenewalLeadsPage() {
       follow_up_date: '',
       status: lead.priority || 'Hot',
       remarks: '',
+      recommendations: lead.recommendations || '',
       productsInterested: (() => {
         if (Array.isArray(lead.products) && lead.products.length > 0) {
           return lead.products.map((p: any) => {
             const pct = p.renewal_pct ?? p.chance
+            const strengthRaw = p.strength ?? p.quantity
             return {
               product_name: p.product_name || p.product || '',
               term: p.term || 'Term 1',
+              strength:
+                strengthRaw != null && strengthRaw !== '' && Number.isFinite(Number(strengthRaw))
+                  ? Number(strengthRaw)
+                  : '',
               renewal_pct:
                 pct != null && pct !== '' && Number.isFinite(Number(pct)) ? Number(pct) : '',
               isFromPreviousDc: Boolean(p.is_from_previous_dc),
@@ -470,7 +516,13 @@ export default function RenewalLeadsPage() {
   const closeUpdateModal = () => {
     setUpdateModalOpen(false)
     setSelectedLead(null)
-    setUpdateForm({ follow_up_date: '', status: '', remarks: '', productsInterested: [] })
+    setUpdateForm({
+      follow_up_date: '',
+      status: '',
+      remarks: '',
+      recommendations: '',
+      productsInterested: [],
+    })
   }
 
   const handleUpdateLead = async () => {
@@ -489,15 +541,22 @@ export default function RenewalLeadsPage() {
     }
     const productRows = updateForm.productsInterested.filter((p) => p.product_name?.trim())
     if (productRows.length === 0) {
-      toast.error('Add at least one product with Renewal %')
+      toast.error('Add at least one product with Strength and Chance %')
       return
     }
-    const invalidPct = productRows.some((p) => {
+    const invalidRows = productRows.some((p) => {
+      const strength = Number(p.strength)
       const pct = Number(p.renewal_pct)
-      return !Number.isFinite(pct) || pct < 1 || pct > 100
+      return (
+        !Number.isFinite(strength) ||
+        strength <= 0 ||
+        !Number.isFinite(pct) ||
+        pct < 1 ||
+        pct > 100
+      )
     })
-    if (invalidPct) {
-      toast.error('Each product must have Renewal % between 1 and 100')
+    if (invalidRows) {
+      toast.error('Each product must have Strength > 0 and Chance % between 1 and 100')
       return
     }
     setUpdating(true)
@@ -506,14 +565,16 @@ export default function RenewalLeadsPage() {
         follow_up_date: new Date(updateForm.follow_up_date).toISOString(),
         priority: updateForm.status,
         remarks: updateForm.remarks,
+        recommendations: updateForm.recommendations,
       }
       const validProducts = productRows.map((p) => ({
         product_name: p.product_name.trim(),
         term: p.term || 'Term 1',
+        strength: Number(p.strength),
         renewal_pct: Number(p.renewal_pct),
         chance: Number(p.renewal_pct),
         is_from_previous_dc: p.isFromPreviousDc,
-        quantity: 1,
+        quantity: Number(p.strength),
         unit_price: 0,
       }))
       payload.productsInterested = validProducts
@@ -522,7 +583,7 @@ export default function RenewalLeadsPage() {
         method: 'PUT',
         body: JSON.stringify(payload),
       })
-      toast.success('Follow-up saved')
+      toast.success('Renewal saved')
       closeUpdateModal()
       await loadLeads()
     } catch (err: any) {
@@ -570,7 +631,13 @@ export default function RenewalLeadsPage() {
       ...prev,
       productsInterested: [
         ...prev.productsInterested,
-        { product_name: '', term: 'Term 1', renewal_pct: 100, isFromPreviousDc: false },
+        {
+          product_name: '',
+          term: 'Term 1',
+          strength: '',
+          renewal_pct: 100,
+          isFromPreviousDc: false,
+        },
       ],
     }))
   }
@@ -718,14 +785,16 @@ export default function RenewalLeadsPage() {
             </div>
 
             <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-              Percentages are entered manually. Products from the previous DC have no default %.
-              New products default to 100% and can be edited.
+              Enter Strength and Chance % manually for each product. Prior DC products have no
+              defaults. New products default Chance % to 100%.
             </div>
 
             {selectedSchool && priorDcProducts.length > 0 && (
               <div className="space-y-2">
                 <Label className="text-neutral-800">Previous DC products</Label>
-                <p className="text-xs text-neutral-500">Enter renewal likelihood manually for each product on file.</p>
+                <p className="text-xs text-neutral-500">
+                  Enter strength and chance % for each product on file.
+                </p>
                 <div className="space-y-2">
                   {renewProducts.map((row, i) =>
                     !row.isFromPreviousDc ? null : (
@@ -734,6 +803,18 @@ export default function RenewalLeadsPage() {
                           {row.product_name}
                           <span className="text-xs font-normal text-neutral-500 ml-1">({row.term})</span>
                         </span>
+                        <Input
+                          type="number"
+                          min={1}
+                          className="w-20"
+                          placeholder="Strength"
+                          value={row.strength === '' ? '' : row.strength}
+                          onChange={(e) => {
+                            const v = e.target.value
+                            updateRenewProduct(i, 'strength', v === '' ? '' : Number(v) || '')
+                          }}
+                          disabled={!selectedSchool}
+                        />
                         <div className="flex items-center gap-1">
                           <Input
                             type="number"
@@ -813,6 +894,18 @@ export default function RenewalLeadsPage() {
                           <SelectItem value="Both">Both</SelectItem>
                         </SelectContent>
                       </Select>
+                      <Input
+                        type="number"
+                        min={1}
+                        className="w-20"
+                        placeholder="Strength"
+                        value={row.strength === '' ? '' : row.strength}
+                        onChange={(e) => {
+                          const v = e.target.value
+                          updateRenewProduct(i, 'strength', v === '' ? '' : Number(v) || '')
+                        }}
+                        disabled={!selectedSchool}
+                      />
                       <div className="flex items-center gap-1">
                         <Input
                           type="number"
@@ -853,11 +946,24 @@ export default function RenewalLeadsPage() {
             <div>
               <Label>Notes</Label>
               <Textarea
+                className="bg-white text-neutral-900 border-neutral-300"
                 value={renewRemarks}
                 onChange={(e) => setRenewRemarks(e.target.value)}
                 rows={3}
                 disabled={!selectedSchool}
                 placeholder="Optional context for this renewal…"
+              />
+            </div>
+
+            <div>
+              <Label>Recommendations</Label>
+              <Textarea
+                className="bg-white text-neutral-900 border-neutral-300"
+                value={renewRecommendations}
+                onChange={(e) => setRenewRecommendations(e.target.value)}
+                rows={3}
+                disabled={!selectedSchool}
+                placeholder="Renewal recommendations for this school…"
               />
             </div>
 
@@ -978,6 +1084,12 @@ export default function RenewalLeadsPage() {
                         <span className="ml-2">{lead.remarks}</span>
                       </div>
                     )}
+                    {lead.recommendations && (
+                      <div>
+                        <span className="text-neutral-600">Recommendations:</span>
+                        <span className="ml-2 whitespace-pre-wrap">{lead.recommendations}</span>
+                      </div>
+                    )}
                     {lead.follow_up_date && (
                       <div>
                         <span className="text-neutral-600">Follow up:</span>
@@ -1005,15 +1117,15 @@ export default function RenewalLeadsPage() {
                         <span className="text-neutral-600">Products:</span>
                         <div className="flex flex-wrap gap-1.5 mt-1">
                           {lead.products.map((p, idx) => {
-                            const pct = productRenewalPctDisplay(p)
                             const name = p.product_name || (p as { product?: string }).product || 'Product'
+                            const meta = formatRenewalProductMeta(p)
                             return (
                               <span
                                 key={idx}
                                 className="inline-flex items-center rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-xs text-emerald-900"
                               >
                                 {name}
-                                {pct ? ` · ${pct}` : ''}
+                                {meta ? ` · ${meta}` : ''}
                               </span>
                             )
                           })}
@@ -1038,7 +1150,7 @@ export default function RenewalLeadsPage() {
                       className="bg-purple-50 text-purple-700 border-purple-200"
                       onClick={() => openUpdateModal(lead)}
                     >
-                      Create Follow-up
+                      Create Renewal
                     </Button>
                     <Button
                       variant="outline"
@@ -1058,16 +1170,17 @@ export default function RenewalLeadsPage() {
       </Card>
 
       <Dialog open={updateModalOpen} onOpenChange={setUpdateModalOpen}>
-        <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Create follow-up</DialogTitle>
-            <DialogDescription>Log interaction for this renewal lead</DialogDescription>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
+          <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
+            <DialogTitle>Create renewal</DialogTitle>
+            <DialogDescription>Log renewal interaction for this lead</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-2 space-y-4">
             <div>
               <Label>Follow-up date *</Label>
               <Input
                 type="date"
+                className="bg-white text-neutral-900"
                 value={updateForm.follow_up_date}
                 onChange={(e) => setUpdateForm({ ...updateForm, follow_up_date: e.target.value })}
               />
@@ -1075,7 +1188,7 @@ export default function RenewalLeadsPage() {
             <div>
               <Label>Priority *</Label>
               <Select value={updateForm.status} onValueChange={(v) => setUpdateForm({ ...updateForm, status: v })}>
-                <SelectTrigger>
+                <SelectTrigger className="bg-white text-neutral-900">
                   <SelectValue placeholder="Select" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1093,96 +1206,144 @@ export default function RenewalLeadsPage() {
                 </Button>
               </div>
               <p className="text-xs text-neutral-500 mb-2">
-                Enter Renewal % manually (1–100). New lines default to 100%.
+                Enter Strength and Chance % (1–100) for each product. New lines default Chance % to 100%.
               </p>
-              <div className="space-y-2 border rounded-md p-2">
+              <div className="border rounded-md bg-white overflow-hidden">
                 {updateForm.productsInterested.length === 0 ? (
-                  <p className="text-xs text-neutral-500">No products on this lead yet.</p>
+                  <p className="text-xs text-neutral-500 p-3">No products on this lead yet.</p>
                 ) : (
-                  updateForm.productsInterested.map((product, index) => (
-                    <div key={index} className="flex flex-wrap gap-2 items-center">
-                      {product.isFromPreviousDc ? (
-                        <span className="flex-1 min-w-[120px] text-sm font-medium">
-                          {product.product_name}
-                          <span className="ml-1 text-xs font-normal text-emerald-700">(prior DC)</span>
-                        </span>
-                      ) : (
-                        <Select
-                          value={product.product_name || undefined}
-                          onValueChange={(v) => updateInterestedProduct(index, 'product_name', v)}
-                        >
-                          <SelectTrigger className="flex-1 min-w-[120px]">
-                            <SelectValue placeholder="Product" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {availableProductNames.map((name) => (
-                              <SelectItem key={name} value={name}>
-                                {name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                      <Select
-                        value={product.term}
-                        onValueChange={(v) => updateInterestedProduct(index, 'term', v)}
-                      >
-                        <SelectTrigger className="w-[100px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Term 1">Term 1</SelectItem>
-                          <SelectItem value="Term 2">Term 2</SelectItem>
-                          <SelectItem value="Both">Both</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <div className="flex items-center gap-1">
-                        <Input
-                          type="number"
-                          min={1}
-                          max={100}
-                          className="w-20"
-                          placeholder="%"
-                          value={product.renewal_pct === '' ? '' : product.renewal_pct}
-                          onChange={(e) => {
-                            const v = e.target.value
-                            updateInterestedProduct(
-                              index,
-                              'renewal_pct',
-                              v === '' ? '' : Number(v) || ''
-                            )
-                          }}
-                        />
-                        <span className="text-xs text-neutral-500">%</span>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeInterestedProduct(index)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
+                  <>
+                    <div className="sticky top-0 z-10 grid grid-cols-[minmax(100px,1fr)_88px_72px_72px_36px] gap-2 text-xs font-semibold text-neutral-600 px-3 py-2 border-b border-neutral-200 bg-white">
+                      <span>Product</span>
+                      <span>Term</span>
+                      <span className="text-center">Strength</span>
+                      <span className="text-center">Chance %</span>
+                      <span />
                     </div>
-                  ))
+                    <div
+                      className="max-h-[min(50vh,22rem)] overflow-y-auto overscroll-contain p-3 space-y-2"
+                      role="region"
+                      aria-label="Products list"
+                    >
+                      {updateForm.productsInterested.map((product, index) => (
+                        <div
+                          key={index}
+                          className="grid grid-cols-[minmax(100px,1fr)_88px_72px_72px_36px] gap-2 items-center"
+                        >
+                          {product.isFromPreviousDc ? (
+                            <span className="text-sm font-medium min-w-0 truncate">
+                              {product.product_name}
+                              <span className="ml-1 text-xs font-normal text-emerald-700">(prior DC)</span>
+                            </span>
+                          ) : (
+                            <Select
+                              value={product.product_name || undefined}
+                              onValueChange={(v) => updateInterestedProduct(index, 'product_name', v)}
+                            >
+                              <SelectTrigger className="h-9 min-w-0">
+                                <SelectValue placeholder="Product" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {availableProductNames.map((name) => (
+                                  <SelectItem key={name} value={name}>
+                                    {name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                          <Select
+                            value={product.term}
+                            onValueChange={(v) => updateInterestedProduct(index, 'term', v)}
+                          >
+                            <SelectTrigger className="h-9">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Term 1">Term 1</SelectItem>
+                              <SelectItem value="Term 2">Term 2</SelectItem>
+                              <SelectItem value="Both">Both</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            type="number"
+                            min={1}
+                            className="h-9 text-center"
+                            placeholder="—"
+                            value={product.strength === '' ? '' : product.strength}
+                            onChange={(e) => {
+                              const v = e.target.value
+                              updateInterestedProduct(
+                                index,
+                                'strength',
+                                v === '' ? '' : Number(v) || ''
+                              )
+                            }}
+                          />
+                          <Input
+                            type="number"
+                            min={1}
+                            max={100}
+                            className="h-9 text-center"
+                            placeholder="%"
+                            value={product.renewal_pct === '' ? '' : product.renewal_pct}
+                            onChange={(e) => {
+                              const v = e.target.value
+                              updateInterestedProduct(
+                                index,
+                                'renewal_pct',
+                                v === '' ? '' : Number(v) || ''
+                              )
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-9 w-9"
+                            onClick={() => removeInterestedProduct(index)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
                 )}
               </div>
+              {updateForm.productsInterested.length > 8 && (
+                <p className="text-xs text-neutral-500 mt-1">
+                  Scroll the products list to view all {updateForm.productsInterested.length} products.
+                </p>
+              )}
+            </div>
+            <div>
+              <Label>Recommendations</Label>
+              <Textarea
+                className="bg-white text-neutral-900 border-neutral-300 min-h-[88px]"
+                value={updateForm.recommendations}
+                onChange={(e) => setUpdateForm({ ...updateForm, recommendations: e.target.value })}
+                rows={3}
+                placeholder="Renewal recommendations for this school…"
+              />
             </div>
             <div>
               <Label>Remarks *</Label>
               <Textarea
+                className="bg-white text-neutral-900 border-neutral-300 min-h-[88px]"
                 value={updateForm.remarks}
                 onChange={(e) => setUpdateForm({ ...updateForm, remarks: e.target.value })}
                 rows={3}
+                placeholder="Interaction notes for this renewal…"
               />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="shrink-0 px-6 py-4 border-t border-neutral-200">
             <Button variant="outline" onClick={closeUpdateModal}>
               Cancel
             </Button>
             <Button onClick={handleUpdateLead} disabled={updating}>
-              {updating ? 'Saving…' : 'Save'}
+              {updating ? 'Creating…' : 'Create renewal'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1202,6 +1363,12 @@ export default function RenewalLeadsPage() {
                 <Card key={i} className="p-3 text-sm">
                   <div className="text-xs text-neutral-500">{formatDateTime(h.updatedAt)}</div>
                   {h.priority && <div>Priority: {h.priority}</div>}
+                  {h.recommendations && (
+                    <div className="mt-1 text-neutral-700">
+                      <span className="font-medium text-neutral-600">Recommendations: </span>
+                      <span className="whitespace-pre-wrap">{h.recommendations}</span>
+                    </div>
+                  )}
                   {h.remarks && <div className="mt-1">{h.remarks}</div>}
                   {h.follow_up_date && <div className="mt-1">Next: {formatDate(h.follow_up_date)}</div>}
                   {Array.isArray(h.productsInterested) && h.productsInterested.length > 0 && (
@@ -1209,12 +1376,12 @@ export default function RenewalLeadsPage() {
                       {h.productsInterested.map((p: any, j: number) => {
                         const name = p.product_name || p.product || 'Product'
                         const term = p.term ? ` (${p.term})` : ''
-                        const pct = productRenewalPctDisplay(p)
+                        const meta = formatRenewalProductMeta(p)
                         return (
                           <li key={j}>
                             {name}
                             {term}
-                            {pct ? ` — ${pct}` : ''}
+                            {meta ? ` — ${meta}` : ''}
                           </li>
                         )
                       })}

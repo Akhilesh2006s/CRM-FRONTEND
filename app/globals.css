@@ -932,8 +932,16 @@
   }
 
   aside,
-  .no-print,
-  #main-content > *:not(#dc-print-root) {
+  .no-print {
+    display: none !important;
+  }
+
+  #main-content {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  #main-content .print\:hidden {
     display: none !important;
   }
 

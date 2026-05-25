@@ -362,7 +362,8 @@ const feedbackStorage = multer.diskStorage({
 });
 
 const feedbackFileFilter = (req, file, cb) => {
-  if (file.mimetype === 'application/pdf') {
+  const ext = path.extname(file.originalname || '').toLowerCase();
+  if (file.mimetype === 'application/pdf' || ext === '.pdf') {
     cb(null, true);
   } else {
     cb(new Error('Only PDF files are allowed'), false);
@@ -390,14 +391,14 @@ const uploadServiceFeedback = async (req, res) => {
       return res.status(404).json({ message: 'Service not found' });
     }
     
-    // Verify trainer owns this service
-    if (service.trainerId.toString() !== req.user._id.toString()) {
+    const trainerOwnerId = service.trainerId?._id ?? service.trainerId;
+    if (String(trainerOwnerId) !== String(req.user._id)) {
       return res.status(403).json({ message: 'Not authorized to upload feedback for this service' });
     }
     
     // Generate URL for the uploaded file
     const fileUrl = `/uploads/service-feedback/${req.file.filename}`;
-    const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
+    const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 5001}`;
     const fullUrl = `${baseUrl}${fileUrl}`;
     
     // Update service with feedback PDF URL

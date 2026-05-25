@@ -13,6 +13,18 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useProducts } from '@/hooks/useProducts'
 import { toast } from 'sonner'
+import { isTransportComplete } from '@/lib/dcTransport'
+import { resolveProductSubject } from '@/lib/clientDcProductRows'
+
+/** Closed Sales: requested/accepted need transport; completed is grandfathered. */
+function includeInClosedSalesList(deal: { status?: string; transport_name?: string; transport_location?: string; pincode?: string; pendingEdit?: { transport_name?: string; transport_location?: string; pincode?: string; status?: string } }) {
+  const status = deal.status || ''
+  if (status === 'completed') return true
+  if (status === 'dc_requested' || status === 'dc_accepted') {
+    return isTransportComplete(deal)
+  }
+  return false
+}
 
 type DcOrder = {
   _id: string
@@ -181,6 +193,7 @@ export default function ClosedSalesPage() {
       // Try multiple statuses that might indicate closed deals
       // First try 'completed', then try all statuses to see what we have
       let data: DcOrder[] = []
+      let savedForDedup: any[] = []
       try {
         // Get all statuses in parallel for better performance with reduced timeout
         // Note: API returns paginated response { data: [...], pagination: {...} }
@@ -193,42 +206,28 @@ export default function ClosedSalesPage() {
           ])
         }
         
-        // Reduced limit for faster initial load - can be increased if needed
-        // Fetch DcOrders with various statuses that should appear in Closed Sales
-        // Note: Term 2 split DCs (status 'scheduled_for_later') are NOT fetched here - they only appear in Term-Wise DC
-        const [completedRes, savedRes, dcRequestedRes, dcAcceptedRes] = await Promise.all([
+        // Fetch DcOrders for Closed Sales: dc_requested/dc_accepted + grandfather completed (not saved — My Clients only)
+        const [completedRes, dcRequestedRes, dcAcceptedRes, savedForDedupRes] = await Promise.all([
           apiCallWithTimeout(`/dc-orders?status=completed&limit=500`),
-          apiCallWithTimeout(`/dc-orders?status=saved&limit=500`),
           apiCallWithTimeout(`/dc-orders?status=dc_requested&limit=500`),
           apiCallWithTimeout(`/dc-orders?status=dc_accepted&limit=500`),
+          apiCallWithTimeout(`/dc-orders?status=saved&limit=500`),
         ])
-        // Extract data array from paginated response or use direct array
         const completedArray = Array.isArray(completedRes) ? completedRes : (completedRes?.data || [])
-        const savedArray = Array.isArray(savedRes) ? savedRes : (savedRes?.data || [])
         const dcRequestedArray = Array.isArray(dcRequestedRes) ? dcRequestedRes : (dcRequestedRes?.data || [])
         const dcAcceptedArray = Array.isArray(dcAcceptedRes) ? dcAcceptedRes : (dcAcceptedRes?.data || [])
+        savedForDedup = Array.isArray(savedForDedupRes) ? savedForDedupRes : (savedForDedupRes?.data || [])
         
         console.log('📊 Loaded DcOrders for Closed Sales:', {
           completed: completedArray.length,
-          saved: savedArray.length,
           dc_requested: dcRequestedArray.length,
-          dc_accepted: dcAcceptedArray.length
+          dc_accepted: dcAcceptedArray.length,
+          saved_dedup_only: savedForDedup.length,
         })
-        console.log('📋 dc_requested items (includes Term 1 DCs from split DCs):', dcRequestedArray.map((d: any) => ({
-          id: d._id,
-          school_name: d.school_name,
-          status: d.status,
-          updatedAt: d.updatedAt || d.updated_at
-        })))
         
-        // When a DC is split:
-        // - DC 1 (Term 1 products) is represented by the DcOrder with status 'dc_requested' -> shows in Closed Sales
-        // - DC 2 (Term 2 products) has status 'scheduled_for_later' -> shows ONLY in Term-Wise DC (NOT in Closed Sales)
-        // So we keep all dc_requested DcOrders - they represent Term 1 DCs (even if split)
-        // Term 2 split DCs should NOT appear in Closed Sales, only in Term-Wise DC
-        data = [...completedArray, ...savedArray, ...dcRequestedArray, ...dcAcceptedArray].filter((d: any) => 
-          d.status !== 'dc_approved' && d.status !== 'dc_sent_to_senior'
-        )
+        data = [...completedArray, ...dcRequestedArray, ...dcAcceptedArray]
+          .filter((d: any) => d.status !== 'dc_approved' && d.status !== 'dc_sent_to_senior')
+          .filter((d: any) => includeInClosedSalesList(d))
       } catch (e) {
         // If no completed deals, try getting all deals and filter client-side
         console.log('No completed deals found, trying all deals...')
@@ -241,21 +240,18 @@ export default function ClosedSalesPage() {
           ])
           // Extract data array from paginated response or use direct array
           const dealsArray = Array.isArray(allDealsRes) ? allDealsRes : (allDealsRes?.data || [])
-          // Filter for deals that might be considered "closed" - including saved (converted leads)
-          data = dealsArray.filter((d: any) => 
-            (d.status === 'completed' || 
-            d.status === 'saved' || // Include saved status for converted leads
-            d.status === 'in_transit' || 
-            d.lead_status === 'Hot' ||
-            d.status === 'hold' ||
-            d.status === 'dc_requested' || // Include DC requests from employees
-            d.status === 'dc_accepted') && // Include accepted DC requests (can be updated later)
-            d.status !== 'dc_approved' && // Exclude approved (already processed)
-            d.status !== 'dc_sent_to_senior' // Exclude sent to senior coordinator
-          )
+          data = dealsArray.filter((d: any) =>
+            (d.status === 'completed' ||
+              d.status === 'dc_requested' ||
+              d.status === 'dc_accepted') &&
+            d.status !== 'dc_approved' &&
+            d.status !== 'dc_sent_to_senior'
+          ).filter((d: any) => includeInClosedSalesList(d))
+          savedForDedup = dealsArray.filter((d: any) => d.status === 'saved')
         } catch (timeoutError) {
           console.warn('Timeout loading all deals, using empty array')
           data = []
+          savedForDedup = []
         }
       }
       
@@ -293,20 +289,17 @@ export default function ClosedSalesPage() {
         
         // Filter out closed leads that have a corresponding DcOrder with status 'dc_requested' or 'dc_accepted'
         // This prevents duplicates where the same school appears twice (once as closed lead with "Raise DC" and once as DcOrder with "Review DC Request")
+        const clientPipelineRecords = [...data, ...savedForDedup]
         const filteredClosedLeads = closedLeadsAsDeals.filter((lead: DcOrder) => {
-          // Check if there's a DcOrder with status 'dc_requested' or 'dc_accepted' for this lead
-          // Match by school_name and contact_mobile to identify duplicates
-          const hasMatchingDcOrder = data.some((dcOrder: any) => {
-            const schoolNameMatch = (dcOrder.school_name || '').toLowerCase().trim() === (lead.school_name || '').toLowerCase().trim()
-            const mobileMatch = (dcOrder.contact_mobile || '').trim() === (lead.contact_mobile || '').trim()
-            const isDcRequested = dcOrder.status === 'dc_requested' || dcOrder.status === 'dc_accepted'
-            
-            // If school name and mobile match, and the DcOrder has dc_requested or dc_accepted status, exclude the closed lead
-            return schoolNameMatch && mobileMatch && isDcRequested
+          const hasMatchingClientRecord = clientPipelineRecords.some((dcOrder: any) => {
+            const schoolNameMatch =
+              (dcOrder.school_name || '').toLowerCase().trim() ===
+              (lead.school_name || '').toLowerCase().trim()
+            const mobileMatch =
+              (dcOrder.contact_mobile || '').trim() === (lead.contact_mobile || '').trim()
+            return schoolNameMatch && mobileMatch
           })
-          
-          // Only include the closed lead if there's no matching DcOrder with dc_requested/dc_accepted status
-          return !hasMatchingDcOrder
+          return !hasMatchingClientRecord
         })
         
         // Merge filtered closed leads with DcOrders
@@ -795,7 +788,7 @@ export default function ClosedSalesPage() {
               ),
               productCategory: matchedSku || undefined,
               specs: p.specs || 'Regular',
-              subject: p.subject || undefined,
+              subject: resolveProductSubject(p),
               strength: Number(p.strength) || Number(p.quantity) || 0,
               level: p.level || getDefaultLevel(productName || 'Abacus'),
               term: p.term || 'Term 1',
@@ -886,7 +879,7 @@ export default function ClosedSalesPage() {
                 // Some older records may have it stored under `category`, so we fallback to that.
                 productCategory: matchedSku || undefined,
                 specs: p.specs || 'Regular',
-                subject: p.subject || undefined,
+                subject: resolveProductSubject(p),
                 strength: strengthNum,
                 level: rawLevel,
                 term: p.term || 'Term 1',
@@ -909,7 +902,7 @@ export default function ClosedSalesPage() {
               return {
               id: String(idx + 1),
                 product: originalProduct, // Use original product name as entered
-              class: '1',
+              class: p.class || '1',
               category: normalizedDeal.school_type === 'Existing' ? 'Old Students' : 'new Students',
               productCategory: (() => {
                 const originalProduct = p.product_name || p.product || 'ABACUS'
@@ -923,7 +916,7 @@ export default function ClosedSalesPage() {
                 return matchedSku || undefined
               })(),
                 specs: 'Regular',
-                subject: undefined,
+                subject: resolveProductSubject(p),
               strength: p.strength || p.quantity || 0,
                 level: p.level || getDefaultLevel(p.product || 'Abacus'),
                 term: p.term || 'Term 1',
@@ -968,7 +961,7 @@ export default function ClosedSalesPage() {
                 return matchedSku || undefined
               })(),
               specs: 'Regular',
-              subject: undefined,
+              subject: resolveProductSubject(p),
               strength: p.strength || p.quantity || 0,
               level: p.level || 'L2',
               term: p.term || 'Term 1',
@@ -1013,7 +1006,7 @@ export default function ClosedSalesPage() {
                 return matchedSku || undefined
               })(),
             specs: 'Regular',
-            subject: undefined,
+            subject: resolveProductSubject(p),
             strength: p.strength || p.quantity || 0,
             level: p.level || 'L2',
             term: p.term || 'Term 1',
@@ -1066,7 +1059,7 @@ export default function ClosedSalesPage() {
             return matchedSku || undefined
           })(),
           specs: 'Regular',
-          subject: undefined,
+          subject: resolveProductSubject(p),
           strength: p.strength || p.quantity || 0,
           level: p.level || 'L2',
           term: p.term || 'Term 1',
@@ -2284,29 +2277,50 @@ export default function ClosedSalesPage() {
                             </Select>
                           </td>
                           <td className="py-4 px-5">
-                            {hasProductSubjects(row.product) && getProductSubjects(row.product).length > 0 ? (
-                              <Select
-                              value={row.subject || ''}
-                                onValueChange={(value) => {
-                                const updated = [...productRows]
-                                  updated[idx].subject = value
-                                setProductRows(updated)
-                              }}
-                              >
-                                <SelectTrigger className="h-9 text-sm bg-white border-slate-200 w-32">
-                                  <SelectValue placeholder="Subject" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {getProductSubjects(row.product).map((subj) => (
-                                    <SelectItem key={subj} value={subj}>
-                                      {subj}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            ) : (
-                              <span className="text-xs text-slate-400">-</span>
-                            )}
+                            {(() => {
+                              const catalogSubjects = hasProductSubjects(row.product)
+                                ? getProductSubjects(row.product)
+                                : []
+                              const storedSubject = row.subject?.trim() || ''
+                              if (catalogSubjects.length > 0) {
+                                const options = [
+                                  ...new Set(
+                                    [...catalogSubjects, storedSubject].filter(Boolean)
+                                  ),
+                                ]
+                                return (
+                                  <Select
+                                    value={storedSubject || options[0] || ''}
+                                    onValueChange={(value) => {
+                                      const updated = [...productRows]
+                                      updated[idx].subject = value
+                                      setProductRows(updated)
+                                    }}
+                                  >
+                                    <SelectTrigger className="h-9 text-sm bg-white border-slate-200 w-32">
+                                      <SelectValue placeholder="Subject" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {options.map((subj) => (
+                                        <SelectItem key={subj} value={subj}>
+                                          {subj}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                )
+                              }
+                              if (storedSubject) {
+                                return (
+                                  <Input
+                                    value={storedSubject}
+                                    readOnly
+                                    className="h-9 text-sm bg-slate-50 border-slate-200 w-32"
+                                  />
+                                )
+                              }
+                              return <span className="text-xs text-slate-400">-</span>
+                            })()}
                           </td>
                           <td className="py-4 px-5">
                             <Input

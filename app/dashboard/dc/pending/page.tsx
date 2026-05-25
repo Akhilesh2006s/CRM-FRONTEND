@@ -718,6 +718,13 @@ export default function PendingDCPage() {
                   : '0 (0%)'}
               </strong>
             </p>
+            {typeof selectedDC.dcOrderId === 'object' && selectedDC.dcOrderId !== null && (
+              <p className="text-sm mt-1 text-black">
+                School: <strong>{selectedDC.dcOrderId.school_name || selectedDC.customerName || '-'}</strong>
+                {' · '}
+                Code: <strong>{selectedDC.dcOrderId.dc_code || '-'}</strong>
+              </p>
+            )}
             {dcDate && <p className="text-sm mt-1 text-black">DC Date: {dcDate}</p>}
             {smeRemarks && <p className="text-sm mt-1 text-black">SME Remarks: {smeRemarks}</p>}
           </div>
@@ -970,6 +977,14 @@ export default function PendingDCPage() {
                 </tr>
               </thead>
               <tbody>
+                {productRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-4 px-2 text-center border border-gray-300 text-black">
+                      No products
+                    </td>
+                  </tr>
+                ) : (
+                  <>
                 {productRows.map((row) => (
                   <tr key={`print-${row.id}`} className="border-b border-gray-200">
                     <td className="py-2 px-2 border border-gray-300">{row.product}</td>
@@ -989,6 +1004,8 @@ export default function PendingDCPage() {
                   </td>
                   <td className="py-2 px-2 border border-gray-300" />
                 </tr>
+                  </>
+                )}
               </tbody>
             </table>
           </div>
@@ -1235,7 +1252,15 @@ export default function PendingDCPage() {
                 type="button"
                 variant="outline" 
                 className="bg-red-600 text-white hover:bg-red-700"
-                onClick={() => window.print()}
+                disabled={productRows.length === 0}
+                title={productRows.length === 0 ? 'Add at least one product before printing' : undefined}
+                onClick={() => {
+                  if (productRows.length === 0) {
+                    alert('Add at least one product before printing.')
+                    return
+                  }
+                  window.print()
+                }}
               >
                 Print
               </Button>

@@ -98,6 +98,33 @@ function displayLeadDealPriority(lead: {
 const HISTORY_SNAPSHOT_STATUSES = ['Hot', 'Warm', 'Visit Again', 'Not Met Management', 'Not Interested'] as const
 
 /** Build `productsInterested`-shaped rows for synthetic history when API omits snapshots */
+function formatUserDisplayName(user: unknown): string | null {
+  if (!user || typeof user !== 'object') return null
+  const u = user as { name?: string; firstName?: string; lastName?: string; email?: string }
+  const name = (u.name || '').trim()
+  if (name) return name
+  const combined = [u.firstName, u.lastName].map((s) => (s || '').trim()).filter(Boolean).join(' ')
+  if (combined) return combined
+  const email = (u.email || '').trim()
+  return email || null
+}
+
+function resolveHistoryUpdatedByName(
+  entry: { updatedBy?: { name?: string; firstName?: string; lastName?: string; email?: string } | string },
+  leadDoc?: {
+    assigned_to?: { name?: string; firstName?: string; lastName?: string; email?: string } | string
+    created_by?: { name?: string; firstName?: string; lastName?: string; email?: string } | string
+  },
+): string | null {
+  const fromEntry = formatUserDisplayName(entry.updatedBy)
+  if (fromEntry) return fromEntry
+  const fromAssigned = formatUserDisplayName(leadDoc?.assigned_to)
+  if (fromAssigned) return fromAssigned
+  const fromCreated = formatUserDisplayName(leadDoc?.created_by)
+  if (fromCreated) return fromCreated
+  return null
+}
+
 function leadProductsToHistorySnapshot(products: Lead['products']) {
   if (!Array.isArray(products)) return []
   return products
@@ -587,15 +614,24 @@ export default function FollowupLeadsPage() {
       }
       
       // If no history from API, add creation entry from current lead data
+      const mergedForDisplay = {
+        ...lead,
+        ...(fullDcOrder || {}),
+        products: fullDcOrder?.products ?? lead.products,
+        lead_status: fullDcOrder?.lead_status ?? lead.lead_status,
+        priority: fullDcOrder?.priority ?? lead.priority,
+      }
+
       if (historyData.length === 0 && lead.createdAt) {
         console.log('No history found, adding creation entry')
+        const creatorName = resolveHistoryUpdatedByName({}, mergedForDisplay)
         historyData.push({
           follow_up_date: lead.follow_up_date || null,
           remarks: lead.remarks || 'Lead created',
           priority: lead.lead_status || displayLeadDealPriority(lead),
           productsInterested: leadProductsToHistorySnapshot(lead.products),
           updatedAt: lead.createdAt,
-          updatedBy: { name: 'System' },
+          updatedBy: creatorName ? { name: creatorName } : undefined,
         })
       }
       
@@ -605,28 +641,27 @@ export default function FollowupLeadsPage() {
         const dateB = new Date(b.updatedAt || 0).getTime()
         return dateB - dateA
       })
+
+      historyData = historyData.map((entry) => {
+        const name = resolveHistoryUpdatedByName(entry, mergedForDisplay)
+        return name ? { ...entry, updatedBy: { ...(entry.updatedBy || {}), name } } : entry
+      })
       
       console.log('Final history data:', historyData.length, 'entries')
-      const mergedForDisplay = {
-        ...lead,
-        ...(fullDcOrder || {}),
-        products: fullDcOrder?.products ?? lead.products,
-        lead_status: fullDcOrder?.lead_status ?? lead.lead_status,
-        priority: fullDcOrder?.priority ?? lead.priority,
-      }
       setHistoryLead(mergedForDisplay as Lead)
       setHistory(historyData)
     } catch (err: any) {
       console.error('Failed to load history:', err)
       // Even on error, show current lead data as history
       if (lead.createdAt) {
+        const creatorName = resolveHistoryUpdatedByName({}, lead)
         setHistory([{
           follow_up_date: lead.follow_up_date || null,
           remarks: lead.remarks || 'Lead created',
           priority: lead.lead_status || displayLeadDealPriority(lead),
           productsInterested: leadProductsToHistorySnapshot(lead.products),
           updatedAt: lead.createdAt,
-          updatedBy: { name: 'System' },
+          updatedBy: creatorName ? { name: creatorName } : undefined,
         }])
       } else {
         setHistory([])
@@ -873,9 +908,9 @@ export default function FollowupLeadsPage() {
 
       {/* Update Lead Modal - Modern Professional Design */}
       <Dialog open={updateModalOpen} onOpenChange={setUpdateModalOpen}>
-        <DialogContent className="sm:max-w-[550px] p-0 gap-0 overflow-hidden shadow-2xl border-0">
+        <DialogContent className="sm:max-w-[550px] max-h-[90vh] p-0 gap-0 overflow-hidden shadow-2xl border-0 flex flex-col">
           {/* Elegant Header with Gradient */}
-          <div className="bg-gradient-to-r from-purple-600 via-purple-700 to-indigo-700 px-6 py-5">
+          <div className="shrink-0 bg-gradient-to-r from-purple-600 via-purple-700 to-indigo-700 px-6 py-5">
             <DialogHeader className="space-y-1">
               <DialogTitle className="text-white text-xl font-semibold tracking-tight">
                 Create Follow-up
@@ -887,7 +922,7 @@ export default function FollowupLeadsPage() {
           </div>
           
           {/* Form Content with Professional Spacing */}
-          <div className="px-6 py-6 bg-gradient-to-b from-white to-neutral-50">
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 bg-gradient-to-b from-white to-neutral-50">
             <div className="space-y-5">
               <div className="space-y-2">
                 <Label className="text-sm font-semibold text-neutral-700 flex items-center gap-2">
@@ -914,12 +949,12 @@ export default function FollowupLeadsPage() {
                   </Button>
                 </div>
 
-                <div className="rounded-md border border-neutral-200 bg-white p-3 space-y-2">
+                <div className="rounded-md border border-neutral-200 bg-white overflow-hidden">
                   {updateForm.productsInterested.length === 0 ? (
-                    <p className="text-xs text-neutral-500">No products added yet.</p>
+                    <p className="text-xs text-neutral-500 p-3">No products added yet.</p>
                   ) : (
                     <>
-                      <div className="grid grid-cols-[2fr_1.3fr_1.5fr_1fr_1fr_auto] gap-2 text-xs font-medium text-neutral-500 px-1">
+                      <div className="sticky top-0 z-10 grid grid-cols-[2fr_1.3fr_1.5fr_1fr_1fr_auto] gap-2 text-xs font-medium text-neutral-500 px-3 py-2 border-b border-neutral-200 bg-white">
                         <span>Product</span>
                         <span>Term</span>
                         <span>Status</span>
@@ -928,6 +963,11 @@ export default function FollowupLeadsPage() {
                         <span></span>
                       </div>
 
+                      <div
+                        className="max-h-[min(50vh,22rem)] overflow-y-auto overscroll-contain p-3 space-y-2"
+                        role="region"
+                        aria-label="Products list"
+                      >
                       {updateForm.productsInterested.map((product, index) => (
                         <div key={`product-${index}`} className="grid grid-cols-[2fr_1.3fr_1.5fr_1fr_1fr_auto] gap-2 items-center">
                           <Select
@@ -1002,9 +1042,15 @@ export default function FollowupLeadsPage() {
                           </Button>
                         </div>
                       ))}
+                      </div>
                     </>
                   )}
                 </div>
+                {updateForm.productsInterested.length > 8 && (
+                  <p className="text-xs text-neutral-500">
+                    Scroll inside the products list to view all {updateForm.productsInterested.length} products.
+                  </p>
+                )}
                 <p className="text-xs text-neutral-500">
                   Required: add at least one product with Strength (quantity) and Chance % for each row.
                 </p>
@@ -1029,7 +1075,7 @@ export default function FollowupLeadsPage() {
           </div>
           
           {/* Professional Footer */}
-          <div className="px-6 py-4 bg-neutral-50 border-t border-neutral-200 flex items-center justify-end gap-3">
+          <div className="shrink-0 px-6 py-4 bg-neutral-50 border-t border-neutral-200 flex items-center justify-end gap-3">
             <Button 
               variant="outline" 
               onClick={closeUpdateModal}
@@ -1147,11 +1193,16 @@ export default function FollowupLeadsPage() {
                                     {leadStatus}
                                   </span>
                                 </div>
-                                {item.updatedBy?.name && (
-                                  <p className="text-xs text-neutral-500">
-                                    Updated by <span className="font-medium text-neutral-700">{item.updatedBy.name}</span>
-                                  </p>
-                                )}
+                                {(() => {
+                                  const updatedByName = resolveHistoryUpdatedByName(item, historyLead ?? undefined)
+                                  if (!updatedByName) return null
+                                  return (
+                                    <p className="text-xs text-neutral-500">
+                                      Updated by{' '}
+                                      <span className="font-medium text-neutral-700">{updatedByName}</span>
+                                    </p>
+                                  )
+                                })()}
                               </div>
                             </div>
                             

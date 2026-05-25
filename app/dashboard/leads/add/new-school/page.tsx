@@ -16,6 +16,8 @@ import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { useProducts } from '@/hooks/useProducts'
 import { lookupPincode } from '@/lib/pincode'
+import { sanitizePhoneInput, validateIndianMobile } from '@/lib/phone'
+import { normalizeIntegerInput } from '@/lib/numericInput'
 
 const LEAD_STATUS_OPTIONS = ['Hot', 'Warm', 'Cold'] as const
 
@@ -24,8 +26,9 @@ type ProductSelection = {
   checked: boolean
   term: string
   status: 'Hot' | 'Warm' | 'Not Interested' | 'Management Not Met' | 'Visit Again'
-  strength: number
-  chance: number
+  /** Stored as string so empty fields do not show a stuck "0". */
+  strength: string
+  chance: string
 }
 
 export default function NewSchoolPage() {
@@ -70,8 +73,8 @@ export default function NewSchoolPage() {
           checked: false,
           term: 'Term 1',
           status: 'Warm',
-          strength: 0,
-          chance: 0,
+          strength: '',
+          chance: '',
         })),
       )
     }
@@ -112,6 +115,11 @@ export default function NewSchoolPage() {
   const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
     setForm((f) => ({ ...f, [name]: value }))
+  }
+
+  const onPhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name } = e.target
+    setForm((f) => ({ ...f, [name]: sanitizePhoneInput(e.target.value) }))
   }
 
   const handlePincodeChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -176,24 +184,22 @@ export default function NewSchoolPage() {
 
     // For non Hot/Warm statuses, strength and chance should be 0
     if (status !== 'Hot' && status !== 'Warm') {
-      updated[index].strength = 0
-      updated[index].chance = 0
+      updated[index].strength = ''
+      updated[index].chance = ''
     }
 
     setProducts(updated)
   }
 
-  const handleProductStrengthChange = (index: number, value: number) => {
+  const handleProductStrengthChange = (index: number, raw: string) => {
     const updated = [...products]
-    updated[index].strength = value < 0 ? 0 : value
+    updated[index].strength = normalizeIntegerInput(raw)
     setProducts(updated)
   }
 
-  const handleProductChanceChange = (index: number, value: number) => {
+  const handleProductChanceChange = (index: number, raw: string) => {
     const updated = [...products]
-    // Clamp between 0 and 100
-    const clamped = Math.max(0, Math.min(100, value))
-    updated[index].chance = clamped
+    updated[index].chance = normalizeIntegerInput(raw, 100)
     setProducts(updated)
   }
 
@@ -208,8 +214,18 @@ export default function NewSchoolPage() {
       setSubmitting(false)
       return
     }
-    if (!form.decision_maker_mobile || !form.decision_maker_mobile.trim()) {
-      setError('Decision Maker Mobile Number is required')
+    const contactMobileCheck = validateIndianMobile(form.contact_mobile, 'Contact mobile')
+    if (!contactMobileCheck.ok) {
+      setError(contactMobileCheck.message)
+      setSubmitting(false)
+      return
+    }
+    const decisionMobileCheck = validateIndianMobile(
+      form.decision_maker_mobile,
+      'Decision Maker Mobile Number'
+    )
+    if (!decisionMobileCheck.ok) {
+      setError(decisionMobileCheck.message)
       setSubmitting(false)
       return
     }
@@ -271,8 +287,11 @@ export default function NewSchoolPage() {
 
       // Validate per-product rules
       for (const p of selectedProducts) {
+        const strengthNum = Number(p.strength)
+        const chanceNum = p.chance === '' ? 0 : Number(p.chance)
+
         // Strength is required for Hot/Warm
-        if ((p.status === 'Hot' || p.status === 'Warm') && (!p.strength || p.strength <= 0)) {
+        if ((p.status === 'Hot' || p.status === 'Warm') && (!p.strength.trim() || strengthNum <= 0)) {
           throw new Error(
             `Please enter strength for product "${p.name}" when status is ${p.status}.`,
           )
@@ -280,40 +299,42 @@ export default function NewSchoolPage() {
 
         // Chance rules
         if (p.status === 'Hot') {
-          if (p.chance < 80) {
+          if (chanceNum < 80) {
             throw new Error(
               `Chance % for product "${p.name}" must be at least 80% when status is Hot.`,
             )
           }
         } else if (p.status === 'Warm') {
-          if (p.chance < 20) {
+          if (chanceNum < 20) {
             throw new Error(
               `Chance % for product "${p.name}" must be at least 20% when status is Warm.`,
             )
           }
-        } else {
-          // For all other statuses, chance must be 0
-          p.chance = 0
         }
       }
 
-      const productsPayload = selectedProducts.map((p) => ({
+      const productsPayload = selectedProducts.map((p) => {
+        const strengthNum = Number(p.strength) || 0
+        const chanceNum =
+          p.status === 'Hot' || p.status === 'Warm' ? Number(p.chance) || 0 : 0
+        return {
           product_name: p.name,
           quantity: 1,
           unit_price: 0,
           term: p.term || 'Term 1',
-        status: p.status,
-        strength: p.strength || 0,
-        chance: p.chance || 0,
-        }))
+          status: p.status,
+          strength: strengthNum,
+          chance: chanceNum,
+        }
+      })
       
       const payload: any = {
         school_name: form.school_name,
         school_type: form.school_type || 'New', // Use selected school type (New or Employee)
         contact_person: form.contact_person,
-        contact_mobile: form.contact_mobile,
+        contact_mobile: contactMobileCheck.digits,
         contact_person2: form.decision_maker_name || undefined,
-        contact_mobile2: form.decision_maker_mobile || undefined,
+        contact_mobile2: decisionMobileCheck.digits,
         location: form.location || undefined,
         address: form.address || undefined,
         pincode: form.pincode || undefined,
@@ -388,7 +409,19 @@ export default function NewSchoolPage() {
           </div>
           <div>
             <Label>Contact mobile *</Label>
-            <Input className="bg-white text-neutral-900" name="contact_mobile" value={form.contact_mobile} onChange={onChange} required />
+            <Input
+              className="bg-white text-neutral-900"
+              name="contact_mobile"
+              type="tel"
+              inputMode="numeric"
+              autoComplete="tel"
+              placeholder="10-digit mobile number"
+              maxLength={15}
+              value={form.contact_mobile}
+              onChange={onPhoneChange}
+              required
+            />
+            <p className="text-xs text-neutral-500 mt-1">Digits only (10–15 digits)</p>
           </div>
           <div>
             <Label>Email</Label>
@@ -400,7 +433,19 @@ export default function NewSchoolPage() {
           </div>
           <div>
             <Label>Decision Maker Mobile Number *</Label>
-            <Input className="bg-white text-neutral-900" name="decision_maker_mobile" value={form.decision_maker_mobile} onChange={onChange} required />
+            <Input
+              className="bg-white text-neutral-900"
+              name="decision_maker_mobile"
+              type="tel"
+              inputMode="numeric"
+              autoComplete="tel"
+              placeholder="10-digit mobile number"
+              maxLength={15}
+              value={form.decision_maker_mobile}
+              onChange={onPhoneChange}
+              required
+            />
+            <p className="text-xs text-neutral-500 mt-1">Digits only (10–15 digits)</p>
           </div>
           <div>
             <Label>Pincode *</Label>
@@ -522,96 +567,120 @@ export default function NewSchoolPage() {
           {/* Products Interested Section */}
           <div className="md:col-span-2">
             <Label>Products Interested *</Label>
-            <div className="space-y-2 mt-2 p-4 bg-white rounded border">
-              {products.map((product, index) => {
-                const isHotOrWarm = product.status === 'Hot' || product.status === 'Warm'
-                return (
-                  <div
-                    key={product.name}
-                    className="flex flex-col md:flex-row md:items-center justify-between gap-2 p-2 hover:bg-gray-50 rounded"
-                  >
-                    <div className="flex items-center space-x-2 min-w-[160px]">
-                    <Checkbox
-                      id={`product-${index}`}
-                      checked={product.checked}
-                      onCheckedChange={(checked) => handleProductCheck(index, checked as boolean)}
-                    />
-                    <Label htmlFor={`product-${index}`} className="font-medium cursor-pointer">
-                      {product.name}
-                    </Label>
+            <div className="mt-2 p-4 bg-white rounded border border-neutral-200">
+              {productsLoading ? (
+                <p className="text-sm text-neutral-500">Loading products…</p>
+              ) : products.length === 0 ? (
+                <p className="text-sm text-neutral-500">No products available.</p>
+              ) : (
+                <>
+                  <div className="hidden md:grid md:grid-cols-[minmax(140px,1fr)_100px_140px_88px_88px] gap-2 px-2 pb-2 border-b border-neutral-200 text-xs font-semibold text-neutral-600">
+                    <span>Product</span>
+                    <span>Term</span>
+                    <span>Status</span>
+                    <span className="text-center">Strength</span>
+                    <span className="text-center">Chance %</span>
                   </div>
-                    <div className="flex flex-wrap gap-2 flex-1">
-                      <div className="w-28">
-                    <Select
-                      value={product.term || 'Term 1'}
-                      onValueChange={(value) => handleProductTermChange(index, value)}
-                    >
-                      <SelectTrigger className="h-8 text-xs bg-white text-neutral-900">
-                        <SelectValue placeholder="Term" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Term 1">Term 1</SelectItem>
-                        <SelectItem value="Term 2">Term 2</SelectItem>
-                        <SelectItem value="Both">Both</SelectItem>
-                      </SelectContent>
-                    </Select>
-                      </div>
-                      <div className="w-40">
-                        <Select
-                          value={product.status}
-                          onValueChange={(value) =>
-                            handleProductStatusChange(
-                              index,
-                              value as ProductSelection['status'],
-                            )
-                          }
+                  <div className="space-y-2">
+                    {products.map((product, index) => {
+                      const isHotOrWarm = product.status === 'Hot' || product.status === 'Warm'
+                      return (
+                        <div
+                          key={product.name}
+                          className="grid grid-cols-1 md:grid-cols-[minmax(140px,1fr)_100px_140px_88px_88px] gap-2 items-center p-2 rounded hover:bg-neutral-50 border border-transparent hover:border-neutral-100"
                         >
-                          <SelectTrigger className="h-8 text-xs bg-white text-neutral-900">
-                            <SelectValue placeholder="Status" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Hot">Hot</SelectItem>
-                            <SelectItem value="Warm">Warm</SelectItem>
-                            <SelectItem value="Not Interested">Not Interested</SelectItem>
-                            <SelectItem value="Management Not Met">
-                              Management Not Met
-                            </SelectItem>
-                            <SelectItem value="Visit Again">Visit Again</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="w-28">
-                        <Input
-                          type="number"
-                          min={0}
-                          disabled={!isHotOrWarm}
-                          className="h-8 text-xs bg-white text-neutral-900"
-                          placeholder="Strength"
-                          value={product.strength}
-                          onChange={(e) =>
-                            handleProductStrengthChange(index, Number(e.target.value) || 0)
-                          }
-                        />
-                      </div>
-                      <div className="w-28 flex items-center">
-                        <Input
-                          type="number"
-                          min={0}
-                          max={100}
-                          disabled={!isHotOrWarm}
-                          className="h-8 text-xs bg-white text-neutral-900"
-                          placeholder="%"
-                          value={product.chance}
-                          onChange={(e) =>
-                            handleProductChanceChange(index, Number(e.target.value) || 0)
-                          }
-                        />
-                        <span className="ml-1 text-xs text-neutral-500">%</span>
-                      </div>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Checkbox
+                              id={`product-${index}`}
+                              checked={product.checked}
+                              onCheckedChange={(checked) =>
+                                handleProductCheck(index, checked as boolean)
+                              }
+                              className="size-5 shrink-0 border-2 border-neutral-500 bg-white data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 data-[state=checked]:text-white shadow-sm"
+                            />
+                            <Label
+                              htmlFor={`product-${index}`}
+                              className="font-medium cursor-pointer text-neutral-900 leading-tight"
+                            >
+                              {product.name}
+                            </Label>
+                          </div>
+                          <div className="flex flex-col gap-0.5 md:contents">
+                            <span className="text-xs text-neutral-500 md:hidden">Term</span>
+                            <Select
+                              value={product.term || 'Term 1'}
+                              onValueChange={(value) => handleProductTermChange(index, value)}
+                              disabled={!product.checked}
+                            >
+                              <SelectTrigger className="h-9 text-xs bg-white text-neutral-900 border-neutral-300">
+                                <SelectValue placeholder="Term" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Term 1">Term 1</SelectItem>
+                                <SelectItem value="Term 2">Term 2</SelectItem>
+                                <SelectItem value="Both">Both</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="flex flex-col gap-0.5 md:contents">
+                            <span className="text-xs text-neutral-500 md:hidden">Status</span>
+                            <Select
+                              value={product.status}
+                              onValueChange={(value) =>
+                                handleProductStatusChange(
+                                  index,
+                                  value as ProductSelection['status'],
+                                )
+                              }
+                              disabled={!product.checked}
+                            >
+                              <SelectTrigger className="h-9 text-xs bg-white text-neutral-900 border-neutral-300">
+                                <SelectValue placeholder="Status" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Hot">Hot</SelectItem>
+                                <SelectItem value="Warm">Warm</SelectItem>
+                                <SelectItem value="Not Interested">Not Interested</SelectItem>
+                                <SelectItem value="Management Not Met">
+                                  Management Not Met
+                                </SelectItem>
+                                <SelectItem value="Visit Again">Visit Again</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="flex flex-col gap-0.5 md:contents">
+                            <span className="text-xs text-neutral-500 md:hidden">Strength</span>
+                            <Input
+                              type="text"
+                              inputMode="numeric"
+                              disabled={!product.checked || !isHotOrWarm}
+                              className="h-9 text-xs bg-white text-neutral-900 border-neutral-300 text-center"
+                              placeholder="—"
+                              value={product.strength}
+                              onChange={(e) => handleProductStrengthChange(index, e.target.value)}
+                            />
+                          </div>
+                          <div className="flex flex-col gap-0.5 md:contents">
+                            <span className="text-xs text-neutral-500 md:hidden">Chance %</span>
+                            <div className="flex items-center gap-1">
+                              <Input
+                                type="text"
+                                inputMode="numeric"
+                                disabled={!product.checked || !isHotOrWarm}
+                                className="h-9 text-xs bg-white text-neutral-900 border-neutral-300 text-center flex-1"
+                                placeholder="—"
+                                value={product.chance}
+                                onChange={(e) => handleProductChanceChange(index, e.target.value)}
+                              />
+                              <span className="text-xs text-neutral-500 shrink-0">%</span>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
-                </div>
-                )
-              })}
+                </>
+              )}
             </div>
             <p className="text-xs text-neutral-500 mt-2">
               Select products, then set Term, Status, Strength, and Chance % for each.

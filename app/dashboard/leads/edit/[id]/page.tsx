@@ -15,10 +15,101 @@ import { toast } from 'sonner'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { useProducts } from '@/hooks/useProducts'
+import { normalizeIntegerInput } from '@/lib/numericInput'
 
 type ProductSelection = {
   name: string
   checked: boolean
+  term: string
+  status: 'Hot' | 'Warm' | 'Not Interested' | 'Management Not Met' | 'Visit Again'
+  strength: string
+  chance: string
+}
+
+type SavedProductRow = {
+  product_name?: string
+  product?: string
+  term?: string
+  status?: string
+  strength?: number
+  chance?: number
+  quantity?: number
+}
+
+function apiStatusToUi(status?: string): ProductSelection['status'] {
+  const s = (status || 'Warm').trim()
+  if (s === 'Not Met Management') return 'Management Not Met'
+  if (
+    s === 'Hot' ||
+    s === 'Warm' ||
+    s === 'Not Interested' ||
+    s === 'Management Not Met' ||
+    s === 'Visit Again'
+  ) {
+    return s
+  }
+  return 'Warm'
+}
+
+function numericFieldToString(value?: number): string {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n <= 0) return ''
+  return String(n)
+}
+
+function parseLeadProductsToMap(products: Lead['products']): Map<string, SavedProductRow> {
+  const map = new Map<string, SavedProductRow>()
+  if (!products) return map
+
+  let rows: unknown[] = []
+  if (Array.isArray(products)) {
+    rows = products
+  } else if (typeof products === 'string') {
+    const productsStr = products.trim()
+    if (!productsStr) return map
+    try {
+      const parsed = JSON.parse(productsStr)
+      if (Array.isArray(parsed)) rows = parsed
+      else rows = productsStr.split(',').map((p) => p.trim()).filter(Boolean)
+    } catch {
+      rows = productsStr.split(',').map((p) => p.trim()).filter(Boolean)
+    }
+  }
+
+  for (const raw of rows) {
+    if (typeof raw === 'string') {
+      const name = raw.trim()
+      if (name) map.set(name, { product_name: name })
+      continue
+    }
+    if (raw && typeof raw === 'object') {
+      const row = raw as SavedProductRow
+      const name = String(row.product_name || row.product || '').trim()
+      if (name) map.set(name, row)
+    }
+  }
+  return map
+}
+
+function defaultProductRow(name: string, saved?: SavedProductRow): ProductSelection {
+  if (saved) {
+    return {
+      name,
+      checked: true,
+      term: saved.term || 'Term 1',
+      status: apiStatusToUi(saved.status),
+      strength: numericFieldToString(saved.strength ?? saved.quantity),
+      chance: numericFieldToString(saved.chance),
+    }
+  }
+  return {
+    name,
+    checked: false,
+    term: 'Term 1',
+    status: 'Warm',
+    strength: '',
+    chance: '',
+  }
 }
 
 type Lead = {
@@ -45,17 +136,20 @@ type Lead = {
   follow_up_date?: string
   estimated_delivery_date?: string
   average_fee?: number
-  products?: Array<{ product_name: string }> | string
+  products?: Array<SavedProductRow | string> | string
 }
+
+type RecordSource = 'leads' | 'dc-orders'
 
 export default function EditLeadPage() {
   const router = useRouter()
   const params = useParams()
   const leadId = params.id as string
   const currentUser = getCurrentUser()
-  const { productNames: availableProducts } = useProducts()
+  const { productNames: availableProducts, loading: productsLoading } = useProducts()
   
   const [loading, setLoading] = useState(true)
+  const [recordSource, setRecordSource] = useState<RecordSource>('dc-orders')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
@@ -108,46 +202,16 @@ export default function EditLeadPage() {
     if (productsProcessedRef.current === currentKey) return
     
     if (loadedLead) {
-      let productNames: string[] = []
-      
-      // Handle both array and string formats (for backward compatibility)
-      if (loadedLead.products) {
-        if (Array.isArray(loadedLead.products)) {
-          productNames = loadedLead.products.map((p: any) => {
-            if (typeof p === 'string') return p
-            return p.product_name || p.product || p
-          })
-        } else if (typeof loadedLead.products === 'string') {
-          // Handle old string format - try to parse as comma-separated or JSON
-          const productsStr = loadedLead.products.trim()
-          if (productsStr) {
-            try {
-              const parsed = JSON.parse(productsStr)
-              if (Array.isArray(parsed)) {
-                productNames = parsed.map((p: any) => typeof p === 'string' ? p : (p.product_name || p.product || p))
-              } else {
-                productNames = productsStr.split(',').map(p => p.trim()).filter(p => p)
-              }
-            } catch {
-              // If not JSON, treat as comma-separated string
-              productNames = productsStr.split(',').map(p => p.trim()).filter(p => p)
-            }
-          }
-        }
-      }
-      
-      const newProducts = availableProducts.map(p => ({
-        name: p,
-        checked: productNames.includes(p),
-      }))
-      
+      const savedByName = parseLeadProductsToMap(loadedLead.products)
+      const newProducts = availableProducts.map((p) =>
+        defaultProductRow(p, savedByName.get(p)),
+      )
       setProducts(newProducts)
       productsProcessedRef.current = currentKey
     } else {
-      // Initialize with all unchecked if no lead loaded yet
       const noLeadKey = `no-lead-${availableProducts.join(',')}`
       if (productsProcessedRef.current !== noLeadKey) {
-        setProducts(availableProducts.map(p => ({ name: p, checked: false })))
+        setProducts(availableProducts.map((p) => defaultProductRow(p)))
         productsProcessedRef.current = noLeadKey
       }
     }
@@ -162,37 +226,18 @@ export default function EditLeadPage() {
   const loadLead = async () => {
     setLoading(true)
     try {
-      // Try to load from leads API first
       let lead: Lead | null = null
+      let source: RecordSource = 'dc-orders'
       try {
         lead = await apiRequest<Lead>(`/leads/${leadId}`)
+        source = 'leads'
       } catch {
-        // If not found, try dc-orders
         lead = await apiRequest<Lead>(`/dc-orders/${leadId}`)
+        source = 'dc-orders'
       }
       
       if (lead) {
-        // Debug: Log the FULL lead data to see what we're getting
-        console.log('=== FULL LEAD DATA FROM API ===')
-        console.log('Full lead object:', JSON.stringify(lead, null, 2))
-        console.log('Specific fields:', {
-          pincode: lead.pincode,
-          state: lead.state,
-          city: lead.city,
-          region: lead.region,
-          area: lead.area,
-          location: lead.location, // This is the landmark
-          average_fee: lead.average_fee,
-          follow_up_date: lead.follow_up_date,
-          estimated_delivery_date: lead.estimated_delivery_date,
-          strength: lead.strength,
-          branches: lead.branches,
-        })
-        console.log('Location (landmark) value:', lead.location)
-        console.log('Strength value:', lead.strength)
-        console.log('Products value:', lead.products, 'Type:', typeof lead.products, 'IsArray:', Array.isArray(lead.products))
-        
-        // Store the loaded lead so products can be set when availableProducts are ready
+        setRecordSource(source)
         setLoadedLead(lead)
         
         setForm({
@@ -326,6 +371,37 @@ export default function EditLeadPage() {
     setProducts(updated)
   }
 
+  const handleProductTermChange = (index: number, term: string) => {
+    const updated = [...products]
+    updated[index].term = term
+    setProducts(updated)
+  }
+
+  const handleProductStatusChange = (
+    index: number,
+    status: ProductSelection['status'],
+  ) => {
+    const updated = [...products]
+    updated[index].status = status
+    if (status !== 'Hot' && status !== 'Warm') {
+      updated[index].strength = ''
+      updated[index].chance = ''
+    }
+    setProducts(updated)
+  }
+
+  const handleProductStrengthChange = (index: number, raw: string) => {
+    const updated = [...products]
+    updated[index].strength = normalizeIntegerInput(raw)
+    setProducts(updated)
+  }
+
+  const handleProductChanceChange = (index: number, raw: string) => {
+    const updated = [...products]
+    updated[index].chance = normalizeIntegerInput(raw, 100)
+    setProducts(updated)
+  }
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSubmitting(true)
@@ -346,13 +422,50 @@ export default function EditLeadPage() {
         return iso
       }
       
-      const selectedProducts = products
-        .filter(p => p.checked)
-        .map(p => ({
+      const selectedProducts = products.filter((p) => p.checked)
+
+      if (selectedProducts.length === 0) {
+        setError('Please select at least one product.')
+        setSubmitting(false)
+        return
+      }
+
+      for (const p of selectedProducts) {
+        const strengthNum = Number(p.strength)
+        const chanceNum = p.chance === '' ? 0 : Number(p.chance)
+
+        if ((p.status === 'Hot' || p.status === 'Warm') && (!p.strength.trim() || strengthNum <= 0)) {
+          setError(`Please enter strength for product "${p.name}" when status is ${p.status}.`)
+          setSubmitting(false)
+          return
+        }
+
+        if (p.status === 'Hot' && chanceNum < 80) {
+          setError(`Chance % for product "${p.name}" must be at least 80% when status is Hot.`)
+          setSubmitting(false)
+          return
+        }
+        if (p.status === 'Warm' && chanceNum < 20) {
+          setError(`Chance % for product "${p.name}" must be at least 20% when status is Warm.`)
+          setSubmitting(false)
+          return
+        }
+      }
+
+      const productsPayload = selectedProducts.map((p) => {
+        const strengthNum = Number(p.strength) || 0
+        const chanceNum =
+          p.status === 'Hot' || p.status === 'Warm' ? Number(p.chance) || 0 : 0
+        return {
           product_name: p.name,
           quantity: 1,
           unit_price: 0,
-        }))
+          term: p.term || 'Term 1',
+          status: p.status,
+          strength: strengthNum,
+          chance: chanceNum,
+        }
+      })
       
       const payload: any = {
         school_name: form.school_name,
@@ -375,7 +488,7 @@ export default function EditLeadPage() {
         remarks: form.remarks || undefined,
         average_fee: form.average_fee ? Number(form.average_fee) : undefined,
         email: form.email,
-        products: selectedProducts,
+        products: productsPayload,
         follow_up_date: parseFollowUp(form.follow_up_date), // Save as follow_up_date, NOT estimated_delivery_date
       }
       
@@ -416,22 +529,12 @@ export default function EditLeadPage() {
         return
       }
       
-      if (selectedProducts.length === 0) {
-        throw new Error('Please select at least one product.')
-      }
-      
-      // Try to update via leads API first, then dc-orders
-      try {
-        await apiRequest(`/leads/${leadId}`, {
-          method: 'PUT',
-          body: JSON.stringify(payload),
-        })
-      } catch {
-        await apiRequest(`/dc-orders/${leadId}`, {
-          method: 'PUT',
-          body: JSON.stringify(payload),
-        })
-      }
+      const updatePath =
+        recordSource === 'leads' ? `/leads/${leadId}` : `/dc-orders/${leadId}`
+      await apiRequest(updatePath, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      })
       
       toast.success('Lead details updated successfully!')
       router.push('/dashboard/leads/followup')
@@ -566,22 +669,124 @@ export default function EditLeadPage() {
           {/* Products Interested Section */}
           <div className="md:col-span-2">
             <Label>Products Interested *</Label>
-            <div className="space-y-2 mt-2 p-4 bg-white rounded border">
-              {products.map((product, index) => (
-                <div key={product.name} className="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded">
-                  <Checkbox
-                    id={`product-${index}`}
-                    checked={product.checked}
-                    onCheckedChange={(checked) => handleProductCheck(index, checked as boolean)}
-                  />
-                  <Label htmlFor={`product-${index}`} className="font-medium cursor-pointer">
-                    {product.name}
-                  </Label>
-                </div>
-              ))}
+            <div className="mt-2 p-4 bg-white rounded border border-neutral-200">
+              {productsLoading ? (
+                <p className="text-sm text-neutral-500">Loading products…</p>
+              ) : products.length === 0 ? (
+                <p className="text-sm text-neutral-500">No products available.</p>
+              ) : (
+                <>
+                  <div className="hidden md:grid md:grid-cols-[minmax(140px,1fr)_100px_140px_88px_88px] gap-2 px-2 pb-2 border-b border-neutral-200 text-xs font-semibold text-neutral-600">
+                    <span>Product</span>
+                    <span>Term</span>
+                    <span>Status</span>
+                    <span className="text-center">Strength</span>
+                    <span className="text-center">Chance %</span>
+                  </div>
+                  <div className="space-y-2">
+                    {products.map((product, index) => {
+                      const isHotOrWarm = product.status === 'Hot' || product.status === 'Warm'
+                      return (
+                        <div
+                          key={product.name}
+                          className="grid grid-cols-1 md:grid-cols-[minmax(140px,1fr)_100px_140px_88px_88px] gap-2 items-center p-2 rounded hover:bg-neutral-50 border border-transparent hover:border-neutral-100"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Checkbox
+                              id={`product-${index}`}
+                              checked={product.checked}
+                              onCheckedChange={(checked) =>
+                                handleProductCheck(index, checked as boolean)
+                              }
+                              className="size-5 shrink-0 border-2 border-neutral-500 bg-white data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 data-[state=checked]:text-white shadow-sm"
+                            />
+                            <Label
+                              htmlFor={`product-${index}`}
+                              className="font-medium cursor-pointer text-neutral-900 leading-tight"
+                            >
+                              {product.name}
+                            </Label>
+                          </div>
+                          <div className="flex flex-col gap-0.5 md:contents">
+                            <span className="text-xs text-neutral-500 md:hidden">Term</span>
+                            <Select
+                              value={product.term || 'Term 1'}
+                              onValueChange={(value) => handleProductTermChange(index, value)}
+                              disabled={!product.checked}
+                            >
+                              <SelectTrigger className="h-9 text-xs bg-white text-neutral-900 border-neutral-300">
+                                <SelectValue placeholder="Term" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Term 1">Term 1</SelectItem>
+                                <SelectItem value="Term 2">Term 2</SelectItem>
+                                <SelectItem value="Both">Both</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="flex flex-col gap-0.5 md:contents">
+                            <span className="text-xs text-neutral-500 md:hidden">Status</span>
+                            <Select
+                              value={product.status}
+                              onValueChange={(value) =>
+                                handleProductStatusChange(
+                                  index,
+                                  value as ProductSelection['status'],
+                                )
+                              }
+                              disabled={!product.checked}
+                            >
+                              <SelectTrigger className="h-9 text-xs bg-white text-neutral-900 border-neutral-300">
+                                <SelectValue placeholder="Status" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Hot">Hot</SelectItem>
+                                <SelectItem value="Warm">Warm</SelectItem>
+                                <SelectItem value="Not Interested">Not Interested</SelectItem>
+                                <SelectItem value="Management Not Met">
+                                  Management Not Met
+                                </SelectItem>
+                                <SelectItem value="Visit Again">Visit Again</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="flex flex-col gap-0.5 md:contents">
+                            <span className="text-xs text-neutral-500 md:hidden">Strength</span>
+                            <Input
+                              type="text"
+                              inputMode="numeric"
+                              disabled={!product.checked || !isHotOrWarm}
+                              className="h-9 text-xs bg-white text-neutral-900 border-neutral-300 text-center"
+                              placeholder="—"
+                              value={product.strength}
+                              onChange={(e) => handleProductStrengthChange(index, e.target.value)}
+                            />
+                          </div>
+                          <div className="flex flex-col gap-0.5 md:contents">
+                            <span className="text-xs text-neutral-500 md:hidden">Chance %</span>
+                            <div className="flex items-center gap-1">
+                              <Input
+                                type="text"
+                                inputMode="numeric"
+                                disabled={!product.checked || !isHotOrWarm}
+                                className="h-9 text-xs bg-white text-neutral-900 border-neutral-300 text-center flex-1"
+                                placeholder="—"
+                                value={product.chance}
+                                onChange={(e) => handleProductChanceChange(index, e.target.value)}
+                              />
+                              <span className="text-xs text-neutral-500 shrink-0">%</span>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
             </div>
             <p className="text-xs text-neutral-500 mt-2">
-              Select the products the school is interested in.
+              Select products, then set Term, Status, Strength, and Chance % for each.
+              Strength and Chance % are required when status is Hot or Warm.
             </p>
           </div>
 

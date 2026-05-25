@@ -25,10 +25,13 @@ import { applyPaymentDivisorsToBreakdown } from '@/lib/dcPaymentDivisors'
 import { normalizeProductTerm, termFromLevelLabel } from '@/lib/productTerm'
 import {
   buildClientDCProductRows,
-  findMatchingOrderProduct,
-  resolveClientDCRowFields,
+  buildEditPOProductRows,
+  computeEditPOTotalAmount,
+  resolveProductSubject,
+  type EditPOProductRow,
   type ResolveClientDCRowOpts,
 } from '@/lib/clientDcProductRows'
+import { isTransportComplete } from '@/lib/dcTransport'
 import { useRouter } from 'next/navigation'
 
 type DC = {
@@ -180,20 +183,7 @@ export default function ClientDCPage() {
   })
   const [submittingEdit, setSubmittingEdit] = useState(false)
   const [uploadingPO, setUploadingPO] = useState(false)
-  const [editProductRows, setEditProductRows] = useState<Array<{
-    id: string
-    product_name: string
-    quantity: number
-    unit_price: number
-    class?: string
-    specs?: string
-    productCategory?: string
-    category?: string
-    strength?: number
-    subject?: string
-    level?: string // Level configured on Products master; shown in Edit PO
-    term?: string // Academic term (Term 1 / 2 / Both) for split tables
-  }>>([])
+  const [editProductRows, setEditProductRows] = useState<EditPOProductRow[]>([])
   const [addProductDialogOpen, setAddProductDialogOpen] = useState(false)
   const [addNewProductDialogOpen, setAddNewProductDialogOpen] = useState(false)
   const [originalPOProducts, setOriginalPOProducts] = useState<string[]>([])
@@ -204,6 +194,7 @@ export default function ClientDCPage() {
   const [dcsWithPendingChanges, setDcsWithPendingChanges] = useState<Set<string>>(new Set())
   // Track DCs with pending edit requests from backend
   const [dcsWithPendingEditRequests, setDcsWithPendingEditRequests] = useState<Set<string>>(new Set())
+  const [dcsWithCompleteTransport, setDcsWithCompleteTransport] = useState<Set<string>>(new Set())
   // Track current DC being edited
   const [currentEditingDCId, setCurrentEditingDCId] = useState<string | null>(null)
   
@@ -315,9 +306,8 @@ export default function ClientDCPage() {
         sessionStorage.removeItem('newlyConvertedDC');
       }
       
-      // Check for pending edit requests in DcOrders (in parallel for better performance)
-      const pendingEditCheckPromises = finalClients.map(async (dc) => {
-        // Check if dcOrderId exists and is not null before accessing _id
+      // Check pending edit requests and transport readiness per DcOrder (in parallel)
+      const dcOrderCheckPromises = finalClients.map(async (dc) => {
         let dcOrderId = null
         if (dc.dcOrderId) {
           if (typeof dc.dcOrderId === 'object' && dc.dcOrderId !== null && dc.dcOrderId._id) {
@@ -326,32 +316,34 @@ export default function ClientDCPage() {
             dcOrderId = dc.dcOrderId
           }
         }
-        if (!dcOrderId) return null
-        
-        // First check if dcOrderId object already has pendingEdit info
-        if (typeof dc.dcOrderId === 'object' && dc.dcOrderId !== null && dc.dcOrderId.pendingEdit) {
-          if (dc.dcOrderId.pendingEdit.status === 'pending') {
-            return dc._id
-          }
-          return null
+        if (!dcOrderId) {
+          return { dcId: dc._id, pendingEdit: false, transportComplete: false }
         }
-        
-        // Otherwise, fetch the DcOrder to check
+
         try {
           const dcOrder = await apiRequest<any>(`/dc-orders/${dcOrderId}`)
-          if (dcOrder.pendingEdit && dcOrder.pendingEdit.status === 'pending') {
+          const pendingEdit = !!(dcOrder.pendingEdit && dcOrder.pendingEdit.status === 'pending')
+          if (pendingEdit) {
             console.log('DC has pending edit request:', dc._id, dcOrder.pendingEdit)
-            return dc._id
+          }
+          return {
+            dcId: dc._id,
+            pendingEdit,
+            transportComplete: isTransportComplete(dcOrder),
           }
         } catch (e) {
-          console.warn('Failed to check pending edit for DC:', dc._id, e)
+          console.warn('Failed to check DcOrder for DC:', dc._id, e)
+          return { dcId: dc._id, pendingEdit: false, transportComplete: false }
         }
-        return null
       })
-      
-      const pendingEditResults = await Promise.all(pendingEditCheckPromises)
-      const pendingEditDCs = new Set<string>(pendingEditResults.filter((id): id is string => id !== null))
-      setDcsWithPendingEditRequests(pendingEditDCs)
+
+      const dcOrderCheckResults = await Promise.all(dcOrderCheckPromises)
+      setDcsWithPendingEditRequests(
+        new Set(dcOrderCheckResults.filter((r) => r.pendingEdit).map((r) => r.dcId))
+      )
+      setDcsWithCompleteTransport(
+        new Set(dcOrderCheckResults.filter((r) => r.transportComplete).map((r) => r.dcId))
+      )
       
       setItems(finalClients)
     } catch (e: any) {
@@ -488,6 +480,15 @@ export default function ClientDCPage() {
       setDcsWithPendingChanges(prev => new Set(prev).add(currentEditingDCId))
     }
   }, [editProductRows, currentEditingDCId, originalProductNames])
+
+  // Keep header total in sync with product rows while Edit PO is open
+  useEffect(() => {
+    if (!editPODialogOpen) return
+    const total = computeEditPOTotalAmount(editProductRows)
+    setEditFormData((prev) =>
+      prev.total_amount === total ? prev : { ...prev, total_amount: total }
+    )
+  }, [editProductRows, editPODialogOpen])
 
   const getProgramInvoiceGate = async (
     dcOrderId?: string | null,
@@ -1227,21 +1228,7 @@ export default function ClientDCPage() {
   const requestClientDC = async () => {
     if (!selectedDC) return
 
-    // Validate transport details (must be filled via Edit PO first)
-    const transportName =
-      (dcOrderData?.pendingEdit?.transport_name as string) ??
-      (dcOrderData?.transport_name as string) ??
-      ''
-    const transportLocation =
-      (dcOrderData?.pendingEdit?.transport_location as string) ??
-      (dcOrderData?.transport_location as string) ??
-      ''
-    const transportPincode =
-      (dcOrderData?.pendingEdit?.pincode as string) ??
-      (dcOrderData?.pincode as string) ??
-      ''
-
-    if (!transportName.trim() || !transportLocation.trim() || !transportPincode.trim()) {
+    if (!isTransportComplete(dcOrderData)) {
       toast.error('Please fill Transport Name, Transport Location, and Pincode in Edit PO before requesting DC.')
       return
     }
@@ -1664,12 +1651,29 @@ export default function ClientDCPage() {
           
           // Store the request data in DcOrder so Admin/Coordinator can see it in Closed Sales
           // Also update the main products array to only contain Term 1 products (for display in Closed Sales)
-          const productsArrayForDcOrder = productsForDcOrder.map((p: any) => ({
-            product_name: p.product || p.product_name || 'Unknown',
-            quantity: p.quantity || p.strength || 0,
-            unit_price: p.unit_price || 0,
-            term: p.term || 'Term 1',
-          }))
+          const productsArrayForDcOrder = productsForDcOrder.map((p: any) => {
+            const subject = resolveProductSubject(p)
+            return {
+              product_name: p.product || p.product_name || 'Unknown',
+              quantity: p.quantity || p.strength || 0,
+              unit_price: p.unit_price || 0,
+              term: p.term || 'Term 1',
+              class: p.class || '1',
+              specs: p.specs || 'Regular',
+              level: p.level || undefined,
+              ...(subject ? { subject } : {}),
+              ...(Array.isArray(p.selected_subjects) && p.selected_subjects.length > 0
+                ? { selected_subjects: p.selected_subjects }
+                : subject
+                  ? {
+                      selected_subjects: subject
+                        .split(',')
+                        .map((s: string) => s.trim())
+                        .filter(Boolean),
+                    }
+                  : {}),
+            }
+          })
           
           const updateResult = await apiRequest(`/dc-orders/${dcOrderId}`, {
             method: 'PUT',
@@ -1918,80 +1922,19 @@ export default function ClientDCPage() {
         hasPendingEdit: !!pe,
       })
 
-      setEditFormData(formData)
-
-      const usedOrderIdx = new Set<number>()
-      const rowsFromDetails =
-        dcDetails.length > 0
-          ? dcDetails.map((p: any, idx: number) => {
-              const name = p.product || p.productName || ''
-              const order = findMatchingOrderProduct(orderProducts, p, idx, usedOrderIdx)
-              const merged = order
-                ? {
-                    ...p,
-                    product: name,
-                    class: order.class ?? p.class,
-                    specs: order.specs ?? p.specs,
-                    productCategory: order.productCategory ?? p.productCategory,
-                    strength: p.strength ?? order.quantity,
-                    price: p.price ?? order.unit_price,
-                    level: p.level || order.level,
-                    term: p.term ?? order.term,
-                  }
-                : p
-              const resolved = resolveClientDCRowFields(merged, name, rowOpts)
-              const catalogLevels = getAvailableLevels(name)
-              const fallbackLevel = catalogLevels[0] || getDefaultLevel(name || 'Abacus')
-              const savedLevel = (merged.level && String(merged.level).trim()) || ''
-              const level = savedLevel || fallbackLevel
-              const term = normalizeProductTerm(
-                merged.term ?? termFromLevelLabel(savedLevel) ?? termFromLevelLabel(level)
-              )
-              return {
-                id: String(idx + 1),
-                product_name: name,
-                quantity: Number(merged.strength ?? merged.quantity ?? order?.quantity) || 0,
-                unit_price: Number(merged.price ?? order?.unit_price) || 0,
-                class: resolved.class,
-                specs: resolved.specs,
-                productCategory: resolved.productCategory,
-                category: merged.category,
-                strength: Number(merged.strength ?? merged.quantity) || 0,
-                subject: merged.subject,
-                level,
-                term,
-              }
-            })
-          : []
-
-      setEditProductRows(
-        rowsFromDetails.length > 0
-          ? rowsFromDetails
-          : orderProducts.map((p: any, idx: number) => {
-              const name = p.product_name || ''
-              const resolved = resolveClientDCRowFields(p, name, rowOpts)
-              const catalogLevels = getAvailableLevels(name)
-              const fallbackLevel = catalogLevels[0] || getDefaultLevel(name || 'Abacus')
-              const savedLevel = (p.level && String(p.level).trim()) || ''
-              const level = savedLevel || fallbackLevel
-              const term = normalizeProductTerm(
-                p.term ?? termFromLevelLabel(savedLevel) ?? termFromLevelLabel(level)
-              )
-              return {
-                id: String(idx + 1),
-                product_name: name,
-                quantity: Number(p.quantity) || 0,
-                unit_price: Number(p.unit_price) || 0,
-                class: resolved.class,
-                specs: resolved.specs,
-                productCategory: resolved.productCategory,
-                category: p.category,
-                strength: Number(p.quantity) || 0,
-                level,
-                term,
-              }
-            })
+      const editRows = buildEditPOProductRows(
+        dcDetails,
+        orderProducts,
+        rowOpts,
+        getDefaultLevel,
+        getAvailableLevels
       )
+      const computedTotal = computeEditPOTotalAmount(editRows)
+      const total_amount =
+        computedTotal > 0 ? computedTotal : Number(formData.total_amount) || 0
+
+      setEditFormData({ ...formData, total_amount })
+      setEditProductRows(editRows)
 
       // Original PO product names (committed on DcOrder) — for price lock + "new product" detection
       const originalProducts = Array.from(
@@ -2080,7 +2023,7 @@ export default function ClientDCPage() {
         })
 
       // Calculate total amount
-      const totalAmount = products.reduce((sum, p) => sum + (p.quantity * p.unit_price), 0)
+      const totalAmount = computeEditPOTotalAmount(products)
 
       // Check if PDF changed or new products were added (compared to original Close Lead state)
       const pdfChanged = editFormData.pod_proof_url !== originalPDFUrl
@@ -2760,8 +2703,10 @@ export default function ClientDCPage() {
                                   Edit PO
                                 </Button>
                               )}
-                              {/* Hide Request DC button if DC has pending changes (PDF changed or new products added) or pending edit request */}
-                              {!dcsWithPendingChanges.has(d._id) && !dcsWithPendingEditRequests.has(d._id) && (
+                              {/* Request DC: transport via Edit PO, no pending PO edits */}
+                              {dcsWithCompleteTransport.has(d._id) &&
+                                !dcsWithPendingChanges.has(d._id) &&
+                                !dcsWithPendingEditRequests.has(d._id) && (
                             <Button 
                               size="sm" 
                               onClick={() => openClientDCDialog(d)}
@@ -2770,6 +2715,13 @@ export default function ClientDCPage() {
                               <Package className="w-4 h-4 mr-2" />
                               Request DC
                             </Button>
+                              )}
+                              {!dcsWithCompleteTransport.has(d._id) &&
+                                !dcsWithPendingChanges.has(d._id) &&
+                                !dcsWithPendingEditRequests.has(d._id) && (
+                                <span className="text-xs text-neutral-500 max-w-[140px] text-center">
+                                  Complete transport in Edit PO to request DC
+                                </span>
                               )}
                           </div>
                           ) : (
@@ -3478,9 +3430,26 @@ export default function ClientDCPage() {
 
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
+            {selectedDC &&
+              !dcsWithCompleteTransport.has(selectedDC._id) &&
+              !dcsWithPendingChanges.has(selectedDC._id) &&
+              !dcsWithPendingEditRequests.has(selectedDC._id) && (
+              <p className="text-xs text-neutral-500 sm:mr-auto w-full sm:w-auto text-left">
+                Complete Transport Name, Location, and Pincode in Edit PO first.
+              </p>
+            )}
             <Button variant="outline" onClick={() => setClientDCDialogOpen(false)}>Cancel</Button>
-            <Button onClick={requestClientDC} disabled={savingClientDC}>
+            <Button
+              onClick={requestClientDC}
+              disabled={
+                savingClientDC ||
+                !selectedDC ||
+                !dcsWithCompleteTransport.has(selectedDC._id) ||
+                dcsWithPendingChanges.has(selectedDC._id) ||
+                dcsWithPendingEditRequests.has(selectedDC._id)
+              }
+            >
               {savingClientDC ? 'Submitting...' : 'Request'}
             </Button>
           </DialogFooter>
@@ -3776,11 +3745,10 @@ export default function ClientDCPage() {
                               if (t) updated[actualIdx].term = t
                               setEditProductRows(updated)
                               // Recalculate total after level change (total is still qty × price)
-                              const total = updated.reduce(
-                                (sum, p) => sum + p.quantity * p.unit_price,
-                                0
-                              )
-                              setEditFormData({ ...editFormData, total_amount: total })
+                              setEditFormData({
+                                ...editFormData,
+                                total_amount: computeEditPOTotalAmount(updated),
+                              })
                             }}
                           >
                             <SelectTrigger className="w-full">
@@ -3812,8 +3780,10 @@ export default function ClientDCPage() {
                               updated[actualIdx].quantity = Number(e.target.value) || 0
                                 setEditProductRows(updated)
                                 // Update total amount
-                              const total = updated.reduce((sum, p) => sum + (p.quantity * p.unit_price), 0)
-                                setEditFormData({ ...editFormData, total_amount: total })
+                              setEditFormData({
+                                ...editFormData,
+                                total_amount: computeEditPOTotalAmount(updated),
+                              })
                               }}
                               min="0"
                             required
@@ -3830,8 +3800,10 @@ export default function ClientDCPage() {
                               updated[actualIdx].unit_price = Number(e.target.value) || 0
                                 setEditProductRows(updated)
                                 // Update total amount
-                              const total = updated.reduce((sum, p) => sum + (p.quantity * p.unit_price), 0)
-                                setEditFormData({ ...editFormData, total_amount: total })
+                              setEditFormData({
+                                ...editFormData,
+                                total_amount: computeEditPOTotalAmount(updated),
+                              })
                               }}
                               min="0"
                               step="0.01"
@@ -3854,8 +3826,10 @@ export default function ClientDCPage() {
                               const updated = editProductRows.filter((_, i) => i !== actualIdx)
                                 setEditProductRows(updated)
                                 // Recalculate total
-                                const total = updated.reduce((sum, p) => sum + (p.quantity * p.unit_price), 0)
-                                setEditFormData({ ...editFormData, total_amount: total })
+                                setEditFormData({
+                                  ...editFormData,
+                                  total_amount: computeEditPOTotalAmount(updated),
+                                })
                               }}
                             >
                               <X className="w-4 h-4" />

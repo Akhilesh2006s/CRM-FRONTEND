@@ -1212,10 +1212,9 @@ const submitPO = async (req, res) => {
     if (dc.dcOrderId) {
       try {
         const DcOrder = require('../models/DcOrder');
-        // Store PO proof and mark deal as completed so it shows in Closed Sales immediately
+        // Store PO proof only; DcOrder stays saved until executive requests DC (Closed Sales gate)
         await DcOrder.findByIdAndUpdate(dc.dcOrderId, {
           pod_proof_url: poPhotoUrl,
-          status: 'completed',
           updatedAt: new Date(),
         });
       } catch (err) {

@@ -35,6 +35,7 @@ type Leave = {
 }
 
 export default function AdminPendingLeavesPage() {
+  const router = useRouter()
   const currentUser = getCurrentUser()
   const isExecutiveManager = currentUser?.role === 'Executive Manager'
   const [items, setItems] = useState<Leave[]>([])

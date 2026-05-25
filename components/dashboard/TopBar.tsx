@@ -50,7 +50,7 @@ export function TopBar() {
   const leftOffset = sidebarOpen ? 'md:left-64' : 'md:left-16'
   
   return (
-    <div className={`fixed top-0 left-16 ${leftOffset} right-0 z-40 transition-all duration-300 ease-out ${
+    <div className={`no-print fixed top-0 left-16 ${leftOffset} right-0 z-40 transition-all duration-300 ease-out ${
       visible ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'
     }`}>
       <div className="w-full bg-white/80 backdrop-blur-xl border-b border-neutral-200/50 shadow-sm">

@@ -2,12 +2,32 @@ const Zone = require('../models/Zone');
 const ZoneCluster = require('../models/ZoneCluster');
 const PincodeMapping = require('../models/PincodeMapping');
 const User = require('../models/User');
-const { normalizeName, normalizeNameLower } = require('../utils/normalizeName');
+const { normalizeName, normalizeNameLower, escapeRegex } = require('../utils/normalizeName');
+
+async function findExistingZoneByName(name) {
+  const normalized = normalizeName(name);
+  if (!normalized) return null;
+  const lower = normalizeNameLower(normalized);
+  return Zone.findOne({
+    $or: [
+      { nameLower: lower },
+      { name: { $regex: `^${escapeRegex(normalized)}$`, $options: 'i' } },
+    ],
+  });
+}
 
 const listZones = async (req, res) => {
   try {
     const zones = await Zone.find().sort({ name: 1 });
-    res.json(zones);
+    const seen = new Set();
+    const deduped = [];
+    for (const zone of zones) {
+      const key = normalizeNameLower(zone.nameLower || zone.name);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      deduped.push(zone);
+    }
+    res.json(deduped);
   } catch (e) {
     res.status(500).json({ message: e.message });
   }
@@ -18,7 +38,7 @@ const createZone = async (req, res) => {
     const name = normalizeName(req.body.name);
     if (!name) return res.status(400).json({ message: 'Zone is required' });
 
-    const existing = await Zone.findOne({ nameLower: normalizeNameLower(name) });
+    const existing = await findExistingZoneByName(name);
     if (existing) return res.status(400).json({ message: 'Zone already exists' });
 
     const zone = await Zone.create({ name, nameLower: normalizeNameLower(name) });

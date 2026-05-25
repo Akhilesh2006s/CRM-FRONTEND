@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { apiRequest } from '@/lib/api'
+import { isDuplicateName, normalizeName } from '@/lib/normalizeName'
 
 type Zone = { _id?: string; name: string }
 type Cluster = { _id?: string; name: string }
@@ -51,9 +52,13 @@ export default function ZonesClustersPage() {
 
   const onAddZone = async (e: React.FormEvent) => {
     e.preventDefault()
-    const name = zoneName.trim()
+    const name = normalizeName(zoneName)
     if (!name) {
       alert('Zone is required')
+      return
+    }
+    if (isDuplicateName(name, zones)) {
+      alert('Zone already exists')
       return
     }
     setSavingZone(true)
@@ -73,9 +78,13 @@ export default function ZonesClustersPage() {
 
   const onAddCluster = async (e: React.FormEvent) => {
     e.preventDefault()
-    const name = clusterName.trim()
+    const name = normalizeName(clusterName)
     if (!name) {
       alert('Cluster is required')
+      return
+    }
+    if (isDuplicateName(name, clusters)) {
+      alert('Cluster already exists')
       return
     }
     setSavingCluster(true)

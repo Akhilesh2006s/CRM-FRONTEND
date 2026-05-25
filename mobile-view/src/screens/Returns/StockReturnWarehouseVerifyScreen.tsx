@@ -10,16 +10,46 @@ import {
   ActivityIndicator,
   Image,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Picker } from '@react-native-picker/picker';
-import { colors, gradients } from '../../theme/colors';
+import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
 import { apiService, getApiUrl } from '../../services/api';
-import LogoutButton from '../../components/LogoutButton';
 
 const CONDITION_OPTIONS = ['Sellable', 'Damaged', 'Expired', 'Missing'];
+
+function normalizeQty(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : NaN;
+}
+
+function isQuantityMismatch(returnQty: unknown, receivedQty: unknown): boolean {
+  const expected = normalizeQty(returnQty);
+  const received = normalizeQty(receivedQty);
+  if (Number.isNaN(expected) || Number.isNaN(received)) return false;
+  return expected > 0 && received !== expected;
+}
+
+function resolveInitialReceivedQty(
+  returnQty: unknown,
+  receivedQty: unknown,
+  condition?: string
+): number {
+  const expected = normalizeQty(returnQty);
+  const received = normalizeQty(receivedQty);
+  const hasPriorVerification =
+    Boolean(String(condition || '').trim()) ||
+    (Number.isFinite(received) && receivedQty != null && receivedQty !== '' && received > 0);
+
+  if (hasPriorVerification && Number.isFinite(received)) {
+    return received;
+  }
+
+  return Number.isFinite(expected) ? expected : 0;
+}
 
 function formatDate(d: string | undefined) {
   if (!d) return '-';
@@ -59,18 +89,23 @@ export default function StockReturnWarehouseVerifyScreen({ navigation, route }: 
         setLoading(true);
         const doc = await apiService.get(`/stock-returns/warehouse-executive/${returnId}`);
         setReturnDoc(doc);
-        const rows: ProductVerification[] = (doc.products || []).map((p: any) => ({
-          product: p.product || '',
-          returnQty: Number(p.returnQty) || 0,
-          reason: p.reason || '',
-          remarks: p.remarks,
-          receivedQty: String(p.receivedQty ?? ''),
-          condition: p.condition || '',
-          batchLot: p.batchLot || '',
-          storageLocation: p.storageLocation || '',
-          quantityMismatch: Boolean(p.quantityMismatch),
-          mismatchRemark: p.mismatchRemark || '',
-        }));
+        const rows: ProductVerification[] = (doc.products || []).map((p: any) => {
+          const returnQty = normalizeQty(p.returnQty) || 0;
+          const receivedQty = resolveInitialReceivedQty(p.returnQty, p.receivedQty, p.condition);
+          const mismatch = isQuantityMismatch(p.returnQty, receivedQty);
+          return {
+            product: p.product || '',
+            returnQty,
+            reason: p.reason || '',
+            remarks: p.remarks,
+            receivedQty: String(receivedQty),
+            condition: p.condition || '',
+            batchLot: p.batchLot || '',
+            storageLocation: p.storageLocation || '',
+            quantityMismatch: mismatch,
+            mismatchRemark: mismatch ? (p.mismatchRemark || '') : '',
+          };
+        });
         setProductRows(rows);
         setWarehousePhotos(Array.isArray(doc.warehousePhotos) ? doc.warehousePhotos : []);
       } catch (e: any) {
@@ -89,8 +124,11 @@ export default function StockReturnWarehouseVerifyScreen({ navigation, route }: 
       if (!p) return prev;
       (p as any)[field] = value;
       if (field === 'receivedQty') {
-        const received = typeof value === 'string' ? parseInt(value, 10) : value;
-        p.quantityMismatch = !isNaN(received) && p.returnQty > 0 && received !== p.returnQty;
+        const received = typeof value === 'string' ? parseInt(value, 10) : Number(value);
+        p.quantityMismatch = isQuantityMismatch(p.returnQty, received);
+        if (!p.quantityMismatch) {
+          p.mismatchRemark = '';
+        }
       }
       return next;
     });
@@ -143,8 +181,10 @@ export default function StockReturnWarehouseVerifyScreen({ navigation, route }: 
     return !isNaN(received) && p.condition && (p.condition.trim() !== '');
   });
 
-  const hasAnyMismatch = productRows.some((p) => p.quantityMismatch);
-  const mismatchRemarkRequired = productRows.some((p) => p.quantityMismatch && !(p.mismatchRemark || '').trim());
+  const hasAnyMismatch = productRows.some((p) => isQuantityMismatch(p.returnQty, p.receivedQty));
+  const mismatchRemarkRequired = productRows.some(
+    (p) => isQuantityMismatch(p.returnQty, p.receivedQty) && !(p.mismatchRemark || '').trim()
+  );
   const canSubmitWithMismatch = !mismatchRemarkRequired;
 
   const handleSubmit = async () => {
@@ -158,18 +198,22 @@ export default function StockReturnWarehouseVerifyScreen({ navigation, route }: 
     }
     setSubmitting(true);
     try {
-      const products = productRows.map((p) => ({
-        product: p.product,
-        returnQty: p.returnQty,
-        reason: p.reason,
-        remarks: p.remarks,
-        receivedQty: parseInt(p.receivedQty, 10) || 0,
-        condition: p.condition,
-        batchLot: p.batchLot,
-        storageLocation: p.storageLocation,
-        quantityMismatch: p.quantityMismatch,
-        mismatchRemark: p.quantityMismatch ? (p.mismatchRemark || '').trim() : '',
-      }));
+      const products = productRows.map((p) => {
+        const receivedQty = normalizeQty(p.receivedQty) || 0;
+        const mismatch = isQuantityMismatch(p.returnQty, receivedQty);
+        return {
+          product: p.product,
+          returnQty: p.returnQty,
+          reason: p.reason,
+          remarks: p.remarks,
+          receivedQty,
+          condition: p.condition,
+          batchLot: p.batchLot,
+          storageLocation: p.storageLocation,
+          quantityMismatch: mismatch,
+          mismatchRemark: mismatch ? (p.mismatchRemark || '').trim() : '',
+        };
+      });
       const totalReceivedQty = products.reduce((s, p) => s + p.receivedQty, 0);
       await apiService.put(`/stock-returns/${returnId}/warehouse-verify`, {
         products,
@@ -197,18 +241,11 @@ export default function StockReturnWarehouseVerifyScreen({ navigation, route }: 
   const canEdit = ['Submitted', 'Sent Back'].includes(returnDoc.status);
 
   return (
-    <View style={styles.container}>
-      <LinearGradient colors={gradients.primary as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
-        <View style={styles.headerContent}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Text style={styles.backIcon}>←</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Verify Return</Text>
-          <LogoutButton />
-        </View>
-      </LinearGradient>
-
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+    <ScreenShell
+      title="Verify Return"
+      loading={loading}
+    >
+<ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
         {/* Read-only */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Return details (read-only)</Text>
@@ -252,7 +289,7 @@ export default function StockReturnWarehouseVerifyScreen({ navigation, route }: 
               <Text style={styles.productName}>{p.product} (requested: {p.returnQty})</Text>
               <View style={styles.row}>
                 <Text style={styles.label}>Received Qty</Text>
-                <TextInput
+                <WebInput
                   style={styles.input}
                   value={p.receivedQty}
                   onChangeText={(v) => /^\d*$/.test(v) && updateProduct(index, 'receivedQty', v)}
@@ -277,7 +314,7 @@ export default function StockReturnWarehouseVerifyScreen({ navigation, route }: 
                 </Picker>
               </View>
               <Text style={styles.label}>Batch / Lot</Text>
-              <TextInput
+              <WebInput
                 style={styles.input}
                 value={p.batchLot}
                 onChangeText={(v) => updateProduct(index, 'batchLot', v)}
@@ -285,7 +322,7 @@ export default function StockReturnWarehouseVerifyScreen({ navigation, route }: 
                 editable={canEdit}
               />
               <Text style={styles.label}>Storage location</Text>
-              <TextInput
+              <WebInput
                 style={styles.input}
                 value={p.storageLocation}
                 onChangeText={(v) => updateProduct(index, 'storageLocation', v)}
@@ -295,7 +332,7 @@ export default function StockReturnWarehouseVerifyScreen({ navigation, route }: 
               {p.quantityMismatch && (
                 <>
                   <Text style={styles.mismatchLabel}>Quantity mismatch — remark required</Text>
-                  <TextInput
+                  <WebInput
                     style={[styles.input, styles.textArea]}
                     value={p.mismatchRemark}
                     onChangeText={(v) => updateProduct(index, 'mismatchRemark', v)}
@@ -360,7 +397,7 @@ export default function StockReturnWarehouseVerifyScreen({ navigation, route }: 
           </View>
         )}
       </ScrollView>
-    </View>
+    </ScreenShell>
   );
 }
 

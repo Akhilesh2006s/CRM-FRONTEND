@@ -1,9 +1,13 @@
 function normalizeName(name) {
-  return (name || '').trim();
+  return (name || '').trim().replace(/\s+/g, ' ');
 }
 
 function normalizeNameLower(name) {
   return normalizeName(name).toLowerCase();
 }
 
-module.exports = { normalizeName, normalizeNameLower };
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+module.exports = { normalizeName, normalizeNameLower, escapeRegex };

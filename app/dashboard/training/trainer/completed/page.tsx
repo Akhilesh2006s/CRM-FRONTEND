@@ -1,12 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { apiRequest, API_BASE_URL } from '@/lib/api'
+import { apiRequest, API_BASE_URL, resolveUploadUrl } from '@/lib/api'
 import { toast } from 'sonner'
-import { Upload, Eye, FileText, Calendar } from 'lucide-react'
+import { Upload, Eye } from 'lucide-react'
 import { format } from 'date-fns'
 
 type Training = {
@@ -47,6 +46,13 @@ export default function TrainerCompletedPage() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'training' | 'service'>('training')
   const [uploading, setUploading] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const pendingUploadRef = useRef<{ id: string; type: 'training' | 'service' } | null>(null)
+
+  const isPdfFile = (file: File) => {
+    const name = file.name.toLowerCase()
+    return file.type === 'application/pdf' || name.endsWith('.pdf')
+  }
 
   useEffect(() => {
     loadData()
@@ -75,7 +81,7 @@ export default function TrainerCompletedPage() {
       return
     }
 
-    if (file.type !== 'application/pdf') {
+    if (!isPdfFile(file)) {
       toast.error('Only PDF files are allowed')
       return
     }
@@ -111,12 +117,39 @@ export default function TrainerCompletedPage() {
     }
   }
 
+  const openFilePicker = (id: string, type: 'training' | 'service') => {
+    pendingUploadRef.current = { id, type }
+    fileInputRef.current?.click()
+  }
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    const pending = pendingUploadRef.current
+    if (file && pending) {
+      void handleFileUpload(pending.id, pending.type, file)
+    }
+    pendingUploadRef.current = null
+    e.target.value = ''
+  }
+
   const handleViewFeedback = (url: string) => {
-    window.open(url, '_blank')
+    const resolved = resolveUploadUrl(url)
+    if (!resolved) {
+      toast.error('Feedback file URL is invalid')
+      return
+    }
+    window.open(resolved, '_blank', 'noopener,noreferrer')
   }
 
   return (
     <div className="space-y-6">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,application/pdf"
+        className="hidden"
+        onChange={handleFileInputChange}
+      />
       <div>
         <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900 mb-2">
           Completed Training & Services (Closure + proof)
@@ -199,29 +232,17 @@ export default function TrainerCompletedPage() {
                       <td className="py-3 px-4 border">
                         <div className="flex gap-2">
                           {!training.feedbackPdfUrl ? (
-                            <label className="cursor-pointer">
-                              <input
-                                type="file"
-                                accept=".pdf"
-                                className="hidden"
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0]
-                                  if (file) {
-                                    handleFileUpload(training._id, 'training', file)
-                                  }
-                                }}
-                                disabled={uploading === training._id}
-                              />
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={uploading === training._id}
-                                className="flex items-center gap-1"
-                              >
-                                <Upload className="w-4 h-4" />
-                                {uploading === training._id ? 'Uploading...' : 'Upload Feedback PDF'}
-                              </Button>
-                            </label>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={uploading === training._id}
+                              className="flex items-center gap-1"
+                              onClick={() => openFilePicker(training._id, 'training')}
+                            >
+                              <Upload className="w-4 h-4" />
+                              {uploading === training._id ? 'Uploading...' : 'Upload Feedback PDF'}
+                            </Button>
                           ) : (
                             <Button
                               size="sm"
@@ -285,29 +306,17 @@ export default function TrainerCompletedPage() {
                       <td className="py-3 px-4 border">
                         <div className="flex gap-2">
                           {!service.feedbackPdfUrl ? (
-                            <label className="cursor-pointer">
-                              <input
-                                type="file"
-                                accept=".pdf"
-                                className="hidden"
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0]
-                                  if (file) {
-                                    handleFileUpload(service._id, 'service', file)
-                                  }
-                                }}
-                                disabled={uploading === service._id}
-                              />
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={uploading === service._id}
-                                className="flex items-center gap-1"
-                              >
-                                <Upload className="w-4 h-4" />
-                                {uploading === service._id ? 'Uploading...' : 'Upload Feedback PDF'}
-                              </Button>
-                            </label>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={uploading === service._id}
+                              className="flex items-center gap-1"
+                              onClick={() => openFilePicker(service._id, 'service')}
+                            >
+                              <Upload className="w-4 h-4" />
+                              {uploading === service._id ? 'Uploading...' : 'Upload Feedback PDF'}
+                            </Button>
                           ) : (
                             <Button
                               size="sm"

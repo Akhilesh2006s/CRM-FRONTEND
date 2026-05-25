@@ -4,6 +4,8 @@ const { generateSchoolCode } = require('../utils/schoolCodeGenerator');
 const { normalizeProductTerm, normalizeDcOrderProductTermsInArray } = require('../utils/productTerm');
 const { derivePriorityFromFollowUpProducts } = require('../utils/leadFollowUpPriority');
 const { dealProductsToFollowUpSnapshot } = require('../utils/dealProductsToFollowUpSnapshot');
+const { attachResolvedUpdatedByToHistory } = require('../utils/resolveHistoryUpdatedBy');
+const { isTransportCompleteForUpdate } = require('../utils/dcTransport');
 const mongoose = require('mongoose');
 
 const SCHOOL_LEAD_STATUSES = new Set(['Hot', 'Warm', 'Cold']);
@@ -207,7 +209,9 @@ const getHistory = async (req, res) => {
     
     // Use lean() to get raw MongoDB document and ensure we get all data
     const item = await DcOrder.findById(req.params.id)
-      .populate('updateHistory.updatedBy', 'name email')
+      .populate('updateHistory.updatedBy', 'name email firstName lastName')
+      .populate('created_by', 'name email firstName lastName')
+      .populate('assigned_to', 'name email firstName lastName')
       .lean(); // Use lean() to get plain JavaScript object
     
     if (!item) {
@@ -260,7 +264,7 @@ const getHistory = async (req, res) => {
         priority: item.lead_status || item.priority || 'Warm',
         productsInterested: productSnapshotForDisplay,
         updatedAt: item.createdAt || new Date(),
-        updatedBy: { name: 'System', _id: null },
+        updatedBy: null,
       }];
     }
 
@@ -279,11 +283,14 @@ const getHistory = async (req, res) => {
       return dateB - dateA;
     });
 
-    // Resolve display priority: old saves used "Cold" when body omitted priority despite a Hot/Warm deal
-    history = history.map((entry) => ({
-      ...entry,
-      priority: resolveHistoryPriorityForResponse(entry, item),
-    }));
+    // Resolve display priority and executive name for each row
+    history = await attachResolvedUpdatedByToHistory(
+      history.map((entry) => ({
+        ...entry,
+        priority: resolveHistoryPriorityForResponse(entry, item),
+      })),
+      item,
+    );
     
     console.log(`Returning ${history.length} history entries for DC ${req.params.id}`);
     res.json(history);
@@ -459,6 +466,67 @@ const update = async (req, res) => {
         });
       }
     }
+
+    const hasProductsArray = Array.isArray(req.body.products);
+    const isEditDetailsProductsUpdate =
+      hasProductsArray && !hasProductsInterested && !isFollowUpSubmission;
+    if (isEditDetailsProductsUpdate) {
+      const DC_PRODUCT_STATUSES = [
+        'Hot',
+        'Warm',
+        'Not Interested',
+        'Management Not Met',
+        'Visit Again',
+        'Not Met Management',
+      ];
+      const rows = req.body.products.filter((row) => row && (row.product_name || row.product));
+      if (rows.length === 0) {
+        return res.status(400).json({ message: 'At least one product is required' });
+      }
+      for (const row of rows) {
+        const hasLeadStatus =
+          row.status !== undefined && row.status !== null && String(row.status).trim() !== '';
+        const hasLeadChance =
+          row.chance !== undefined && row.chance !== null && String(row.chance).trim() !== '';
+
+        // Edit PO / close-lead commercial lines — no Hot/Warm chance % rules
+        if (!hasLeadStatus && !hasLeadChance) {
+          const qty = Number(row.quantity) || Number(row.strength) || 0;
+          const unitPrice = Number(row.unit_price) || 0;
+          if (qty <= 0) {
+            return res.status(400).json({ message: 'Each product must have quantity greater than 0' });
+          }
+          if (unitPrice <= 0) {
+            return res.status(400).json({ message: 'Each product must have unit price greater than 0' });
+          }
+          continue;
+        }
+
+        let status = String(row.status || 'Warm').trim();
+        if (status === 'Not Met Management') status = 'Management Not Met';
+        if (!DC_PRODUCT_STATUSES.includes(status)) {
+          return res.status(400).json({ message: `Invalid product status: ${row.status}` });
+        }
+        const strength = Number(row.strength) || Number(row.quantity) || 0;
+        const chance = Math.max(0, Math.min(100, Number(row.chance) || 0));
+        if ((status === 'Hot' || status === 'Warm') && strength <= 0) {
+          return res.status(400).json({
+            message: 'Each Hot/Warm product must have strength greater than 0',
+          });
+        }
+        if (status === 'Hot' && chance < 80) {
+          return res.status(400).json({
+            message: 'Hot products require chance % at least 80',
+          });
+        }
+        if (status === 'Warm' && chance < 20) {
+          return res.status(400).json({
+            message: 'Warm products require chance % at least 20',
+          });
+        }
+      }
+    }
+
     const shouldTrackHistory = hasFollowUpDate || hasRemarks || hasPriority || hasProductsInterested;
     
     // Prepare update object using $set for field updates
@@ -533,6 +601,12 @@ const update = async (req, res) => {
 
     // When Executive requests DC (status → dc_requested), store requestedBy and requestedAt
     if (req.body.status === 'dc_requested') {
+      if (!isTransportCompleteForUpdate(item, req.body)) {
+        return res.status(400).json({
+          message:
+            'Transport Name, Transport Location, and Pincode are required before requesting DC.',
+        });
+      }
       updateData.requestedBy = req.user._id;
       updateData.requestedAt = new Date();
     }

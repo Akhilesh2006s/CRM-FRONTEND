@@ -733,7 +733,7 @@ export function Sidebar() {
   return (
     <>
       {/* Sidebar - Premium Linear-style design */}
-      <aside className={`${sidebarOpen ? 'w-64' : 'w-16'} shrink-0 bg-[#0F0F0F] text-white fixed md:sticky top-16 left-0 z-50 self-start h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)] overflow-y-auto border-r border-white/5 transition-all duration-300 ease-out backdrop-blur-xl`}>
+      <aside className={`${sidebarOpen ? 'w-64' : 'w-16'} shrink-0 bg-[#0F0F0F] text-white fixed md:sticky top-16 left-0 z-50 self-start h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)] overflow-y-auto scrollbar-hide border-r border-white/5 transition-all duration-300 ease-out backdrop-blur-xl`}>
         {/* User Profile Section - Premium styling */}
         <div className={`py-5 border-b border-white/5 ${sidebarOpen ? 'px-4' : 'px-0'} hidden md:block`}>
           {sidebarOpen ? (

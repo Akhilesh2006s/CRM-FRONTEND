@@ -420,8 +420,12 @@ const warehouseVerifyReturn = async (req, res) => {
     }
 
     // Map products: ensure verification fields, auto-set quantityMismatch when receivedQty !== returnQty
-    const updatedProducts = (products || returnDoc.products).map((p) => {
-      const existing = returnDoc.products.find((x) => x.product === (p.product || x.product));
+    const updatedProducts = (products || returnDoc.products).map((p, index) => {
+      const existingByIndex = returnDoc.products[index];
+      const existing =
+        existingByIndex?.product === (p.product || existingByIndex?.product)
+          ? existingByIndex
+          : returnDoc.products.find((x) => x.product === (p.product || x.product));
       const requested = Number(existing?.returnQty ?? p.returnQty) || 0;
       const received = Number(p.receivedQty) || 0;
       const mismatch = requested > 0 && received !== requested;
@@ -437,7 +441,9 @@ const warehouseVerifyReturn = async (req, res) => {
         batchLot: p.batchLot || existing?.batchLot,
         storageLocation: p.storageLocation || existing?.storageLocation,
         quantityMismatch: mismatch,
-        mismatchRemark: mismatch ? (p.mismatchRemark || existing?.mismatchRemark || '') : (p.mismatchRemark || ''),
+        mismatchRemark: mismatch
+          ? String(p.mismatchRemark || existing?.mismatchRemark || '').trim()
+          : '',
       };
     });
 
@@ -452,10 +458,12 @@ const warehouseVerifyReturn = async (req, res) => {
     if (hasMismatch) {
       const missingRemark = updatedProducts.find((p) => p.quantityMismatch && !(p.mismatchRemark && String(p.mismatchRemark).trim()));
       if (missingRemark) {
-        return res.status(400).json({ message: 'Mismatch remark is required when received quantity does not match requested quantity' });
+        return res.status(400).json({
+          message: `Mismatch remark is required for ${missingRemark.product} when received quantity does not match requested quantity`,
+        });
       }
     }
-    returnDoc.status = bodyStatus || (hasMismatch ? 'Pending Manager Approval' : 'Received');
+    returnDoc.status = hasMismatch ? 'Pending Manager Approval' : 'Received';
 
     await returnDoc.save();
 

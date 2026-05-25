@@ -1300,7 +1300,7 @@ export default function CloseLeadPage() {
         if (isDcOrder) {
           // DC Order status enum: 'saved', 'pending', 'in_transit', 'completed', 'hold', 'dc_requested', 'dc_accepted', 'dc_approved', 'dc_sent_to_senior'
           // Don't set status to 'Closed' - use 'completed' or 'saved' instead
-          updatePayload.status = 'completed' // Use 'completed' for DC Orders when closing
+          updatePayload.status = 'saved'
           
           const updated = await apiRequest(`/dc-orders/${leadId}`, {
             method: 'PUT',
@@ -2065,21 +2065,40 @@ export default function CloseLeadPage() {
                         {filteredProducts.length === 0 ? (
                           <p className="text-xs text-neutral-500">No products in catalog.</p>
                         ) : (
-                          <div className="flex flex-wrap gap-2 max-h-[180px] overflow-y-auto border rounded p-2 bg-neutral-50/50">
-                            {filteredProducts.map((product) => (
-                              <Button
-                                key={`${section.id}-${product}`}
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="text-xs h-8"
-                                disabled={!allowLines}
-                                onClick={() => addProductLineToSection(section.id, product)}
-                              >
-                                <PlusCircle className="w-3 h-3 mr-1" />
-                                {product}
-                              </Button>
-                            ))}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[180px] overflow-y-auto border rounded p-3 bg-white">
+                            {filteredProducts.map((product) => {
+                              const lineForProduct = section.lines.find((l) => l.product === product)
+                              const isSelected = Boolean(lineForProduct)
+                              const checkboxId = `catalog-${section.id}-${product.replace(/\s+/g, '-')}`
+                              return (
+                                <div
+                                  key={`${section.id}-${product}`}
+                                  className="flex items-center gap-2 min-w-0"
+                                >
+                                  <Checkbox
+                                    id={checkboxId}
+                                    checked={isSelected}
+                                    disabled={!allowLines}
+                                    onCheckedChange={(checked) => {
+                                      if (!allowLines) return
+                                      if (checked) {
+                                        if (!lineForProduct) {
+                                          addProductLineToSection(section.id, product)
+                                        }
+                                      } else if (lineForProduct) {
+                                        removeProductSectionLine(section.id, lineForProduct.id)
+                                      }
+                                    }}
+                                  />
+                                  <Label
+                                    htmlFor={checkboxId}
+                                    className={`text-xs cursor-pointer font-normal truncate ${!allowLines ? 'opacity-50' : ''}`}
+                                  >
+                                    {product}
+                                  </Label>
+                                </div>
+                              )
+                            })}
                           </div>
                         )}
                       </div>

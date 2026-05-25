@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { apiRequest } from '@/lib/api'
+import { isDuplicateName, normalizeName } from '@/lib/normalizeName'
 import { toast } from 'sonner'
 
 type Zone = { _id?: string; name: string }
@@ -72,13 +73,12 @@ export default function ZonesPage() {
 
   const onAddZone = async (e: React.FormEvent) => {
     e.preventDefault()
-    const trimmed = zoneName.trim()
+    const trimmed = normalizeName(zoneName)
     if (!trimmed) {
       toast.error('Zone is required')
       return
     }
-    const dup = zones.some((z) => z.name.trim().toLowerCase() === trimmed.toLowerCase())
-    if (dup) {
+    if (isDuplicateName(trimmed, zones)) {
       toast.error('Zone already exists')
       return
     }

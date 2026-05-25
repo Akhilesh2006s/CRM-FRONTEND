@@ -65,6 +65,40 @@ type ProductVerificationRow = {
   mismatchRemark: string
 }
 
+function normalizeQty(value: unknown): number {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : NaN
+}
+
+function isQuantityMismatch(returnQty: unknown, receivedQty: unknown): boolean {
+  const expected = normalizeQty(returnQty)
+  const received = normalizeQty(receivedQty)
+  if (Number.isNaN(expected) || Number.isNaN(received)) return false
+  return expected > 0 && received !== expected
+}
+
+function resolveInitialReceivedQty(
+  returnQty: unknown,
+  receivedQty: unknown,
+  condition?: string
+): number {
+  const expected = normalizeQty(returnQty)
+  const received = normalizeQty(receivedQty)
+  const hasPriorVerification =
+    Boolean(condition?.trim()) ||
+    (Number.isFinite(received) && receivedQty != null && receivedQty !== '' && received > 0)
+
+  if (hasPriorVerification && Number.isFinite(received)) {
+    return received
+  }
+
+  return Number.isFinite(expected) ? expected : 0
+}
+
+function canVerifyReturn(status: string): boolean {
+  return status === 'Submitted' || status === 'Sent Back'
+}
+
 export default function WarehouseExecutiveStockReturnsPage() {
   const [returns, setReturns] = useState<StockReturn[]>([])
   const [loading, setLoading] = useState(false)
@@ -85,14 +119,9 @@ export default function WarehouseExecutiveStockReturnsPage() {
   const loadReturns = async () => {
     setLoading(true)
     try {
-      // Load executive returns that are Submitted or Received status
-      const response = await apiRequest<any>(`/stock-returns/executive/list`)
+      const response = await apiRequest<any>(`/stock-returns/warehouse-executive/queue`)
       const returnsList = Array.isArray(response) ? response : (response?.data || [])
-      // Filter to show only Submitted status (not yet received by warehouse)
-      const submittedReturns = returnsList.filter((r: any) => 
-        r.status === 'Submitted' || r.status === 'Received'
-      )
-      setReturns(submittedReturns)
+      setReturns(returnsList)
     } catch (e: any) {
       toast.error(e.message || 'Failed to load returns')
       setReturns([])
@@ -106,20 +135,24 @@ export default function WarehouseExecutiveStockReturnsPage() {
     
     // Initialize product verification rows from return products
     if (returnItem.products && Array.isArray(returnItem.products)) {
-      const verificationRows: ProductVerificationRow[] = returnItem.products.map((p, idx) => ({
-        id: `product-${idx}`,
-        product: p.product,
-        soldQty: p.soldQty,
-        returnQty: p.returnQty,
-        reason: p.reason,
-        remarks: p.remarks || '',
-        receivedQty: p.receivedQty || 0,
-        condition: p.condition || '',
-        batchLot: p.batchLot || '',
-        storageLocation: p.storageLocation || '',
-        quantityMismatch: p.quantityMismatch || false,
-        mismatchRemark: p.mismatchRemark || '',
-      }))
+      const verificationRows: ProductVerificationRow[] = returnItem.products.map((p, idx) => {
+        const receivedQty = resolveInitialReceivedQty(p.returnQty, p.receivedQty, p.condition)
+        const mismatch = isQuantityMismatch(p.returnQty, receivedQty)
+        return {
+          id: `product-${idx}`,
+          product: p.product,
+          soldQty: p.soldQty,
+          returnQty: p.returnQty,
+          reason: p.reason,
+          remarks: p.remarks || '',
+          receivedQty,
+          condition: p.condition || '',
+          batchLot: p.batchLot || '',
+          storageLocation: p.storageLocation || '',
+          quantityMismatch: mismatch,
+          mismatchRemark: mismatch ? (p.mismatchRemark || '') : '',
+        }
+      })
       setProductVerificationRows(verificationRows)
     } else {
       setProductVerificationRows([])
@@ -137,12 +170,11 @@ export default function WarehouseExecutiveStockReturnsPage() {
       if (row.id === id) {
         const updated = { ...row, [field]: value }
         
-        // Check for quantity mismatch
         if (field === 'receivedQty') {
-          const mismatch = updated.receivedQty !== updated.returnQty
+          const mismatch = isQuantityMismatch(updated.returnQty, updated.receivedQty)
           updated.quantityMismatch = mismatch
           if (!mismatch) {
-            updated.mismatchRemark = '' // Clear remark if quantities match
+            updated.mismatchRemark = ''
           }
         }
         
@@ -193,15 +225,16 @@ export default function WarehouseExecutiveStockReturnsPage() {
 
   const validateVerification = (): boolean => {
     for (const row of productVerificationRows) {
-      if (!row.receivedQty || row.receivedQty <= 0) {
-        toast.error(`Please enter received quantity for ${row.product}`)
+      const receivedQty = normalizeQty(row.receivedQty)
+      if (Number.isNaN(receivedQty) || receivedQty < 0) {
+        toast.error(`Please enter a valid received quantity for ${row.product}`)
         return false
       }
       if (!row.condition) {
         toast.error(`Please select condition for ${row.product}`)
         return false
       }
-      if (row.quantityMismatch && !row.mismatchRemark) {
+      if (isQuantityMismatch(row.returnQty, receivedQty) && !row.mismatchRemark?.trim()) {
         toast.error(`Please provide remark for quantity mismatch in ${row.product}`)
         return false
       }
@@ -216,25 +249,33 @@ export default function WarehouseExecutiveStockReturnsPage() {
     
     setSubmitting(true)
     try {
-      const totalReceivedQty = productVerificationRows.reduce((sum, r) => sum + (r.receivedQty || 0), 0)
-      const hasMismatch = productVerificationRows.some(r => r.quantityMismatch)
-      
+      const totalReceivedQty = productVerificationRows.reduce(
+        (sum, r) => sum + (normalizeQty(r.receivedQty) || 0),
+        0
+      )
+      const hasMismatch = productVerificationRows.some((r) =>
+        isQuantityMismatch(r.returnQty, r.receivedQty)
+      )
+
       const payload = {
         returnId: selectedReturn.returnId,
-        status: hasMismatch ? 'Pending Manager Approval' : 'Received',
-        products: productVerificationRows.map(row => ({
-          product: row.product,
-          soldQty: row.soldQty,
-          returnQty: row.returnQty,
-          reason: row.reason,
-          remarks: row.remarks,
-          receivedQty: row.receivedQty,
-          condition: row.condition,
-          batchLot: row.batchLot,
-          storageLocation: row.storageLocation,
-          quantityMismatch: row.quantityMismatch,
-          mismatchRemark: row.mismatchRemark,
-        })),
+        products: productVerificationRows.map((row) => {
+          const receivedQty = normalizeQty(row.receivedQty) || 0
+          const mismatch = isQuantityMismatch(row.returnQty, receivedQty)
+          return {
+            product: row.product,
+            soldQty: row.soldQty,
+            returnQty: row.returnQty,
+            reason: row.reason,
+            remarks: row.remarks,
+            receivedQty,
+            condition: row.condition,
+            batchLot: row.batchLot,
+            storageLocation: row.storageLocation,
+            quantityMismatch: mismatch,
+            mismatchRemark: mismatch ? (row.mismatchRemark || '').trim() : '',
+          }
+        }),
         warehousePhotos: warehousePhotoUrls,
         totalReceivedQty,
         verifiedBy: user?._id,
@@ -244,13 +285,14 @@ export default function WarehouseExecutiveStockReturnsPage() {
 
       await apiRequest(`/stock-returns/${selectedReturn._id}/warehouse-verify`, {
         method: 'PUT',
-        body: JSON.stringify({
-          ...payload,
-          returnId: selectedReturn.returnId, // Include returnId in payload for reference
-        }),
+        body: JSON.stringify(payload),
       })
 
-      toast.success('Return submitted to Warehouse Manager successfully')
+      toast.success(
+        hasMismatch
+          ? 'Return submitted for manager review (quantity mismatch)'
+          : 'Return submitted to Warehouse Manager successfully'
+      )
       setViewReturnDialogOpen(false)
       loadReturns()
     } catch (e: any) {
@@ -279,19 +321,20 @@ export default function WarehouseExecutiveStockReturnsPage() {
                 <th className="py-3 px-4 font-semibold">Executive Name</th>
                 <th className="py-3 px-4 font-semibold">Expected Qty</th>
                 <th className="py-3 px-4 font-semibold">Return Type</th>
+                <th className="py-3 px-4 font-semibold">Status</th>
                 <th className="py-3 px-4 font-semibold">Action</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="py-8 text-center text-neutral-500" colSpan={6}>
+                  <td className="py-8 text-center text-neutral-500" colSpan={7}>
                     Loading...
                   </td>
                 </tr>
               ) : returns.length === 0 ? (
                 <tr>
-                  <td className="py-8 text-center text-neutral-500" colSpan={6}>
+                  <td className="py-8 text-center text-neutral-500" colSpan={7}>
                     No return requests found
                   </td>
                 </tr>
@@ -303,6 +346,15 @@ export default function WarehouseExecutiveStockReturnsPage() {
                     <td className="py-3 px-4">{returnItem.executiveName || '-'}</td>
                     <td className="py-3 px-4">{returnItem.totalQuantity || returnItem.returnQty || 0}</td>
                     <td className="py-3 px-4">{returnItem.returnType || '-'}</td>
+                    <td className="py-3 px-4">
+                      <span className={`text-xs px-2 py-1 rounded ${
+                        returnItem.status === 'Sent Back'
+                          ? 'bg-orange-100 text-orange-800'
+                          : 'bg-blue-100 text-blue-800'
+                      }`}>
+                        {returnItem.status}
+                      </span>
+                    </td>
                     <td className="py-3 px-4">
                       <Button
                         size="sm"
@@ -443,7 +495,7 @@ export default function WarehouseExecutiveStockReturnsPage() {
                     </thead>
                     <tbody>
                       {productVerificationRows.map((row) => {
-                        const hasMismatch = row.receivedQty !== row.returnQty
+                        const hasMismatch = isQuantityMismatch(row.returnQty, row.receivedQty)
                         return (
                           <tr key={row.id} className={`border-b ${hasMismatch ? 'bg-yellow-50' : ''}`}>
                             <td className="py-2 px-3">{row.product}</td>
@@ -569,7 +621,7 @@ export default function WarehouseExecutiveStockReturnsPage() {
                   <div>
                     <Label>Total Received Quantity</Label>
                     <Input 
-                      value={productVerificationRows.reduce((sum, r) => sum + (r.receivedQty || 0), 0)} 
+                      value={productVerificationRows.reduce((sum, r) => sum + (normalizeQty(r.receivedQty) || 0), 0)} 
                       readOnly 
                       className="bg-neutral-50" 
                     />
@@ -577,9 +629,9 @@ export default function WarehouseExecutiveStockReturnsPage() {
                   <div>
                     <Label>Has Quantity Mismatch</Label>
                     <Input 
-                      value={productVerificationRows.some(r => r.quantityMismatch) ? 'Yes - Requires Manager Review' : 'No'} 
+                      value={productVerificationRows.some((r) => isQuantityMismatch(r.returnQty, r.receivedQty)) ? 'Yes - Requires Manager Review' : 'No'} 
                       readOnly 
-                      className={`bg-neutral-50 ${productVerificationRows.some(r => r.quantityMismatch) ? 'text-yellow-600 font-semibold' : ''}`}
+                      className={`bg-neutral-50 ${productVerificationRows.some((r) => isQuantityMismatch(r.returnQty, r.receivedQty)) ? 'text-yellow-600 font-semibold' : ''}`}
                     />
                   </div>
                 </div>
@@ -591,7 +643,10 @@ export default function WarehouseExecutiveStockReturnsPage() {
             <Button variant="outline" onClick={() => setViewReturnDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={submitToManager} disabled={submitting}>
+            <Button
+              onClick={submitToManager}
+              disabled={submitting || !selectedReturn || !canVerifyReturn(selectedReturn.status)}
+            >
               {submitting ? 'Submitting...' : (
                 <>
                   <CheckCircle2 className="w-4 h-4 mr-2" />

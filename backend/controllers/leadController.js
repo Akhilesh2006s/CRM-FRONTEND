@@ -48,9 +48,10 @@ function mapRenewalProducts(productsInput) {
     .filter((p) => p && (p.product_name || p.product))
     .map((p) => {
       const renewalPct = parseRenewalPct(p);
+      const strengthQty = Math.max(1, Number(p.strength) || Number(p.quantity) || 1);
       return {
         product_name: String(p.product_name || p.product || '').trim(),
-        quantity: 1,
+        quantity: strengthQty,
         unit_price: Number(p.unit_price) || 0,
         term: normalizeProductTerm(p.term),
         deliverables: Array.isArray(p.deliverables) ? p.deliverables : [],
@@ -69,7 +70,7 @@ function normalizeRenewalProductsInterested(rows = []) {
         product_name: String(row.product_name || row.product || '').trim(),
         term: normalizeProductTerm(row.term),
         status: 'Warm',
-        strength: 1,
+        strength: Number(row.strength) || Number(row.quantity) || 0,
         chance: pct,
         is_from_previous_dc: Boolean(row.is_from_previous_dc ?? row.isFromPreviousDc),
       };
@@ -80,7 +81,7 @@ function renewalInterestedToLeadProducts(rows = []) {
   return rows.map((row) => ({
     product_name: row.product_name,
     term: row.term,
-    quantity: 1,
+    quantity: Math.max(1, Number(row.strength) || Number(row.quantity) || 1),
     unit_price: 0,
     renewal_pct: row.chance,
     is_from_previous_dc: Boolean(row.is_from_previous_dc),
@@ -358,12 +359,17 @@ const createRenewalLead = async (req, res) => {
     if (productsFromBody.length === 0) {
       return res.status(400).json({ message: 'Add at least one product interested for this renewal.' });
     }
-    const invalidPct = productsFromBody.some(
-      (row) => row.renewal_pct == null || row.renewal_pct < 1 || row.renewal_pct > 100
+    const invalidProducts = productsFromBody.some(
+      (row) =>
+        row.renewal_pct == null ||
+        row.renewal_pct < 1 ||
+        row.renewal_pct > 100 ||
+        !row.quantity ||
+        row.quantity <= 0
     );
-    if (invalidPct) {
+    if (invalidProducts) {
       return res.status(400).json({
-        message: 'Each product must have Renewal % between 1 and 100.',
+        message: 'Each product must have Strength greater than 0 and Chance % between 1 and 100.',
       });
     }
     let productsNormalized;
@@ -406,6 +412,8 @@ const createRenewalLead = async (req, res) => {
       zone: order.zone || '',
       strength: order.strength != null ? order.strength : 0,
       remarks: req.body.remarks != null ? String(req.body.remarks) : '',
+      recommendations:
+        req.body.recommendations != null ? String(req.body.recommendations).trim() : '',
       priority: ['Hot', 'Warm', 'Cold'].includes(req.body.priority) ? req.body.priority : 'Warm',
       status: 'Pending',
       follow_up_date: req.body.follow_up_date ? new Date(req.body.follow_up_date) : undefined,
@@ -451,6 +459,7 @@ const updateLead = async (req, res) => {
 
     const hasFollowUpDate = req.body.follow_up_date !== undefined;
     const hasRemarks = req.body.remarks !== undefined;
+    const hasRecommendations = req.body.recommendations !== undefined;
     const hasProductsInterested = Array.isArray(req.body.productsInterested);
     const isRenewalLead = lead.lead_type === 'renewal';
 
@@ -486,11 +495,12 @@ const updateLead = async (req, res) => {
       }
       if (isRenewalLead) {
         const invalidRenewalRows = normalizedProductsInterested.some(
-          (row) => row.chance < 1 || row.chance > 100
+          (row) => row.chance < 1 || row.chance > 100 || row.strength <= 0
         );
         if (invalidRenewalRows) {
           return res.status(400).json({
-            message: 'Each product must have Renewal % between 1 and 100',
+            message:
+              'Each product must have Strength greater than 0 and Chance % between 1 and 100',
           });
         }
       } else {
@@ -531,7 +541,8 @@ const updateLead = async (req, res) => {
       delete req.body.productsInterested;
     }
 
-    const shouldTrackHistory = hasFollowUpDate || hasRemarks || hasPriority || hasProductsInterested;
+    const shouldTrackHistory =
+      hasFollowUpDate || hasRemarks || hasRecommendations || hasPriority || hasProductsInterested;
 
     if (shouldTrackHistory) {
       const historyPriority =
@@ -546,6 +557,7 @@ const updateLead = async (req, res) => {
             ? new Date(req.body.follow_up_date)
             : null,
           remarks: hasRemarks ? (req.body.remarks || '') : '',
+          recommendations: hasRecommendations ? (req.body.recommendations || '') : '',
           priority: historyPriority,
           productsInterested: normalizedProductsInterested,
           updatedBy: req.user?._id || lead.createdBy,
