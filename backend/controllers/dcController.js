@@ -54,8 +54,14 @@ const upload = multer({
 
 const ALLOWED_SHORTAGE_ROLES = new Set(['Admin', 'Super Admin', 'Executive', 'Sales Executive']);
 
+const {
+  normalizeProductForKey,
+  getShortageParentMatchKey,
+  findParentRowForShortage,
+} = require('../utils/shortageDcRowKey');
+
 const getRowKey = (row = {}) => {
-  const product = String(row.product || row.productName || '').trim().toLowerCase();
+  const product = normalizeProductForKey(row.product || row.productName || '');
   const cls = String(row.class || '').trim().toLowerCase();
   const category = String(row.category || '').trim().toLowerCase();
   const term = String(row.term || 'Term 1').trim().toLowerCase();
@@ -82,7 +88,11 @@ const normalizeProductDetails = (rows = [], { isShortage = false } = {}) =>
     return {
       product: p.product || p.productName || '',
       class: p.class || '1',
-      category: isShortage ? 'Shortage' : (p.category || 'new Students'),
+      category: (() => {
+        const raw = String(p.category || '').trim();
+        if (isShortage && (!raw || /^shortage$/i.test(raw))) return 'new Students';
+        return raw || 'new Students';
+      })(),
       productName: p.productName || p.product || '',
       productCategory: p.productCategory || undefined,
       quantity,
@@ -506,15 +516,15 @@ const raiseDC = async (req, res) => {
       const consumedByRow = new Map();
       siblingShortages.forEach((dcRow) => {
         (dcRow.productDetails || []).forEach((p) => {
-          const key = getRowKey(p);
+          const key = getShortageParentMatchKey(p);
           const current = consumedByRow.get(key) || 0;
           consumedByRow.set(key, current + qtyFromRow(p));
         });
       });
 
       for (const row of shortageRows) {
-        const key = getRowKey(row);
-        const parentRow = (parentDc.productDetails || []).find((p) => getRowKey(p) === key);
+        const key = getShortageParentMatchKey(row);
+        const parentRow = findParentRowForShortage(parentDc.productDetails, row);
         if (!parentRow) {
           return res.status(400).json({ message: `Shortage item "${row.product}" not found on parent DC` });
         }

@@ -23,6 +23,7 @@ import { toast } from 'sonner'
 import { useProducts } from '@/hooks/useProducts'
 import { applyPaymentDivisorsToBreakdown } from '@/lib/dcPaymentDivisors'
 import { normalizeProductTerm, termFromLevelLabel } from '@/lib/productTerm'
+import { shortageParentRowKey } from '@/lib/shortageDcRowKey'
 import {
   buildClientDCProductRows,
   buildEditPOProductRows,
@@ -1054,7 +1055,7 @@ export default function ClientDCPage() {
           })
           .forEach((x: any) => {
             ;(x.productDetails || []).forEach((p: any) => {
-              const key = `${(p.product || p.productName || '').toLowerCase()}::${(p.class || '').toLowerCase()}::${(p.category || '').toLowerCase()}::${(p.term || 'term 1').toLowerCase()}`
+              const key = shortageParentRowKey(p)
               const qty = Number(p.quantity || p.strength || 0)
               consumed.set(key, (consumed.get(key) || 0) + qty)
             })
@@ -1065,7 +1066,7 @@ export default function ClientDCPage() {
       const prodName = p.product || p.productName || ''
       const orderedQuantity = Number(p.quantity || p.strength || 0)
       const deliveredQuantity = Number(p.deliveredQuantity ?? orderedQuantity)
-      const key = `${(p.product || p.productName || '').toLowerCase()}::${(p.class || '').toLowerCase()}::${(p.category || '').toLowerCase()}::${(p.term || 'term 1').toLowerCase()}`
+      const key = shortageParentRowKey(p)
       const alreadyRaised = Number(consumed.get(key) || 0)
       const calculatedShortage = Math.max(orderedQuantity - deliveredQuantity - alreadyRaised, 0)
       const skuCats = hasProductCategories(prodName) ? getProductCategories(prodName) : []
@@ -2671,7 +2672,7 @@ export default function ClientDCPage() {
                                 setViewingPoOpen(true)
                               }}
                             >
-                              View PO
+                              View DC
                             </Button>
                           ) : (
                             <span className="text-sm text-neutral-400">-</span>

@@ -29,11 +29,24 @@ export function resolveClientDCRowFields(
   const isSkuCategory = (cat: string) =>
     skuCats.some((s) => s.toLowerCase() === String(cat || '').trim().toLowerCase())
 
-  const rawClass =
+  const hasSku = skuCats.length > 0
+
+  let rawClass =
     row.class !== undefined && row.class !== null && String(row.class).trim() !== ''
       ? String(row.class).trim()
       : ''
-  const classVal = rawClass && rawClass !== '0' ? rawClass : '1'
+  if (!rawClass || rawClass === '0') {
+    const from = row.fromClass != null ? String(row.fromClass).trim() : ''
+    const to = row.toClass != null ? String(row.toClass).trim() : ''
+    if (from && to && from !== to) rawClass = `${from}–${to}`
+    else if (from) rawClass = from
+  }
+  if (!rawClass && Array.isArray(row.selected_classes) && row.selected_classes.length > 0) {
+    rawClass = row.selected_classes.map((c: unknown) => String(c).trim()).filter(Boolean).join(', ')
+  }
+  const classVal =
+    rawClass && rawClass !== '0' && rawClass !== '-1' ? rawClass : rawClass === '0' ? '' : '1'
+  const classDisplay = classVal || '1'
 
   const catRaw = typeof row.category === 'string' ? row.category.trim() : ''
   const studentLike = catRaw !== '' && isStudentEnrollmentCategory(catRaw)
@@ -51,12 +64,13 @@ export function resolveClientDCRowFields(
     row.specs !== undefined && row.specs !== null && String(row.specs).trim() !== ''
       ? String(row.specs).trim()
       : ''
-  if ((!specs || specs === 'Regular') && catRaw && !studentLike && isSkuCategory(catRaw)) {
+  // SKU lines (e.g. IIT risers / eduapt) belong in Product Category, not Specs
+  if ((!specs || specs === 'Regular') && catRaw && !studentLike && isSkuCategory(catRaw) && !hasSku) {
     specs = skuCats.find((s) => s.toLowerCase() === catRaw.toLowerCase()) || catRaw
   }
   if (!specs) specs = 'Regular'
 
-  return { class: classVal, productCategory: productCategory || undefined, specs }
+  return { class: classDisplay, productCategory: productCategory || undefined, specs }
 }
 
 /** Subject from line `subject` or `selected_subjects` (close lead / DcOrder products). */
@@ -244,9 +258,13 @@ export function buildEditPOProductRows(
             ? {
                 ...p,
                 product: name,
-                class: order.class ?? p.class,
-                specs: order.specs ?? p.specs,
-                productCategory: order.productCategory ?? p.productCategory,
+                class: p.class ?? order.class,
+                specs: p.specs ?? order.specs,
+                productCategory: p.productCategory ?? order.productCategory,
+                category: p.category ?? order.category,
+                fromClass: p.fromClass ?? order.fromClass,
+                toClass: p.toClass ?? order.toClass,
+                selected_classes: p.selected_classes ?? order.selected_classes,
                 quantity: p.quantity ?? order.quantity,
                 strength: p.strength ?? order.strength ?? order.quantity,
                 price: p.price ?? order.unit_price,
@@ -336,9 +354,13 @@ export function buildClientDCProductRows(
         ? {
             ...p,
             product: p.product || order.product_name,
-            class: order.class ?? p.class,
-            specs: order.specs ?? p.specs,
-            productCategory: order.productCategory ?? p.productCategory,
+            class: p.class ?? order.class,
+            specs: p.specs ?? order.specs,
+            productCategory: p.productCategory ?? order.productCategory,
+            category: p.category ?? order.category,
+            fromClass: p.fromClass ?? order.fromClass,
+            toClass: p.toClass ?? order.toClass,
+            selected_classes: p.selected_classes ?? order.selected_classes,
             quantity: p.quantity ?? order.quantity,
             strength: p.strength ?? order.quantity ?? order.strength,
             level: p.level || order.level,

@@ -2574,7 +2574,7 @@ export default function ClientDCPage() {
                                 setViewingPoOpen(true)
                               }}
                             >
-                              View PO
+                              View DC
                             </Button>
                           ) : (
                             <span className="text-sm text-neutral-400">-</span>

@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { getCurrentUser } from '@/lib/auth'
 import { useProducts } from '@/hooks/useProducts'
 import { toast } from 'sonner'
-import { ArrowLeft, MapPin, Edit, History, X, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ArrowLeft, MapPin, Edit, History, X, AlertCircle, ChevronLeft, ChevronRight, Star } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
@@ -49,6 +49,7 @@ type ProductInterested = {
   status: string
   strength: number
   chance: number
+  important?: boolean
 }
 
 /** Align product-line enums across Lead/DcOrder schemas */
@@ -137,6 +138,7 @@ function leadProductsToHistorySnapshot(products: Lead['products']) {
         product_name: String(p.product_name || p.product || '').trim(),
         term: String(p.term || 'Term 1').trim(),
         status,
+        important: Boolean((p as { important?: boolean }).important),
       }
     })
 }
@@ -428,6 +430,7 @@ export default function FollowupLeadsPage() {
             status: p.status || displayLeadDealPriority(lead) || 'Warm',
             strength: Number(p.strength ?? p.quantity ?? 0) || 0,
             chance: Number(p.chance ?? 0) || 0,
+            important: Boolean((p as { important?: boolean }).important),
           }))
         }
 
@@ -495,6 +498,7 @@ export default function FollowupLeadsPage() {
           status: p.status || 'Warm',
           strength: Number(p.strength) || 0,
           chance: Number(p.chance) || 0,
+          important: Boolean(p.important),
           quantity: Number(p.strength) || 0,
           unit_price: 0,
         }))
@@ -686,7 +690,7 @@ export default function FollowupLeadsPage() {
       ...prev,
       productsInterested: [
         ...prev.productsInterested,
-        { product_name: '', term: 'Term 1', status: 'Warm', strength: 0, chance: 0 },
+        { product_name: '', term: 'Term 1', status: 'Warm', strength: 0, chance: 0, important: false },
       ],
     }))
   }
@@ -701,7 +705,7 @@ export default function FollowupLeadsPage() {
   const updateInterestedProduct = (
     index: number,
     field: keyof ProductInterested,
-    value: string | number
+    value: string | number | boolean
   ) => {
     setUpdateForm((prev) => ({
       ...prev,
@@ -954,12 +958,13 @@ export default function FollowupLeadsPage() {
                     <p className="text-xs text-neutral-500 p-3">No products added yet.</p>
                   ) : (
                     <>
-                      <div className="sticky top-0 z-10 grid grid-cols-[2fr_1.3fr_1.5fr_1fr_1fr_auto] gap-2 text-xs font-medium text-neutral-500 px-3 py-2 border-b border-neutral-200 bg-white">
+                      <div className="sticky top-0 z-10 grid grid-cols-[2fr_1.3fr_1.5fr_1fr_1fr_2.5rem_auto] gap-2 text-xs font-medium text-neutral-500 px-3 py-2 border-b border-neutral-200 bg-white">
                         <span>Product</span>
                         <span>Term</span>
                         <span>Status</span>
                         <span className="text-center">Strength</span>
                         <span className="text-center">Chance %</span>
+                        <span className="text-center" title="Mark as important">★</span>
                         <span></span>
                       </div>
 
@@ -969,7 +974,7 @@ export default function FollowupLeadsPage() {
                         aria-label="Products list"
                       >
                       {updateForm.productsInterested.map((product, index) => (
-                        <div key={`product-${index}`} className="grid grid-cols-[2fr_1.3fr_1.5fr_1fr_1fr_auto] gap-2 items-center">
+                        <div key={`product-${index}`} className="grid grid-cols-[2fr_1.3fr_1.5fr_1fr_1fr_2.5rem_auto] gap-2 items-center">
                           <Select
                             value={product.product_name || undefined}
                             onValueChange={(v) => updateInterestedProduct(index, 'product_name', v)}
@@ -1035,6 +1040,25 @@ export default function FollowupLeadsPage() {
                             type="button"
                             variant="ghost"
                             size="icon"
+                            className={`h-9 w-9 ${
+                              product.important
+                                ? 'text-amber-500 hover:text-amber-600'
+                                : 'text-neutral-300 hover:text-amber-500'
+                            }`}
+                            title={product.important ? 'Marked important' : 'Mark as important'}
+                            onClick={() =>
+                              updateInterestedProduct(index, 'important', !product.important)
+                            }
+                          >
+                            <Star
+                              className="h-4 w-4"
+                              fill={product.important ? 'currentColor' : 'none'}
+                            />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
                             className="h-9 w-9 text-neutral-500 hover:text-red-600"
                             onClick={() => removeInterestedProduct(index)}
                           >
@@ -1052,7 +1076,7 @@ export default function FollowupLeadsPage() {
                   </p>
                 )}
                 <p className="text-xs text-neutral-500">
-                  Required: add at least one product with Strength (quantity) and Chance % for each row.
+                  Required: add at least one product with Strength (quantity) and Chance % for each row. Tap ★ to mark a product as important.
                 </p>
               </div>
               
@@ -1250,7 +1274,10 @@ export default function FollowupLeadsPage() {
                                         className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-white/80 px-3 py-2 border border-neutral-100"
                                       >
                                         <div className="min-w-0 flex-1">
-                                          <span className="text-sm font-medium text-neutral-900 truncate block">
+                                          <span className="text-sm font-medium text-neutral-900 truncate block flex items-center gap-1.5">
+                                            {row.important ? (
+                                              <Star className="h-3.5 w-3.5 text-amber-500 shrink-0" fill="currentColor" />
+                                            ) : null}
                                             {row.product_name || 'Product'}
                                           </span>
                                           {row.term ? (

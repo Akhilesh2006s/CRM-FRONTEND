@@ -1,61 +1,48 @@
-/** Local dev default; must match `backend/server.js` when `PORT` is unset (5001 avoids macOS AirPlay on 5000). */
-export const LOCAL_API_BASE_URL = "http://localhost:5001";
+/** Local dev default — must match `backend/server.js` (`PORT` defaults to 5000). */
+export const LOCAL_API_BASE_URL = "http://localhost:5000";
 export const PROD_API_BASE_URL = "https://crm-backend-production-fc85.up.railway.app";
 
 /**
- * Never use port 5000 for the API in the browser: macOS AirPlay binds :5000, so requests get 403 from the wrong service.
- * Stale .env or shell env may still set NEXT_PUBLIC_API_BASE_URL to http://localhost:5000.
+ * Resolve API origin: env override → local in dev → production on Vercel.
+ * On macOS, if AirPlay blocks port 5000, set NEXT_PUBLIC_API_BASE_URL=http://localhost:5001
+ * and run the backend with PORT=5001.
  */
 function normalizeClientApiBase(): string {
-  const raw =
-    process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
-    PROD_API_BASE_URL;
-  try {
-    const u = new URL(raw);
-    const port = u.port || (u.protocol === "https:" ? "443" : "80");
-    const isLocalHost = u.hostname === "localhost" || u.hostname === "127.0.0.1";
-
-    // In production builds we never want localhost API origins.
-    if (process.env.NODE_ENV === "production" && isLocalHost) {
-      return PROD_API_BASE_URL;
+  const fromEnv = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "");
+  if (fromEnv) {
+    try {
+      const u = new URL(fromEnv);
+      const isLocalHost =
+        u.hostname === "localhost" || u.hostname === "127.0.0.1";
+      if (process.env.NODE_ENV === "production" && isLocalHost) {
+        return PROD_API_BASE_URL;
+      }
+    } catch {
+      if (
+        process.env.NODE_ENV === "production" &&
+        (fromEnv.includes("localhost") || fromEnv.includes("127.0.0.1"))
+      ) {
+        return PROD_API_BASE_URL;
+      }
     }
-
-    if (isLocalHost && port === "5000") {
-      return LOCAL_API_BASE_URL;
-    }
-  } catch {
-    if (
-      process.env.NODE_ENV === "production" &&
-      (raw.includes("localhost") || raw.includes("127.0.0.1"))
-    ) {
-      return PROD_API_BASE_URL;
-    }
-    if (raw.includes("localhost:5000") || raw.includes("127.0.0.1:5000")) {
-      return LOCAL_API_BASE_URL;
-    }
+    return fromEnv;
   }
-  return raw;
+  if (process.env.NODE_ENV === "production") {
+    return PROD_API_BASE_URL;
+  }
+  return LOCAL_API_BASE_URL;
 }
 
 export const API_BASE_URL = normalizeClientApiBase();
 
-/**
- * Origin for static `/uploads` (must never be localhost:5000 — macOS AirPlay uses 5000, not Node).
- */
+/** Origin for static `/uploads` (served by Express, same host as API). */
 function uploadsApiOrigin(): string {
-  const base = API_BASE_URL.replace(/\/$/, "");
-  if (
-    base.includes(":5000") &&
-    (base.includes("localhost") || base.includes("127.0.0.1"))
-  ) {
-    return LOCAL_API_BASE_URL;
-  }
-  return base;
+  return API_BASE_URL.replace(/\/$/, "");
 }
 
 /**
  * Files under /uploads are served by the API (Express static), not the Next.js app.
- * Rewrites stale `http://localhost:5000/uploads/...` (DB) and wrong env to LOCAL_API_BASE_URL.
+ * Rewrites `/uploads` paths to the configured API origin.
  */
 export function resolveUploadUrl(url: string | null | undefined): string {
   if (url == null || typeof url !== "string") return "";
@@ -65,46 +52,26 @@ export function resolveUploadUrl(url: string | null | undefined): string {
     return trimmed;
   }
   if (trimmed.startsWith("uploads/")) {
-    return stripAirPlayPortFromUploadUrl(`${uploadsApiOrigin()}/${trimmed}`);
+    return `${uploadsApiOrigin()}/${trimmed}`;
   }
   if (trimmed.startsWith("/uploads/")) {
-    return stripAirPlayPortFromUploadUrl(`${uploadsApiOrigin()}${trimmed}`);
+    return `${uploadsApiOrigin()}${trimmed}`;
   }
   if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
     try {
       const u = new URL(trimmed);
       if (u.pathname.startsWith("/uploads/")) {
-        const port = u.port || (u.protocol === "https:" ? "443" : "80");
-        const isBadLocal5000 =
-          (u.hostname === "localhost" || u.hostname === "127.0.0.1") &&
-          port === "5000";
-        if (isBadLocal5000) {
-          return stripAirPlayPortFromUploadUrl(
-            `${LOCAL_API_BASE_URL}${u.pathname}${u.search}${u.hash}`
-          );
-        }
-        return stripAirPlayPortFromUploadUrl(
-          `${uploadsApiOrigin()}${u.pathname}${u.search}${u.hash}`
-        );
+        return `${uploadsApiOrigin()}${u.pathname}${u.search}${u.hash}`;
       }
     } catch {
-      return stripAirPlayPortFromUploadUrl(trimmed);
+      return trimmed;
     }
-    return stripAirPlayPortFromUploadUrl(trimmed);
+    return trimmed;
   }
   if (/^po-\d+-\d+\.[a-z0-9]+$/i.test(trimmed)) {
-    return stripAirPlayPortFromUploadUrl(
-      `${uploadsApiOrigin()}/uploads/po/${trimmed}`
-    );
+    return `${uploadsApiOrigin()}/uploads/po/${trimmed}`;
   }
-  return stripAirPlayPortFromUploadUrl(trimmed);
-}
-
-function stripAirPlayPortFromUploadUrl(result: string): string {
-  if (!result || !result.includes("/uploads/")) return result;
-  return result
-    .replace(/^http:\/\/localhost:5000(?=\/)/, LOCAL_API_BASE_URL)
-    .replace(/^http:\/\/127\.0\.0\.1:5000(?=\/)/, LOCAL_API_BASE_URL);
+  return trimmed;
 }
 
 export function poFileApiUrl(poPathOrUrl: string | null | undefined): string | null {

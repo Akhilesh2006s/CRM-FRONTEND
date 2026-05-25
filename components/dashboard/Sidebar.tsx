@@ -733,7 +733,9 @@ export function Sidebar() {
   return (
     <>
       {/* Sidebar - Premium Linear-style design */}
-      <aside className={`${sidebarOpen ? 'w-64' : 'w-16'} shrink-0 bg-[#0F0F0F] text-white fixed md:sticky top-16 left-0 z-50 self-start h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)] overflow-y-auto scrollbar-hide border-r border-white/5 transition-all duration-300 ease-out backdrop-blur-xl`}>
+      <aside
+        className={`${sidebarOpen ? 'w-64' : 'w-16'} shrink-0 flex h-[100dvh] md:h-full flex-col overflow-hidden bg-[#0b1210] text-white fixed inset-y-0 left-0 z-50 md:static md:z-auto border-r border-[#16A34A]/25 shadow-[4px_0_24px_rgba(0,0,0,0.12)] transition-[width] duration-300 ease-out`}
+      >
         {/* User Profile Section - Premium styling */}
         <div className={`py-5 border-b border-white/5 ${sidebarOpen ? 'px-4' : 'px-0'} hidden md:block`}>
           {sidebarOpen ? (
@@ -744,7 +746,7 @@ export function Sidebar() {
               <div className="flex-1 min-w-0">
                 <div className="font-medium text-sm truncate text-white/90">{user?.name || 'User'}</div>
                 <div className="text-xs text-white/50 flex items-center gap-1.5 mt-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/80 shadow-sm shadow-emerald-500/50"></span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A] shadow-sm shadow-[#16A34A]/50"></span>
                   <span className="font-normal">Active</span>
                 </div>
               </div>
@@ -772,8 +774,8 @@ export function Sidebar() {
             {sidebarOpen ? <X size={16} /> : <Menu size={16} />}
           </button>
         </div>
-      <nav className="py-2">
-        <ul className="flex md:block gap-0 overflow-x-auto scrollbar-hide">
+      <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden dashboard-sidebar-scroll bg-[#0b1210] py-2">
+        <ul className="block gap-0 px-2">
           {finalNav.map((item) => (
             <li key={item.label} className="w-full" data-item={item.label}>
               {item.children ? (
@@ -798,12 +800,14 @@ export function Sidebar() {
                         toggle(item.label)
                       }
                     }}
-                    className={`w-full flex items-center justify-center text-white/70 py-2.5 rounded-lg hover:bg-white/5 hover:text-white font-medium transition-all duration-200 group ${
-                      sidebarOpen ? 'px-3 gap-2.5 justify-start' : 'px-0'
+                    className={`w-full flex items-center text-white/75 py-2.5 rounded-lg hover:bg-white/10 hover:text-white font-medium transition-all duration-200 group ${
+                      sidebarOpen ? 'px-3 gap-2.5 justify-start' : 'px-0 justify-center'
                     }`}
                     title={!sidebarOpen ? item.label : ''}
                   >
-                    {item.icon && typeof item.icon === 'function' && <item.icon size={18} className="text-white/60 group-hover:text-white flex-shrink-0 transition-colors" />}
+                    {item.icon && typeof item.icon === 'function' && (
+                      <item.icon size={18} className="text-white/55 group-hover:text-[#4ade80] flex-shrink-0 transition-colors" />
+                    )}
                     {sidebarOpen && (
                       <span className="text-[13px] text-white/70 group-hover:text-white transition-colors">{item.label}</span>
                     )}
@@ -831,22 +835,16 @@ export function Sidebar() {
                             <li key={c.label}>
                               <Link 
                                 href={c.href} 
-                                className={`flex items-center gap-2.5 text-[12.5px] px-3 py-2.5 rounded-lg font-medium transition-all duration-200 relative ${
-                                  isActive 
-                                    ? 'bg-white/15 text-white shadow-lg shadow-white/5 border border-white/20 rounded-lg' 
-                                    : 'text-white/50 hover:bg-white/5 hover:text-white/80'
+                                className={`flex items-center gap-2.5 text-[12.5px] px-3 py-2 rounded-md font-medium transition-all duration-200 ${
+                                  isActive
+                                    ? 'bg-[#16A34A]/25 text-white border-l-2 border-[#16A34A]'
+                                    : 'text-white/70 hover:bg-white/10 hover:text-white'
                                 }`}
                               >
-                                {isActive && (
-                                  <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-white/10 to-transparent pointer-events-none" />
-                                )}
                                 {c.icon && typeof c.icon === 'function' && (
-                                  <c.icon size={14} className={`flex-shrink-0 relative z-10 ${isActive ? 'text-white' : 'text-white/50'}`} />
+                                  <c.icon size={14} className={`flex-shrink-0 ${isActive ? 'text-[#4ade80]' : 'text-white/50'}`} />
                                 )}
-                                <span className="relative z-10">{c.label}</span>
-                                {isActive && (
-                                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-white/40 rounded-r-full" />
-                                )}
+                                <span>{c.label}</span>
                               </Link>
                             </li>
                           )

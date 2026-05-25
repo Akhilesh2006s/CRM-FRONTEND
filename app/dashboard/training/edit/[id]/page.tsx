@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -8,8 +8,9 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { apiRequest } from '@/lib/api'
+import { apiRequest, API_BASE_URL, resolveUploadUrl } from '@/lib/api'
 import { toast } from 'sonner'
+import { Upload, Eye } from 'lucide-react'
 
 type Training = {
   _id: string
@@ -26,6 +27,7 @@ type Training = {
   remarks?: string
   status: 'Scheduled' | 'Completed' | 'Cancelled'
   poImageUrl?: string
+  feedbackPdfUrl?: string
 }
 
 export default function EditTrainingPage() {
@@ -36,10 +38,18 @@ export default function EditTrainingPage() {
   const [training, setTraining] = useState<Training | null>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [uploadingFeedback, setUploadingFeedback] = useState(false)
+  const [feedbackPdfUrl, setFeedbackPdfUrl] = useState<string | undefined>()
+  const feedbackInputRef = useRef<HTMLInputElement>(null)
   const [form, setForm] = useState({
     status: 'Scheduled' as 'Scheduled' | 'Completed' | 'Cancelled',
     remarks: '',
   })
+
+  const isPdfFile = (file: File) => {
+    const name = file.name.toLowerCase()
+    return file.type === 'application/pdf' || name.endsWith('.pdf')
+  }
 
   useEffect(() => {
     if (trainingId) {
@@ -57,6 +67,7 @@ export default function EditTrainingPage() {
           status: data.status || 'Scheduled',
           remarks: data.remarks || '',
         })
+        setFeedbackPdfUrl(data.feedbackPdfUrl)
       } else {
         toast.error('Training not found')
         router.push('/dashboard/training/list')
@@ -69,11 +80,45 @@ export default function EditTrainingPage() {
     }
   }
 
+  const handleFeedbackUpload = async (file: File) => {
+    if (!isPdfFile(file)) {
+      toast.error('Only PDF files are allowed')
+      return
+    }
+    setUploadingFeedback(true)
+    try {
+      const formData = new FormData()
+      formData.append('feedback', file)
+      const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null
+      const response = await fetch(`${API_BASE_URL}/api/training/${trainingId}/upload-feedback`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      })
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.message || 'Failed to upload feedback')
+      }
+      const result = await response.json()
+      setFeedbackPdfUrl(result.feedbackPdfUrl || result.training?.feedbackPdfUrl)
+      toast.success('Feedback form uploaded')
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to upload feedback')
+    } finally {
+      setUploadingFeedback(false)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
     if (!form.status) {
       toast.error('Training Status is required')
+      return
+    }
+
+    if (form.status === 'Completed' && !feedbackPdfUrl) {
+      toast.error('Please upload the feedback form (PDF) for completed training')
       return
     }
 
@@ -226,6 +271,44 @@ export default function EditTrainingPage() {
                 rows={3}
               />
             </div>
+            {form.status === 'Completed' && (
+              <div className="md:col-span-2 rounded-lg border border-neutral-200 bg-neutral-50/50 p-4 space-y-3">
+                <Label>Feedback Form (PDF) *</Label>
+                <p className="text-sm text-neutral-600">
+                  Upload the signed feedback form after training is completed.
+                </p>
+                <input
+                  ref={feedbackInputRef}
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) void handleFeedbackUpload(file)
+                    e.target.value = ''
+                  }}
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={uploadingFeedback}
+                    onClick={() => feedbackInputRef.current?.click()}
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    {uploadingFeedback ? 'Uploading...' : feedbackPdfUrl ? 'Replace PDF' : 'Upload PDF'}
+                  </Button>
+                  {feedbackPdfUrl && (
+                    <Button type="button" variant="ghost" asChild>
+                      <a href={resolveUploadUrl(feedbackPdfUrl)} target="_blank" rel="noopener noreferrer">
+                        <Eye className="h-4 w-4 mr-2" />
+                        View feedback
+                      </a>
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
           <div className="flex justify-end gap-2 pt-4">
             <Button type="button" variant="outline" onClick={() => router.push('/dashboard/training/list')}>

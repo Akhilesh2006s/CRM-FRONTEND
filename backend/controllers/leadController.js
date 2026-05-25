@@ -474,6 +474,7 @@ const updateLead = async (req, res) => {
             : 'Warm',
           strength: Number(row.strength) || 0,
           chance: Math.max(0, Math.min(100, Number(row.chance) || 0)),
+          important: Boolean(row.important),
           quantity: Number(row.strength) || 0,
           unit_price: 0,
         }));
