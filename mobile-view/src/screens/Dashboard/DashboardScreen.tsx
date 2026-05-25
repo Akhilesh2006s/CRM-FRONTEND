@@ -1516,24 +1516,6 @@ export default function DashboardScreen({ navigation }: any) {
             </View>
           </LinearGradient>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.card}
-          activeOpacity={0.8}
-          onPress={() => navigation.navigate('ExecutiveManagerNew')}
-        >
-          <View style={[styles.cardContent, styles.cardContentWhite]}>
-            <View style={styles.cardIconContainer}>
-              <Text style={styles.cardIconWhite}>➕</Text>
-            </View>
-            <View style={styles.cardTextContainer}>
-              <Text style={styles.cardTitleWhite}>Create Manager</Text>
-              <Text style={styles.cardSubtitleWhite}>Add new executive manager</Text>
-            </View>
-            <View style={styles.cardArrowContainer}>
-              <Text style={styles.cardArrowWhite}>›</Text>
-            </View>
-          </View>
-        </TouchableOpacity>
       </View>
 
       <View style={styles.section}>

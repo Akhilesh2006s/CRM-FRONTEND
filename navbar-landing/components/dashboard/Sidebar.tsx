@@ -166,10 +166,7 @@ const NAV: NavItem[] = [
   {
     label: 'Executive Managers',
     icon: Shield,
-    children: [
-      { label: 'All Managers', href: '/dashboard/executive-managers' },
-      { label: 'Create Manager', href: '/dashboard/executive-managers/new' },
-    ],
+    href: '/dashboard/executive-managers',
   },
   {
     label: 'Leave Management',

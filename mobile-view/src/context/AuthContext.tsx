@@ -92,7 +92,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       // Handle 401 Unauthorized (invalid credentials)
       if (error.response?.status === 401) {
-        const errorMessage = error.response?.data?.message || 'Invalid mobile number or password';
+        const errorMessage = error.response?.data?.message || 'Invalid mobile number, email, or password';
         throw new Error(errorMessage);
       }
       

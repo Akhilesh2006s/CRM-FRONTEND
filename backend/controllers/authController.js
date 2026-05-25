@@ -85,7 +85,7 @@ const login = async (req, res) => {
     const { email, password, mobile } = req.body;
     const identifier = String(email || mobile || '').trim();
     if (!identifier || !password) {
-      return res.status(400).json({ message: 'Mobile number and password are required' });
+      return res.status(400).json({ message: 'Mobile number or email and password are required' });
     }
 
     const buildLoginQuery = () => {
@@ -134,7 +134,7 @@ const login = async (req, res) => {
         token: generateToken(user._id),
       });
     } else {
-      res.status(401).json({ message: 'Invalid mobile number or password' });
+      res.status(401).json({ message: 'Invalid mobile number, email, or password' });
       }
     } else {
       // Use mock data service
@@ -165,7 +165,7 @@ const login = async (req, res) => {
           token: generateToken(user._id),
         });
       } else {
-        res.status(401).json({ message: 'Invalid mobile number or password' });
+        res.status(401).json({ message: 'Invalid mobile number, email, or password' });
       }
     }
   } catch (error) {

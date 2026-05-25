@@ -275,7 +275,6 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
       icon: I.managers,
       items: [
         { label: 'All Managers', screen: 'ExecutiveManagers', icon: '🛡️' },
-        { label: 'Create Manager', screen: 'ExecutiveManagerNew', icon: '➕' },
       ],
     },
     {

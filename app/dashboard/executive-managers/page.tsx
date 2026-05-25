@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { apiRequest } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
-import { PlusCircle, Users, Eye, UserPlus } from 'lucide-react'
+import { Users, Eye, UserPlus } from 'lucide-react'
 import Link from 'next/link'
 import {
   Dialog,
@@ -140,12 +140,6 @@ export default function ExecutiveManagersPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Executive Managers</h1>
-        <Link href="/dashboard/executive-managers/new">
-          <Button>
-            <PlusCircle className="w-4 h-4 mr-2" />
-            Create Executive Manager
-          </Button>
-        </Link>
       </div>
 
       <Card className="p-4 md:p-6 bg-neutral-50 border border-neutral-200">

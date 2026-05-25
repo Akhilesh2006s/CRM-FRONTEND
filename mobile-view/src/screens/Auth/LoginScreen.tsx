@@ -24,7 +24,7 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!mobile || !password) {
-      Alert.alert('Error', 'Please enter mobile number and password');
+      Alert.alert('Error', 'Please enter mobile number or email and password');
       return;
     }
 
@@ -64,16 +64,16 @@ export default function LoginScreen() {
 
               <View style={styles.form}>
                 <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>Mobile Number</Text>
+                  <Text style={styles.inputLabel}>Mobile number or email</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="Enter your mobile number"
+                    placeholder="Mobile number or email"
                     placeholderTextColor={colors.textTertiary}
                     value={mobile}
                     onChangeText={setMobile}
-                    keyboardType="phone-pad"
+                    keyboardType="default"
                     autoCapitalize="none"
-                    autoComplete="tel"
+                    autoComplete="username"
                   />
                 </View>
 
