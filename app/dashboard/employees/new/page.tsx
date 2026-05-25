@@ -10,6 +10,10 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { apiRequest } from '@/lib/api'
 
+const TAGGING_ROLES = ['Executive', 'Coordinator', 'Senior Coordinator', 'Finance Manager', 'Warehouse Manager']
+
+type EmployeeOption = { _id: string; name: string; role: string }
+
 export default function NewEmployeePage() {
   const router = useRouter()
   const [form, setForm] = useState({
@@ -28,7 +32,9 @@ export default function NewEmployeePage() {
     city: '',
     pincode: '',
     role: 'Executive',
+    taggedEmployeeIds: [] as string[],
   })
+  const [tagOptions, setTagOptions] = useState<EmployeeOption[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loadingPincode, setLoadingPincode] = useState(false)
@@ -123,7 +129,19 @@ export default function NewEmployeePage() {
 
   useEffect(() => {
     loadZones()
+    apiRequest<EmployeeOption[]>('/employees?isActive=true')
+      .then((data) => setTagOptions(Array.isArray(data) ? data : []))
+      .catch(() => setTagOptions([]))
   }, [])
+
+  const toggleTagged = (empId: string) => {
+    setForm((f) => ({
+      ...f,
+      taggedEmployeeIds: f.taggedEmployeeIds.includes(empId)
+        ? f.taggedEmployeeIds.filter((x) => x !== empId)
+        : [...f.taggedEmployeeIds, empId],
+    }))
+  }
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -144,6 +162,9 @@ export default function NewEmployeePage() {
       // Only include cluster if role is Executive
       if (form.role !== 'Executive') {
         delete payload.cluster
+      }
+      if (!TAGGING_ROLES.includes(form.role)) {
+        delete payload.taggedEmployeeIds
       }
       await apiRequest('/employees/create', {
         method: 'POST',
@@ -318,6 +339,28 @@ export default function NewEmployeePage() {
             <Label>Password *</Label>
             <Input className="bg-white text-neutral-900" type="password" name="password" value={form.password} onChange={onChange} required />
           </div>
+
+          {TAGGING_ROLES.includes(form.role) && (
+            <div className="md:col-span-2">
+              <Label className="mb-2 block">Employee tagging</Label>
+              <div className="max-h-48 overflow-y-auto border rounded p-3 bg-white space-y-2">
+                {tagOptions.length === 0 ? (
+                  <p className="text-sm text-neutral-500">No employees available to tag</p>
+                ) : (
+                  tagOptions.map((e) => (
+                    <label key={e._id} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={form.taggedEmployeeIds.includes(e._id)}
+                        onChange={() => toggleTagged(e._id)}
+                      />
+                      {e.name} ({e.role})
+                    </label>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
 
           {error && <div className="md:col-span-2 text-red-600 text-sm">{error}</div>}
           <div className="md:col-span-2 flex justify-end">

@@ -15,7 +15,7 @@ interface AuthContextType {
   user: User | null;
   isFirstTime: boolean;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (mobile: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
 }
@@ -66,10 +66,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const login = async (email: string, password: string) => {
+  const login = async (mobile: string, password: string) => {
     try {
-      console.log('Attempting login with email:', email);
-      const response = await apiService.post('/auth/login', { email, password });
+      console.log('Attempting login with mobile:', mobile);
+      const response = await apiService.post('/auth/login', { mobile, email: mobile, password });
       const { token, ...userData } = response;
       
       if (!token) {
@@ -92,7 +92,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       // Handle 401 Unauthorized (invalid credentials)
       if (error.response?.status === 401) {
-        const errorMessage = error.response?.data?.message || 'Invalid email or password';
+        const errorMessage = error.response?.data?.message || 'Invalid mobile number or password';
         throw new Error(errorMessage);
       }
       

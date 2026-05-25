@@ -16,7 +16,7 @@ import Link from 'next/link'
 
 export default function LoginPage() {
   const router = useRouter()
-  const [email, setEmail] = useState('')
+  const [mobile, setMobile] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -25,7 +25,7 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     try {
-      const user = await login(email, password)
+      const user = await login(mobile, password)
       toast.success('Welcome back! Redirecting…')
       
       // Redirect Executive Managers to their specific dashboard
@@ -66,14 +66,14 @@ export default function LoginPage() {
               </motion.h1>
               <form onSubmit={onSubmit} className="space-y-5">
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="text-gray-300">Email</Label>
+                  <Label htmlFor="mobile" className="text-gray-300">Mobile Number</Label>
                   <Input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    id="mobile"
+                    type="tel"
+                    value={mobile}
+                    onChange={(e) => setMobile(e.target.value)}
                     required
-                    placeholder="you@example.com"
+                    placeholder="10-digit mobile number"
                     className="bg-neutral-800 border-neutral-700 text-white placeholder:text-neutral-400"
                   />
                 </div>

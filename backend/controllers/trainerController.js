@@ -27,7 +27,7 @@ const listTrainers = async (req, res) => {
 // Create trainer (as a User with role Trainer)
 const createTrainer = async (req, res) => {
   try {
-    const { name, email, mobile, trainerProducts, trainerLevels, trainerType, state, zone, cluster, address1 } = req.body;
+    const { name, email, mobile, trainerProducts, trainerLevels, trainerAbacusLevels, trainerVedicLevels, trainerType, state, zone, cluster, address1 } = req.body;
     if (!mobile) {
       return res.status(400).json({ message: 'Mobile number is required' });
     }
@@ -43,6 +43,8 @@ const createTrainer = async (req, res) => {
       mobile,
       trainerProducts,
       trainerLevels,
+      trainerAbacusLevels,
+      trainerVedicLevels,
       trainerType,
       state,
       zone,

@@ -82,17 +82,41 @@ const register = async (req, res) => {
 // @access  Public
 const login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, mobile } = req.body;
+    const identifier = String(email || mobile || '').trim();
+    if (!identifier || !password) {
+      return res.status(400).json({ message: 'Mobile number and password are required' });
+    }
+
+    const buildLoginQuery = () => {
+      const normalized = identifier.toLowerCase();
+      const digits = identifier.replace(/\D/g, '');
+      const or = [{ email: normalized }];
+      if (digits.length >= 10) {
+        or.push({ mobile: digits });
+        or.push({ phone: digits });
+        const last10 = digits.slice(-10);
+        if (last10.length === 10) {
+          or.push({ mobile: { $regex: `${last10}$` } });
+          or.push({ phone: { $regex: `${last10}$` } });
+        }
+      }
+      return { $or: or };
+    };
 
     if (mongoose.connection.readyState === 1) {
-    const user = await User.findOne({ email });
+    const user = await User.findOne(buildLoginQuery());
+
+    if (user && user.isActive === false) {
+      return res.status(403).json({ message: 'Account is deactivated. Please contact admin.' });
+    }
 
     if (user && (await user.comparePassword(password))) {
       // Ensure special admin emails have correct role
       const superAdminEmails = (process.env.SUPER_ADMIN_EMAILS || 'amenityforge@gmail.com')
         .split(',')
         .map((s) => s.trim().toLowerCase())
-      if (superAdminEmails.includes(String(email).toLowerCase()) && user.role !== 'Super Admin') {
+      if (superAdminEmails.includes(String(user.email || '').toLowerCase()) && user.role !== 'Super Admin') {
         user.role = 'Super Admin'
       }
       // Update last login
@@ -103,23 +127,28 @@ const login = async (req, res) => {
         _id: user._id,
         name: user.name,
         email: user.email,
+        mobile: user.mobile,
         role: user.role,
         roles: user.roles || [],
         hasCompletedFirstTimeSetup: user.hasCompletedFirstTimeSetup || false,
         token: generateToken(user._id),
       });
     } else {
-      res.status(401).json({ message: 'Invalid email or password' });
+      res.status(401).json({ message: 'Invalid mobile number or password' });
       }
     } else {
       // Use mock data service
-      const user = await mockDataService.findUser({ email });
+      const user = await mockDataService.findUser({ email: identifier });
+
+      if (user && user.isActive === false) {
+        return res.status(403).json({ message: 'Account is deactivated. Please contact admin.' });
+      }
 
       if (user && (await bcrypt.compare(password, user.password))) {
         const superAdminEmails = (process.env.SUPER_ADMIN_EMAILS || 'amenityforge@gmail.com')
           .split(',')
           .map((s) => s.trim().toLowerCase())
-        if (superAdminEmails.includes(String(email).toLowerCase()) && user.role !== 'Super Admin') {
+        if (superAdminEmails.includes(String(user.email || '').toLowerCase()) && user.role !== 'Super Admin') {
           user.role = 'Super Admin'
         }
         // Update last login
@@ -129,13 +158,14 @@ const login = async (req, res) => {
           _id: user._id,
           name: user.name,
           email: user.email,
+          mobile: user.mobile,
           role: user.role,
           roles: user.roles || [],
           hasCompletedFirstTimeSetup: user.hasCompletedFirstTimeSetup || false,
           token: generateToken(user._id),
         });
       } else {
-        res.status(401).json({ message: 'Invalid email or password' });
+        res.status(401).json({ message: 'Invalid mobile number or password' });
       }
     }
   } catch (error) {

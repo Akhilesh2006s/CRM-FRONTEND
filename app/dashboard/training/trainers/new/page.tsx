@@ -22,6 +22,8 @@ export default function AddTrainerPage() {
     state: '', zone: '', cluster: '',
     trainerProducts: [] as string[],
     trainerLevels: '',
+    trainerAbacusLevels: '',
+    trainerVedicLevels: '',
     trainerType: 'Employee',
     address1: '',
   })
@@ -178,14 +180,12 @@ export default function AddTrainerPage() {
             <Input className="bg-white text-neutral-900" type="email" value={form.email} onChange={(e)=>setForm(f=>({...f,email:e.target.value}))} />
           </div>
           <div>
-            <Label>Trainer Type *</Label>
+            <Label>Employment Type *</Label>
             <Select value={form.trainerType} onValueChange={(v)=>setForm(f=>({...f,trainerType:v}))}>
               <SelectTrigger className="bg-white text-neutral-900"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="BDE">BDE</SelectItem>
                 <SelectItem value="Employee">Employee</SelectItem>
                 <SelectItem value="Freelancer">Freelancer</SelectItem>
-                <SelectItem value="Teachers">Teachers</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -234,9 +234,9 @@ export default function AddTrainerPage() {
             <Textarea className="bg-white text-neutral-900" value={form.address1} onChange={(e)=>setForm(f=>({...f,address1:e.target.value}))} />
           </div>
           <div className="md:col-span-2">
-            <Label className="mb-1">Products *</Label>
+            <Label className="mb-1">Product Category *</Label>
             <div className="flex flex-wrap gap-3 text-sm">
-              {['Abacus', 'Vedic Maths', 'EEL', 'IIT', 'Financial literacy', 'Brain bytes', 'Spelling bee', 'Skill pro', 'Maths lab', 'Codechamp'].map(p=> (
+              {['Abacus', 'Vedic Maths', 'EEL', 'IIT'].map(p=> (
                 <label key={p} className="inline-flex items-center gap-2">
                   <input type="checkbox" checked={form.trainerProducts.includes(p)} onChange={()=>toggleProduct(p)} />
                   {p}
@@ -244,9 +244,21 @@ export default function AddTrainerPage() {
               ))}
             </div>
           </div>
+          {form.trainerProducts.includes('Abacus') && (
+            <div className="md:col-span-2">
+              <Label>Abacus levels known</Label>
+              <Input className="bg-white text-neutral-900" value={form.trainerAbacusLevels} onChange={(e)=>setForm(f=>({...f,trainerAbacusLevels:e.target.value}))} placeholder="e.g. Level 1–8" />
+            </div>
+          )}
+          {form.trainerProducts.includes('Vedic Maths') && (
+            <div className="md:col-span-2">
+              <Label>Vedic Maths levels known</Label>
+              <Input className="bg-white text-neutral-900" value={form.trainerVedicLevels} onChange={(e)=>setForm(f=>({...f,trainerVedicLevels:e.target.value}))} placeholder="e.g. Level 1–5" />
+            </div>
+          )}
           <div className="md:col-span-2">
-            <Label>Levels</Label>
-            <Input className="bg-white text-neutral-900" value={form.trainerLevels} onChange={(e)=>setForm(f=>({...f,trainerLevels:e.target.value}))} placeholder="e.g., AB-3, VM-2" />
+            <Label>Other levels (optional)</Label>
+            <Input className="bg-white text-neutral-900" value={form.trainerLevels} onChange={(e)=>setForm(f=>({...f,trainerLevels:e.target.value}))} placeholder="EEL / IIT notes" />
           </div>
           <div className="md:col-span-2 flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={()=>router.back()}>Cancel</Button>

@@ -53,7 +53,10 @@ const userSchema = new mongoose.Schema({
   // Trainer specific fields (optional)
   trainerProducts: [{ type: String }],
   trainerLevels: { type: String },
+  trainerAbacusLevels: { type: String },
+  trainerVedicLevels: { type: String },
   trainerType: { type: String, enum: ['BDE', 'Employee', 'Freelancer', 'Teachers'], default: undefined },
+  taggedEmployeeIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   isActive: {
     type: Boolean,
     default: true,

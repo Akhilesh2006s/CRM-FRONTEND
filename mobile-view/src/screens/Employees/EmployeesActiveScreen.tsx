@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, RefreshControl, Alert, ActivityIndicator } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { colors, gradients } from '../../theme/colors';
+import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
 import { useAuth } from '../../context/AuthContext';
 
 interface Employee {
@@ -11,8 +12,11 @@ interface Employee {
   name: string;
   email: string;
   phone?: string;
+  mobile?: string;
   role: string;
   department?: string;
+  zone?: string;
+  cluster?: string;
 }
 
 export default function EmployeesActiveScreen({ navigation }: any) {
@@ -63,32 +67,23 @@ export default function EmployeesActiveScreen({ navigation }: any) {
   };
 
   const isCoordinator = user?.role === 'Coordinator' || user?.role === 'Senior Coordinator';
-  const filtered = items.filter((e) => e.name.toLowerCase().includes(searchQuery.toLowerCase()) || e.email.toLowerCase().includes(searchQuery.toLowerCase()) || (e.phone || '').includes(searchQuery));
-
-  if (loading && !refreshing) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading employees...</Text>
-      </View>
-    );
-  }
+  const filtered = items.filter((e) =>
+    e.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    e.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (e.phone || '').includes(searchQuery) ||
+    (e.mobile || '').includes(searchQuery) ||
+    (e.zone || '').toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
-    <View style={styles.container}>
-      <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
-        <View style={styles.headerContent}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Text style={styles.backIcon}>←</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Active Employees</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('EmployeeNew')} style={styles.addButton}>
-            <Text style={styles.addIcon}>+</Text>
-          </TouchableOpacity>
-        </View>
-      </LinearGradient>
-      <View style={styles.searchContainer}>
-        <TextInput style={styles.searchInput} value={searchQuery} onChangeText={setSearchQuery} placeholder="Search name/email/phone" placeholderTextColor={colors.textSecondary} />
+    <ScreenShell
+      title="Active Employees"
+      loading={loading && !refreshing}
+      refreshing={refreshing}
+      onRefresh={onRefresh}
+    >
+<View style={styles.searchContainer}>
+        <WebInput style={styles.searchInput} value={searchQuery} onChangeText={setSearchQuery} placeholder="Search name/email/phone" />
         <TouchableOpacity style={styles.refreshButton} onPress={loadData}>
           <Text style={styles.refreshButtonText}>Refresh</Text>
         </TouchableOpacity>
@@ -125,17 +120,34 @@ export default function EmployeesActiveScreen({ navigation }: any) {
                     <Text style={styles.infoValue}>{e.department}</Text>
                   </View>
                 )}
+                {e.zone && (
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Zone:</Text>
+                    <Text style={styles.infoValue}>{e.zone}</Text>
+                  </View>
+                )}
+                {e.cluster && (
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Cluster:</Text>
+                    <Text style={styles.infoValue}>{e.cluster}</Text>
+                  </View>
+                )}
               </View>
               {!isCoordinator && (
-                <TouchableOpacity style={styles.resetButton} onPress={() => resetPassword(e._id, e.name)}>
-                  <Text style={styles.resetButtonText}>Reset Password</Text>
-                </TouchableOpacity>
+                <View style={styles.cardActions}>
+                  <TouchableOpacity style={styles.editButton} onPress={() => navigation.navigate('EmployeeEdit', { id: e._id })}>
+                    <Text style={styles.editButtonText}>Edit</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.resetButton} onPress={() => resetPassword(e._id, e.name)}>
+                    <Text style={styles.resetButtonText}>Reset Password</Text>
+                  </TouchableOpacity>
+                </View>
               )}
             </View>
           ))
         )}
       </ScrollView>
-    </View>
+    </ScreenShell>
   );
 }
 
@@ -167,7 +179,10 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: 'row', marginBottom: 6 },
   infoLabel: { ...typography.body.medium, color: colors.textSecondary, width: 100 },
   infoValue: { ...typography.body.medium, color: colors.textPrimary, flex: 1 },
-  resetButton: { paddingVertical: 10, borderRadius: 8, backgroundColor: colors.warning, alignItems: 'center' },
+  cardActions: { flexDirection: 'row', gap: 8 },
+  editButton: { flex: 1, paddingVertical: 10, borderRadius: 8, backgroundColor: colors.primary, alignItems: 'center' },
+  editButtonText: { ...typography.label.medium, color: colors.textLight, fontWeight: '600' },
+  resetButton: { flex: 1, paddingVertical: 10, borderRadius: 8, backgroundColor: colors.warning, alignItems: 'center' },
   resetButtonText: { ...typography.label.medium, color: colors.textLight, fontWeight: '600' },
 });
 

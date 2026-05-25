@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl, Alert, ActivityIndicator } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { colors, gradients } from '../../theme/colors';
+import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 
 export default function TrainersActiveScreen({ navigation }: any) {
@@ -32,29 +33,14 @@ export default function TrainersActiveScreen({ navigation }: any) {
     loadData();
   };
 
-  if (loading && !refreshing) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading trainers...</Text>
-      </View>
-    );
-  }
-
   return (
-    <View style={styles.container}>
-      <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
-        <View style={styles.headerContent}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Text style={styles.backIcon}>←</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Active Trainers</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('TrainersNew')} style={styles.addButton}>
-            <Text style={styles.addIcon}>+</Text>
-          </TouchableOpacity>
-        </View>
-      </LinearGradient>
-      <ScrollView style={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+    <ScreenShell
+      title="Active Trainers"
+      loading={loading && !refreshing}
+      refreshing={refreshing}
+      onRefresh={onRefresh}
+    >
+<ScrollView style={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         {trainers.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyIcon}>👨‍🏫</Text>
@@ -66,11 +52,22 @@ export default function TrainersActiveScreen({ navigation }: any) {
               <Text style={styles.trainerName}>{trainer.name || 'Trainer'}</Text>
               <Text style={styles.trainerEmail}>{trainer.email || '-'}</Text>
               {trainer.mobile && <Text style={styles.trainerMobile}>Mobile: {trainer.mobile}</Text>}
+              {trainer.zone && <Text style={styles.trainerMeta}>Zone: {trainer.zone}</Text>}
+              {trainer.trainerType && <Text style={styles.trainerMeta}>Type: {trainer.trainerType}</Text>}
+              {(trainer.trainerProducts || []).length > 0 && (
+                <Text style={styles.trainerMeta}>Products: {(trainer.trainerProducts || []).join(', ')}</Text>
+              )}
+              <TouchableOpacity
+                style={styles.editButton}
+                onPress={() => navigation.navigate('TrainersEdit', { id: trainer._id })}
+              >
+                <Text style={styles.editButtonText}>Edit</Text>
+              </TouchableOpacity>
             </View>
           ))
         )}
       </ScrollView>
-    </View>
+    </ScreenShell>
   );
 }
 
@@ -93,6 +90,9 @@ const styles = StyleSheet.create({
   trainerName: { ...typography.heading.h3, color: colors.textPrimary, marginBottom: 8 },
   trainerEmail: { ...typography.body.medium, color: colors.textSecondary, marginBottom: 4 },
   trainerMobile: { ...typography.body.medium, color: colors.textSecondary },
+  trainerMeta: { ...typography.body.small, color: colors.textSecondary, marginTop: 4 },
+  editButton: { marginTop: 12, paddingVertical: 10, borderRadius: 8, backgroundColor: colors.primary, alignItems: 'center' },
+  editButtonText: { ...typography.label.medium, color: colors.textLight, fontWeight: '600' },
 });
 
 

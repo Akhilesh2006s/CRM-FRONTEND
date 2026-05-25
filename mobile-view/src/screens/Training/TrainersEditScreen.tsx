@@ -9,7 +9,8 @@ import MessageBanner from '../../components/MessageBanner';
 
 const PRODUCT_CATEGORIES = ['Abacus', 'Vedic Maths', 'EEL', 'IIT'];
 
-export default function TrainersNewScreen({ navigation }: any) {
+export default function TrainersEditScreen({ navigation, route }: any) {
+  const id = route.params?.id as string;
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -26,17 +27,19 @@ export default function TrainersNewScreen({ navigation }: any) {
   });
   const [zones, setZones] = useState<string[]>([]);
   const [clustersByZone, setClustersByZone] = useState<Record<string, string[]>>({});
+  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
+    if (!id) return;
     (async () => {
       try {
-        const [pairsRaw, zonesRaw] = await Promise.all([
+        const [pairsRaw, zonesRaw, trainer] = await Promise.all([
           apiService.get<any[]>('/zones-clusters').catch(() => []),
           apiService.get<any[]>('/zones').catch(() => []),
+          apiService.get<any>(`/employees/${id}`),
         ]);
         const pairs = Array.isArray(pairsRaw) ? pairsRaw : [];
         const zoneDocs = Array.isArray(zonesRaw) ? zonesRaw : [];
@@ -51,11 +54,27 @@ export default function TrainersNewScreen({ navigation }: any) {
         const zoneNames = zoneDocs.map((z: any) => (z.name || '').trim()).filter(Boolean);
         setZones([...new Set([...Object.keys(zoneMap), ...zoneNames])].sort());
         setClustersByZone(zoneMap);
-      } catch {
-        /* zones optional */
+        setForm({
+          name: trainer.name || '',
+          email: trainer.email || '',
+          mobile: trainer.mobile || '',
+          state: trainer.state || '',
+          zone: trainer.zone || '',
+          cluster: trainer.cluster || '',
+          address1: trainer.address1 || '',
+          trainerProducts: trainer.trainerProducts || [],
+          trainerAbacusLevels: trainer.trainerAbacusLevels || '',
+          trainerVedicLevels: trainer.trainerVedicLevels || '',
+          trainerLevels: trainer.trainerLevels || '',
+          trainerType: trainer.trainerType || 'Employee',
+        });
+      } catch (e: any) {
+        setErrorMessage(e.message || 'Failed to load trainer');
+      } finally {
+        setLoading(false);
       }
     })();
-  }, []);
+  }, [id]);
 
   const toggleProduct = (p: string) => {
     setForm((f) => ({
@@ -67,14 +86,9 @@ export default function TrainersNewScreen({ navigation }: any) {
   };
 
   const handleSubmit = async () => {
-    setSuccessMessage(null);
     setErrorMessage(null);
-    if (!form.name?.trim()) {
-      setErrorMessage('Trainer name is required');
-      return;
-    }
-    if (!form.mobile?.trim() || form.mobile.replace(/\D/g, '').length < 10) {
-      setErrorMessage('Valid mobile number is required');
+    if (!form.name?.trim() || !form.mobile?.trim()) {
+      setErrorMessage('Name and mobile are required');
       return;
     }
     if (form.trainerProducts.length === 0) {
@@ -83,40 +97,26 @@ export default function TrainersNewScreen({ navigation }: any) {
     }
     setSubmitting(true);
     try {
-      await apiService.post('/trainers/create', form);
-      setSuccessMessage('Trainer created successfully.');
-      setForm({
-        name: '',
-        email: '',
-        mobile: '',
-        state: '',
-        zone: '',
-        cluster: '',
-        address1: '',
-        trainerProducts: [],
-        trainerAbacusLevels: '',
-        trainerVedicLevels: '',
-        trainerLevels: '',
-        trainerType: 'Employee',
-      });
+      await apiService.put(`/trainers/${id}`, form);
+      navigation.navigate('TrainersActive');
     } catch (error: any) {
-      setErrorMessage(error.message || 'Failed to create trainer');
+      setErrorMessage(error.message || 'Failed to update trainer');
     } finally {
       setSubmitting(false);
     }
   };
 
+  if (loading) {
+    return (
+      <ScreenShell title="Edit Trainer" loading>
+        <View />
+      </ScreenShell>
+    );
+  }
+
   return (
-    <ScreenShell title="Add Trainer">
+    <ScreenShell title="Edit Trainer">
       <ScrollView ref={scrollRef} style={styles.content} contentContainerStyle={styles.contentContainer}>
-        {successMessage && (
-          <MessageBanner
-            type="success"
-            message={successMessage}
-            actionLabel="View Trainers"
-            onAction={() => navigation.navigate('TrainersActive')}
-          />
-        )}
         {errorMessage && <MessageBanner type="error" message={errorMessage} onDismiss={() => setErrorMessage(null)} />}
 
         <FormField label="Trainer Name *" value={form.name} onChangeText={(t: string) => setForm((f) => ({ ...f, name: t }))} />
@@ -169,29 +169,15 @@ export default function TrainersNewScreen({ navigation }: any) {
         </View>
 
         {form.trainerProducts.includes('Abacus') && (
-          <FormField
-            label="Abacus levels known"
-            value={form.trainerAbacusLevels}
-            onChangeText={(t: string) => setForm((f) => ({ ...f, trainerAbacusLevels: t }))}
-            placeholder="e.g. Level 1–8"
-          />
+          <FormField label="Abacus levels known" value={form.trainerAbacusLevels} onChangeText={(t: string) => setForm((f) => ({ ...f, trainerAbacusLevels: t }))} />
         )}
         {form.trainerProducts.includes('Vedic Maths') && (
-          <FormField
-            label="Vedic Maths levels known"
-            value={form.trainerVedicLevels}
-            onChangeText={(t: string) => setForm((f) => ({ ...f, trainerVedicLevels: t }))}
-            placeholder="e.g. Level 1–5"
-          />
+          <FormField label="Vedic Maths levels known" value={form.trainerVedicLevels} onChangeText={(t: string) => setForm((f) => ({ ...f, trainerVedicLevels: t }))} />
         )}
-        <FormField
-          label="Other levels (optional)"
-          value={form.trainerLevels}
-          onChangeText={(t: string) => setForm((f) => ({ ...f, trainerLevels: t }))}
-        />
+        <FormField label="Other levels (optional)" value={form.trainerLevels} onChangeText={(t: string) => setForm((f) => ({ ...f, trainerLevels: t }))} />
 
         <TouchableOpacity style={[styles.submitButton, submitting && styles.submitButtonDisabled]} onPress={handleSubmit} disabled={submitting}>
-          {submitting ? <ActivityIndicator color={colors.textLight} /> : <Text style={styles.submitButtonText}>Create Trainer</Text>}
+          {submitting ? <ActivityIndicator color={colors.textLight} /> : <Text style={styles.submitButtonText}>Save Changes</Text>}
         </TouchableOpacity>
       </ScrollView>
     </ScreenShell>
