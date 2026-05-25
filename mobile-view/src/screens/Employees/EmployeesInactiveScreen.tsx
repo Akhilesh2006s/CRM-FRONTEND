@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, RefreshControl, Alert, ActivityIndicator } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { colors, gradients } from '../../theme/colors';
+import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
-import LogoutButton from '../../components/LogoutButton';
 
 interface Employee {
   _id: string;
   name: string;
   email: string;
   phone?: string;
+  mobile?: string;
   role: string;
   department?: string;
+  zone?: string;
 }
 
 export default function EmployeesInactiveScreen({ navigation }: any) {
@@ -45,28 +47,15 @@ export default function EmployeesInactiveScreen({ navigation }: any) {
 
   const filtered = items.filter((e) => e.name.toLowerCase().includes(searchQuery.toLowerCase()) || e.email.toLowerCase().includes(searchQuery.toLowerCase()) || (e.phone || '').includes(searchQuery));
 
-  if (loading && !refreshing) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading inactive employees...</Text>
-      </View>
-    );
-  }
-
   return (
-    <View style={styles.container}>
-      <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
-        <View style={styles.headerContent}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Text style={styles.backIcon}>←</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Inactive Employees</Text>
-          <LogoutButton />
-        </View>
-      </LinearGradient>
-      <View style={styles.searchContainer}>
-        <TextInput style={styles.searchInput} value={searchQuery} onChangeText={setSearchQuery} placeholder="Search name/email/phone" placeholderTextColor={colors.textSecondary} />
+    <ScreenShell
+      title="Inactive Employees"
+      loading={loading && !refreshing}
+      refreshing={refreshing}
+      onRefresh={onRefresh}
+    >
+<View style={styles.searchContainer}>
+        <WebInput style={styles.searchInput} value={searchQuery} onChangeText={setSearchQuery} placeholder="Search name/email/phone" />
         <TouchableOpacity style={styles.refreshButton} onPress={loadData}>
           <Text style={styles.refreshButtonText}>Refresh</Text>
         </TouchableOpacity>
@@ -103,12 +92,24 @@ export default function EmployeesInactiveScreen({ navigation }: any) {
                     <Text style={styles.infoValue}>{e.department}</Text>
                   </View>
                 )}
+                {e.zone && (
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Zone:</Text>
+                    <Text style={styles.infoValue}>{e.zone}</Text>
+                  </View>
+                )}
               </View>
+              <TouchableOpacity
+                style={styles.editButton}
+                onPress={() => navigation.navigate('EmployeeEdit', { id: e._id })}
+              >
+                <Text style={styles.editButtonText}>Edit</Text>
+              </TouchableOpacity>
             </View>
           ))
         )}
       </ScrollView>
-    </View>
+    </ScreenShell>
   );
 }
 
@@ -136,6 +137,8 @@ const styles = StyleSheet.create({
   roleBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   roleBadgeText: { ...typography.label.small, fontWeight: '600' },
   cardBody: { marginBottom: 12 },
+  editButton: { paddingVertical: 10, borderRadius: 8, backgroundColor: colors.primary, alignItems: 'center' },
+  editButtonText: { ...typography.label.medium, color: colors.textLight, fontWeight: '600' },
   infoRow: { flexDirection: 'row', marginBottom: 6 },
   infoLabel: { ...typography.body.medium, color: colors.textSecondary, width: 100 },
   infoValue: { ...typography.body.medium, color: colors.textPrimary, flex: 1 },

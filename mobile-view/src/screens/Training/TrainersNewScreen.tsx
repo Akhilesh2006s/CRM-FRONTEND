@@ -7,7 +7,7 @@ import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebSelect } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 
-const PRODUCT_CATEGORIES = ['Abacus', 'Vedic Maths', 'EEL', 'IIT'];
+import { TRAINER_CATEGORIES } from '../../constants/trainerCategories';
 
 export default function TrainersNewScreen({ navigation }: any) {
   const [form, setForm] = useState({
@@ -29,6 +29,7 @@ export default function TrainersNewScreen({ navigation }: any) {
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [categoryPickerKey, setCategoryPickerKey] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -57,14 +58,17 @@ export default function TrainersNewScreen({ navigation }: any) {
     })();
   }, []);
 
-  const toggleProduct = (p: string) => {
-    setForm((f) => ({
-      ...f,
-      trainerProducts: f.trainerProducts.includes(p)
-        ? f.trainerProducts.filter((x) => x !== p)
-        : [...f.trainerProducts, p],
-    }));
+  const addProductCategory = (value: string) => {
+    if (!value || form.trainerProducts.includes(value)) return;
+    setForm((f) => ({ ...f, trainerProducts: [...f.trainerProducts, value] }));
+    setCategoryPickerKey((k) => k + 1);
   };
+
+  const removeProductCategory = (p: string) => {
+    setForm((f) => ({ ...f, trainerProducts: f.trainerProducts.filter((x) => x !== p) }));
+  };
+
+  const availableCategories = TRAINER_CATEGORIES.filter((c) => !form.trainerProducts.includes(c));
 
   const handleSubmit = async () => {
     setSuccessMessage(null);
@@ -156,17 +160,26 @@ export default function TrainersNewScreen({ navigation }: any) {
         <FormField label="Address" value={form.address1} onChangeText={(t: string) => setForm((f) => ({ ...f, address1: t }))} multiline />
 
         <Text style={styles.sectionTitle}>Product Category *</Text>
+        {availableCategories.length > 0 && (
+          <WebSelect
+            key={`cat-${categoryPickerKey}`}
+            label="Add category"
+            value=""
+            onValueChange={addProductCategory}
+            items={availableCategories.map((c) => ({ label: c, value: c }))}
+            placeholder="Select product category"
+          />
+        )}
         <View style={styles.checkboxRow}>
-          {PRODUCT_CATEGORIES.map((p) => (
-            <TouchableOpacity
-              key={p}
-              style={[styles.chip, form.trainerProducts.includes(p) && styles.chipActive]}
-              onPress={() => toggleProduct(p)}
-            >
-              <Text style={[styles.chipText, form.trainerProducts.includes(p) && styles.chipTextActive]}>{p}</Text>
+          {form.trainerProducts.map((p) => (
+            <TouchableOpacity key={p} style={[styles.chip, styles.chipActive]} onPress={() => removeProductCategory(p)}>
+              <Text style={[styles.chipText, styles.chipTextActive]}>{p} ×</Text>
             </TouchableOpacity>
           ))}
         </View>
+        {form.trainerProducts.length === 0 && (
+          <Text style={styles.hint}>No categories selected</Text>
+        )}
 
         {form.trainerProducts.includes('Abacus') && (
           <FormField
@@ -227,6 +240,7 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: { ...typography.body.small, color: colors.textPrimary },
   chipTextActive: { color: colors.textLight },
+  hint: { ...typography.body.small, color: colors.textSecondary, marginBottom: 12 },
   submitButton: { marginTop: 24, borderRadius: 12, backgroundColor: colors.primary, paddingVertical: 16, alignItems: 'center' },
   submitButtonDisabled: { opacity: 0.6 },
   submitButtonText: { ...typography.label.large, color: colors.textLight, fontWeight: '600' },

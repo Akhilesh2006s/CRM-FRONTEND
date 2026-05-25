@@ -13,6 +13,11 @@ import { toast } from 'sonner'
 import { apiRequest } from '@/lib/api'
 import { INDIAN_STATES } from '@/lib/indianStatesCities'
 
+const TRAINER_CATEGORIES = ['Abacus', 'Vedic Maths', 'ECC', 'IIT']
+
+const normalizeProducts = (products: string[] = []) =>
+  products.map((p) => (p === 'EEL' ? 'ECC' : p))
+
 export default function EditTrainerPage() {
   const router = useRouter()
   const params = useParams()
@@ -66,7 +71,7 @@ export default function EditTrainerPage() {
           state: trainer.state || '',
           zone: trainer.zone || '',
           cluster: trainer.cluster || '',
-          trainerProducts: trainer.trainerProducts || [],
+          trainerProducts: normalizeProducts(trainer.trainerProducts || []),
           trainerLevels: trainer.trainerLevels || '',
           trainerAbacusLevels: trainer.trainerAbacusLevels || '',
           trainerVedicLevels: trainer.trainerVedicLevels || '',
@@ -106,13 +111,13 @@ export default function EditTrainerPage() {
     }
   }
 
-  const toggleProduct = (p: string) => {
-    setForm((f) => ({
-      ...f,
-      trainerProducts: f.trainerProducts.includes(p)
-        ? f.trainerProducts.filter((x) => x !== p)
-        : [...f.trainerProducts, p],
-    }))
+  const addProductCategory = (value: string) => {
+    if (!value || form.trainerProducts.includes(value)) return
+    setForm((f) => ({ ...f, trainerProducts: [...f.trainerProducts, value] }))
+  }
+
+  const removeProductCategory = (p: string) => {
+    setForm((f) => ({ ...f, trainerProducts: f.trainerProducts.filter((x) => x !== p) }))
   }
 
   if (loading) return <div className="p-6">Loading…</div>
@@ -182,16 +187,30 @@ export default function EditTrainerPage() {
             <Label>Address</Label>
             <Textarea className="bg-white text-neutral-900" value={form.address1} onChange={(e) => setForm((f) => ({ ...f, address1: e.target.value }))} />
           </div>
-          <div className="md:col-span-2">
-            <Label className="mb-1">Product Category *</Label>
-            <div className="flex flex-wrap gap-3 text-sm">
-              {['Abacus', 'Vedic Maths', 'EEL', 'IIT'].map((p) => (
-                <label key={p} className="inline-flex items-center gap-2">
-                  <input type="checkbox" checked={form.trainerProducts.includes(p)} onChange={() => toggleProduct(p)} />
-                  {p}
-                </label>
-              ))}
-            </div>
+          <div className="md:col-span-2 space-y-2">
+            <Label>Product Category *</Label>
+            <Select onValueChange={addProductCategory}>
+              <SelectTrigger className="bg-white text-neutral-900 max-w-md">
+                <SelectValue placeholder="Select product category to add" />
+              </SelectTrigger>
+              <SelectContent>
+                {TRAINER_CATEGORIES.filter((c) => !form.trainerProducts.includes(c)).map((c) => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {form.trainerProducts.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {form.trainerProducts.map((p) => (
+                  <span key={p} className="inline-flex items-center gap-1 rounded-full bg-neutral-200 px-3 py-1 text-sm">
+                    {p}
+                    <button type="button" className="text-neutral-600 hover:text-red-600" onClick={() => removeProductCategory(p)} aria-label={`Remove ${p}`}>×</button>
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-neutral-500">No categories selected</p>
+            )}
           </div>
           {form.trainerProducts.includes('Abacus') && (
             <div className="md:col-span-2">
