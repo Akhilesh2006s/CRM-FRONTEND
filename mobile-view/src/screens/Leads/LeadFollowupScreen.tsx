@@ -9,17 +9,40 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
-  TextInput,
+  Platform,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { colors, gradients } from '../../theme/colors';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import MessageBanner from '../../components/MessageBanner';
-import LogoutButton from '../../components/LogoutButton';
+import ScreenShell from '../../ui/ScreenShell';
+import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
 
 const DEAL_PRODUCT_STATUS_ORDER = ['Hot', 'Warm', 'Visit Again', 'Not Met Management', 'Not Interested'] as const;
+const SCHOOL_LEAD_STATUSES = new Set(['Hot', 'Warm', 'Cold']);
+const TERM_OPTIONS = [
+  { label: 'Term 1', value: 'Term 1' },
+  { label: 'Term 2', value: 'Term 2' },
+  { label: 'Both', value: 'Both' },
+];
+const PRODUCT_LINE_STATUS_OPTIONS = [
+  { label: 'Hot', value: 'Hot' },
+  { label: 'Warm', value: 'Warm' },
+  { label: 'Visit Again', value: 'Visit Again' },
+  { label: 'Not Met Management', value: 'Not Met Management' },
+  { label: 'Not Interested', value: 'Not Interested' },
+];
+
+type ProductInterested = {
+  product_name: string;
+  term: string;
+  status: string;
+  strength: number;
+  chance: number;
+  important: boolean;
+};
 
 function normalizeProductLineStatus(status?: string): string {
   const s = (status || '').trim();
@@ -48,65 +71,140 @@ function displayLeadDealPriority(lead: {
 }): string {
   const schoolLeadStatus = (lead.lead_status || '').trim();
   if (schoolLeadStatus) return schoolLeadStatus;
-
   const schoolPriority = (lead.priority || '').trim();
   if (schoolPriority) return schoolPriority;
-
   if (Array.isArray(lead.products) && lead.products.length > 0) {
     const derived = deriveLeadPriorityFromDealProducts(lead.products);
     if (derived) return derived;
   }
-  return 'Hot';
+  return 'Warm';
+}
+
+function leadProductsToInterested(lead: any): ProductInterested[] {
+  if (Array.isArray(lead.products) && lead.products.length > 0) {
+    return lead.products.map((p: any) => ({
+      product_name: p.product_name || p.product || '',
+      term: p.term || 'Term 1',
+      status: p.status || displayLeadDealPriority(lead) || 'Warm',
+      strength: Number(p.strength ?? p.quantity ?? 0) || 0,
+      chance: Number(p.chance ?? 0) || 0,
+      important: Boolean(p.important),
+    }));
+  }
+  if (typeof lead.products === 'string' && lead.products.trim()) {
+    return lead.products
+      .split(',')
+      .map((name: string) => name.trim())
+      .filter(Boolean)
+      .map((name: string) => ({
+        product_name: name,
+        term: 'Term 1',
+        status: displayLeadDealPriority(lead) || 'Warm',
+        strength: 0,
+        chance: 0,
+        important: false,
+      }));
+  }
+  return [];
+}
+
+function formatProductsSummary(products: any): string {
+  if (!products) return '—';
+  if (typeof products === 'string' && products.trim()) return products.trim();
+  if (Array.isArray(products) && products.length > 0) {
+    const text = products
+      .map((p: any) => {
+        const name = p.product_name || p.product || p.name || '';
+        if (!name) return '';
+        const term = p.term ? ` (${p.term})` : '';
+        const imp = p.important ? ' ★' : '';
+        return `${name}${term}${imp}`;
+      })
+      .filter(Boolean)
+      .join(', ');
+    return text || '—';
+  }
+  return '—';
 }
 
 export default function LeadFollowupScreen({ navigation }: any) {
   const { user } = useAuth();
+  const [allLeads, setAllLeads] = useState<any[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
+  const [zones, setZones] = useState<string[]>([]);
+  const [zoneFilter, setZoneFilter] = useState('');
+  const [schoolFilter, setSchoolFilter] = useState('');
+  const [mobileFilter, setMobileFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showFollowUpDatePicker, setShowFollowUpDatePicker] = useState(false);
   const [selectedLead, setSelectedLead] = useState<any>(null);
+  const [historyLead, setHistoryLead] = useState<any>(null);
+  const [history, setHistory] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const [productNames, setProductNames] = useState<string[]>([]);
   const [updateForm, setUpdateForm] = useState({
     follow_up_date: '',
-    priority: 'Hot',
     remarks: '',
+    productsInterested: [] as ProductInterested[],
   });
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
 
   useEffect(() => {
     loadLeads();
+    loadProductCatalog();
   }, []);
+
+  useEffect(() => {
+    applyFilters();
+  }, [allLeads, zoneFilter, schoolFilter, mobileFilter]);
+
+  const loadProductCatalog = async () => {
+    try {
+      let data: any;
+      try {
+        data = await apiService.get('/products/active');
+      } catch {
+        data = await apiService.get('/products');
+      }
+      const list = Array.isArray(data) ? data : data?.data || [];
+      const names = list
+        .map((p: any) => (typeof p === 'string' ? p : p.name || p.product_name || ''))
+        .filter(Boolean);
+      setProductNames([...new Set(names)]);
+    } catch {
+      setProductNames([]);
+    }
+  };
 
   const loadLeads = async () => {
     try {
       setLoading(true);
-      
       if (!user?._id) {
         Alert.alert('Error', 'User not found');
-        setLoading(false);
         return;
       }
 
-      // Fetch leads and dc-orders assigned to current employee (like web app)
       const [leadsResponse, dcOrdersResponse] = await Promise.all([
         apiService.get(`/leads?employee=${user._id}`).catch(() => []),
-        apiService.get(`/dc-orders?assigned_to=${user._id}`).catch(() => [])
+        apiService.get(`/dc-orders?assigned_to=${user._id}`).catch(() => []),
       ]);
 
-      const allData = Array.isArray(leadsResponse) ? leadsResponse : (leadsResponse?.data || []);
-      const dcOrders = Array.isArray(dcOrdersResponse) ? dcOrdersResponse : (dcOrdersResponse?.data || []);
+      const allData = Array.isArray(leadsResponse) ? leadsResponse : leadsResponse?.data || [];
+      const dcOrders = Array.isArray(dcOrdersResponse) ? dcOrdersResponse : dcOrdersResponse?.data || [];
 
-      // Filter out closed/saved/completed leads
       const activeLeads = (Array.isArray(allData) ? allData : [])
         .filter((lead: any) => {
-        const status = lead.status?.toLowerCase();
-        return status !== 'saved' && status !== 'completed' && status !== 'closed';
-      })
+          const status = lead.status?.toLowerCase();
+          return status !== 'saved' && status !== 'completed' && status !== 'closed';
+        })
         .map((lead: any) => ({ ...lead }));
 
-      // Convert dc-orders to lead format and exclude closed/saved leads
       const leadsFromOrders: any[] = dcOrders
         .filter((order: any) => {
           const status = order.status?.toLowerCase();
@@ -130,17 +228,10 @@ export default function LeadFollowupScreen({ navigation }: any) {
           priority: order.priority,
         }));
 
-      // Combine and filter follow-up leads
       const combinedLeads = [...activeLeads, ...leadsFromOrders];
-
-      // Filter leads that need follow-up - exclude closed/saved/completed leads
       const followUpLeads = combinedLeads.filter((lead: any) => {
         const status = lead.status?.toLowerCase();
-        // Exclude closed/saved/completed leads
-        if (status === 'saved' || status === 'completed' || status === 'closed') {
-          return false;
-        }
-        // Include pending/processing leads or leads with future follow-up dates
+        if (status === 'saved' || status === 'completed' || status === 'closed') return false;
         return (
           status === 'pending' ||
           status === 'processing' ||
@@ -148,19 +239,45 @@ export default function LeadFollowupScreen({ navigation }: any) {
         );
       });
 
-      // Remove duplicates by _id
-      const uniqueLeads = followUpLeads.filter((lead, index, self) =>
-        index === self.findIndex((l) => l._id === lead._id)
+      const uniqueLeads = followUpLeads.filter(
+        (lead, index, self) => index === self.findIndex((l) => l._id === lead._id)
       );
 
-      setLeads(uniqueLeads);
+      setAllLeads(uniqueLeads);
+      const uniqueZones = Array.from(
+        new Set(uniqueLeads.map((l) => l.zone).filter(Boolean))
+      ) as string[];
+      setZones(uniqueZones.sort());
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to load follow-up leads');
-      setLeads([]);
+      setAllLeads([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
+  };
+
+  const applyFilters = () => {
+    let filtered = [...allLeads];
+    if (zoneFilter && zoneFilter !== 'all') {
+      filtered = filtered.filter((l) =>
+        l.zone?.toLowerCase().includes(zoneFilter.toLowerCase())
+      );
+    }
+    if (schoolFilter) {
+      filtered = filtered.filter((l) =>
+        l.school_name?.toLowerCase().includes(schoolFilter.toLowerCase())
+      );
+    }
+    if (mobileFilter) {
+      filtered = filtered.filter((l) => l.contact_mobile?.includes(mobileFilter));
+    }
+    filtered.sort((a, b) => {
+      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return bTime - aTime;
+    });
+    setLeads(filtered);
   };
 
   const onRefresh = () => {
@@ -170,10 +287,12 @@ export default function LeadFollowupScreen({ navigation }: any) {
 
   const openUpdateModal = (lead: any) => {
     setSelectedLead(lead);
+    setModalError(null);
+    const prefilled = leadProductsToInterested(lead);
     setUpdateForm({
       follow_up_date: '',
-      priority: displayLeadDealPriority(lead),
       remarks: '',
+      productsInterested: prefilled.length > 0 ? prefilled : [],
     });
     setShowUpdateModal(true);
   };
@@ -181,7 +300,8 @@ export default function LeadFollowupScreen({ navigation }: any) {
   const closeUpdateModal = () => {
     setShowUpdateModal(false);
     setSelectedLead(null);
-    setUpdateForm({ follow_up_date: '', priority: 'Hot', remarks: '' });
+    setModalError(null);
+    setUpdateForm({ follow_up_date: '', remarks: '', productsInterested: [] });
   };
 
   const clearMessages = () => {
@@ -189,31 +309,102 @@ export default function LeadFollowupScreen({ navigation }: any) {
     setErrorMessage(null);
   };
 
+  const addInterestedProduct = () => {
+    setUpdateForm((prev) => ({
+      ...prev,
+      productsInterested: [
+        ...prev.productsInterested,
+        {
+          product_name: '',
+          term: 'Term 1',
+          status: 'Warm',
+          strength: 0,
+          chance: 0,
+          important: false,
+        },
+      ],
+    }));
+  };
+
+  const removeInterestedProduct = (index: number) => {
+    setUpdateForm((prev) => ({
+      ...prev,
+      productsInterested: prev.productsInterested.filter((_, i) => i !== index),
+    }));
+  };
+
+  const updateInterestedProduct = (
+    index: number,
+    field: keyof ProductInterested,
+    value: string | number | boolean
+  ) => {
+    setUpdateForm((prev) => ({
+      ...prev,
+      productsInterested: prev.productsInterested.map((item, i) =>
+        i === index ? { ...item, [field]: value } : item
+      ),
+    }));
+  };
+
   const handleUpdateFollowup = async () => {
     if (!selectedLead) return;
-    setSuccessMessage(null);
-    setErrorMessage(null);
+    setModalError(null);
 
-    if (!updateForm.follow_up_date || !updateForm.follow_up_date.trim()) {
-      setErrorMessage('Next Follow-up Date is required');
+    if (!updateForm.follow_up_date?.trim()) {
+      setModalError('Next Follow-up Date is required');
       return;
     }
-    if (!updateForm.remarks || !updateForm.remarks.trim()) {
-      setErrorMessage('Remarks is required');
+    if (!updateForm.remarks?.trim()) {
+      setModalError('Remarks is required');
+      return;
+    }
+
+    const selectedProducts = updateForm.productsInterested.filter(
+      (p) => p.product_name && p.product_name.trim()
+    );
+    if (selectedProducts.length === 0) {
+      setModalError('Add at least one product with Strength and Chance %');
+      return;
+    }
+    const missingStrengthOrChance = selectedProducts.some(
+      (p) => (Number(p.strength) || 0) <= 0 || (Number(p.chance) || 0) <= 0
+    );
+    if (missingStrengthOrChance) {
+      setModalError('Each product needs Strength > 0 and Chance % > 0');
       return;
     }
 
     setUpdating(true);
     try {
+      const validProducts = selectedProducts.map((p) => ({
+        product_name: p.product_name.trim(),
+        term: p.term || 'Term 1',
+        status: p.status || 'Warm',
+        strength: Number(p.strength) || 0,
+        chance: Number(p.chance) || 0,
+        important: Boolean(p.important),
+        quantity: Number(p.strength) || 0,
+        unit_price: 0,
+      }));
+
+      const derivedPriority = deriveLeadPriorityFromDealProducts(validProducts);
+      const schoolLeadStatus = (selectedLead.lead_status || '').trim();
       const payload: any = {
-        follow_up_date: new Date(updateForm.follow_up_date).toISOString(),
-        priority: updateForm.priority,
-        remarks: updateForm.remarks,
+        follow_up_date: new Date(updateForm.follow_up_date + 'T00:00:00').toISOString(),
+        remarks: updateForm.remarks.trim(),
+        productsInterested: validProducts,
       };
+      if (SCHOOL_LEAD_STATUSES.has(schoolLeadStatus)) {
+        payload.lead_status = schoolLeadStatus;
+        payload.priority = schoolLeadStatus;
+      } else {
+        payload.priority =
+          derivedPriority || selectedLead.priority || displayLeadDealPriority(selectedLead);
+      }
 
       try {
         await apiService.put(`/dc-orders/${selectedLead._id}`, payload);
-      } catch (err: any) {
+      } catch {
         await apiService.put(`/leads/${selectedLead._id}`, payload);
       }
 
@@ -221,56 +412,84 @@ export default function LeadFollowupScreen({ navigation }: any) {
       closeUpdateModal();
       loadLeads();
     } catch (error: any) {
-      setErrorMessage(error.message || 'Failed to update follow-up');
+      setModalError(error.message || 'Failed to create follow-up');
     } finally {
       setUpdating(false);
     }
   };
 
-  const handleEditLead = (lead: any) => {
-    navigation.navigate('LeadEdit', { id: lead._id });
-  };
-
-  const handleCloseLead = (lead: any) => {
-    Alert.alert(
-      'Close Lead',
-      'Are you sure you want to close this lead?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Close',
-          style: 'destructive',
-          onPress: () => navigation.navigate('LeadClose', { id: lead._id }),
-        },
-      ]
-    );
-  };
-
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return '-';
+  const openHistoryModal = async (lead: any) => {
+    setHistoryLead(lead);
+    setShowHistoryModal(true);
+    setHistory([]);
+    setHistoryLoading(true);
     try {
-      return new Date(dateString).toLocaleDateString('en-IN', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric'
-      });
+      let historyData: any[] = [];
+      try {
+        const apiHistory = await apiService.get(`/dc-orders/${lead._id}/history`);
+        if (Array.isArray(apiHistory)) historyData = apiHistory;
+      } catch {
+        /* leads API has no history */
+      }
+      try {
+        const full = await apiService.get(`/dc-orders/${lead._id}`);
+        if (full?.updateHistory && Array.isArray(full.updateHistory)) {
+          const existing = new Set(historyData.map((h) => new Date(h.updatedAt).getTime()));
+          full.updateHistory.forEach((entry: any) => {
+            const t = new Date(entry.updatedAt).getTime();
+            if (!existing.has(t)) {
+              historyData.push(entry);
+              existing.add(t);
+            }
+          });
+        }
+        if (full) setHistoryLead({ ...lead, ...full });
+      } catch {
+        /* ignore */
+      }
+      if (historyData.length === 0 && lead.createdAt) {
+        historyData.push({
+          follow_up_date: lead.follow_up_date || null,
+          remarks: lead.remarks || 'Lead created',
+          priority: lead.lead_status || displayLeadDealPriority(lead),
+          productsInterested: leadProductsToInterested(lead),
+          updatedAt: lead.createdAt,
+          updatedBy: { name: 'System' },
+        });
+      }
+      historyData.sort(
+        (a, b) =>
+          new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime()
+      );
+      setHistory(historyData);
     } catch {
-      return '-';
+      if (lead.createdAt) {
+        setHistory([
+          {
+            follow_up_date: lead.follow_up_date || null,
+            remarks: lead.remarks || 'Lead created',
+            priority: displayLeadDealPriority(lead),
+            updatedAt: lead.createdAt,
+          },
+        ]);
+      }
+    } finally {
+      setHistoryLoading(false);
     }
   };
 
   const formatDateTime = (dateString?: string) => {
-    if (!dateString) return '-';
+    if (!dateString) return '—';
     try {
       return new Date(dateString).toLocaleString('en-IN', {
         day: 'numeric',
         month: 'short',
         year: 'numeric',
         hour: '2-digit',
-        minute: '2-digit'
+        minute: '2-digit',
       });
     } catch {
-      return '-';
+      return '—';
     }
   };
 
@@ -285,37 +504,34 @@ export default function LeadFollowupScreen({ navigation }: any) {
       case 'visit again':
         return { bg: '#fbbf24' + '15', text: '#fbbf24', border: '#fbbf24' + '30' };
       default:
-        return { bg: colors.textSecondary + '15', text: colors.textSecondary, border: colors.textSecondary + '30' };
+        return {
+          bg: colors.textSecondary + '15',
+          text: colors.textSecondary,
+          border: colors.textSecondary + '30',
+        };
     }
   };
 
-  if (loading && !refreshing) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading follow-up leads...</Text>
-      </View>
-    );
-  }
+  const zoneItems = [
+    { label: 'All Zones', value: 'all' },
+    ...zones.map((z) => ({ label: z, value: z })),
+  ];
+
+  const productSelectItems = productNames.map((n) => ({ label: n, value: n }));
 
   return (
-    <View style={styles.container}>
-      <LinearGradient colors={gradients.primary as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
-        <View style={styles.headerContent}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Text style={styles.backIcon}>←</Text>
-          </TouchableOpacity>
-          <View style={styles.headerTitleContainer}>
-            <Text style={styles.headerTitle}>Follow-up Leads</Text>
-            <Text style={styles.headerSubtitle}>{leads.length} {leads.length === 1 ? 'lead' : 'leads'} pending</Text>
-          </View>
-          <LogoutButton />
-        </View>
-      </LinearGradient>
-      <ScrollView 
-        style={styles.content} 
+    <ScreenShell
+      title="Follow-up Leads"
+      loading={loading && !refreshing}
+      refreshing={refreshing}
+      onRefresh={onRefresh}
+    >
+      <ScrollView
+        style={styles.content}
         contentContainerStyle={styles.contentContainer}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+        }
       >
         {successMessage && (
           <MessageBanner type="success" message={successMessage} onDismiss={clearMessages} />
@@ -323,122 +539,164 @@ export default function LeadFollowupScreen({ navigation }: any) {
         {errorMessage && (
           <MessageBanner type="error" message={errorMessage} onDismiss={clearMessages} />
         )}
+
+        <View style={styles.filtersCard}>
+          {zones.length > 0 && (
+            <WebSelect
+              label="Zone"
+              value={zoneFilter || 'all'}
+              onValueChange={(v) => setZoneFilter(v === 'all' ? '' : v)}
+              items={zoneItems}
+              placeholder="All Zones"
+            />
+          )}
+          <Text style={styles.filterLabel}>School Name</Text>
+          <WebInput
+            style={styles.filterInput}
+            placeholder="Search school..."
+            value={schoolFilter}
+            onChangeText={setSchoolFilter}
+          />
+          <Text style={styles.filterLabel}>Contact Mobile</Text>
+          <WebInput
+            style={styles.filterInput}
+            placeholder="Search mobile..."
+            value={mobileFilter}
+            onChangeText={setMobileFilter}
+            keyboardType="phone-pad"
+          />
+          <WebButton title="Refresh" onPress={loadLeads} variant="outline" />
+        </View>
+
         {leads.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <View style={styles.emptyIconContainer}>
-              <Text style={styles.emptyIcon}>📞</Text>
-            </View>
+            <Text style={styles.emptyIcon}>📞</Text>
             <Text style={styles.emptyTitle}>No Follow-up Leads</Text>
-            <Text style={styles.emptySubtitle}>All your leads are up to date or there are no pending follow-ups</Text>
+            <Text style={styles.emptySubtitle}>
+              {allLeads.length === 0
+                ? 'Create leads to see them here.'
+                : 'No leads match the current filters.'}
+            </Text>
           </View>
         ) : (
           leads.map((lead) => {
             const dealPriority = displayLeadDealPriority(lead);
             const priorityColors = getPriorityColor(dealPriority);
-            const isOverdue = lead.follow_up_date && new Date(lead.follow_up_date) < new Date();
-            
+            const isOverdue =
+              lead.follow_up_date && new Date(lead.follow_up_date) < new Date();
+
             return (
-              <TouchableOpacity 
-                key={lead._id} 
-                style={styles.card} 
-                onPress={() => navigation.navigate('LeadEdit', { id: lead._id })} 
-                activeOpacity={0.8}
-              >
+              <View key={lead._id} style={styles.card}>
                 <View style={styles.cardTop}>
                   <View style={styles.cardHeader}>
                     <View style={styles.schoolInfo}>
                       <Text style={styles.schoolName} numberOfLines={2}>
                         {lead.school_name || 'Unnamed School'}
                       </Text>
-                      {lead.location && (
+                      {lead.location ? (
                         <View style={styles.locationRow}>
                           <Text style={styles.locationIcon}>📍</Text>
                           <Text style={styles.locationText}>{lead.location}</Text>
                         </View>
-                      )}
+                      ) : null}
                     </View>
-                    <View style={[styles.priorityBadge, { backgroundColor: priorityColors.bg, borderColor: priorityColors.border }]}>
+                    <View
+                      style={[
+                        styles.priorityBadge,
+                        { backgroundColor: priorityColors.bg, borderColor: priorityColors.border },
+                      ]}
+                    >
                       <Text style={[styles.priorityText, { color: priorityColors.text }]}>
                         {dealPriority}
                       </Text>
                     </View>
                   </View>
                 </View>
-                
+
                 <View style={styles.divider} />
-                
+
                 <View style={styles.cardBody}>
                   <View style={styles.infoGrid}>
                     <View style={styles.infoItem}>
-                      <Text style={styles.infoIcon}>👤</Text>
-                      <View style={styles.infoContent}>
-                        <Text style={styles.infoLabel}>Contact</Text>
-                        <Text style={styles.infoValue} numberOfLines={1}>
-                          {lead.contact_person || '-'}
-                        </Text>
-                      </View>
+                      <Text style={styles.infoLabel}>Contact</Text>
+                      <Text style={styles.infoValue}>{lead.contact_person || '—'}</Text>
                     </View>
-                    
                     <View style={styles.infoItem}>
-                      <Text style={styles.infoIcon}>📱</Text>
-                      <View style={styles.infoContent}>
-                        <Text style={styles.infoLabel}>Mobile</Text>
-                        <Text style={styles.infoValue}>
-                          {lead.contact_mobile || '-'}
-                        </Text>
-                      </View>
+                      <Text style={styles.infoLabel}>Mobile</Text>
+                      <Text style={styles.infoValue}>{lead.contact_mobile || '—'}</Text>
                     </View>
                   </View>
-                  
-                  {lead.follow_up_date && (
-                    <View style={[styles.dateContainer, isOverdue && styles.dateContainerOverdue]}>
-                      <Text style={styles.dateIcon}>📅</Text>
-                      <Text style={styles.dateLabel}>Follow-up: </Text>
-                      <Text style={[styles.dateValue, isOverdue && styles.dateValueOverdue]}>
-                        {formatDateTime(lead.follow_up_date)}
-                      </Text>
-                    </View>
-                  )}
-                  
-                  {lead.remarks && (
+
+                  <View
+                    style={[
+                      styles.dateContainer,
+                      isOverdue && styles.dateContainerOverdue,
+                    ]}
+                  >
+                    <Text style={styles.dateLabel}>Follow-up date & time: </Text>
+                    <Text style={[styles.dateValue, isOverdue && styles.dateValueOverdue]}>
+                      {formatDateTime(lead.follow_up_date)}
+                    </Text>
+                  </View>
+
+                  <View style={styles.productsRow}>
+                    <Text style={styles.productsLabel}>Products interested: </Text>
+                    <Text style={styles.productsValue}>
+                      {formatProductsSummary(lead.products)}
+                    </Text>
+                  </View>
+
+                  {lead.remarks ? (
                     <View style={styles.remarksContainer}>
                       <Text style={styles.remarksLabel}>Remarks:</Text>
-                      <Text style={styles.remarksText} numberOfLines={2}>
+                      <Text style={styles.remarksText} numberOfLines={3}>
                         {lead.remarks}
                       </Text>
                     </View>
-                  )}
+                  ) : null}
                 </View>
-                
+
                 <View style={styles.cardFooter}>
-                  <View style={styles.actionButtons}>
-                    <TouchableOpacity
-                      style={[styles.actionButton, styles.updateButton]}
-                      onPress={() => openUpdateModal(lead)}
-                    >
-                      <Text style={styles.actionButtonText}>📅 Follow-up</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.actionButton, styles.editButton]}
-                      onPress={() => handleEditLead(lead)}
-                    >
-                      <Text style={styles.actionButtonText}>✏️ Edit</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.actionButton, styles.closeButton, { marginRight: 0 }]}
-                      onPress={() => handleCloseLead(lead)}
-                    >
-                      <Text style={[styles.actionButtonText, styles.closeButtonText]}>✅ Close</Text>
-                    </TouchableOpacity>
-                  </View>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.editButton]}
+                    onPress={() => navigation.navigate('LeadEdit', { id: lead._id })}
+                  >
+                    <Text style={styles.actionButtonText}>Edit Lead</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.updateButton]}
+                    onPress={() => openUpdateModal(lead)}
+                  >
+                    <Text style={styles.actionButtonText}>Create Follow-up</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.historyButton]}
+                    onPress={() => openHistoryModal(lead)}
+                  >
+                    <Text style={styles.actionButtonText}>View History</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.closeButton]}
+                    onPress={() =>
+                      Alert.alert('Close Lead', 'Close this lead?', [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Close',
+                          onPress: () => navigation.navigate('LeadClose', { id: lead._id }),
+                        },
+                      ])
+                    }
+                  >
+                    <Text style={styles.actionButtonText}>Close Lead</Text>
+                  </TouchableOpacity>
                 </View>
-              </TouchableOpacity>
+              </View>
             );
           })
         )}
       </ScrollView>
 
-      {/* Update Follow-up Modal */}
+      {/* Create Follow-up Modal */}
       <Modal visible={showUpdateModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -449,47 +707,147 @@ export default function LeadFollowupScreen({ navigation }: any) {
               </TouchableOpacity>
             </View>
             <ScrollView style={styles.modalBody}>
-              {errorMessage && (
-                <MessageBanner type="error" message={errorMessage} onDismiss={clearMessages} />
+              {modalError && (
+                <MessageBanner type="error" message={modalError} onDismiss={() => setModalError(null)} />
               )}
               {selectedLead && (
                 <>
-                  <Text style={styles.modalLabel}>School: {selectedLead.school_name || 'Unknown'}</Text>
-                  
-                  <Text style={styles.modalLabel}>Next Follow-up Date *</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="YYYY-MM-DD"
-                    value={updateForm.follow_up_date}
-                    onChangeText={(text) => setUpdateForm({ ...updateForm, follow_up_date: text })}
-                  />
-                  <Text style={styles.inputHint}>Format: YYYY-MM-DD (e.g., 2024-12-25)</Text>
+                  <Text style={styles.modalSchool}>{selectedLead.school_name || 'Unknown'}</Text>
 
-                  <Text style={styles.modalLabel}>Priority *</Text>
-                  <View style={styles.priorityContainer}>
-                    {['Hot', 'Warm', 'Cold', 'Visit Again'].map((priority) => (
+                  <Text style={styles.modalLabel}>Next Follow-up Date *</Text>
+                  <TouchableOpacity
+                    style={styles.dateTouchable}
+                    onPress={() => setShowFollowUpDatePicker(true)}
+                  >
+                    <Text
+                      style={[
+                        styles.dateText,
+                        !updateForm.follow_up_date && styles.datePlaceholder,
+                      ]}
+                    >
+                      {updateForm.follow_up_date || 'Tap to pick date'}
+                    </Text>
+                    <Text>📅</Text>
+                  </TouchableOpacity>
+
+                  {showFollowUpDatePicker && (
+                    <Modal visible transparent animationType="slide">
                       <TouchableOpacity
-                        key={priority}
-                        style={[
-                          styles.priorityButton,
-                          updateForm.priority === priority && styles.priorityButtonActive,
-                        ]}
-                        onPress={() => setUpdateForm({ ...updateForm, priority })}
-                      >
-                        <Text
-                          style={[
-                            styles.priorityButtonText,
-                            updateForm.priority === priority && styles.priorityButtonTextActive,
-                          ]}
-                        >
-                          {priority}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
+                        style={styles.dateOverlay}
+                        activeOpacity={1}
+                        onPress={() => setShowFollowUpDatePicker(false)}
+                      />
+                      <View style={styles.datePickerBox}>
+                        <View style={styles.datePickerHeader}>
+                          <Text style={styles.datePickerTitle}>Follow-up date</Text>
+                          <TouchableOpacity onPress={() => setShowFollowUpDatePicker(false)}>
+                            <Text style={styles.doneText}>Done</Text>
+                          </TouchableOpacity>
+                        </View>
+                        <DateTimePicker
+                          value={
+                            updateForm.follow_up_date
+                              ? new Date(updateForm.follow_up_date)
+                              : new Date()
+                          }
+                          mode="date"
+                          display={Platform.OS === 'ios' ? 'spinner' : 'calendar'}
+                          onChange={(_, d) => {
+                            if (d) {
+                              setUpdateForm((f) => ({
+                                ...f,
+                                follow_up_date: d.toISOString().split('T')[0],
+                              }));
+                            }
+                            if (Platform.OS === 'android') setShowFollowUpDatePicker(false);
+                          }}
+                        />
+                      </View>
+                    </Modal>
+                  )}
+
+                  <View style={styles.productsSectionHeader}>
+                    <Text style={styles.modalLabel}>Products Interested *</Text>
+                    <TouchableOpacity onPress={addInterestedProduct}>
+                      <Text style={styles.addProductLink}>+ Add Product</Text>
+                    </TouchableOpacity>
                   </View>
 
+                  {updateForm.productsInterested.length === 0 ? (
+                    <Text style={styles.hint}>No products added yet.</Text>
+                  ) : (
+                    updateForm.productsInterested.map((product, index) => (
+                      <View key={`pi-${index}`} style={styles.productRowCard}>
+                        <WebSelect
+                          label="Product"
+                          value={product.product_name}
+                          onValueChange={(v) =>
+                            updateInterestedProduct(index, 'product_name', v)
+                          }
+                          items={
+                            product.product_name &&
+                            !productNames.includes(product.product_name)
+                              ? [
+                                  ...productSelectItems,
+                                  { label: product.product_name, value: product.product_name },
+                                ]
+                              : productSelectItems
+                          }
+                          placeholder="Select product"
+                        />
+                        <WebSelect
+                          label="Term"
+                          value={product.term}
+                          onValueChange={(v) => updateInterestedProduct(index, 'term', v)}
+                          items={TERM_OPTIONS}
+                        />
+                        <WebSelect
+                          label="Status"
+                          value={product.status}
+                          onValueChange={(v) => updateInterestedProduct(index, 'status', v)}
+                          items={PRODUCT_LINE_STATUS_OPTIONS}
+                        />
+                        <WebInput
+                          style={styles.input}
+                          placeholder="Strength"
+                          value={String(product.strength || '')}
+                          onChangeText={(t) =>
+                            updateInterestedProduct(index, 'strength', Number(t) || 0)
+                          }
+                          keyboardType="number-pad"
+                        />
+                        <WebInput
+                          style={styles.input}
+                          placeholder="Chance %"
+                          value={String(product.chance || '')}
+                          onChangeText={(t) =>
+                            updateInterestedProduct(
+                              index,
+                              'chance',
+                              Math.min(100, Math.max(0, Number(t) || 0))
+                            )
+                          }
+                          keyboardType="number-pad"
+                        />
+                        <TouchableOpacity
+                          style={styles.importantToggle}
+                          onPress={() =>
+                            updateInterestedProduct(index, 'important', !product.important)
+                          }
+                        >
+                          <Text style={product.important ? styles.starOn : styles.starOff}>
+                            {product.important ? '★' : '☆'} Important
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => removeInterestedProduct(index)}>
+                          <Text style={styles.removeLink}>Remove</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))
+                  )}
+
                   <Text style={styles.modalLabel}>Remarks *</Text>
-                  <TextInput
+                  <WebInput
                     style={[styles.input, styles.textArea]}
                     placeholder="Enter remarks for this follow-up"
                     value={updateForm.remarks}
@@ -502,15 +860,15 @@ export default function LeadFollowupScreen({ navigation }: any) {
             </ScrollView>
             <View style={styles.modalFooter}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonCancel, { marginRight: 12 }]}
+                style={[styles.modalButton, styles.modalButtonCancel]}
                 onPress={closeUpdateModal}
               >
                 <Text style={styles.modalButtonTextCancel}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonSubmit, { marginRight: 0 }]}
+                style={[styles.modalButton, styles.modalButtonSubmit]}
                 onPress={handleUpdateFollowup}
-                disabled={updating || !updateForm.follow_up_date || !updateForm.remarks}
+                disabled={updating}
               >
                 {updating ? (
                   <ActivityIndicator color={colors.textLight} />
@@ -522,112 +880,269 @@ export default function LeadFollowupScreen({ navigation }: any) {
           </View>
         </View>
       </Modal>
-    </View>
+
+      {/* History Modal */}
+      <Modal visible={showHistoryModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Follow-up History</Text>
+              <TouchableOpacity onPress={() => setShowHistoryModal(false)}>
+                <Text style={styles.modalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.modalBody}>
+              {historyLead && (
+                <Text style={styles.modalSchool}>{historyLead.school_name}</Text>
+              )}
+              {historyLoading ? (
+                <ActivityIndicator color={colors.primary} style={{ marginVertical: 24 }} />
+              ) : history.length === 0 ? (
+                <Text style={styles.hint}>No history entries yet.</Text>
+              ) : (
+                history.map((item, idx) => (
+                  <View key={idx} style={styles.historyCard}>
+                    <Text style={styles.historyDate}>{formatDateTime(item.updatedAt)}</Text>
+                    <Text style={styles.historyMeta}>
+                      Status: {item.priority || displayLeadDealPriority(historyLead || {})}
+                    </Text>
+                    {item.follow_up_date ? (
+                      <Text style={styles.historyMeta}>
+                        Next follow-up: {formatDateTime(item.follow_up_date)}
+                      </Text>
+                    ) : null}
+                    {item.remarks ? (
+                      <Text style={styles.historyRemarks}>{item.remarks}</Text>
+                    ) : null}
+                    {Array.isArray(item.productsInterested) &&
+                    item.productsInterested.length > 0 ? (
+                      <Text style={styles.historyProducts}>
+                        Products:{' '}
+                        {item.productsInterested
+                          .map((p: any) => p.product_name)
+                          .filter(Boolean)
+                          .join(', ')}
+                      </Text>
+                    ) : null}
+                  </View>
+                ))
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
-  loadingText: { marginTop: 12, ...typography.body.medium, color: colors.textSecondary },
-  header: { paddingHorizontal: 20, paddingTop: 50, paddingBottom: 20, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
-  headerContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  backButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  backIcon: { fontSize: 24, color: colors.textLight, fontWeight: 'bold' },
-  headerTitleContainer: { flex: 1, alignItems: 'center' },
-  headerTitle: { ...typography.heading.h1, color: colors.textLight, marginBottom: 4 },
-  headerSubtitle: { ...typography.body.small, color: colors.textLight + 'CC' },
-  placeholder: { width: 40 },
   content: { flex: 1 },
   contentContainer: { padding: 16, paddingBottom: 32 },
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60 },
-  emptyIconContainer: { marginBottom: 16 },
-  emptyIcon: { fontSize: 64 },
-  emptyTitle: { ...typography.heading.h2, color: colors.textPrimary, marginBottom: 8, textAlign: 'center' },
-  emptySubtitle: { ...typography.body.medium, color: colors.textSecondary, textAlign: 'center', paddingHorizontal: 32 },
-  card: { 
-    backgroundColor: colors.backgroundLight, 
-    borderRadius: 16, 
-    marginBottom: 16, 
-    shadowColor: colors.shadowDark, 
-    shadowOffset: { width: 0, height: 2 }, 
-    shadowOpacity: 0.1, 
-    shadowRadius: 8, 
+  filtersCard: {
+    backgroundColor: colors.backgroundLight,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  filterLabel: {
+    ...typography.body.small,
+    color: colors.textSecondary,
+    marginBottom: 6,
+    marginTop: 8,
+  },
+  filterInput: {
+    backgroundColor: colors.background,
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 4,
+  },
+  emptyContainer: { alignItems: 'center', paddingVertical: 48 },
+  emptyIcon: { fontSize: 48, marginBottom: 12 },
+  emptyTitle: { ...typography.heading.h2, color: colors.textPrimary, marginBottom: 8 },
+  emptySubtitle: {
+    ...typography.body.medium,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    paddingHorizontal: 24,
+  },
+  card: {
+    backgroundColor: colors.backgroundLight,
+    borderRadius: 16,
+    marginBottom: 16,
+    shadowColor: colors.shadowDark,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
     elevation: 3,
     overflow: 'hidden',
   },
   cardTop: { padding: 16, paddingBottom: 12 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   schoolInfo: { flex: 1, marginRight: 12 },
-  schoolName: { ...typography.heading.h3, color: colors.textPrimary, marginBottom: 8 },
-  locationRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
+  schoolName: { ...typography.heading.h3, color: colors.textPrimary, marginBottom: 4 },
+  locationRow: { flexDirection: 'row', alignItems: 'center' },
   locationIcon: { fontSize: 14, marginRight: 4 },
   locationText: { ...typography.body.small, color: colors.textSecondary },
-  priorityBadge: { 
-    paddingHorizontal: 12, 
-    paddingVertical: 6, 
-    borderRadius: 12, 
-    borderWidth: 1,
-  },
+  priorityBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, borderWidth: 1 },
   priorityText: { ...typography.body.small, fontWeight: '600', fontSize: 11 },
   divider: { height: 1, backgroundColor: colors.border, marginHorizontal: 16 },
   cardBody: { padding: 16, paddingTop: 12 },
   infoGrid: { flexDirection: 'row', marginBottom: 12 },
-  infoItem: { flex: 1, flexDirection: 'row', marginRight: 16 },
-  infoIcon: { fontSize: 18, marginRight: 8, marginTop: 2 },
-  infoContent: { flex: 1 },
-  infoLabel: { ...typography.body.small, color: colors.textSecondary, marginBottom: 4 },
+  infoItem: { flex: 1, marginRight: 8 },
+  infoLabel: { ...typography.body.small, color: colors.textSecondary, marginBottom: 2 },
   infoValue: { ...typography.body.medium, color: colors.textPrimary, fontWeight: '500' },
-  dateContainer: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    padding: 12, 
-    backgroundColor: colors.info + '08', 
-    borderRadius: 8, 
-    marginBottom: 12,
+  dateContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    padding: 10,
+    backgroundColor: colors.info + '08',
+    borderRadius: 8,
+    marginBottom: 10,
   },
   dateContainerOverdue: { backgroundColor: colors.error + '08' },
-  dateIcon: { fontSize: 16, marginRight: 8 },
   dateLabel: { ...typography.body.small, color: colors.textSecondary },
   dateValue: { ...typography.body.medium, color: colors.textPrimary, fontWeight: '500' },
   dateValueOverdue: { color: colors.error, fontWeight: '600' },
-  remarksContainer: { marginTop: 8 },
+  productsRow: { marginBottom: 8 },
+  productsLabel: { ...typography.body.small, color: colors.textSecondary },
+  productsValue: { ...typography.body.medium, color: colors.textPrimary, marginTop: 4 },
+  remarksContainer: { marginTop: 4 },
   remarksLabel: { ...typography.body.small, color: colors.textSecondary, marginBottom: 4 },
   remarksText: { ...typography.body.medium, color: colors.textPrimary },
-  cardFooter: { 
-    padding: 16, 
-    paddingTop: 12, 
-    borderTopWidth: 1, 
+  cardFooter: {
+    padding: 12,
+    borderTopWidth: 1,
     borderTopColor: colors.border,
-    backgroundColor: colors.background + '50',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
-  actionButtons: { flexDirection: 'row' },
-  actionButton: { flex: 1, padding: 10, borderRadius: 8, alignItems: 'center', marginRight: 8 },
+  actionButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    minWidth: '47%',
+    alignItems: 'center',
+  },
   updateButton: { backgroundColor: colors.primary },
-  editButton: { backgroundColor: colors.info },
+  editButton: { backgroundColor: '#7c3aed' },
+  historyButton: { backgroundColor: colors.info },
   closeButton: { backgroundColor: colors.success },
   actionButtonText: { ...typography.body.small, color: colors.textLight, fontWeight: '600' },
-  closeButtonText: { color: colors.textLight },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: colors.backgroundLight, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '90%' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: colors.border },
+  modalContent: {
+    backgroundColor: colors.backgroundLight,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '92%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
   modalTitle: { ...typography.heading.h2, color: colors.textPrimary },
   modalClose: { fontSize: 24, color: colors.textSecondary },
-  modalBody: { padding: 20 },
-  modalLabel: { ...typography.body.medium, color: colors.textPrimary, marginBottom: 8, fontWeight: '600' },
-  input: { backgroundColor: colors.background, borderRadius: 12, padding: 12, ...typography.body.medium, color: colors.textPrimary, borderWidth: 1, borderColor: colors.border, marginBottom: 8 },
-  inputHint: { ...typography.body.small, color: colors.textSecondary, marginBottom: 16 },
-  textArea: { minHeight: 100, textAlignVertical: 'top' },
-  priorityContainer: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 16 },
-  priorityButton: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, marginRight: 8, marginBottom: 8 },
-  priorityButtonActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  priorityButtonText: { ...typography.body.small, color: colors.textPrimary },
-  priorityButtonTextActive: { color: colors.textLight, fontWeight: '600' },
-  modalFooter: { flexDirection: 'row', padding: 20, borderTopWidth: 1, borderTopColor: colors.border },
+  modalBody: { padding: 20, maxHeight: 480 },
+  modalSchool: { ...typography.body.medium, color: colors.textSecondary, marginBottom: 16 },
+  modalLabel: {
+    ...typography.body.medium,
+    color: colors.textPrimary,
+    marginBottom: 8,
+    fontWeight: '600',
+  },
+  input: {
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 12,
+  },
+  textArea: { minHeight: 90, textAlignVertical: 'top' },
+  hint: { ...typography.body.small, color: colors.textSecondary, marginBottom: 12 },
+  dateTouchable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 16,
+  },
+  dateText: { ...typography.body.medium, color: colors.textPrimary },
+  datePlaceholder: { color: colors.textSecondary },
+  dateOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
+  datePickerBox: {
+    backgroundColor: colors.backgroundLight,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingBottom: 24,
+  },
+  datePickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  datePickerTitle: { ...typography.heading.h3, color: colors.textPrimary },
+  doneText: { color: colors.primary, fontWeight: '600' },
+  productsSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  addProductLink: { color: colors.primary, fontWeight: '600' },
+  productRowCard: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    backgroundColor: colors.background,
+  },
+  importantToggle: { marginBottom: 8 },
+  starOn: { color: '#eab308', fontWeight: '600' },
+  starOff: { color: colors.textSecondary },
+  removeLink: { color: colors.error, fontSize: 13 },
+  modalFooter: {
+    flexDirection: 'row',
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    gap: 12,
+  },
   modalButton: { flex: 1, padding: 16, borderRadius: 12, alignItems: 'center' },
-  modalButtonCancel: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },
+  modalButtonCancel: {
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   modalButtonSubmit: { backgroundColor: colors.primary },
   modalButtonTextCancel: { ...typography.body.medium, color: colors.textPrimary, fontWeight: '600' },
   modalButtonTextSubmit: { ...typography.body.medium, color: colors.textLight, fontWeight: '600' },
+  historyCard: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    backgroundColor: colors.background,
+  },
+  historyDate: { ...typography.body.medium, fontWeight: '600', color: colors.textPrimary },
+  historyMeta: { ...typography.body.small, color: colors.textSecondary, marginTop: 4 },
+  historyRemarks: { ...typography.body.medium, color: colors.textPrimary, marginTop: 8 },
+  historyProducts: { ...typography.body.small, color: colors.textSecondary, marginTop: 6 },
 });
-

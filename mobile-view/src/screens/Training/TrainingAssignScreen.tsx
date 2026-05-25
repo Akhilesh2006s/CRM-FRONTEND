@@ -1,11 +1,23 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Alert, ActivityIndicator } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { colors, gradients } from '../../theme/colors';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Alert,
+  Modal,
+  Platform,
+  TouchableOpacity,
+} from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
+import ScreenShell from '../../ui/ScreenShell';
+import { WebInput, WebButton } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
-import LogoutButton from '../../components/LogoutButton';
+
+const todayIso = () => new Date().toISOString().split('T')[0];
 
 export default function TrainingAssignScreen({ navigation }: any) {
   const [form, setForm] = useState({
@@ -27,11 +39,53 @@ export default function TrainingAssignScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [lastScheduleLabel, setLastScheduleLabel] = useState<string | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     loadOptions();
   }, []);
+
+  const loadLastTraining = useCallback(async () => {
+    const code = form.schoolCode.trim();
+    const name = form.schoolName.trim();
+    if (!code && !name) {
+      setLastScheduleLabel(null);
+      return;
+    }
+    const q = code
+      ? `schoolCode=${encodeURIComponent(code)}&status=Completed`
+      : `schoolName=${encodeURIComponent(name)}&status=Completed`;
+    try {
+      const rows = await apiService.get<any[]>(`/training?${q}`);
+      const completed = (Array.isArray(rows) ? rows : []).filter((r) => r.status === 'Completed');
+      if (completed.length === 0) {
+        setLastScheduleLabel(null);
+        return;
+      }
+      const latest = completed.reduce((a, b) => {
+        const da = new Date(a.trainingDate || 0).getTime();
+        const db = new Date(b.trainingDate || 0).getTime();
+        return db > da ? b : a;
+      });
+      const d = new Date(latest.trainingDate || '');
+      setLastScheduleLabel(
+        `Last training completed: ${d.toLocaleDateString('en-IN', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+        })}`
+      );
+    } catch {
+      setLastScheduleLabel(null);
+    }
+  }, [form.schoolCode, form.schoolName]);
+
+  useEffect(() => {
+    const t = setTimeout(loadLastTraining, 400);
+    return () => clearTimeout(t);
+  }, [loadLastTraining]);
 
   const loadOptions = async () => {
     try {
@@ -49,13 +103,9 @@ export default function TrainingAssignScreen({ navigation }: any) {
     }
   };
 
-  const clearMessages = () => {
+  const handleSubmit = async () => {
     setSuccessMessage(null);
     setErrorMessage(null);
-  };
-
-  const handleSubmit = async () => {
-    clearMessages();
     if (!form.schoolName?.trim()) {
       setErrorMessage('School Name is required');
       scrollRef.current?.scrollTo({ y: 0, animated: true });
@@ -71,6 +121,11 @@ export default function TrainingAssignScreen({ navigation }: any) {
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
+    if (form.trainingDate < todayIso()) {
+      setErrorMessage('Training date cannot be in the past');
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+      return;
+    }
     if (!form.subject?.trim()) {
       setErrorMessage('Subject is required');
       scrollRef.current?.scrollTo({ y: 0, animated: true });
@@ -79,17 +134,15 @@ export default function TrainingAssignScreen({ navigation }: any) {
 
     setSubmitting(true);
     try {
-      const payload = {
+      await apiService.post('/training/create', {
         ...form,
         status: 'Scheduled',
-      };
-      await apiService.post('/training', payload);
+        trainingDate: form.trainingDate,
+      });
       setSuccessMessage('Training assigned successfully.');
-      setErrorMessage(null);
       scrollRef.current?.scrollTo({ y: 0, animated: true });
     } catch (error: any) {
       setErrorMessage(error.message || 'Failed to assign training');
-      setSuccessMessage(null);
       scrollRef.current?.scrollTo({ y: 0, animated: true });
     } finally {
       setSubmitting(false);
@@ -97,114 +150,205 @@ export default function TrainingAssignScreen({ navigation }: any) {
   };
 
   if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading...</Text>
-      </View>
-    );
+    return <ScreenShell title="Assign Training" loading />;
   }
 
   return (
-    <View style={styles.container}>
-      <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
-        <View style={styles.headerContent}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Text style={styles.backIcon}>←</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Assign Training</Text>
-          <LogoutButton />
-        </View>
-      </LinearGradient>
-      <ScrollView ref={scrollRef} style={styles.content} contentContainerStyle={styles.contentContainer}>
-        {successMessage && (
-          <MessageBanner
-            type="success"
-            message={successMessage}
-            actionLabel="View Trainings"
-            onAction={() => navigation.navigate('TrainingList')}
+    <ScreenShell noScroll title="Assign Training">
+      <View style={styles.page}>
+        <ScrollView
+          ref={scrollRef}
+          style={styles.scroll}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+        >
+          {successMessage && (
+            <MessageBanner
+              type="success"
+              message={successMessage}
+              actionLabel="View Trainings"
+              onAction={() => navigation.navigate('TrainingList')}
+            />
+          )}
+          {errorMessage && (
+            <MessageBanner type="error" message={errorMessage} onDismiss={() => setErrorMessage(null)} />
+          )}
+
+          <FormField
+            label="School Code"
+            value={form.schoolCode}
+            onChangeText={(t) => setForm((f) => ({ ...f, schoolCode: t }))}
+            placeholder="Enter school code"
           />
-        )}
-        {errorMessage && (
-          <MessageBanner type="error" message={errorMessage} onDismiss={clearMessages} />
-        )}
-        <FormField label="School Code" value={form.schoolCode} onChangeText={(text: string) => setForm((f) => ({ ...f, schoolCode: text }))} placeholder="Enter school code" />
-        <FormField label="School Name *" value={form.schoolName} onChangeText={(text: string) => setForm((f) => ({ ...f, schoolName: text }))} placeholder="Enter school name" />
-        <FormField label="Zone" value={form.zone} onChangeText={(text: string) => setForm((f) => ({ ...f, zone: text }))} placeholder="Enter zone" />
-        <FormField label="Town" value={form.town} onChangeText={(text: string) => setForm((f) => ({ ...f, town: text }))} placeholder="Enter town" />
-        <FormField label="Subject *" value={form.subject} onChangeText={(text: string) => setForm((f) => ({ ...f, subject: text }))} placeholder="Enter subject" />
-        <View style={styles.fieldContainer}>
+          <FormField
+            label="School Name *"
+            value={form.schoolName}
+            onChangeText={(t) => setForm((f) => ({ ...f, schoolName: t }))}
+            placeholder="Enter school name"
+          />
+          {lastScheduleLabel ? (
+            <View style={styles.infoBox}>
+              <Text style={styles.infoText}>{lastScheduleLabel}</Text>
+            </View>
+          ) : null}
+
+          <FormField label="Zone" value={form.zone} onChangeText={(t) => setForm((f) => ({ ...f, zone: t }))} />
+          <FormField label="Town" value={form.town} onChangeText={(t) => setForm((f) => ({ ...f, town: t }))} />
+          <FormField
+            label="Product / Subject *"
+            value={form.subject}
+            onChangeText={(t) => setForm((f) => ({ ...f, subject: t }))}
+          />
+
           <Text style={styles.label}>Trainer *</Text>
-          <ScrollView style={styles.optionsContainer}>
+          <View style={styles.chipRow}>
             {trainers.map((trainer) => (
-              <TouchableOpacity key={trainer._id} style={[styles.option, form.trainerId === trainer._id && styles.optionSelected]} onPress={() => setForm((f) => ({ ...f, trainerId: trainer._id }))}>
-                <Text style={[styles.optionText, form.trainerId === trainer._id && styles.optionTextSelected]}>{trainer.name || trainer.email}</Text>
+              <TouchableOpacity
+                key={trainer._id}
+                style={[styles.chip, form.trainerId === trainer._id && styles.chipOn]}
+                onPress={() => setForm((f) => ({ ...f, trainerId: trainer._id }))}
+              >
+                <Text style={[styles.chipText, form.trainerId === trainer._id && styles.chipTextOn]}>
+                  {trainer.name || trainer.email}
+                </Text>
               </TouchableOpacity>
             ))}
-          </ScrollView>
+          </View>
+
+          <View style={styles.fieldContainer}>
+            <Text style={styles.label}>Training Date *</Text>
+            <TouchableOpacity style={styles.dateTouchable} onPress={() => setShowDatePicker(true)}>
+              <Text style={styles.dateTouchableText}>
+                {form.trainingDate || 'Tap to pick date (today or later)'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <FormField label="Term" value={form.term} onChangeText={(t) => setForm((f) => ({ ...f, term: t }))} />
+          <FormField
+            label="Training Level"
+            value={form.trainingLevel}
+            onChangeText={(t) => setForm((f) => ({ ...f, trainingLevel: t }))}
+          />
+          <FormField
+            label="Remarks"
+            value={form.remarks}
+            onChangeText={(t) => setForm((f) => ({ ...f, remarks: t }))}
+            multiline
+          />
+        </ScrollView>
+
+        <View style={styles.footer}>
+          <WebButton title={submitting ? 'Assigning…' : 'Add Training'} onPress={handleSubmit} loading={submitting} />
+          <WebButton title="Cancel" onPress={() => navigation.goBack()} variant="outline" disabled={submitting} />
         </View>
-        <View style={styles.fieldContainer}>
-          <Text style={styles.label}>Employee</Text>
-          <ScrollView style={styles.optionsContainer}>
-            {employees.map((emp) => (
-              <TouchableOpacity key={emp._id} style={[styles.option, form.employeeId === emp._id && styles.optionSelected]} onPress={() => setForm((f) => ({ ...f, employeeId: emp._id }))}>
-                <Text style={[styles.optionText, form.employeeId === emp._id && styles.optionTextSelected]}>{emp.name || emp.email}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-        <FormField label="Training Date *" value={form.trainingDate} onChangeText={(text: string) => setForm((f) => ({ ...f, trainingDate: text }))} placeholder="YYYY-MM-DD" />
-        <FormField label="Term" value={form.term} onChangeText={(text: string) => setForm((f) => ({ ...f, term: text }))} placeholder="Enter term" />
-        <FormField label="Training Level" value={form.trainingLevel} onChangeText={(text: string) => setForm((f) => ({ ...f, trainingLevel: text }))} placeholder="Enter level" />
-        <View style={styles.textAreaContainer}>
-          <Text style={styles.label}>Remarks</Text>
-          <TextInput style={styles.textArea} value={form.remarks} onChangeText={(text: string) => setForm((f) => ({ ...f, remarks: text }))} placeholder="Enter remarks" multiline numberOfLines={4} />
-        </View>
-        <TouchableOpacity style={[styles.submitButton, submitting && styles.submitButtonDisabled]} onPress={handleSubmit} disabled={submitting}>
-          <LinearGradient colors={[colors.primary, colors.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.submitButtonGradient}>
-            {submitting ? <ActivityIndicator color={colors.textLight} /> : <Text style={styles.submitButtonText}>Assign Training</Text>}
-          </LinearGradient>
-        </TouchableOpacity>
-      </ScrollView>
-    </View>
+      </View>
+
+      {showDatePicker && (
+        <Modal visible transparent animationType="slide">
+          <View style={styles.datePickerBox}>
+            <DateTimePicker
+              value={form.trainingDate ? new Date(form.trainingDate + 'T00:00:00') : new Date()}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              minimumDate={new Date()}
+              onChange={(_, d) => {
+                if (d) setForm((f) => ({ ...f, trainingDate: d.toISOString().split('T')[0] }));
+                if (Platform.OS === 'android') setShowDatePicker(false);
+              }}
+            />
+            <WebButton title="Done" onPress={() => setShowDatePicker(false)} />
+          </View>
+        </Modal>
+      )}
+    </ScreenShell>
   );
 }
 
-function FormField({ label, value, onChangeText, placeholder }: any) {
+function FormField({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  multiline,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (t: string) => void;
+  placeholder?: string;
+  multiline?: boolean;
+}) {
   return (
     <View style={styles.fieldContainer}>
       <Text style={styles.label}>{label}</Text>
-      <TextInput style={styles.input} value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={colors.textSecondary} />
+      <WebInput
+        style={[styles.input, multiline && styles.textArea]}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        multiline={multiline}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
-  loadingText: { marginTop: 12, ...typography.body.medium, color: colors.textSecondary },
-  header: { paddingHorizontal: 20, paddingTop: 50, paddingBottom: 20, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
-  headerContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  backButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  backIcon: { fontSize: 24, color: colors.textLight, fontWeight: 'bold' },
-  headerTitle: { ...typography.heading.h1, color: colors.textLight, flex: 1, textAlign: 'center' },
-  placeholder: { width: 40 },
-  content: { flex: 1 },
-  contentContainer: { padding: 20, paddingBottom: 40 },
-  fieldContainer: { marginBottom: 16 },
-  label: { ...typography.label.medium, color: colors.textPrimary, marginBottom: 8 },
-  input: { ...typography.body.medium, backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 14, color: colors.textPrimary },
-  optionsContainer: { maxHeight: 150 },
-  option: { padding: 12, marginBottom: 8, backgroundColor: colors.backgroundLight, borderRadius: 12, borderWidth: 1, borderColor: colors.border },
-  optionSelected: { backgroundColor: colors.primary + '20', borderColor: colors.primary },
-  optionText: { ...typography.body.medium, color: colors.textPrimary },
-  optionTextSelected: { color: colors.primary, fontWeight: '600' },
-  textAreaContainer: { marginBottom: 16 },
-  textArea: { ...typography.body.medium, backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 14, color: colors.textPrimary, minHeight: 100, textAlignVertical: 'top' },
-  submitButton: { marginTop: 24, borderRadius: 12, overflow: 'hidden' },
-  submitButtonDisabled: { opacity: 0.6 },
-  submitButtonGradient: { paddingVertical: 16, alignItems: 'center' },
-  submitButtonText: { ...typography.label.large, color: colors.textLight, fontWeight: '600' },
+  page: { flex: 1 },
+  scroll: { flex: 1 },
+  content: { padding: 20, paddingBottom: 16 },
+  fieldContainer: { marginBottom: 14 },
+  label: { ...typography.label.medium, color: colors.textPrimary, marginBottom: 6 },
+  input: {
+    backgroundColor: colors.backgroundLight,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 14,
+    color: colors.textPrimary,
+  },
+  textArea: { minHeight: 80, textAlignVertical: 'top' },
+  infoBox: {
+    backgroundColor: '#ecfdf5',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+  },
+  infoText: { ...typography.body.small, color: '#065f46' },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.backgroundLight,
+    ...typography.body.small,
+  },
+  chipOn: { borderColor: colors.primary, backgroundColor: colors.primary + '18' },
+  chipText: { ...typography.body.small, color: colors.textPrimary },
+  chipTextOn: { color: colors.primary, fontWeight: '600' },
+  dateTouchable: {
+    backgroundColor: colors.backgroundLight,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 14,
+  },
+  dateTouchableText: { ...typography.body.medium, color: colors.textPrimary },
+  footer: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 28,
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    backgroundColor: colors.backgroundLight,
+  },
+  datePickerBox: {
+    backgroundColor: colors.backgroundLight,
+    padding: 16,
+    marginTop: 'auto',
+  },
 });
-
-

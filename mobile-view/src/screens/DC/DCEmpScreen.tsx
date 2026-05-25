@@ -10,11 +10,11 @@ import {
   TextInput,
   Modal,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { colors, gradients } from '../../theme/colors';
+import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
-import LogoutButton from '../../components/LogoutButton';
 
 export default function DCEmpScreen({ navigation }: any) {
   const [activeTab, setActiveTab] = useState<'samples' | 'kits'>('samples');
@@ -130,21 +130,10 @@ export default function DCEmpScreen({ navigation }: any) {
   };
 
   return (
-    <View style={styles.container}>
-      <LinearGradient colors={gradients.primary as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
-        <View style={styles.headerContent}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Text style={styles.backIcon}>←</Text>
-          </TouchableOpacity>
-          <View style={styles.headerTitleContainer}>
-            <Text style={styles.headerTitle}>EMP DC</Text>
-            <Text style={styles.headerSubtitle}>Employee Kits & Samples</Text>
-          </View>
-          <LogoutButton />
-        </View>
-      </LinearGradient>
-
-      <View style={styles.tabContainer}>
+    <ScreenShell
+      title="EMP DC"
+    >
+<View style={styles.tabContainer}>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'samples' && styles.tabActive]}
           onPress={() => setActiveTab('samples')}
@@ -223,7 +212,7 @@ export default function DCEmpScreen({ navigation }: any) {
               <Text style={styles.formTitle}>Create Employee Kit</Text>
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Employee ID *</Text>
-                <TextInput
+                <WebInput
                   style={styles.input}
                   placeholder="User ObjectId"
                   value={form.employee_id}
@@ -248,7 +237,7 @@ export default function DCEmpScreen({ navigation }: any) {
               </View>
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Distribution Date *</Text>
-                <TextInput
+                <WebInput
                   style={styles.input}
                   placeholder="YYYY-MM-DD"
                   value={form.distribution_date}
@@ -257,7 +246,7 @@ export default function DCEmpScreen({ navigation }: any) {
               </View>
               <View style={styles.formGroup}>
                 <Text style={styles.label}>Expected Return Date</Text>
-                <TextInput
+                <WebInput
                   style={styles.input}
                   placeholder="YYYY-MM-DD"
                   value={form.expected_return_date}
@@ -304,7 +293,7 @@ export default function DCEmpScreen({ navigation }: any) {
           </View>
         )}
       </ScrollView>
-    </View>
+    </ScreenShell>
   );
 }
 

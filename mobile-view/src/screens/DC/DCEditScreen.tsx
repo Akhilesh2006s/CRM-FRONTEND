@@ -9,12 +9,12 @@ import {
   ActivityIndicator,
   TextInput,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { colors, gradients } from '../../theme/colors';
+import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
-import LogoutButton from '../../components/LogoutButton';
 
 export default function DCEditScreen({ navigation, route }: any) {
   const { id } = route.params || {};
@@ -100,18 +100,11 @@ export default function DCEditScreen({ navigation, route }: any) {
   }
 
   return (
-    <View style={styles.container}>
-      <LinearGradient colors={gradients.primary as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
-        <View style={styles.headerContent}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Text style={styles.backIcon}>←</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Edit DC</Text>
-          <LogoutButton />
-        </View>
-      </LinearGradient>
-
-      <ScrollView ref={scrollRef} style={styles.content} contentContainerStyle={styles.contentContainer}>
+    <ScreenShell
+      title="Edit DC"
+      loading={loading}
+    >
+<ScrollView ref={scrollRef} style={styles.content} contentContainerStyle={styles.contentContainer}>
         {successMessage && (
           <MessageBanner
             type="success"
@@ -126,7 +119,7 @@ export default function DCEditScreen({ navigation, route }: any) {
         <View style={styles.formCard}>
           <View style={styles.formSection}>
             <Text style={styles.label}>Customer Name</Text>
-            <TextInput
+            <WebInput
               style={styles.input}
               value={form.customerName}
               onChangeText={(text) => setForm({ ...form, customerName: text })}
@@ -135,7 +128,7 @@ export default function DCEditScreen({ navigation, route }: any) {
 
           <View style={styles.formSection}>
             <Text style={styles.label}>Customer Email</Text>
-            <TextInput
+            <WebInput
               style={styles.input}
               value={form.customerEmail}
               onChangeText={(text) => setForm({ ...form, customerEmail: text })}
@@ -145,7 +138,7 @@ export default function DCEditScreen({ navigation, route }: any) {
 
           <View style={styles.formSection}>
             <Text style={styles.label}>Customer Address</Text>
-            <TextInput
+            <WebInput
               style={[styles.input, styles.textArea]}
               value={form.customerAddress}
               onChangeText={(text) => setForm({ ...form, customerAddress: text })}
@@ -156,7 +149,7 @@ export default function DCEditScreen({ navigation, route }: any) {
 
           <View style={styles.formSection}>
             <Text style={styles.label}>Customer Phone</Text>
-            <TextInput
+            <WebInput
               style={styles.input}
               value={form.customerPhone}
               onChangeText={(text) => setForm({ ...form, customerPhone: text })}
@@ -166,7 +159,7 @@ export default function DCEditScreen({ navigation, route }: any) {
 
           <View style={styles.formSection}>
             <Text style={styles.label}>Product</Text>
-            <TextInput
+            <WebInput
               style={styles.input}
               value={form.product}
               onChangeText={(text) => setForm({ ...form, product: text })}
@@ -175,7 +168,7 @@ export default function DCEditScreen({ navigation, route }: any) {
 
           <View style={styles.formSection}>
             <Text style={styles.label}>Requested Quantity</Text>
-            <TextInput
+            <WebInput
               style={styles.input}
               value={form.requestedQuantity}
               onChangeText={(text) => setForm({ ...form, requestedQuantity: text })}
@@ -185,7 +178,7 @@ export default function DCEditScreen({ navigation, route }: any) {
 
           <View style={styles.formSection}>
             <Text style={styles.label}>Delivery Notes</Text>
-            <TextInput
+            <WebInput
               style={[styles.input, styles.textArea]}
               value={form.deliveryNotes}
               onChangeText={(text) => setForm({ ...form, deliveryNotes: text })}
@@ -215,7 +208,7 @@ export default function DCEditScreen({ navigation, route }: any) {
           </View>
         </View>
       </ScrollView>
-    </View>
+    </ScreenShell>
   );
 }
 

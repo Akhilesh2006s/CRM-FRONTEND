@@ -44,7 +44,7 @@ const expenseSchema = new mongoose.Schema(
 
     transportType: {
       type: String,
-      enum: ['Bike', 'Car', 'Bus', 'Train', 'Flight', 'Other', 'Auto'],
+      enum: ['Bike', 'Car', 'Bus', 'Train', 'Flight', 'Auto', 'Other'],
     },
     travelFrom: { type: String },
     travelTo: { type: String },
@@ -55,6 +55,7 @@ const expenseSchema = new mongoose.Schema(
     lodgeName: { type: String },
     city: { type: String },
     stayDate: { type: Date },
+    stayDateEnd: { type: Date },
     hotelAddress: { type: String },
 
     restaurantName: { type: String },

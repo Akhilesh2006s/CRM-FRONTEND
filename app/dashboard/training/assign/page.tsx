@@ -57,6 +57,8 @@ export default function AssignTrainingServicePage() {
   const [assignDialogOpen, setAssignDialogOpen] = useState(false)
   const [selectedSchool, setSelectedSchool] = useState<School | null>(null)
   const [assignType, setAssignType] = useState<'training' | 'service'>('training')
+  const [lastScheduleLabel, setLastScheduleLabel] = useState<string | null>(null)
+  const todayMin = new Date().toISOString().split('T')[0]
   const [assignForm, setAssignForm] = useState({
     subject: '',
     trainerId: '',
@@ -267,6 +269,55 @@ export default function AssignTrainingServicePage() {
     }
   }
 
+  const loadLastCompletedSchedule = async (school: School, type: 'training' | 'service') => {
+    const code = school.school_code?.trim()
+    const name = school.school_name?.trim()
+    if (!code && !name) {
+      setLastScheduleLabel(null)
+      return
+    }
+    const base = code
+      ? `schoolCode=${encodeURIComponent(code)}&status=Completed`
+      : `schoolName=${encodeURIComponent(name!)}&status=Completed`
+    try {
+      if (type === 'training') {
+        const rows = await apiRequest<{ trainingDate?: string; status?: string }[]>(`/training?${base}`)
+        const completed = (Array.isArray(rows) ? rows : []).filter((r) => r.status === 'Completed')
+        if (completed.length === 0) {
+          setLastScheduleLabel(null)
+          return
+        }
+        const latest = completed.reduce((a, b) => {
+          const da = new Date(a.trainingDate || 0).getTime()
+          const db = new Date(b.trainingDate || 0).getTime()
+          return db > da ? b : a
+        })
+        const d = new Date(latest.trainingDate || '')
+        setLastScheduleLabel(
+          `Last training completed: ${d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`
+        )
+      } else {
+        const rows = await apiRequest<{ serviceDate?: string; status?: string }[]>(`/services?${base}`)
+        const completed = (Array.isArray(rows) ? rows : []).filter((r) => r.status === 'Completed')
+        if (completed.length === 0) {
+          setLastScheduleLabel(null)
+          return
+        }
+        const latest = completed.reduce((a, b) => {
+          const da = new Date(a.serviceDate || 0).getTime()
+          const db = new Date(b.serviceDate || 0).getTime()
+          return db > da ? b : a
+        })
+        const d = new Date(latest.serviceDate || '')
+        setLastScheduleLabel(
+          `Last service completed: ${d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`
+        )
+      }
+    } catch {
+      setLastScheduleLabel(null)
+    }
+  }
+
   const handleAssignClick = (school: School, type: 'training' | 'service') => {
     setSelectedSchool(school)
     setAssignType(type)
@@ -280,20 +331,25 @@ export default function AssignTrainingServicePage() {
       remarks: '',
       status: 'Scheduled',
     })
+    setLastScheduleLabel(null)
     setAssignDialogOpen(true)
+    loadLastCompletedSchedule(school, type)
   }
 
   const handleAssignSubmit = async () => {
     if (!selectedSchool) return
 
+    if (assignForm.date && assignForm.date < todayMin) {
+      toast.error('Cannot schedule on a past date')
+      return
+    }
+
     if (assignType === 'training') {
-      // For training, validate required fields: Product, Trainer, Term, Training Date, Training Level
       if (!assignForm.subject || !assignForm.trainerId || !assignForm.date || !assignForm.term || !assignForm.trainingLevel) {
         toast.error('Please fill all required fields')
         return
       }
     } else {
-      // For service, validate: Product, Trainer, Term, Service Date
       if (!assignForm.subject || !assignForm.trainerId || !assignForm.date || !assignForm.term) {
         toast.error('Please fill all required fields')
         return
@@ -634,6 +690,17 @@ export default function AssignTrainingServicePage() {
             <DialogTitle>{assignType === 'training' ? 'Add Training Schedule Details' : 'Add Service Schedule Details'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {selectedSchool && (
+              <p className="text-sm text-neutral-700">
+                School: <span className="font-medium">{selectedSchool.school_name}</span>
+                {selectedSchool.school_code ? ` (${selectedSchool.school_code})` : ''}
+              </p>
+            )}
+            {lastScheduleLabel && (
+              <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+                {lastScheduleLabel}
+              </div>
+            )}
             <div>
               <Label>Product *</Label>
               <Select value={assignForm.subject} onValueChange={(v) => setAssignForm(f => ({ ...f, subject: v }))}>
@@ -695,6 +762,7 @@ export default function AssignTrainingServicePage() {
                   <Input
                     type="date"
                     className="bg-white text-neutral-900"
+                    min={todayMin}
                     value={assignForm.date}
                     onChange={(e) => setAssignForm(f => ({ ...f, date: e.target.value }))}
                     required
@@ -744,6 +812,7 @@ export default function AssignTrainingServicePage() {
                   <Input
                     type="date"
                     className="bg-white text-neutral-900"
+                    min={todayMin}
                     value={assignForm.date}
                     onChange={(e) => setAssignForm(f => ({ ...f, date: e.target.value }))}
                     required

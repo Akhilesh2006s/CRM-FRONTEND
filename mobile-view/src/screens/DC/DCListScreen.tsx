@@ -12,6 +12,8 @@ import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebButton, DataTable } from '../../ui/WebPrimitives';
 import { Alert } from 'react-native';
 
 interface DCItem {
@@ -130,8 +132,12 @@ export default function DCListScreen({ navigation, route }: any) {
 
   if (loading && !refreshing) {
     return (
-      <View style={styles.container}>
-        <View style={styles.header}>
+    <ScreenShell title="D C List"
+      loading={loading}
+      refreshing={refreshing}
+      onRefresh={() => { setRefreshing(true); loadDCs(); }}>
+      <PageSection title="D C List">
+<View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <Text style={styles.backButton}>← Back</Text>
           </TouchableOpacity>
@@ -144,8 +150,9 @@ export default function DCListScreen({ navigation, route }: any) {
           <ActivityIndicator size="large" color="#6366F1" />
           <Text style={styles.loadingText}>Loading DCs...</Text>
         </View>
-      </View>
-    );
+      </PageSection>
+    </ScreenShell>
+  );
   }
 
   return (

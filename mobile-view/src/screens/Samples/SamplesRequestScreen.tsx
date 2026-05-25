@@ -10,13 +10,13 @@ import {
   TextInput,
   Modal,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { colors, gradients } from '../../theme/colors';
+import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
-import LogoutButton from '../../components/LogoutButton';
 
 type ProductSelection = {
   product_name: string;
@@ -45,11 +45,16 @@ export default function SamplesRequestScreen({ navigation }: any) {
       setLoading(true);
       const [requestsData, productsData] = await Promise.all([
         apiService.get('/sample-requests/my').catch(() => []),
-        apiService.get('/products').catch(() => [])
+        apiService.get('/products/active').catch(() => apiService.get('/products').catch(() => [])),
       ]);
       setMyRequests(Array.isArray(requestsData) ? requestsData : []);
-      const prods = Array.isArray(productsData) ? productsData : [];
-      setAvailableProducts(prods.map((p: any) => p.productName || '').filter(Boolean));
+      const prods = Array.isArray(productsData) ? productsData : productsData?.data || [];
+      const names = prods
+        .map((p: any) =>
+          typeof p === 'string' ? p : p.productName || p.product_name || p.name || ''
+        )
+        .filter(Boolean);
+      setAvailableProducts([...new Set(names)]);
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to load data');
     } finally {
@@ -58,11 +63,19 @@ export default function SamplesRequestScreen({ navigation }: any) {
   };
 
   const addProduct = () => {
-    if (newProduct.product_name && newProduct.quantity > 0) {
-      setProducts([...products, { ...newProduct }]);
-      setNewProduct({ product_name: '', quantity: 1 });
-      setShowAddProductModal(false);
+    const name = newProduct.product_name?.trim();
+    if (!name) {
+      setErrorMessage('Product name is required');
+      return;
     }
+    if (newProduct.quantity < 1) {
+      setErrorMessage('Quantity must be at least 1');
+      return;
+    }
+    setProducts([...products, { product_name: name, quantity: newProduct.quantity }]);
+    setNewProduct({ product_name: '', quantity: 1 });
+    setShowAddProductModal(false);
+    setErrorMessage(null);
   };
 
   const removeProduct = (index: number) => {
@@ -121,21 +134,11 @@ export default function SamplesRequestScreen({ navigation }: any) {
   };
 
   return (
-    <View style={styles.container}>
-      <LinearGradient colors={gradients.primary as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
-        <View style={styles.headerContent}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Text style={styles.backIcon}>←</Text>
-          </TouchableOpacity>
-          <View style={styles.headerTitleContainer}>
-            <Text style={styles.headerTitle}>Sample Requests</Text>
-            <Text style={styles.headerSubtitle}>Request product samples</Text>
-          </View>
-          <LogoutButton />
-        </View>
-      </LinearGradient>
-
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+    <ScreenShell
+      title="Sample Requests"
+      loading={loading}
+    >
+<ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
         {successMessage && (
           <MessageBanner type="success" message={successMessage} onDismiss={clearMessages} />
         )}
@@ -147,7 +150,7 @@ export default function SamplesRequestScreen({ navigation }: any) {
           
           <View style={styles.formSection}>
             <Text style={styles.label}>Purpose</Text>
-            <TextInput
+            <WebInput
               style={styles.input}
               value={purpose}
               onChangeText={setPurpose}
@@ -243,29 +246,42 @@ export default function SamplesRequestScreen({ navigation }: any) {
                 <Text style={styles.modalClose}>✕</Text>
               </TouchableOpacity>
             </View>
-            <View style={styles.modalBody}>
-              <Text style={styles.modalLabel}>Product Name *</Text>
-              <ScrollView style={styles.productsList}>
-                {availableProducts.map((prod) => (
-                  <TouchableOpacity
-                    key={prod}
-                    style={styles.productOption}
-                    onPress={() => setNewProduct({ ...newProduct, product_name: prod })}
-                  >
-                    <Text style={styles.productOptionText}>{prod}</Text>
-                    {newProduct.product_name === prod && <Text style={styles.checkmark}>✓</Text>}
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-              <Text style={styles.modalLabel}>Quantity *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter quantity"
-                value={String(newProduct.quantity)}
-                onChangeText={(text) => setNewProduct({ ...newProduct, quantity: Number(text) || 1 })}
-                keyboardType="numeric"
-              />
-            </View>
+            <ScrollView style={styles.modalBody} keyboardShouldPersistTaps="handled">
+              {availableProducts.length > 0 ? (
+                <WebSelect
+                  label="Product Name *"
+                  value={newProduct.product_name}
+                  onValueChange={(v) => setNewProduct((p) => ({ ...p, product_name: v }))}
+                  items={availableProducts.map((name) => ({ label: name, value: name }))}
+                  placeholder="Select product"
+                />
+              ) : null}
+              <View style={styles.modalField}>
+                <Text style={styles.modalLabel}>
+                  {availableProducts.length > 0 ? 'Or enter product name *' : 'Product Name *'}
+                </Text>
+                <WebInput
+                  style={styles.input}
+                  placeholder="Enter product name"
+                  value={newProduct.product_name}
+                  onChangeText={(text) =>
+                    setNewProduct((p) => ({ ...p, product_name: text }))
+                  }
+                />
+              </View>
+              <View style={styles.modalField}>
+                <Text style={styles.modalLabel}>Quantity *</Text>
+                <WebInput
+                  style={styles.input}
+                  placeholder="Enter quantity"
+                  value={String(newProduct.quantity)}
+                  onChangeText={(text) =>
+                    setNewProduct((p) => ({ ...p, quantity: Math.max(1, Number(text) || 1) }))
+                  }
+                  keyboardType="number-pad"
+                />
+              </View>
+            </ScrollView>
             <View style={styles.modalFooter}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonCancel]}
@@ -284,7 +300,7 @@ export default function SamplesRequestScreen({ navigation }: any) {
           </View>
         </View>
       </Modal>
-    </View>
+    </ScreenShell>
   );
 }
 
@@ -336,12 +352,9 @@ const styles = StyleSheet.create({
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: colors.border },
   modalTitle: { ...typography.heading.h2, color: colors.textPrimary },
   modalClose: { fontSize: 24, color: colors.textSecondary },
-  modalBody: { padding: 20 },
+  modalBody: { padding: 20, maxHeight: 360 },
+  modalField: { marginBottom: 16 },
   modalLabel: { ...typography.body.medium, color: colors.textPrimary, marginBottom: 8, fontWeight: '600' },
-  productsList: { maxHeight: 200, marginBottom: 16 },
-  productOption: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, backgroundColor: colors.background, borderRadius: 8, marginBottom: 8 },
-  productOptionText: { ...typography.body.medium, color: colors.textPrimary },
-  checkmark: { fontSize: 18, color: colors.success },
   modalFooter: { flexDirection: 'row', padding: 20, borderTopWidth: 1, borderTopColor: colors.border, gap: 12 },
   modalButton: { flex: 1, padding: 16, borderRadius: 12, alignItems: 'center' },
   modalButtonCancel: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },

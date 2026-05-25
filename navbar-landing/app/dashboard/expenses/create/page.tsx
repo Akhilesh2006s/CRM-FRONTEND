@@ -291,24 +291,22 @@ export default function CreateExpensePage() {
             <div className="space-y-4 p-4 border border-blue-200 rounded-lg bg-blue-50">
               <h3 className="font-semibold text-blue-900">Travel Details</h3>
               
-              {/* Transport Type */}
               <div>
-                <Label htmlFor="transportType">Transport Type *</Label>
+                <Label htmlFor="transportType">Travel mode *</Label>
                 <Select
                   value={form.transportType}
                   onValueChange={(value) => setForm({ ...form, transportType: value })}
                   required
                 >
                   <SelectTrigger className="bg-white">
-                    <SelectValue placeholder="Select transport type" />
+                    <SelectValue placeholder="Select mode" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Auto">Auto</SelectItem>
-                    <SelectItem value="Bike">Bike</SelectItem>
-                    <SelectItem value="Bus">Bus</SelectItem>
-                    <SelectItem value="Car">Car</SelectItem>
-                    <SelectItem value="Flight">Flight</SelectItem>
-                    <SelectItem value="Train">Train</SelectItem>
+                    {['Bike', 'Car', 'Bus', 'Train', 'Flight', 'Other'].map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {m}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

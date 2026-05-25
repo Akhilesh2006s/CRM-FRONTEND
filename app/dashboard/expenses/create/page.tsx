@@ -33,6 +33,7 @@ type CartLine = {
   lodgeName: string
   city: string
   stayDate: string
+  stayDateEnd: string
   restaurantName: string
   mealDate: string
   otherExpenseType: string
@@ -43,6 +44,7 @@ type CartLine = {
 }
 
 const OTHER_TYPES = ['Parking', 'Toll', 'Courier', 'Printing', 'Miscellaneous', 'Other'] as const
+const TRAVEL_MODES = ['Bike', 'Car', 'Bus', 'Train', 'Flight', 'Auto'] as const
 
 function emptyLine(category: CartLine['category'] = 'travel'): CartLine {
   const today = new Date().toISOString().split('T')[0]
@@ -61,6 +63,7 @@ function emptyLine(category: CartLine['category'] = 'travel'): CartLine {
     lodgeName: '',
     city: '',
     stayDate: today,
+    stayDateEnd: today,
     restaurantName: '',
     mealDate: today,
     otherExpenseType: 'Miscellaneous',
@@ -103,6 +106,7 @@ async function submitOneExpense(line: CartLine, batchId: string, policy: Expense
     payload.lodgeName = line.lodgeName
     payload.city = line.city
     payload.stayDate = line.stayDate
+    if (line.stayDateEnd) payload.stayDateEnd = line.stayDateEnd
   }
   if (line.category === 'food') {
     payload.restaurantName = line.restaurantName
@@ -147,18 +151,18 @@ export default function CreateExpensePage() {
         setPolicy({
           skipFinanceStage: false,
           foodBillMandatoryAbove: 500,
-          requireTicketForModes: ['Bus', 'Train', 'Flight', 'Other'],
+          requireTicketForModes: ['Bus', 'Train', 'Flight'],
         })
       )
   }, [])
 
   const ticketRequired = useMemo(() => {
     if (!policy || draft.category !== 'travel') return false
-    return (
-      draft.transportType === 'Other' ||
-      policy.requireTicketForModes.includes(draft.transportType)
-    )
+    return policy.requireTicketForModes.includes(draft.transportType)
   }, [draft, policy])
+
+  const showGlobalBillUpload =
+    draft.category === 'travel' && !ticketRequired
 
   const billRequired = useMemo(() => {
     if (draft.category === 'accommodation') return true
@@ -224,8 +228,12 @@ export default function CreateExpensePage() {
       }
     }
     if (draft.category === 'accommodation') {
-      if (!draft.lodgeName || !draft.city || !draft.stayDate) {
-        toast.error('Lodge name, city, and stay date are required')
+      if (!draft.lodgeName || !draft.city || !draft.stayDate || !draft.stayDateEnd) {
+        toast.error('Lodge name, city, and stay period (from–to) are required')
+        return
+      }
+      if (new Date(draft.stayDateEnd) < new Date(draft.stayDate)) {
+        toast.error('Stay to date must be on or after stay from date')
         return
       }
       if (!draft.billFile) {
@@ -291,8 +299,8 @@ export default function CreateExpensePage() {
       <Card className="p-6 space-y-4">
         <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
           Proof rules: accommodation always needs a bill; food above ₹
-          {policy?.foodBillMandatoryAbove ?? 500} needs a bill; Bus/Train/Flight/Other travel needs a
-          ticket upload. Use GPS verify on travel to compare claimed distance with maps.
+          {policy?.foodBillMandatoryAbove ?? 500} needs a bill; Bus/Train/Flight travel needs a ticket
+          upload. Use GPS verify on travel to compare claimed distance with maps.
         </div>
 
         <div>
@@ -356,7 +364,7 @@ export default function CreateExpensePage() {
                   <SelectValue placeholder="Select mode" />
                 </SelectTrigger>
                 <SelectContent>
-                  {['Bike', 'Car', 'Bus', 'Train', 'Flight', 'Other'].map((m) => (
+                  {TRAVEL_MODES.map((m) => (
                     <SelectItem key={m} value={m}>
                       {m}
                     </SelectItem>
@@ -446,14 +454,26 @@ export default function CreateExpensePage() {
                 onChange={(e) => setDraft({ ...draft, city: e.target.value })}
               />
             </div>
-            <div>
-              <Label>Stay date *</Label>
-              <Input
-                type="date"
-                className="bg-white mt-1"
-                value={draft.stayDate}
-                onChange={(e) => setDraft({ ...draft, stayDate: e.target.value })}
-              />
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div>
+                <Label>Stay from *</Label>
+                <Input
+                  type="date"
+                  className="bg-white mt-1"
+                  value={draft.stayDate}
+                  onChange={(e) => setDraft({ ...draft, stayDate: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Stay to *</Label>
+                <Input
+                  type="date"
+                  className="bg-white mt-1"
+                  min={draft.stayDate || undefined}
+                  value={draft.stayDateEnd}
+                  onChange={(e) => setDraft({ ...draft, stayDateEnd: e.target.value })}
+                />
+              </div>
             </div>
             <div>
               <Label>Bill photo *</Label>
@@ -561,7 +581,7 @@ export default function CreateExpensePage() {
           />
         </div>
 
-        {!ticketRequired && draft.category !== 'accommodation' && (
+        {showGlobalBillUpload && (
           <div>
             <Label>Bill / receipt upload{billRequired ? ' *' : ''}</Label>
             <Input

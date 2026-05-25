@@ -1,6 +1,12 @@
 const Attendance = require('../models/Attendance');
 const User = require('../models/User');
 
+/** Active session: endTime unset or explicitly null */
+const activeAttendanceFilter = (employeeId) => ({
+  employeeId,
+  $or: [{ endTime: null }, { endTime: { $exists: false } }],
+});
+
 // @desc    Check-in attendance (first time or regular)
 // @route   POST /api/attendance/check-in
 // @access  Private
@@ -66,10 +72,9 @@ const checkOut = async (req, res) => {
     const employeeId = req.user._id;
     
     // Find today's active attendance (no endTime)
-    const attendance = await Attendance.findOne({
-      employeeId,
-      endTime: null,
-    }).sort({ startTime: -1 });
+    const attendance = await Attendance.findOne(activeAttendanceFilter(employeeId)).sort({
+      startTime: -1,
+    });
 
     if (!attendance) {
       return res.status(404).json({ message: 'No active attendance found' });
@@ -117,10 +122,9 @@ const getCurrentAttendance = async (req, res) => {
   try {
     const employeeId = req.user._id;
     
-    const attendance = await Attendance.findOne({
-      employeeId,
-      endTime: null,
-    }).sort({ startTime: -1 });
+    const attendance = await Attendance.findOne(activeAttendanceFilter(employeeId)).sort({
+      startTime: -1,
+    });
 
     if (!attendance) {
       return res.json({ attendance: null, isActive: false });

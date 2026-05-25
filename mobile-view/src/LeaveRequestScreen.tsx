@@ -112,7 +112,6 @@ export default function LeaveRequestScreen({ navigation }: any) {
 
   return (
     <ScreenShell
-      noScroll
       title="Apply for Leave"
       headerRight={
         <TouchableOpacity onPress={() => navigation.navigate('LeavesApproved')}>
@@ -120,12 +119,7 @@ export default function LeaveRequestScreen({ navigation }: any) {
         </TouchableOpacity>
       }
     >
-      <ScrollView
-        ref={scrollRef}
-        style={styles.scroll}
-        contentContainerStyle={styles.contentContainer}
-        keyboardShouldPersistTaps="handled"
-      >
+      <ScrollView ref={scrollRef} style={styles.content} contentContainerStyle={styles.contentContainer}>
         {successMessage && (
           <MessageBanner
             type="success"
@@ -264,8 +258,8 @@ function DatePickerModal({
 }
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1 },
-  contentContainer: { padding: 20, paddingBottom: 48, gap: 4 },
+  content: { flex: 1 },
+  contentContainer: { padding: 20, paddingBottom: 40, gap: 4 },
   headerLink: { color: colors.primary, fontWeight: '600', fontSize: 14 },
   fieldContainer: { marginBottom: 16 },
   label: { ...typography.label.medium, color: colors.textPrimary, marginBottom: 8 },

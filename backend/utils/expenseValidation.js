@@ -67,7 +67,7 @@ function validateExpensePayload(body, policy, fileInfo = {}) {
 
   const receiptOk = hasReceipt(body, fileInfo);
   const ticketOk = hasTicket(body, fileInfo);
-  const ticketModes = policy.requireTicketForModes || ['Bus', 'Train', 'Flight', 'Other'];
+  const ticketModes = policy.requireTicketForModes || ['Bus', 'Train', 'Flight'];
 
   if (category === 'travel') {
     const transportType = String(body.transportType || '').trim();
@@ -98,9 +98,6 @@ function validateExpensePayload(body, policy, fileInfo = {}) {
     if (ticketModes.includes(transportType) && !ticketOk) {
       errors.push(`Ticket/proof upload is required for travel mode: ${transportType}.`);
     }
-    if (transportType === 'Other' && !ticketOk) {
-      errors.push('Ticket upload is mandatory when travel mode is Other.');
-    }
   }
 
   if (category === 'accommodation') {
@@ -109,11 +106,17 @@ function validateExpensePayload(body, policy, fileInfo = {}) {
     }
     if (!String(body.city || '').trim()) errors.push('City is required.');
     const stayDate = body.stayDate || body.accommodationDate;
-    if (!stayDate) errors.push('Stay date is required.');
+    const stayDateEnd = body.stayDateEnd;
+    if (!stayDate) errors.push('Stay from date is required.');
+    if (!stayDateEnd) errors.push('Stay to date is required.');
+    if (stayDate && stayDateEnd && new Date(stayDateEnd) < new Date(stayDate)) {
+      errors.push('Stay to date must be on or after stay from date.');
+    }
     if (!receiptOk) errors.push('Bill photo upload is required for accommodation.');
     data.lodgeName = String(body.lodgeName || body.hotelName || '').trim();
     data.city = String(body.city || '').trim();
     data.stayDate = stayDate ? new Date(stayDate) : date;
+    data.stayDateEnd = stayDateEnd ? new Date(stayDateEnd) : data.stayDate;
     data.hotelAddress = body.hotelAddress || '';
   }
 

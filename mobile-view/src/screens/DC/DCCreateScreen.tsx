@@ -15,13 +15,13 @@ import {
   Modal,
   Platform,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { colors, gradients } from '../../theme/colors';
+import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
-import LogoutButton from '../../components/LogoutButton';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 
 type ProductRow = {
@@ -269,35 +269,19 @@ export default function DCCreateScreen({ navigation, route }: any) {
 
   if (!deal && !loading) {
     return (
-      <View style={styles.container}>
-        <LinearGradient colors={gradients.primary as [string, string]} style={styles.header}>
-          <View style={styles.headerContent}>
-            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-              <Text style={styles.backIcon}>←</Text>
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Raise DC</Text>
-            <LogoutButton />
-          </View>
-        </LinearGradient>
-        <View style={styles.errorBlock}>
+    <ScreenShell
+      title="Raise DC"
+      loading={loading}
+    >
+<View style={styles.errorBlock}>
           <Text style={styles.errorText}>{errorMessage || 'Deal not found'}</Text>
         </View>
-      </View>
-    );
+    </ScreenShell>
+  );
   }
 
   return (
     <View style={styles.container}>
-      <LinearGradient colors={gradients.primary as [string, string]} style={styles.header}>
-        <View style={styles.headerContent}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Text style={styles.backIcon}>←</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Raise DC</Text>
-          <LogoutButton />
-        </View>
-      </LinearGradient>
-
       <ScrollView ref={scrollRef} style={styles.content} contentContainerStyle={styles.contentContainer}>
         {successMessage && (
           <MessageBanner type="success" message={successMessage} onDismiss={clearMessages} />
@@ -439,19 +423,19 @@ export default function DCCreateScreen({ navigation, route }: any) {
                       ))}
                     </Picker>
                   </View>
-                  <TextInput
+                  <WebInput
                     style={[styles.tableInput, styles.colSpecs]}
                     value={row.specs}
                     onChangeText={(v) => updateProductRow(row.id, 'specs', v)}
                     placeholder="Specs"
                   />
-                  <TextInput
+                  <WebInput
                     style={[styles.tableInput, styles.colSubject]}
                     value={row.subject || ''}
                     onChangeText={(v) => updateProductRow(row.id, 'subject', v)}
                     placeholder="Subject"
                   />
-                  <TextInput
+                  <WebInput
                     style={[styles.tableInput, styles.colQty]}
                     value={String(row.strength)}
                     onChangeText={(v) => updateProductRow(row.id, 'strength', Number(v) || 0)}
@@ -479,7 +463,7 @@ export default function DCCreateScreen({ navigation, route }: any) {
                       ))}
                     </Picker>
                   </View>
-                  <TextInput
+                  <WebInput
                     style={[styles.tableInput, styles.colPrice]}
                     value={String(row.unit_price)}
                     onChangeText={(v) => updateProductRow(row.id, 'unit_price', Number(v) || 0)}
@@ -510,14 +494,7 @@ export default function DCCreateScreen({ navigation, route }: any) {
             onPress={handleSubmitToSeniorCoordinator}
             disabled={submitting}
           >
-            <LinearGradient colors={[colors.primary, colors.primaryDark]} style={styles.submitGradient}>
-              {submitting ? (
-                <ActivityIndicator color={colors.textLight} />
-              ) : (
-                <Text style={styles.submitButtonText}>Submit to Senior Coordinator</Text>
-              )}
-            </LinearGradient>
-          </TouchableOpacity>
+            </TouchableOpacity>
         </View>
       </ScrollView>
     </View>
@@ -540,13 +517,11 @@ function FormField({
   return (
     <View style={styles.fieldContainer}>
       <Text style={styles.label}>{label}</Text>
-      <TextInput
+      <WebInput
         style={[styles.input, !editable && styles.inputDisabled]}
         value={value}
         onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={colors.textSecondary}
-        editable={editable}
+        placeholder={placeholder} editable={editable}
       />
     </View>
   );

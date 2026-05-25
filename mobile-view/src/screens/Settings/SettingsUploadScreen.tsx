@@ -1,102 +1,182 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Alert, ActivityIndicator } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-// import { getDocumentAsync, DocumentPickerAsset } from 'expo-document-picker'; // Requires development build
-import { colors, gradients } from '../../theme/colors';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, Alert, Linking } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
+import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
 import { apiService, getApiUrl } from '../../services/api';
-import LogoutButton from '../../components/LogoutButton';
+import { useAuth } from '../../context/AuthContext';
+import { getRoleFlags } from '../../utils/roles';
 
+type UploadEntry = {
+  _id: string;
+  fileName: string;
+  originalName: string;
+  description: string;
+  dataType: string;
+  filePath: string;
+  uploadedByName: string;
+  createdAt: string;
+};
+
+const DATA_TYPES = [
+  { label: 'Schools', value: 'schools' },
+  { label: 'Employees', value: 'employees' },
+  { label: 'Products', value: 'products' },
+  { label: 'Other', value: 'other' },
+];
+
+/** Matches web `settings/upload` */
 export default function SettingsUploadScreen({ navigation }: any) {
-  const [file, setFile] = useState<{ name: string } | null>(null);
+  const { user } = useAuth();
+  const { isAdmin } = getRoleFlags(user);
+
+  const [uploads, setUploads] = useState<UploadEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [file, setFile] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
   const [description, setDescription] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const [dataType, setDataType] = useState('other');
+
+  const loadUploads = async () => {
+    setLoading(true);
+    try {
+      const data = await apiService.get('/settings/uploads');
+      setUploads(Array.isArray(data) ? data : []);
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to load upload history');
+      setUploads([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isAdmin) loadUploads();
+    else setLoading(false);
+  }, [isAdmin]);
 
   const pickFile = async () => {
-    // Document picker requires a development build (not available in Expo Go)
-    Alert.alert(
-      'Development Build Required',
-      'File picker functionality requires a custom development build. Please build the app using:\n\nnpx expo run:ios\n\nor\n\nnpx expo run:android',
-      [{ text: 'OK' }]
-    );
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
+      if (!result.canceled && result.assets?.[0]) {
+        setFile(result.assets[0]);
+      }
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Could not pick file');
+    }
   };
 
   const handleUpload = async () => {
     if (!file) {
-      Alert.alert('Error', 'Please select a file to upload.');
+      Alert.alert('Error', 'Please select a file');
       return;
     }
-    setSubmitting(true);
+    setUploading(true);
     try {
-      // Simplified: Post metadata only; actual file upload would require FormData
-      await apiService.post('/settings/upload', { fileName: file.name, description });
-      Alert.alert('Success', 'File metadata uploaded.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to upload file info');
+      const formData = new FormData();
+      formData.append('file', {
+        uri: file.uri,
+        name: file.name || 'upload',
+        type: file.mimeType || 'application/octet-stream',
+      } as any);
+      formData.append('description', description);
+      formData.append('dataType', dataType);
+      await apiService.upload('/settings/upload', formData);
+      Alert.alert('Success', 'File uploaded successfully');
+      setFile(null);
+      setDescription('');
+      setDataType('other');
+      loadUploads();
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Upload failed');
     } finally {
-      setSubmitting(false);
+      setUploading(false);
     }
   };
 
+  const formatDate = (iso: string) => {
+    try {
+      return new Date(iso).toLocaleString();
+    } catch {
+      return iso;
+    }
+  };
+
+  const openFile = (entry: UploadEntry) => {
+    const base = getApiUrl().replace(/\/api$/, '');
+    const path = entry.filePath?.startsWith('http') ? entry.filePath : `${base}${entry.filePath}`;
+    Linking.openURL(path).catch(() => Alert.alert('Error', 'Could not open file'));
+  };
+
+  if (!isAdmin) {
+    return (
+      <ScreenShell title="Data upload">
+        <View style={styles.denied}>
+          <Text style={styles.deniedText}>Admin privileges required for app data upload.</Text>
+          <WebButton title="Go back" onPress={() => navigation.goBack()} variant="outline" />
+        </View>
+      </ScreenShell>
+    );
+  }
+
   return (
-    <View style={styles.container}>
-      <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
-        <View style={styles.headerContent}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Text style={styles.backIcon}>←</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Upload Documents</Text>
-          <LogoutButton />
-        </View>
-      </LinearGradient>
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.connectionBox}>
-          <Text style={styles.connectionLabel}>API (this device)</Text>
-          <Text style={styles.connectionUrl} selectable>{getApiUrl()}</Text>
-          <Text style={styles.connectionHint}>If the phone can’t connect, set EXPO_PUBLIC_API_URL in .env to your laptop IP (see API_SETUP.md).</Text>
-        </View>
-        <TouchableOpacity style={styles.fileButton} onPress={pickFile}>
-          <Text style={styles.fileButtonText}>{file ? file.name : 'Select File'}</Text>
-        </TouchableOpacity>
-        <Text style={styles.label}>Description</Text>
-        <TextInput
-          style={[styles.input, { minHeight: 100, textAlignVertical: 'top' }]}
+    <ScreenShell title="Data upload" subtitle="Upload files and view history" loading={loading}>
+      <PageSection title="Upload file">
+        <WebButton
+          title={file ? file.name : 'Select file'}
+          variant="outline"
+          onPress={pickFile}
+        />
+        <WebLabel>Data type</WebLabel>
+        <WebSelect
+          value={dataType}
+          onValueChange={setDataType}
+          items={DATA_TYPES}
+        />
+        <WebLabel>Description</WebLabel>
+        <WebInput
+          placeholder="Optional description"
           value={description}
           onChangeText={setDescription}
-          placeholder="Enter description (optional)"
-          placeholderTextColor={colors.textSecondary}
           multiline
+          style={{ minHeight: 80 }}
         />
-        <TouchableOpacity style={[styles.submitButton, submitting && styles.submitButtonDisabled]} onPress={handleUpload} disabled={submitting}>
-          <LinearGradient colors={[colors.primary, colors.primaryDark]} style={styles.submitButtonGradient}>
-            {submitting ? <ActivityIndicator color={colors.textLight} /> : <Text style={styles.submitButtonText}>Upload</Text>}
-          </LinearGradient>
-        </TouchableOpacity>
-      </ScrollView>
-    </View>
+        <WebButton title={uploading ? 'Uploading…' : 'Upload'} onPress={handleUpload} loading={uploading} disabled={uploading} />
+      </PageSection>
+
+      <PageSection title="Upload history">
+        {uploads.length === 0 ? (
+          <Text style={styles.empty}>No uploads yet</Text>
+        ) : (
+          <>
+            <DataTable
+              columns={['File', 'Type', 'By', 'Date']}
+              rows={uploads.map((u) => [
+                u.originalName || u.fileName,
+                u.dataType,
+                u.uploadedByName || '—',
+                formatDate(u.createdAt),
+              ])}
+            />
+            {uploads.map((u) => (
+              <WebButton
+                key={u._id}
+                title={`Download ${u.originalName || u.fileName}`}
+                variant="outline"
+                onPress={() => openFile(u)}
+              />
+            ))}
+          </>
+        )}
+      </PageSection>
+    </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: { paddingHorizontal: 20, paddingTop: 50, paddingBottom: 20, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
-  headerContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  backButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  backIcon: { fontSize: 24, color: colors.textLight, fontWeight: 'bold' },
-  connectionBox: { backgroundColor: colors.backgroundLight, borderRadius: 12, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: colors.border },
-  connectionLabel: { ...typography.label.small, color: colors.textSecondary, marginBottom: 6 },
-  connectionUrl: { ...typography.body.medium, color: colors.primary, marginBottom: 8 },
-  connectionHint: { ...typography.body.small, color: colors.textSecondary },
-  headerTitle: { ...typography.heading.h1, color: colors.textLight, flex: 1, textAlign: 'center' },
-  placeholder: { width: 40 },
-  content: { padding: 20, gap: 16 },
-  fileButton: { backgroundColor: colors.backgroundLight, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.border },
-  fileButtonText: { ...typography.body.medium, color: colors.textPrimary },
-  label: { ...typography.label.medium, color: colors.textPrimary },
-  input: { ...typography.body.medium, backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 14, color: colors.textPrimary },
-  submitButton: { marginTop: 24, borderRadius: 12, overflow: 'hidden' },
-  submitButtonDisabled: { opacity: 0.6 },
-  submitButtonGradient: { paddingVertical: 16, alignItems: 'center' },
-  submitButtonText: { ...typography.label.large, color: colors.textLight, fontWeight: '600' },
+  empty: { ...typography.body.medium, color: colors.textSecondary, textAlign: 'center', paddingVertical: 16 },
+  denied: { flex: 1, padding: 24, justifyContent: 'center', gap: 16 },
+  deniedText: { ...typography.body.medium, color: colors.textSecondary, textAlign: 'center' },
 });
-

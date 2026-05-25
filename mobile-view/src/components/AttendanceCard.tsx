@@ -62,10 +62,8 @@ export default function AttendanceCard() {
 
   const checkCurrentAttendance = async () => {
     try {
-      const attendance = await apiService.get('/attendance/current');
-      if (attendance.attendance) {
-        setCurrentAttendance(attendance.attendance);
-      }
+      const data = await apiService.get('/attendance/current');
+      setCurrentAttendance(data.attendance ?? null);
     } catch (error) {
       console.error('Error checking attendance:', error);
     }
@@ -187,7 +185,7 @@ export default function AttendanceCard() {
         }
       ]);
     } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.message || 'Failed to submit attendance');
+      Alert.alert('Error', error?.message || 'Failed to submit attendance');
     } finally {
       setLoading(false);
     }
@@ -197,10 +195,11 @@ export default function AttendanceCard() {
     setLoading(true);
     try {
       await apiService.post('/attendance/check-out', {});
+      setCurrentAttendance(null);
       await checkCurrentAttendance();
       Alert.alert('Success', 'Attendance checked out successfully');
     } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.message || 'Failed to check out');
+      Alert.alert('Error', error?.message || 'Failed to check out');
     } finally {
       setLoading(false);
     }

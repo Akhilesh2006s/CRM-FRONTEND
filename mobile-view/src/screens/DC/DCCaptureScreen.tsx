@@ -14,6 +14,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { apiService } from '../../services/api';
 import { getCurrentLocation, getTownFromPincode } from '../../services/location';
 import { useAuth } from '../../context/AuthContext';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebButton, DataTable } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 
 const PRODUCTS = [
@@ -291,8 +293,9 @@ export default function DCCaptureScreen({ navigation, route }: any) {
   };
 
   return (
-    <ScrollView ref={scrollRef} style={styles.container}>
-      <View style={styles.content}>
+    <ScreenShell title="D C Capture" loading={loading}>
+      <PageSection title="D C Capture">
+<View style={styles.content}>
         {successMessage && (
           <MessageBanner
             type="success"
@@ -314,7 +317,7 @@ export default function DCCaptureScreen({ navigation, route }: any) {
 
         <View style={styles.section}>
           <Text style={styles.label}>School Name *</Text>
-          <TextInput
+          <WebInput
             style={styles.input}
             value={schoolName}
             onChangeText={setSchoolName}
@@ -324,7 +327,7 @@ export default function DCCaptureScreen({ navigation, route }: any) {
 
         <View style={styles.section}>
           <Text style={styles.label}>Contact Person</Text>
-          <TextInput
+          <WebInput
             style={styles.input}
             value={contactPerson}
             onChangeText={setContactPerson}
@@ -334,7 +337,7 @@ export default function DCCaptureScreen({ navigation, route }: any) {
 
         <View style={styles.section}>
           <Text style={styles.label}>Contact Mobile *</Text>
-          <TextInput
+          <WebInput
             style={styles.input}
             value={contactMobile}
             onChangeText={setContactMobile}
@@ -345,7 +348,7 @@ export default function DCCaptureScreen({ navigation, route }: any) {
 
         <View style={styles.section}>
           <Text style={styles.label}>Email</Text>
-          <TextInput
+          <WebInput
             style={styles.input}
             value={email}
             onChangeText={setEmail}
@@ -357,7 +360,7 @@ export default function DCCaptureScreen({ navigation, route }: any) {
 
         <View style={styles.section}>
           <Text style={styles.label}>Address</Text>
-          <TextInput
+          <WebInput
             style={[styles.input, styles.textArea]}
             value={address}
             onChangeText={setAddress}
@@ -369,7 +372,7 @@ export default function DCCaptureScreen({ navigation, route }: any) {
 
         <View style={styles.section}>
           <Text style={styles.label}>Pincode</Text>
-          <TextInput
+          <WebInput
             style={styles.input}
             value={pincode}
             onChangeText={handlePincodeChange}
@@ -381,7 +384,7 @@ export default function DCCaptureScreen({ navigation, route }: any) {
 
         <View style={styles.section}>
           <Text style={styles.label}>Town</Text>
-          <TextInput
+          <WebInput
             style={styles.input}
             value={town}
             onChangeText={setTown}
@@ -417,7 +420,7 @@ export default function DCCaptureScreen({ navigation, route }: any) {
         {schoolCategory && (
           <View style={styles.section}>
             <Text style={styles.label}>Remarks * (Mandatory for selected category)</Text>
-            <TextInput
+            <WebInput
               style={[styles.input, styles.textArea]}
               value={schoolRemarks}
               onChangeText={setSchoolRemarks}
@@ -506,7 +509,7 @@ export default function DCCaptureScreen({ navigation, route }: any) {
               <View style={styles.productRow}>
                 <View style={[styles.productField, { flex: 1, marginRight: 8 }]}>
                   <Text style={styles.fieldLabel}>Class</Text>
-                  <TextInput
+                  <WebInput
                     style={styles.input}
                     value={product.class}
                     onChangeText={(value) => updateProduct(product.id, 'class', value)}
@@ -516,7 +519,7 @@ export default function DCCaptureScreen({ navigation, route }: any) {
 
                 <View style={[styles.productField, { flex: 1 }]}>
                   <Text style={styles.fieldLabel}>Category</Text>
-                  <TextInput
+                  <WebInput
                     style={styles.input}
                     value={product.category}
                     onChangeText={(value) => updateProduct(product.id, 'category', value)}
@@ -555,7 +558,7 @@ export default function DCCaptureScreen({ navigation, route }: any) {
               <View style={styles.productRow}>
                 <View style={[styles.productField, { flex: 1, marginRight: 8 }]}>
                   <Text style={styles.fieldLabel}>Quantity</Text>
-                  <TextInput
+                  <WebInput
                     style={styles.input}
                     value={product.quantity.toString()}
                     onChangeText={(value) => updateProduct(product.id, 'quantity', parseInt(value) || 0)}
@@ -566,7 +569,7 @@ export default function DCCaptureScreen({ navigation, route }: any) {
 
                 <View style={[styles.productField, { flex: 1 }]}>
                   <Text style={styles.fieldLabel}>Strength</Text>
-                  <TextInput
+                  <WebInput
                     style={styles.input}
                     value={product.strength.toString()}
                     onChangeText={(value) => updateProduct(product.id, 'strength', parseInt(value) || 0)}
@@ -591,7 +594,8 @@ export default function DCCaptureScreen({ navigation, route }: any) {
           )}
         </TouchableOpacity>
       </View>
-    </ScrollView>
+      </PageSection>
+    </ScreenShell>
   );
 }
 

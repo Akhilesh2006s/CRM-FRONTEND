@@ -557,6 +557,21 @@ export function Sidebar() {
           { label: 'My Leaves', href: '/dashboard/leaves/approved', icon: CheckCircle2 },
         ],
       },
+      {
+        label: 'Reports',
+        icon: BarChart3,
+        children: [
+          { label: 'Leads', href: '/dashboard/reports/leads', icon: FileText },
+          { label: 'All Expenses', href: '/dashboard/reports/expenses', icon: Receipt },
+        ],
+      },
+      {
+        label: 'Settings',
+        icon: Settings,
+        children: [
+          { label: 'Change Password', href: '/dashboard/settings/password', icon: UserCircle2 },
+        ],
+      },
       { label: 'Sign out', icon: LogOut, href: '/auth/login' },
     ]
   } else if (isExecutive) {

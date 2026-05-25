@@ -5,7 +5,7 @@ const SETTINGS_KEY = 'global';
 const DEFAULT_EXPENSE_POLICY = {
   skipFinanceStage: false,
   foodBillMandatoryAbove: 500,
-  requireTicketForModes: ['Bus', 'Train', 'Flight', 'Other'],
+  requireTicketForModes: ['Bus', 'Train', 'Flight'],
 };
 
 async function getExpensePolicy() {

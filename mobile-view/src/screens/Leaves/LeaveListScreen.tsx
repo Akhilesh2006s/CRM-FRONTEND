@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { apiService } from '../../services/api';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebButton, DataTable } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 
 export default function LeaveListScreen({ navigation }: any) {
@@ -114,8 +116,10 @@ export default function LeaveListScreen({ navigation }: any) {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
+    <ScreenShell title="Leave List"
+      loading={loading}>
+      <PageSection title="Leave List">
+<View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.backButton}>← Back</Text>
         </TouchableOpacity>
@@ -207,7 +211,7 @@ export default function LeaveListScreen({ navigation }: any) {
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Start Date *</Text>
-              <TextInput
+              <WebInput
                 style={styles.input}
                 placeholder="YYYY-MM-DD"
                 value={startDate}
@@ -217,7 +221,7 @@ export default function LeaveListScreen({ navigation }: any) {
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>End Date *</Text>
-              <TextInput
+              <WebInput
                 style={styles.input}
                 placeholder="YYYY-MM-DD"
                 value={endDate}
@@ -227,7 +231,7 @@ export default function LeaveListScreen({ navigation }: any) {
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Reason *</Text>
-              <TextInput
+              <WebInput
                 style={[styles.input, styles.textArea]}
                 placeholder="Enter reason for leave"
                 value={reason}
@@ -251,7 +255,8 @@ export default function LeaveListScreen({ navigation }: any) {
           </View>
         </ScrollView>
       </Modal>
-    </View>
+      </PageSection>
+    </ScreenShell>
   );
 }
 

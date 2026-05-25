@@ -104,7 +104,7 @@ export default function ResubmitExpensePage() {
       apiRequest<ExpensePolicy>('/expenses/policy').catch(() => ({
         skipFinanceStage: false,
         foodBillMandatoryAbove: 500,
-        requireTicketForModes: ['Bus', 'Train', 'Flight', 'Other'],
+        requireTicketForModes: ['Bus', 'Train', 'Flight'],
       })),
       apiRequest<ExpenseRecord>(`/expenses/${id}`),
     ])
@@ -152,7 +152,7 @@ export default function ResubmitExpensePage() {
   const ticketRequired = useMemo(() => {
     if (!policy || category !== 'travel') return false
     return (
-      transportType === 'Other' || policy.requireTicketForModes.includes(transportType)
+      policy.requireTicketForModes.includes(transportType)
     )
   }, [policy, category, transportType])
 
@@ -340,7 +340,7 @@ export default function ResubmitExpensePage() {
                 }}>
                   <SelectTrigger className="bg-white mt-1"><SelectValue placeholder="Mode" /></SelectTrigger>
                   <SelectContent>
-                    {['Bike', 'Car', 'Bus', 'Train', 'Flight', 'Other'].map((m) => (
+                    {['Bike', 'Car', 'Bus', 'Train', 'Flight', 'Auto'].map((m) => (
                       <SelectItem key={m} value={m}>{m}</SelectItem>
                     ))}
                   </SelectContent>

@@ -1,16 +1,39 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Alert, ActivityIndicator } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { colors, gradients } from '../../theme/colors';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
+import ScreenShell from '../../ui/ScreenShell';
+import { WebInput, WebButton } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
-import LogoutButton from '../../components/LogoutButton';
+import { useAuth } from '../../context/AuthContext';
+import { getRoleFlags } from '../../utils/roles';
 
 export default function SettingsSMSScreen({ navigation }: any) {
+  const { user } = useAuth();
+  const { isAdmin } = getRoleFlags(user);
   const [senderId, setSenderId] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [template, setTemplate] = useState('');
+  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    (async () => {
+      try {
+        const data = await apiService.get<{ senderId?: string; apiKey?: string; template?: string }>(
+          '/settings/sms'
+        );
+        setSenderId(data.senderId || '');
+        setApiKey(data.apiKey || '');
+        setTemplate(data.template || '');
+      } catch (e: any) {
+        Alert.alert('Error', e.message || 'Failed to load SMS settings');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [isAdmin]);
 
   const handleSave = async () => {
     if (!senderId.trim() || !apiKey.trim()) {
@@ -28,56 +51,80 @@ export default function SettingsSMSScreen({ navigation }: any) {
     }
   };
 
-  return (
-    <View style={styles.container}>
-      <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.header}>
-        <View style={styles.headerContent}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Text style={styles.backIcon}>←</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>SMS Settings</Text>
-          <LogoutButton />
+  if (!isAdmin) {
+    return (
+      <ScreenShell title="SMS Settings">
+        <View style={styles.denied}>
+          <Text style={styles.deniedText}>Admin privileges required for SMS settings.</Text>
+          <WebButton title="Go back" onPress={() => navigation.goBack()} variant="outline" />
         </View>
-      </LinearGradient>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.label}>Sender ID *</Text>
-        <TextInput style={styles.input} value={senderId} onChangeText={setSenderId} placeholder="Enter sender ID" placeholderTextColor={colors.textSecondary} />
-        <Text style={styles.label}>API Key *</Text>
-        <TextInput style={styles.input} value={apiKey} onChangeText={setApiKey} placeholder="Enter SMS API key" placeholderTextColor={colors.textSecondary} secureTextEntry />
-        <Text style={styles.label}>Default Template</Text>
-        <TextInput
-          style={[styles.input, { minHeight: 120, textAlignVertical: 'top' }]}
-          value={template}
-          onChangeText={setTemplate}
-          placeholder="Enter default SMS template"
-          placeholderTextColor={colors.textSecondary}
-          multiline
-        />
-        <TouchableOpacity style={[styles.submitButton, submitting && styles.submitButtonDisabled]} onPress={handleSave} disabled={submitting}>
-          <LinearGradient colors={[colors.primary, colors.primaryDark]} style={styles.submitButtonGradient}>
-            {submitting ? <ActivityIndicator color={colors.textLight} /> : <Text style={styles.submitButtonText}>Save Settings</Text>}
-          </LinearGradient>
-        </TouchableOpacity>
-      </ScrollView>
-    </View>
+      </ScreenShell>
+    );
+  }
+
+  if (loading) {
+    return (
+      <ScreenShell title="SMS Settings" loading />
+    );
+  }
+
+  return (
+    <ScreenShell noScroll title="SMS Settings">
+      <View style={styles.page}>
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <Text style={styles.label}>Sender ID *</Text>
+          <WebInput style={styles.input} value={senderId} onChangeText={setSenderId} placeholder="Enter sender ID" />
+          <Text style={styles.label}>API Key *</Text>
+          <WebInput
+            style={styles.input}
+            value={apiKey}
+            onChangeText={setApiKey}
+            placeholder="Enter SMS API key"
+            secureTextEntry
+          />
+          <Text style={styles.label}>Default Template</Text>
+          <WebInput
+            style={[styles.input, styles.textArea]}
+            value={template}
+            onChangeText={setTemplate}
+            placeholder="Enter default SMS template"
+            multiline
+          />
+        </ScrollView>
+        <View style={styles.footer}>
+          <WebButton title={submitting ? 'Saving…' : 'Save settings'} onPress={handleSave} loading={submitting} disabled={submitting} />
+          <WebButton title="Cancel" onPress={() => navigation.goBack()} variant="outline" disabled={submitting} />
+        </View>
+      </View>
+    </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: { paddingHorizontal: 20, paddingTop: 50, paddingBottom: 20, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
-  headerContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  backButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  backIcon: { fontSize: 24, color: colors.textLight, fontWeight: 'bold' },
-  headerTitle: { ...typography.heading.h1, color: colors.textLight, flex: 1, textAlign: 'center' },
-  placeholder: { width: 40 },
-  content: { padding: 20, gap: 16 },
-  label: { ...typography.label.medium, color: colors.textPrimary },
-  input: { ...typography.body.medium, backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 14, color: colors.textPrimary },
-  submitButton: { marginTop: 24, borderRadius: 12, overflow: 'hidden' },
-  submitButtonDisabled: { opacity: 0.6 },
-  submitButtonGradient: { paddingVertical: 16, alignItems: 'center' },
-  submitButtonText: { ...typography.label.large, color: colors.textLight, fontWeight: '600' },
+  page: { flex: 1 },
+  scroll: { flex: 1 },
+  content: { padding: 20, gap: 8, paddingBottom: 16 },
+  label: { ...typography.label.medium, color: colors.textPrimary, marginBottom: 6 },
+  input: {
+    ...typography.body.medium,
+    backgroundColor: colors.backgroundLight,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 14,
+    color: colors.textPrimary,
+    marginBottom: 10,
+  },
+  textArea: { minHeight: 120, textAlignVertical: 'top' },
+  footer: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 28,
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    backgroundColor: colors.backgroundLight,
+  },
+  denied: { flex: 1, padding: 24, justifyContent: 'center', gap: 16 },
+  deniedText: { ...typography.body.medium, color: colors.textSecondary, textAlign: 'center' },
 });
-
-
