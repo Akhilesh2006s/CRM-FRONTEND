@@ -49,7 +49,7 @@ export default function ExecutiveManagersScreen({ navigation }: any) {
             <Text style={styles.backIcon}>←</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Executive Managers</Text>
-          <View style={styles.addButton} />
+          <View style={{ width: 40 }} />
         </View>
       </LinearGradient>
       <ScrollView style={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>

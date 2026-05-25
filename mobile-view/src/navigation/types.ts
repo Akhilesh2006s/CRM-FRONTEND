@@ -37,7 +37,6 @@ export type RootStackParamList = {
   
   // Executive Managers
   ExecutiveManagers: undefined;
-  ExecutiveManagerNew: undefined;
   ExecutiveManagerDashboard: { managerId: string };
   ExecutiveManagerLeaves: { managerId: string };
   POChangeRequests: undefined;
