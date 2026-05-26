@@ -344,44 +344,41 @@ function expandSectionsToProductDetails(
       const selectedSubjects = line.selectedSubjects || []
       const hasSubjects =
         ctx.hasProductSubjects(line.product) && selectedSubjects.length > 0
-      const categoriesToUse = ctx.hasProductCategories(line.product)
-        ? ctx.getProductCategories(line.product)
-        : [schoolExisting ? 'Existing Students' : 'New Students']
+      const defaultCategory = ctx.hasProductCategories(line.product)
+        ? ctx.getProductCategories(line.product)[0] || ''
+        : schoolExisting
+          ? 'Existing Students'
+          : 'New Students'
+      const defaultSpec = specsToUse[0]
+      const primaryClass = classSelections.find((s) => Number(s.strength) > 0)
+      const subjectDisplay =
+        hasSubjects && selectedSubjects.length > 0 ? selectedSubjects.join(', ') : undefined
 
       let rowIdx = 0
       const parentId = line.parentRowId
-      if (levelsToUse.length === 0) continue
+      if (levelsToUse.length === 0 || !primaryClass) continue
 
-      for (const classSel of classSelections) {
-        const classNum = parseInt(classSel.class, 10)
-        const strengthToUse = Number(classSel.strength) || 0
+      // One table row per selected level (category chosen in dropdown on that row).
+      for (const level of levelsToUse) {
+        const strengthToUse = Number(primaryClass.strength) || 0
+        const classNum = parseInt(primaryClass.class, 10)
         if (!classNum || strengthToUse <= 0) continue
-        for (const spec of specsToUse) {
-          for (const category of categoriesToUse) {
-            for (const level of levelsToUse) {
-              const subjectDisplay =
-                hasSubjects && selectedSubjects.length > 0
-                  ? selectedSubjects.join(', ')
-                  : undefined
-              out.push({
-                id: `${parentId}_${classNum}_${rowIdx++}`,
-                product: line.product,
-                class: classNum.toString(),
-                category,
-                productCategory: ctx.hasProductCategories(line.product) ? category : undefined,
-                quantity: strengthToUse || 1,
-                strength: strengthToUse || 0,
-                price: priceToUse || 0,
-                total: (strengthToUse || 0) * (priceToUse || 0),
-                level,
-                specs: spec,
-                subject: subjectDisplay,
-                isParentRow: false,
-                sameRateForAllClasses: false,
-              })
-            }
-          }
-        }
+        out.push({
+          id: `${parentId}_${classNum}_${rowIdx++}`,
+          product: line.product,
+          class: classNum.toString(),
+          category: defaultCategory,
+          productCategory: ctx.hasProductCategories(line.product) ? defaultCategory : undefined,
+          quantity: strengthToUse || 1,
+          strength: strengthToUse,
+          price: priceToUse || 0,
+          total: strengthToUse * (priceToUse || 0),
+          level,
+          specs: defaultSpec,
+          subject: subjectDisplay,
+          isParentRow: false,
+          sameRateForAllClasses: false,
+        })
       }
     }
   }
