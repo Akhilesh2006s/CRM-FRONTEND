@@ -20,8 +20,10 @@ import { SCHOOL_TYPE_OPTIONS } from '@/lib/warehouseOptions'
 import { Badge } from '@/components/ui/badge'
 import { shortageParentRowKey } from '@/lib/shortageDcRowKey'
 import { useProducts } from '@/hooks/useProducts'
+import { fetchDcInvoiceData, type DcInvoiceData } from '@/lib/dcInvoiceData'
+import DcInvoiceViewDialog from '@/components/dc/DcInvoiceViewDialog'
 import { toast } from 'sonner'
-import { Pencil, X, Upload, FileText, Download } from 'lucide-react'
+import { Pencil, X, Upload, FileText, Download, Loader2 } from 'lucide-react'
 import jsPDF from 'jspdf'
 
 /** List column: only PO-stage remarks (dcRemarks), not warehouse deliveryNotes. */
@@ -81,7 +83,11 @@ export default function CompletedDCPage() {
   const [replacingPdfFor, setReplacingPdfFor] = useState<Row | null>(null)
   const [shortageDialogOpen, setShortageDialogOpen] = useState(false)
   const [shortageTargetDC, setShortageTargetDC] = useState<any | null>(null)
-  const { hasProductCategories, getProductCategories } = useProducts()
+  const { hasProductCategories, getProductCategories, getCalculationType, getCatalogFallbackCount } =
+    useProducts()
+  const [invoiceModalOpen, setInvoiceModalOpen] = useState(false)
+  const [invoiceData, setInvoiceData] = useState<DcInvoiceData | null>(null)
+  const [invoiceLoadingDcId, setInvoiceLoadingDcId] = useState<string | null>(null)
   const [shortageRows, setShortageRows] = useState<Array<{
     id: string
     product: string
@@ -1233,6 +1239,27 @@ export default function CompletedDCPage() {
     }
   }
 
+  const openInvoiceView = async (row: Row) => {
+    const dcId = row.dcId || row._id
+    if (!dcId) {
+      toast.error('DC not found')
+      return
+    }
+    setInvoiceLoadingDcId(dcId)
+    try {
+      const data = await fetchDcInvoiceData(dcId, {
+        getCalculationType,
+        getCatalogFallbackCount,
+      })
+      setInvoiceData(data)
+      setInvoiceModalOpen(true)
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to load invoice')
+    } finally {
+      setInvoiceLoadingDcId(null)
+    }
+  }
+
   const downloadCSV = () => {
     if (rows.length === 0) {
       toast.error('No data to export')
@@ -1479,6 +1506,22 @@ export default function CompletedDCPage() {
                         title="Replace PDF"
                       >
                         Replace PDF
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={invoiceLoadingDcId === (r.dcId || r._id)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openInvoiceView(r)
+                        }}
+                        title="View Invoice"
+                      >
+                        {invoiceLoadingDcId === (r.dcId || r._id) ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          'View Invoice'
+                        )}
                       </Button>
                       <div
                         className="flex flex-col gap-1 min-w-[200px]"
@@ -1819,6 +1862,12 @@ export default function CompletedDCPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DcInvoiceViewDialog
+        open={invoiceModalOpen}
+        onOpenChange={setInvoiceModalOpen}
+        invoiceData={invoiceData}
+      />
 
       {/* PDF Viewer Dialog */}
       <Dialog open={!!pdfUrl} onOpenChange={(open) => {

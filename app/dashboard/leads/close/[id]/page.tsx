@@ -846,8 +846,8 @@ export default function CloseLeadPage() {
     setExpandedLineBySection((prev) => {
       const next = { ...prev }
       delete next[sectionId]
-      return next
-    })
+        return next
+      })
   }
 
   const addProductLineToSection = (sectionId: string, product: string) => {
@@ -2090,31 +2090,31 @@ export default function CloseLeadPage() {
                               </div>
 
                               <div className="flex flex-wrap items-center gap-3 justify-between border-t pt-2">
-                                <div className="flex items-center gap-2">
-                                  <Checkbox
-                                    id={`same-rate-${line.id}`}
-                                    checked={line.sameRateForAllClasses || false}
-                                    onCheckedChange={(checked) =>
-                                      updateProductSectionLine(section.id, line.id, {
-                                        sameRateForAllClasses: !!checked,
-                                      })
-                                    }
-                                  />
-                                  <Label htmlFor={`same-rate-${line.id}`} className="text-xs cursor-pointer">
-                                    Same rate for all classes (this level)
-                                  </Label>
-                                </div>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => removeProductSectionLine(section.id, line.id)}
-                                  className="text-red-600 hover:text-red-700"
-                                >
+                              <div className="flex items-center gap-2">
+                                <Checkbox
+                                  id={`same-rate-${line.id}`}
+                                  checked={line.sameRateForAllClasses || false}
+                                  onCheckedChange={(checked) =>
+                                    updateProductSectionLine(section.id, line.id, {
+                                      sameRateForAllClasses: !!checked,
+                                    })
+                                  }
+                                />
+                                <Label htmlFor={`same-rate-${line.id}`} className="text-xs cursor-pointer">
+                                  Same rate for all classes (this level)
+                                </Label>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeProductSectionLine(section.id, line.id)}
+                                className="text-red-600 hover:text-red-700"
+                              >
                                   <X className="w-4 h-4 mr-1" />
                                   Remove product
-                                </Button>
-                              </div>
+                              </Button>
+                            </div>
 
                             {allowLineConfig && productSpecs.length > 0 && (
                               <div className="mt-2 pt-2 border-t">
