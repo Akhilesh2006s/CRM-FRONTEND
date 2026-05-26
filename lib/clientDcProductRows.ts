@@ -270,3 +270,150 @@ export function buildClientDCProductRows(
 
   return []
 }
+
+export type EditPOProductRow = {
+  id: string
+  product_name: string
+  quantity: number
+  unit_price: number
+  level?: string
+  term?: string
+  class?: string
+  specs?: string
+  productCategory?: string
+  category?: string
+  strength?: number
+  subject?: string
+  selected_subjects?: string[]
+}
+
+/** Subject string for API payloads (DC productDetails / DcOrder products). */
+export function resolveProductSubject(p: Record<string, any>): string | undefined {
+  if (p.subject != null && String(p.subject).trim() !== '') {
+    return String(p.subject).trim()
+  }
+  if (Array.isArray(p.selected_subjects) && p.selected_subjects.length > 0) {
+    return p.selected_subjects
+      .map((s: unknown) => String(s).trim())
+      .filter(Boolean)
+      .join(', ')
+  }
+  return undefined
+}
+
+export function computeEditPOTotalAmount(
+  rows: Array<{ quantity?: number; unit_price?: number }>
+): number {
+  return rows.reduce(
+    (sum, row) => sum + (Number(row.quantity) || 0) * (Number(row.unit_price) || 0),
+    0
+  )
+}
+
+/** Build editable PO rows from DC productDetails + DcOrder products (Edit PO dialog). */
+export function buildEditPOProductRows(
+  dcProductDetails: any[],
+  dcOrderProducts: any[],
+  opts: ResolveClientDCRowOpts,
+  getDefaultLevel: (product: string) => string,
+  getAvailableLevels: (product: string) => string[]
+): EditPOProductRow[] {
+  const details = dedupeProductDetailLines(
+    (Array.isArray(dcProductDetails) ? dcProductDetails : []).filter(
+      (p) => p && (p.product || p.productName || p.product_name)
+    )
+  )
+  const orders = Array.isArray(dcOrderProducts) ? dcOrderProducts : []
+
+  const mapRow = (raw: Record<string, any>, order: any | null, id: string): EditPOProductRow => {
+    const productName =
+      raw.product || raw.product_name || raw.productName || order?.product_name || ''
+    const merged = order
+      ? {
+          ...raw,
+          product: productName,
+          product_name: productName,
+          class: raw.class ?? order.class,
+          specs: raw.specs ?? order.specs,
+          productCategory: raw.productCategory ?? order.productCategory,
+          category: raw.category ?? order.category,
+          quantity: raw.quantity ?? order.quantity,
+          strength: raw.strength ?? order.quantity ?? order.strength,
+          level: raw.level || order.level,
+          term: raw.term ?? order.term,
+          unit_price: order.unit_price ?? raw.unit_price ?? raw.price,
+          subject: raw.subject ?? order.subject,
+          selected_subjects: raw.selected_subjects ?? order.selected_subjects,
+        }
+      : raw
+
+    const resolved = resolveClientDCRowFields(merged, productName, opts)
+    const qty =
+      merged.quantity != null
+        ? Number(merged.quantity)
+        : merged.strength != null
+          ? Number(merged.strength)
+          : 0
+    const unitPrice =
+      merged.unit_price != null
+        ? Number(merged.unit_price)
+        : merged.price != null
+          ? Number(merged.price)
+          : 0
+    const level =
+      merged.level ||
+      getAvailableLevels(productName)[0] ||
+      getDefaultLevel(productName || 'Abacus')
+
+    return {
+      id,
+      product_name: productName,
+      quantity: qty,
+      unit_price: unitPrice,
+      level,
+      term: resolveClientDCRowTerm(merged),
+      class: resolved.class,
+      specs: resolved.specs,
+      productCategory: resolved.productCategory,
+      category: typeof merged.category === 'string' ? merged.category : undefined,
+      strength: merged.strength != null ? Number(merged.strength) : qty,
+      subject: resolveProductSubject(merged),
+      selected_subjects: Array.isArray(merged.selected_subjects)
+        ? merged.selected_subjects
+        : undefined,
+    }
+  }
+
+  if (details.length > 0) {
+    const used = new Set<number>()
+    return details.map((p, idx) => {
+      const order = findMatchingOrderProduct(orders, p, idx, used)
+      return mapRow(p, order, `edit-${idx + 1}`)
+    })
+  }
+
+  if (orders.length > 0) {
+    return orders.map((p, idx) =>
+      mapRow(
+        {
+          product_name: p.product_name,
+          class: p.class,
+          specs: p.specs,
+          productCategory: p.productCategory,
+          category: p.category,
+          quantity: p.quantity,
+          strength: p.quantity ?? p.strength,
+          level: p.level,
+          term: p.term,
+          unit_price: p.unit_price,
+          subject: p.subject,
+          selected_subjects: p.selected_subjects,
+        },
+        p,
+        `edit-order-${idx + 1}`
+      )
+    )
+  }
+
+  return []
+}
