@@ -16,12 +16,16 @@ import {
   isPerKmTravelMode,
   isTravelAmountLocked,
   perKmRateLabel,
+  resolveTravelPerKmRates,
+  type TravelPerKmRates,
 } from '@/lib/expenseTravelRates'
 
 type ExpensePolicy = {
   skipFinanceStage: boolean
   foodBillMandatoryAbove: number
   requireTicketForModes: string[]
+  bikeRatePerKm?: number
+  carRatePerKm?: number
 }
 
 type CartLine = {
@@ -152,9 +156,20 @@ export default function CreateExpensePage() {
           skipFinanceStage: false,
           foodBillMandatoryAbove: 500,
           requireTicketForModes: ['Bus', 'Train', 'Flight'],
+          bikeRatePerKm: 2.8,
+          carRatePerKm: 8,
         })
       )
   }, [])
+
+  const travelRates: TravelPerKmRates = useMemo(
+    () =>
+      resolveTravelPerKmRates({
+        bikeRatePerKm: policy?.bikeRatePerKm,
+        carRatePerKm: policy?.carRatePerKm,
+      }),
+    [policy]
+  )
 
   const ticketRequired = useMemo(() => {
     if (!policy || draft.category !== 'travel') return false
@@ -205,7 +220,7 @@ export default function CreateExpensePage() {
         const kms = String(res.gpsDistance)
         setDraft((d) => {
           const amt = isPerKmTravelMode(d.transportType)
-            ? calcTravelAmount(d.transportType, res.gpsDistance!)
+            ? calcTravelAmount(d.transportType, res.gpsDistance!, travelRates)
             : d.amount
           return {
             ...d,
@@ -364,7 +379,7 @@ export default function CreateExpensePage() {
             />
             {travelAmountLocked && (
               <p className="text-xs text-blue-700 mt-1">
-                Auto-calculated from distance ({perKmRateLabel(draft.transportType)}) — not editable
+                Auto-calculated from distance ({perKmRateLabel(draft.transportType, travelRates)}) — not editable
               </p>
             )}
           </div>
@@ -379,7 +394,7 @@ export default function CreateExpensePage() {
                 value={draft.transportType || undefined}
                 onValueChange={(v) => {
                   const kms = parseFloat(draft.approxKms) || 0
-                  const amt = isPerKmTravelMode(v) ? calcTravelAmount(v, kms) : ''
+                  const amt = isPerKmTravelMode(v) ? calcTravelAmount(v, kms, travelRates) : ''
                   setDraft({
                     ...draft,
                     transportType: v,
@@ -428,7 +443,7 @@ export default function CreateExpensePage() {
                 onChange={(e) => {
                   const kms = e.target.value
                   const amt = isPerKmTravelMode(draft.transportType)
-                    ? calcTravelAmount(draft.transportType, parseFloat(kms) || 0)
+                    ? calcTravelAmount(draft.transportType, parseFloat(kms) || 0, travelRates)
                     : draft.amount
                   setDraft({
                     ...draft,
@@ -439,7 +454,7 @@ export default function CreateExpensePage() {
               />
               {isPerKmTravelMode(draft.transportType) && (
                 <p className="text-xs text-blue-700 mt-1">
-                  Rate: {perKmRateLabel(draft.transportType)} — amount updates automatically and is locked
+                  Rate: {perKmRateLabel(draft.transportType, travelRates)} — amount updates automatically and is locked
                 </p>
               )}
             </div>

@@ -24,6 +24,8 @@ type ExpensePolicy = {
   skipFinanceStage: boolean;
   foodBillMandatoryAbove: number;
   requireTicketForModes: string[];
+  bikeRatePerKm?: number;
+  carRatePerKm?: number;
 };
 
 type CartLine = {
@@ -91,9 +93,14 @@ function emptyLine(category: CartLine['category'] = 'travel'): CartLine {
   };
 }
 
-function calcTravelAmount(mode: string, kms: number): string {
-  if (mode === 'Bike') return (kms * 2.8).toFixed(2);
-  if (mode === 'Car') return (kms * 8).toFixed(2);
+function calcTravelAmount(
+  mode: string,
+  kms: number,
+  bikeRatePerKm = 2.8,
+  carRatePerKm = 8
+): string {
+  if (mode === 'Bike' && kms > 0) return (kms * bikeRatePerKm).toFixed(2);
+  if (mode === 'Car' && kms > 0) return (kms * carRatePerKm).toFixed(2);
   return '';
 }
 
@@ -267,9 +274,12 @@ export default function ExpenseCreateScreen({ navigation }: any) {
     }
   };
 
+  const bikeRate = policy?.bikeRatePerKm && policy.bikeRatePerKm > 0 ? policy.bikeRatePerKm : 2.8;
+  const carRate = policy?.carRatePerKm && policy.carRatePerKm > 0 ? policy.carRatePerKm : 8;
+
   const travelAmountFor = (mode: string, kms: string) => {
     if (mode !== 'Bike' && mode !== 'Car') return null;
-    return calcTravelAmount(mode, parseFloat(kms) || 0);
+    return calcTravelAmount(mode, parseFloat(kms) || 0, bikeRate, carRate);
   };
 
   const updateKms = (kms: string) => {
@@ -506,7 +516,7 @@ export default function ExpenseCreateScreen({ navigation }: any) {
             {(draft.transportType === 'Bike' || draft.transportType === 'Car') && (
               <Text style={styles.calcPreview}>
                 Calculated amount: ₹{draft.amount || '0.00'} (
-                {draft.transportType === 'Bike' ? '₹2.8/km' : '₹8/km'})
+                {draft.transportType === 'Bike' ? `₹${bikeRate}/km` : `₹${carRate}/km`})
               </Text>
             )}
             {ticketRequired && (
@@ -591,7 +601,7 @@ export default function ExpenseCreateScreen({ navigation }: any) {
           {draft.category === 'travel' &&
             (draft.transportType === 'Bike' || draft.transportType === 'Car') && (
               <Text style={styles.hint}>
-                Rate: {draft.transportType === 'Bike' ? '₹2.8/km' : '₹8/km'} — updates when distance changes
+                Rate: {draft.transportType === 'Bike' ? `₹${bikeRate}/km` : `₹${carRate}/km`} — updates when distance changes
               </Text>
             )}
         </View>

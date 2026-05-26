@@ -38,6 +38,8 @@ const appSettingsSchema = new mongoose.Schema(
         type: [String],
         default: ['Bus', 'Train', 'Flight', 'Other'],
       },
+      bikeRatePerKm: { type: Number, default: 2.8, min: 0 },
+      carRatePerKm: { type: Number, default: 8, min: 0 },
     },
     uploads: [uploadEntrySchema],
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

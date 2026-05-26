@@ -275,16 +275,22 @@ const runBackup = async (req, res) => {
   }
 };
 
+const { DEFAULT_EXPENSE_POLICY } = require('../utils/expensePolicy');
+
 const getExpensePolicyAdmin = async (req, res) => {
   try {
     const doc = await getOrCreateSettings();
     const expense = doc.expense || {};
+    const bike = Number(expense.bikeRatePerKm);
+    const car = Number(expense.carRatePerKm);
     res.json({
       skipFinanceStage: Boolean(expense.skipFinanceStage),
       foodBillMandatoryAbove: Number(expense.foodBillMandatoryAbove) || 500,
       requireTicketForModes: Array.isArray(expense.requireTicketForModes)
         ? expense.requireTicketForModes
         : ['Bus', 'Train', 'Flight', 'Other'],
+      bikeRatePerKm: bike > 0 ? bike : DEFAULT_EXPENSE_POLICY.bikeRatePerKm,
+      carRatePerKm: car > 0 ? car : DEFAULT_EXPENSE_POLICY.carRatePerKm,
     });
   } catch (e) {
     res.status(500).json({ message: e.message });
@@ -293,15 +299,43 @@ const getExpensePolicyAdmin = async (req, res) => {
 
 const updateExpensePolicyAdmin = async (req, res) => {
   try {
-    const { skipFinanceStage, foodBillMandatoryAbove, requireTicketForModes } = req.body;
+    const { skipFinanceStage, foodBillMandatoryAbove, requireTicketForModes, bikeRatePerKm, carRatePerKm } =
+      req.body;
     const doc = await getOrCreateSettings();
-    doc.expense = {
-      skipFinanceStage: Boolean(skipFinanceStage),
-      foodBillMandatoryAbove: Math.max(0, Number(foodBillMandatoryAbove) || 500),
+    const current = doc.expense && typeof doc.expense === 'object' ? doc.expense : {};
+
+    const next = {
+      skipFinanceStage:
+        skipFinanceStage !== undefined ? Boolean(skipFinanceStage) : Boolean(current.skipFinanceStage),
+      foodBillMandatoryAbove:
+        foodBillMandatoryAbove !== undefined
+          ? Math.max(0, Number(foodBillMandatoryAbove) || 500)
+          : Number(current.foodBillMandatoryAbove) || 500,
       requireTicketForModes: Array.isArray(requireTicketForModes)
         ? requireTicketForModes.filter(Boolean)
-        : ['Bus', 'Train', 'Flight', 'Other'],
+        : Array.isArray(current.requireTicketForModes)
+          ? current.requireTicketForModes
+          : DEFAULT_EXPENSE_POLICY.requireTicketForModes,
+      bikeRatePerKm:
+        Number(current.bikeRatePerKm) > 0
+          ? Number(current.bikeRatePerKm)
+          : DEFAULT_EXPENSE_POLICY.bikeRatePerKm,
+      carRatePerKm:
+        Number(current.carRatePerKm) > 0 ? Number(current.carRatePerKm) : DEFAULT_EXPENSE_POLICY.carRatePerKm,
     };
+
+    if (req.user.role === 'Super Admin') {
+      if (bikeRatePerKm !== undefined) {
+        next.bikeRatePerKm = Math.max(0, Number(bikeRatePerKm) || DEFAULT_EXPENSE_POLICY.bikeRatePerKm);
+      }
+      if (carRatePerKm !== undefined) {
+        next.carRatePerKm = Math.max(0, Number(carRatePerKm) || DEFAULT_EXPENSE_POLICY.carRatePerKm);
+      }
+    } else if (bikeRatePerKm !== undefined || carRatePerKm !== undefined) {
+      return res.status(403).json({ message: 'Only Super Admin can change travel per-km rates' });
+    }
+
+    doc.expense = next;
     doc.updatedBy = req.user._id;
     await doc.save();
     res.json(doc.expense);

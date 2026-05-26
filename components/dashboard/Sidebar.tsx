@@ -65,7 +65,7 @@ type NavItem = {
   label: string
   icon?: any
   href?: string
-  children?: { label: string; href: string; icon?: any; adminOnly?: boolean }[]
+  children?: { label: string; href: string; icon?: any; adminOnly?: boolean; superAdminOnly?: boolean }[]
 }
 
 function HoverTooltip({ item, pathname, onClose }: { item: NavItem; pathname: string; onClose: () => void }) {
@@ -278,6 +278,7 @@ const NAV: NavItem[] = [
       { label: 'App Dashboard Data Upload', href: '/dashboard/settings/upload' },
       { label: 'SMS', href: '/dashboard/settings/sms' },
       { label: 'DB Backup', href: '/dashboard/settings/backup' },
+      { label: 'Expense policy', href: '/dashboard/settings/expenses', adminOnly: true },
     ],
   },
   { label: 'Sign out', icon: LogOut, href: '/auth/login' },
@@ -649,6 +650,18 @@ export function Sidebar() {
             if (child.adminOnly && !isAdmin) return false
             return true
           })
+        }
+      }
+      if (item.label === 'Settings' && item.children) {
+        const isAdmin = user?.role === 'Admin' || user?.role === 'Super Admin'
+        const isSuperAdmin = user?.role === 'Super Admin'
+        return {
+          ...item,
+          children: item.children.filter((child) => {
+            if (child.superAdminOnly && !isSuperAdmin) return false
+            if (child.adminOnly && !isAdmin) return false
+            return true
+          }),
         }
       }
       return item

@@ -17,12 +17,16 @@ import {
   isPerKmTravelMode,
   isTravelAmountLocked,
   perKmRateLabel,
+  resolveTravelPerKmRates,
+  type TravelPerKmRates,
 } from '@/lib/expenseTravelRates'
 
 type ExpensePolicy = {
   skipFinanceStage: boolean
   foodBillMandatoryAbove: number
   requireTicketForModes: string[]
+  bikeRatePerKm?: number
+  carRatePerKm?: number
 }
 
 type ExpenseRecord = {
@@ -149,6 +153,15 @@ export default function ResubmitExpensePage() {
       .finally(() => setLoading(false))
   }, [id, router])
 
+  const travelRates: TravelPerKmRates = useMemo(
+    () =>
+      resolveTravelPerKmRates({
+        bikeRatePerKm: policy?.bikeRatePerKm,
+        carRatePerKm: policy?.carRatePerKm,
+      }),
+    [policy]
+  )
+
   const ticketRequired = useMemo(() => {
     if (!policy || category !== 'travel') return false
     return (
@@ -187,7 +200,7 @@ export default function ResubmitExpensePage() {
         setGpsDistance(res.gpsDistance)
         setApproxKms(String(res.gpsDistance))
         if (isPerKmTravelMode(transportType)) {
-          const amt = calcTravelAmount(transportType, res.gpsDistance)
+          const amt = calcTravelAmount(transportType, res.gpsDistance, travelRates)
           if (amt) setAmount(amt)
         }
         setGpsNote(`System estimate: ${res.gpsDistance} km`)
@@ -344,7 +357,7 @@ export default function ResubmitExpensePage() {
               />
               {travelAmountLocked && (
                 <p className="text-xs text-blue-700 mt-1">
-                  Auto-calculated ({perKmRateLabel(transportType)}) — not editable
+                  Auto-calculated ({perKmRateLabel(transportType, travelRates)}) — not editable
                 </p>
               )}
             </div>
@@ -357,7 +370,7 @@ export default function ResubmitExpensePage() {
                 <Select value={transportType || undefined} onValueChange={(v) => {
                   setTransportType(v)
                   if (isPerKmTravelMode(v)) {
-                    const amt = calcTravelAmount(v, parseFloat(approxKms) || 0)
+                    const amt = calcTravelAmount(v, parseFloat(approxKms) || 0, travelRates)
                     setAmount(amt)
                   }
                 }}>
@@ -388,13 +401,15 @@ export default function ResubmitExpensePage() {
                   onChange={(e) => {
                     setApproxKms(e.target.value)
                     if (isPerKmTravelMode(transportType)) {
-                      setAmount(calcTravelAmount(transportType, parseFloat(e.target.value) || 0))
+                      setAmount(
+                        calcTravelAmount(transportType, parseFloat(e.target.value) || 0, travelRates)
+                      )
                     }
                   }}
                 />
                 {isPerKmTravelMode(transportType) && (
                   <p className="text-xs text-blue-700 mt-1">
-                    Rate: {perKmRateLabel(transportType)} — amount locked after calculation
+                    Rate: {perKmRateLabel(transportType, travelRates)} — amount locked after calculation
                   </p>
                 )}
               </div>
