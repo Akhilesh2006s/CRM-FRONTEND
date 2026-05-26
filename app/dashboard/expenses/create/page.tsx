@@ -11,6 +11,12 @@ import { Textarea } from '@/components/ui/textarea'
 import { apiRequest, LOCAL_API_BASE_URL } from '@/lib/api'
 import { toast } from 'sonner'
 import { Plus, Trash2 } from 'lucide-react'
+import {
+  calcTravelAmount,
+  isPerKmTravelMode,
+  isTravelAmountLocked,
+  perKmRateLabel,
+} from '@/lib/expenseTravelRates'
 
 type ExpensePolicy = {
   skipFinanceStage: boolean
@@ -72,12 +78,6 @@ function emptyLine(category: CartLine['category'] = 'travel'): CartLine {
     billFile: null,
     ticketFile: null,
   }
-}
-
-function calcTravelAmount(mode: string, kms: number) {
-  if (mode === 'Bike') return (kms * 2.8).toFixed(2)
-  if (mode === 'Car') return (kms * 8).toFixed(2)
-  return ''
 }
 
 async function submitOneExpense(line: CartLine, batchId: string, policy: ExpensePolicy) {
@@ -164,6 +164,8 @@ export default function CreateExpensePage() {
   const showGlobalBillUpload =
     draft.category === 'travel' && !ticketRequired
 
+  const travelAmountLocked = isTravelAmountLocked(draft.category, draft.transportType)
+
   const billRequired = useMemo(() => {
     if (draft.category === 'accommodation') return true
     const amt = parseFloat(draft.amount) || 0
@@ -200,7 +202,18 @@ export default function CreateExpensePage() {
         body: JSON.stringify({ from: draft.travelFrom, to: draft.travelTo }),
       })
       if (res.gpsDistance != null) {
-        setDraft((d) => ({ ...d, gpsDistance: res.gpsDistance }))
+        const kms = String(res.gpsDistance)
+        setDraft((d) => {
+          const amt = isPerKmTravelMode(d.transportType)
+            ? calcTravelAmount(d.transportType, res.gpsDistance!)
+            : d.amount
+          return {
+            ...d,
+            gpsDistance: res.gpsDistance,
+            approxKms: kms,
+            amount: amt || d.amount,
+          }
+        })
         setGpsNote(`System estimate: ${res.gpsDistance} km`)
       } else {
         setGpsNote(res.error || 'GPS distance unavailable — manager can verify manually.')
@@ -336,10 +349,24 @@ export default function CreateExpensePage() {
             <Input
               type="number"
               step="0.01"
-              className="bg-white mt-1"
+              className={`mt-1 ${travelAmountLocked ? 'bg-neutral-100 cursor-not-allowed' : 'bg-white'}`}
               value={draft.amount}
-              onChange={(e) => setDraft({ ...draft, amount: e.target.value })}
+              readOnly={travelAmountLocked}
+              onChange={(e) => {
+                if (travelAmountLocked) return
+                setDraft({ ...draft, amount: e.target.value })
+              }}
+              title={
+                travelAmountLocked
+                  ? 'Amount is calculated from distance and cannot be edited for Bike/Car'
+                  : undefined
+              }
             />
+            {travelAmountLocked && (
+              <p className="text-xs text-blue-700 mt-1">
+                Auto-calculated from distance ({perKmRateLabel(draft.transportType)}) — not editable
+              </p>
+            )}
           </div>
         </div>
 
@@ -352,11 +379,11 @@ export default function CreateExpensePage() {
                 value={draft.transportType || undefined}
                 onValueChange={(v) => {
                   const kms = parseFloat(draft.approxKms) || 0
-                  const amt = calcTravelAmount(v, kms)
+                  const amt = isPerKmTravelMode(v) ? calcTravelAmount(v, kms) : ''
                   setDraft({
                     ...draft,
                     transportType: v,
-                    amount: amt || draft.amount,
+                    amount: isPerKmTravelMode(v) ? amt : draft.amount,
                   })
                 }}
               >
@@ -400,16 +427,19 @@ export default function CreateExpensePage() {
                 value={draft.approxKms}
                 onChange={(e) => {
                   const kms = e.target.value
-                  const amt =
-                    draft.transportType === 'Bike' || draft.transportType === 'Car'
-                      ? calcTravelAmount(draft.transportType, parseFloat(kms) || 0)
-                      : draft.amount
-                  setDraft({ ...draft, approxKms: kms, amount: amt || draft.amount })
+                  const amt = isPerKmTravelMode(draft.transportType)
+                    ? calcTravelAmount(draft.transportType, parseFloat(kms) || 0)
+                    : draft.amount
+                  setDraft({
+                    ...draft,
+                    approxKms: kms,
+                    amount: isPerKmTravelMode(draft.transportType) ? amt : draft.amount,
+                  })
                 }}
               />
-              {(draft.transportType === 'Bike' || draft.transportType === 'Car') && (
+              {isPerKmTravelMode(draft.transportType) && (
                 <p className="text-xs text-blue-700 mt-1">
-                  Rate: {draft.transportType === 'Bike' ? '₹2.8/km' : '₹8/km'} (auto-calculated)
+                  Rate: {perKmRateLabel(draft.transportType)} — amount updates automatically and is locked
                 </p>
               )}
             </div>

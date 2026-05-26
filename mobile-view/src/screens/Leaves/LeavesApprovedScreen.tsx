@@ -117,6 +117,12 @@ export default function LeavesApprovedScreen({ navigation }: any) {
                     <Text style={styles.infoValue}>{leave.reason}</Text>
                   </View>
                 )}
+                {leave.status === 'Rejected' && leave.rejectionReason ? (
+                  <View style={[styles.infoRow, styles.rejectionRow]}>
+                    <Text style={styles.infoLabel}>Rejection:</Text>
+                    <Text style={styles.rejectionValue}>{leave.rejectionReason}</Text>
+                  </View>
+                ) : null}
               </View>
             </View>
           ))
@@ -149,6 +155,8 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: 'row', marginBottom: 6 },
   infoLabel: { ...typography.body.medium, color: colors.textSecondary, width: 80 },
   infoValue: { ...typography.body.medium, color: colors.textPrimary, flex: 1 },
+  rejectionRow: { marginTop: 4, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.border },
+  rejectionValue: { ...typography.body.medium, color: colors.error, flex: 1 },
 });
 
 

@@ -12,6 +12,12 @@ import { Textarea } from '@/components/ui/textarea'
 import { apiRequest, LOCAL_API_BASE_URL, resolveUploadUrl } from '@/lib/api'
 import { toast } from 'sonner'
 import { ArrowLeft } from 'lucide-react'
+import {
+  calcTravelAmount,
+  isPerKmTravelMode,
+  isTravelAmountLocked,
+  perKmRateLabel,
+} from '@/lib/expenseTravelRates'
 
 type ExpensePolicy = {
   skipFinanceStage: boolean
@@ -52,12 +58,6 @@ function normalizeCategory(cat: string): 'travel' | 'food' | 'accommodation' | '
   if (c === 'food') return 'food'
   if (c === 'accommodation' || c === 'accomodation') return 'accommodation'
   return 'other'
-}
-
-function calcTravelAmount(mode: string, kms: number) {
-  if (mode === 'Bike') return (kms * 2.8).toFixed(2)
-  if (mode === 'Car') return (kms * 8).toFixed(2)
-  return ''
 }
 
 function toDateInput(d?: string) {
@@ -185,6 +185,11 @@ export default function ResubmitExpensePage() {
       )
       if (res.gpsDistance != null) {
         setGpsDistance(res.gpsDistance)
+        setApproxKms(String(res.gpsDistance))
+        if (isPerKmTravelMode(transportType)) {
+          const amt = calcTravelAmount(transportType, res.gpsDistance)
+          if (amt) setAmount(amt)
+        }
         setGpsNote(`System estimate: ${res.gpsDistance} km`)
       } else {
         setGpsNote(res.error || 'GPS distance unavailable')
@@ -285,6 +290,8 @@ export default function ResubmitExpensePage() {
     }
   }
 
+  const travelAmountLocked = isTravelAmountLocked(category, transportType)
+
   if (loading) return <div className="p-8 text-neutral-500">Loading…</div>
 
   return (
@@ -321,11 +328,25 @@ export default function ResubmitExpensePage() {
               <Input
                 type="number"
                 step="0.01"
-                className="bg-white mt-1"
+                className={`mt-1 ${travelAmountLocked ? 'bg-neutral-100 cursor-not-allowed' : 'bg-white'}`}
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                readOnly={travelAmountLocked}
+                onChange={(e) => {
+                  if (travelAmountLocked) return
+                  setAmount(e.target.value)
+                }}
                 required
+                title={
+                  travelAmountLocked
+                    ? 'Amount is calculated from distance and cannot be edited for Bike/Car'
+                    : undefined
+                }
               />
+              {travelAmountLocked && (
+                <p className="text-xs text-blue-700 mt-1">
+                  Auto-calculated ({perKmRateLabel(transportType)}) — not editable
+                </p>
+              )}
             </div>
           </div>
 
@@ -335,8 +356,10 @@ export default function ResubmitExpensePage() {
                 <Label>Travel mode *</Label>
                 <Select value={transportType || undefined} onValueChange={(v) => {
                   setTransportType(v)
-                  const amt = calcTravelAmount(v, parseFloat(approxKms) || 0)
-                  if (amt) setAmount(amt)
+                  if (isPerKmTravelMode(v)) {
+                    const amt = calcTravelAmount(v, parseFloat(approxKms) || 0)
+                    setAmount(amt)
+                  }
                 }}>
                   <SelectTrigger className="bg-white mt-1"><SelectValue placeholder="Mode" /></SelectTrigger>
                   <SelectContent>
@@ -364,12 +387,16 @@ export default function ResubmitExpensePage() {
                   value={approxKms}
                   onChange={(e) => {
                     setApproxKms(e.target.value)
-                    if (transportType === 'Bike' || transportType === 'Car') {
-                      const amt = calcTravelAmount(transportType, parseFloat(e.target.value) || 0)
-                      if (amt) setAmount(amt)
+                    if (isPerKmTravelMode(transportType)) {
+                      setAmount(calcTravelAmount(transportType, parseFloat(e.target.value) || 0))
                     }
                   }}
                 />
+                {isPerKmTravelMode(transportType) && (
+                  <p className="text-xs text-blue-700 mt-1">
+                    Rate: {perKmRateLabel(transportType)} — amount locked after calculation
+                  </p>
+                )}
               </div>
               <Button type="button" variant="outline" onClick={fetchGpsDistance} disabled={gpsLoading}>
                 {gpsLoading ? 'Calculating…' : 'Verify distance (GPS)'}

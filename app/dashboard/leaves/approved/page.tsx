@@ -21,6 +21,7 @@ type Leave = {
   reason?: string
   status: 'Pending' | 'Approved' | 'Rejected'
   leaveType?: string
+  rejectionReason?: string
 }
 
 export default function EmployeeApprovedLeavesPage() {
@@ -112,13 +113,14 @@ export default function EmployeeApprovedLeavesPage() {
                 <th className="py-2 px-3">From</th>
                 <th className="py-2 px-3">To</th>
                 <th className="py-2 px-3 text-left">Reason</th>
+                <th className="py-2 px-3 text-left">Rejection reason</th>
                 <th className="py-2 px-3">Status</th>
               </tr>
             </thead>
             <tbody>
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-8 px-3 text-center text-neutral-500">
+                  <td colSpan={6} className="py-8 px-3 text-center text-neutral-500">
                     No leave requests yet.{' '}
                     <Link href="/dashboard/leaves/request" className="text-blue-600 hover:underline">
                       Apply for leave
@@ -132,6 +134,13 @@ export default function EmployeeApprovedLeavesPage() {
                   <td className="py-2 px-3 text-center">{new Date(l.startDate).toLocaleDateString()}</td>
                   <td className="py-2 px-3 text-center">{new Date(l.endDate).toLocaleDateString()}</td>
                   <td className="py-2 px-3">{l.reason || '-'}</td>
+                  <td className="py-2 px-3 text-sm">
+                    {l.status === 'Rejected' && l.rejectionReason ? (
+                      <span className="text-red-700">{l.rejectionReason}</span>
+                    ) : (
+                      '-'
+                    )}
+                  </td>
                   <td className="py-2 px-3 text-center">
                     <span
                       className={
