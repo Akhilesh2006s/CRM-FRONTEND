@@ -18,7 +18,8 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useProducts } from '@/hooks/useProducts'
 import { toast } from '@/hooks/use-toast'
-import { PlusCircle, X } from 'lucide-react'
+import Link from 'next/link'
+import { PlusCircle, X, Eye } from 'lucide-react'
 
 type Lead = { _id: string; school_name: string; contact_person?: string; location?: string }
 type ProductRow = { id: string; product: string; soldQty: number; returnQty: number; reason: string; remarks: string }
@@ -33,7 +34,14 @@ type ExecReturn = {
   finYear?: string
   schoolType?: string
   schoolCode?: string
+  rejectionReason?: string
+  managerRemarks?: string
+  executiveName?: string
+  createdBy?: { name?: string }
+  verifiedBy?: { name?: string }
+  approvedBy?: { name?: string }
   leadId?: { school_name?: string }
+  dcOrderId?: { school_name?: string }
 }
 
 const RETURN_REASONS = ['Damaged', 'Expired', 'Wrong Item', 'Excess Stock', 'Other']
@@ -268,8 +276,11 @@ export default function EmployeeReturnsPage() {
                 <th className="py-2 pr-2">Fin Year</th>
                 <th className="py-2 pr-2">Lead</th>
                 <th className="py-2 pr-2">Return Date</th>
+                {isAdmin && <th className="py-2 pr-2">Executive</th>}
                 <th className="py-2 pr-2">Remarks</th>
+                {isAdmin && <th className="py-2 pr-2">Manager / rejection</th>}
                 <th className="py-2 pr-2">Created</th>
+                {isAdmin && <th className="py-2 pr-2">Action</th>}
               </tr>
             </thead>
             <tbody>
@@ -279,15 +290,53 @@ export default function EmployeeReturnsPage() {
                   <td className="py-2 pr-2">{r.status || '-'}</td>
                   <td className="py-2 pr-2">{r.lrNumber || '-'}</td>
                   <td className="py-2 pr-2">{r.finYear || '-'}</td>
-                  <td className="py-2 pr-2">{r.leadId?.school_name || '-'}</td>
+                  <td className="py-2 pr-2">
+                    {r.leadId?.school_name || r.dcOrderId?.school_name || '-'}
+                  </td>
                   <td className="py-2 pr-2">{new Date(r.returnDate).toLocaleDateString()}</td>
-                  <td className="py-2 pr-2">{r.remarks || '-'}</td>
+                  {isAdmin && (
+                    <td className="py-2 pr-2">
+                      {r.executiveName || r.createdBy?.name || '-'}
+                    </td>
+                  )}
+                  <td className="py-2 pr-2 max-w-[200px] truncate" title={r.remarks || ''}>
+                    {r.remarks || '-'}
+                  </td>
+                  {isAdmin && (
+                    <td className="py-2 pr-2 max-w-[220px]">
+                      {r.rejectionReason ? (
+                        <span className="text-red-700 text-xs" title={r.rejectionReason}>
+                          Rejected: {r.rejectionReason}
+                        </span>
+                      ) : r.managerRemarks ? (
+                        <span className="text-xs text-muted-foreground" title={r.managerRemarks}>
+                          {r.managerRemarks}
+                        </span>
+                      ) : (
+                        '-'
+                      )}
+                    </td>
+                  )}
                   <td className="py-2 pr-2">{new Date(r.createdAt).toLocaleString()}</td>
+                  {isAdmin && (
+                    <td className="py-2 pr-2">
+                      <Link
+                        href={`/dashboard/returns/employees/${r._id}`}
+                        className="inline-flex items-center text-primary hover:underline text-xs"
+                      >
+                        <Eye className="h-4 w-4 mr-1" />
+                        View
+                      </Link>
+                    </td>
+                  )}
                 </tr>
               ))}
               {myReturns.length === 0 && (
                 <tr>
-                  <td className="py-3 text-muted-foreground" colSpan={8}>
+                  <td
+                    className="py-3 text-muted-foreground"
+                    colSpan={isAdmin ? 11 : 8}
+                  >
                     No returns yet
                   </td>
                 </tr>
