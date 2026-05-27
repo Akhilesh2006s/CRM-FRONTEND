@@ -218,17 +218,7 @@ export default function CompletedDCPage() {
     // show only active (not on hold)
     qs.append('hold', 'false')
     try {
-      // Fetch from both DcOrder and DC model
-      let dcOrderData: Row[] = []
       let dcModelData: any[] = []
-      
-      try {
-        dcOrderData = await apiRequest<Row[]>(`/warehouse/dc/list?${qs.toString()}`)
-        console.log('Loaded DcOrder data:', dcOrderData?.length || 0, 'entries')
-      } catch (err: any) {
-        console.warn('Failed to load warehouse DC list:', err)
-        dcOrderData = []
-      }
       
       try {
         // Try dedicated endpoint first, fallback to filtered endpoint
@@ -341,124 +331,11 @@ export default function CompletedDCPage() {
           poDocument: dc.poDocument || dc.poPhotoUrl || '',
         }
       })
+      // Completed DC list should show ONLY completed DC model entries.
+      setAllRows(transformedDCs)
+      applyFilters(transformedDCs)
       
-      // Mark DcOrder entries and find their corresponding DC IDs
-      const dcOrderRows: Row[] = (dcOrderData || []).map((row: any) => {
-        const rowId = row._id?.toString() || row._id
-        return {
-          ...row,
-          _id: rowId, // This is a DcOrder ID
-          isDcOrder: true,
-        }
-      })
-      
-      // Find DC entries for DcOrder rows
-      for (const row of dcOrderRows) {
-        try {
-          // Find DC that has this dcOrderId
-          const matchingDC = dcModelData.find((dc: any) => {
-            if (!dc.dcOrderId) return false
-            // Handle both populated object and ID string
-            let dcOrderIdValue: string
-            if (typeof dc.dcOrderId === 'object' && dc.dcOrderId._id) {
-              dcOrderIdValue = dc.dcOrderId._id.toString()
-            } else if (typeof dc.dcOrderId === 'object' && dc.dcOrderId.toString) {
-              dcOrderIdValue = dc.dcOrderId.toString()
-            } else {
-              dcOrderIdValue = String(dc.dcOrderId)
-            }
-            return dcOrderIdValue === row._id.toString()
-          })
-          if (matchingDC) {
-            row.dcId = matchingDC._id?.toString() || matchingDC._id
-            // Also copy PDF data and other fields from the matching DC
-            row.poDocument = matchingDC.poDocument || matchingDC.poPhotoUrl || row.poDocument
-            row.poPhotoUrl = matchingDC.poPhotoUrl || matchingDC.poDocument || row.poPhotoUrl
-            row.lrCost = matchingDC.lrCost || row.lrCost
-            row.remarks = poStageRemarks(matchingDC)
-            row.lrNo = matchingDC.lrNo || row.lrNo
-            row.deliveryStatus = matchingDC.deliveryStatus || row.deliveryStatus
-            row.schoolType = matchingDC.dcOrderId?.school_type || row.schoolType
-            row.zone = matchingDC.dcOrderId?.zone || row.zone
-            console.log(`Found DC ${row.dcId} for DcOrder ${row._id}`)
-          } else {
-            console.warn(`No DC found for DcOrder ${row._id} - this entry cannot be updated`)
-          }
-        } catch (e) {
-          console.warn('Error finding DC for DcOrder:', e)
-        }
-      }
-
-      // Deduplicate: DC model row is authoritative; drop any DcOrder row that has
-      // a matching completed DC (matched by dcOrderId on the DC model row).
-      const dcOrderIdsWithDC = new Set<string>(
-        dcModelData
-          .map((dc: any) => {
-            const ref = dc.dcOrderId
-            if (!ref) return null
-            if (typeof ref === 'object' && ref._id) return ref._id.toString()
-            return String(ref)
-          })
-          .filter(Boolean) as string[]
-      )
-
-      const allDataMap = new Map<string, Row>()
-
-      // DC model entries are authoritative
-      transformedDCs.forEach(dc => {
-        allDataMap.set(dc._id, dc)
-      })
-
-      console.log('📦 Added DC entries to map:', transformedDCs.length)
-
-      // Add DcOrder entry only when no completed DC exists for it yet
-      dcOrderRows.forEach(dcOrder => {
-        if (dcOrderIdsWithDC.has(dcOrder._id)) {
-          // Completed DC already in list — skip to avoid duplicate
-          return
-        }
-        if (dcOrder.dcId && allDataMap.has(dcOrder.dcId)) {
-          // Matched DC is already present — skip
-          return
-        }
-        allDataMap.set(dcOrder._id, dcOrder)
-      })
-      
-      const allData = Array.from(allDataMap.values())
-      
-      // Store all data for filtering
-      setAllRows(allData)
-      
-      // Apply filters to the data
-      applyFilters(allData)
-      
-      console.log('✅ Final data to display:', {
-        totalRows: allData.length,
-        dcEntries: transformedDCs.length,
-        dcOrderEntries: dcOrderRows.length,
-        sampleRow: allData[0] ? {
-          id: allData[0]._id,
-          schoolName: allData[0].schoolName,
-          isDcOrder: allData[0].isDcOrder,
-          dcNo: allData[0].dcNo,
-          completedDate: allData[0].completedDate
-        } : null,
-        allRowIds: allData.slice(0, 5).map(r => r._id)
-      })
-      
-      if (allData.length === 0) {
-        console.warn('⚠️ No data to display! Check:')
-        console.warn('  - dcModelData length:', dcModelData?.length || 0)
-        console.warn('  - dcOrderData length:', dcOrderData?.length || 0)
-        console.warn('  - transformedDCs length:', transformedDCs.length)
-        console.warn('  - dcOrderRows length:', dcOrderRows.length)
-      }
-      
-      // Store all data and apply filters
-      setAllRows(allData)
-      applyFilters(allData)
-      
-      if (allData.length === 0) {
+      if (transformedDCs.length === 0) {
         // Don't show error if filters are applied - might be intentional
         if (Object.values(filters).some(v => v)) {
           // Filters applied but no results
