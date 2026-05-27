@@ -246,11 +246,12 @@ export function buildClientDCProductRows(
             fromClass: p.fromClass ?? order.fromClass,
             toClass: p.toClass ?? order.toClass,
             selected_classes: p.selected_classes ?? order.selected_classes,
-            quantity: p.quantity ?? order.quantity,
-            strength: p.strength ?? order.quantity ?? order.strength,
+            // Prefer DcOrder commercial values when both sources exist.
+            quantity: order.quantity ?? p.quantity,
+            strength: order.quantity ?? order.strength ?? p.strength ?? p.quantity,
             level: p.level || order.level,
             term: p.term ?? order.term,
-            price: p.price ?? order.unit_price,
+            price: order.unit_price ?? p.price,
           }
         : p
       return mapToClientDCProductRow(merged, `dc-${idx + 1}`, opts, getDefaultLevel)
