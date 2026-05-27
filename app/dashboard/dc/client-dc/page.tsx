@@ -1690,38 +1690,10 @@ export default function ClientDCPage() {
           
           console.log('🔄 Updating DcOrder status to dc_requested with request data:', dcOrderId)
           
-          // Store the request data in DcOrder so Admin/Coordinator can see it in Closed Sales
-          // Also update the main products array to only contain Term 1 products (for display in Closed Sales)
-          const productsArrayForDcOrder = productsForDcOrder.map((p: any) => {
-            const subject = resolveProductSubject(p)
-            return {
-              product_name: p.product || p.product_name || 'Unknown',
-              quantity: p.quantity || p.strength || 0,
-              unit_price: p.unit_price || 0,
-              term: p.term || 'Term 1',
-              class: p.class || '1',
-              specs: p.specs || 'Regular',
-              level: p.level || undefined,
-              ...(subject ? { subject } : {}),
-              ...(Array.isArray(p.selected_subjects) && p.selected_subjects.length > 0
-                ? { selected_subjects: p.selected_subjects }
-                : subject
-                  ? {
-                      selected_subjects: subject
-                        .split(',')
-                        .map((s: string) => s.trim())
-                        .filter(Boolean),
-                    }
-                  : {}),
-            }
-          })
-          
           const updateResult = await apiRequest(`/dc-orders/${dcOrderId}`, {
             method: 'PUT',
             body: JSON.stringify({ 
               status: 'dc_requested',
-              // Update main products array to only show Term 1 products (for display in Closed Sales)
-              products: productsArrayForDcOrder,
               dcRequestData: {
                 // Store product details from the request (Term 1 products if split)
                 productDetails: productsForDcOrder,
@@ -2737,23 +2709,23 @@ export default function ClientDCPage() {
                           )}
                         </TableCell>
                         <TableCell className="text-center">
-                          {status === 'created' || status === 'po_submitted' || status === 'dc_requested' ? (
-                          <div className="flex items-center gap-2 justify-center">
-                            {d.poPhotoUrl && (
-                              <Button 
-                                size="sm" 
-                                variant="outline"
-                                onClick={() => openEditPODialog(d)}
-                                className="border-neutral-200 hover:bg-neutral-50 shadow-sm"
-                              >
-                                <Pencil className="w-4 h-4 mr-2" />
-                                Edit PO
-                              </Button>
-                            )}
+                          {status === 'created' || status === 'po_submitted' ? (
+                            <div className="flex items-center gap-2 justify-center">
+                              {d.poPhotoUrl && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => openEditPODialog(d)}
+                                  className="border-neutral-200 hover:bg-neutral-50 shadow-sm"
+                                >
+                                  <Pencil className="w-4 h-4 mr-2" />
+                                  Edit PO
+                                </Button>
+                              )}
                               {/* Always show Edit PO button if dcOrderId exists, even without PO photo */}
                               {!d.poPhotoUrl && d.dcOrderId && (
-                                <Button 
-                                  size="sm" 
+                                <Button
+                                  size="sm"
                                   variant="outline"
                                   onClick={() => openEditPODialog(d)}
                                   className="border-neutral-200 hover:bg-neutral-50 shadow-sm"
@@ -2763,32 +2735,32 @@ export default function ClientDCPage() {
                                 </Button>
                               )}
                               {/* Request DC: transport via Edit PO, no pending PO edits */}
-                              {status !== 'dc_requested' &&
-                                dcsWithCompleteTransport.has(d._id) &&
+                              {dcsWithCompleteTransport.has(d._id) &&
                                 !dcsWithPendingChanges.has(d._id) &&
                                 !dcsWithPendingEditRequests.has(d._id) && (
-                            <Button 
-                              size="sm" 
-                              onClick={() => openClientDCDialog(d)}
-                              className="bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg"
-                            >
-                              <Package className="w-4 h-4 mr-2" />
-                              Request DC
-                            </Button>
-                              )}
-                              {status === 'dc_requested' && (
-                                <span className="text-xs text-amber-700 max-w-[140px] text-center">
-                                  Awaiting Closed Sales review
-                                </span>
-                              )}
+                                  <Button
+                                    size="sm"
+                                    onClick={() => openClientDCDialog(d)}
+                                    className="bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg"
+                                  >
+                                    <Package className="w-4 h-4 mr-2" />
+                                    Request DC
+                                  </Button>
+                                )}
                               {!dcsWithCompleteTransport.has(d._id) &&
                                 !dcsWithPendingChanges.has(d._id) &&
                                 !dcsWithPendingEditRequests.has(d._id) && (
-                                <span className="text-xs text-neutral-500 max-w-[140px] text-center">
-                                  Complete transport in Edit PO to request DC
-                                </span>
-                              )}
-                          </div>
+                                  <span className="text-xs text-neutral-500 max-w-[140px] text-center">
+                                    Complete transport in Edit PO to request DC
+                                  </span>
+                                )}
+                            </div>
+                          ) : status === 'dc_requested' ? (
+                            <div className="flex items-center justify-center">
+                              <span className="text-xs text-amber-700 max-w-[160px] text-center">
+                                Awaiting Closed Sales review
+                              </span>
+                            </div>
                           ) : (
                             <div className="flex items-center gap-2 justify-center">
                               <Button 

@@ -389,30 +389,39 @@ export default function CompletedDCPage() {
         }
       }
 
-      // Combine both lists (DcOrder entries first, then DC entries)
-      // Remove duplicates - if a DC entry exists, prefer it over DcOrder entry
+      // Deduplicate: DC model row is authoritative; drop any DcOrder row that has
+      // a matching completed DC (matched by dcOrderId on the DC model row).
+      const dcOrderIdsWithDC = new Set<string>(
+        dcModelData
+          .map((dc: any) => {
+            const ref = dc.dcOrderId
+            if (!ref) return null
+            if (typeof ref === 'object' && ref._id) return ref._id.toString()
+            return String(ref)
+          })
+          .filter(Boolean) as string[]
+      )
+
       const allDataMap = new Map<string, Row>()
-      
-      // First add DC entries (these are authoritative)
+
+      // DC model entries are authoritative
       transformedDCs.forEach(dc => {
         allDataMap.set(dc._id, dc)
       })
-      
+
       console.log('📦 Added DC entries to map:', transformedDCs.length)
-      
-      // Then add DcOrder entries only if they don't have a corresponding DC or if DC doesn't exist
+
+      // Add DcOrder entry only when no completed DC exists for it yet
       dcOrderRows.forEach(dcOrder => {
-        if (dcOrder.dcId) {
-          // If we found a DC for this DcOrder, use the DC entry instead
-          if (!allDataMap.has(dcOrder.dcId)) {
-            // DC entry doesn't exist in our list, so add the DcOrder entry
-            allDataMap.set(dcOrder._id, dcOrder)
-          }
-          // If DC entry exists, we skip the DcOrder entry (DC is authoritative)
-        } else {
-          // No DC found, add the DcOrder entry
-          allDataMap.set(dcOrder._id, dcOrder)
+        if (dcOrderIdsWithDC.has(dcOrder._id)) {
+          // Completed DC already in list — skip to avoid duplicate
+          return
         }
+        if (dcOrder.dcId && allDataMap.has(dcOrder.dcId)) {
+          // Matched DC is already present — skip
+          return
+        }
+        allDataMap.set(dcOrder._id, dcOrder)
       })
       
       const allData = Array.from(allDataMap.values())
@@ -645,12 +654,17 @@ export default function CompletedDCPage() {
       toast.error('Invalid DC ID. Cannot edit.')
       return
     }
+
+    // DcOrder rows without a matching DC model entry cannot be edited via /dc/:id
+    if (row.isDcOrder && !row.dcId) {
+      toast.error('No completed DC found for this order yet. Complete the DC first.')
+      return
+    }
     
     try {
-      // Determine which ID to use for fetching
-      const dcIdToFetch = row.dcId || row._id // Use dcId if available (for DcOrder entries), otherwise use _id
+      // Always use the real DC model ID
+      const dcIdToFetch = row.dcId || row._id
       
-      // Try to fetch full DC details, but use row data as fallback
       let fullDC: any = null
       try {
         console.log('Fetching DC details for:', dcIdToFetch, 'isDcOrder:', row.isDcOrder)
@@ -658,7 +672,6 @@ export default function CompletedDCPage() {
         console.log('Fetched DC:', fullDC)
       } catch (err: any) {
         console.warn('Failed to fetch full DC details, using row data:', err)
-        // Use row data as fallback
         fullDC = row
       }
       
