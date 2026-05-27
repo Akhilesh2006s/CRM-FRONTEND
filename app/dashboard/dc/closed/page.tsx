@@ -808,6 +808,46 @@ export default function ClosedSalesPage() {
             unit_price: 0,
           }])
         }
+      } else if (Array.isArray(normalizedDeal.products) && normalizedDeal.products.length > 0) {
+        // No dcRequestData yet and no DC created — prefill from DcOrder products.
+        const rowsFromOrder: ProductRow[] = normalizedDeal.products.map((p: any, idx: number) => {
+          const productName: string = p.product_name || p.product || 'ABACUS'
+          const skuCategories = getProductCategories(productName)
+          const rawSku = (p.productCategory || p.category || '').trim()
+          const matchedSku =
+            skuCategories.includes(rawSku)
+              ? rawSku
+              : skuCategories.find((c) => c.toLowerCase() === rawSku.toLowerCase())
+
+          return {
+            id: String(idx + 1),
+            product: productName,
+            class: p.class || '1',
+            category: normalizeCategoryForDropdown(
+              p.category,
+              normalizedDeal.school_type === 'Existing' ? 'Old Students' : 'new Students',
+            ),
+            productCategory: matchedSku || undefined,
+            specs: p.specs || 'Regular',
+            subject: resolveProductSubject(p),
+            strength: Number(p.quantity) || Number(p.strength) || 0,
+            level: p.level || getDefaultLevel(productName || 'Abacus'),
+            term: p.term || 'Term 1',
+            unit_price: Number(p.unit_price) || 0,
+          }
+        })
+
+        setProductRows(rowsFromOrder.length > 0 ? rowsFromOrder : [{
+          id: '1',
+          product: 'Abacus',
+          class: '1',
+          category: normalizedDeal.school_type === 'Existing' ? 'Old Students' : 'new Students',
+          specs: 'Regular',
+          strength: 0,
+          level: 'L1',
+          term: 'Term 1',
+          unit_price: 0,
+        }])
       } else if (existingDCForDeal) {
         // Load full DC details to get all fields
         try {

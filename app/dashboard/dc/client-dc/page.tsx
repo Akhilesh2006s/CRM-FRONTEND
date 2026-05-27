@@ -3826,6 +3826,17 @@ export default function ClientDCPage() {
                           />
                         </TableCell>
                         <TableCell>
+                            <Input
+                              value={row.class || '1'}
+                              onChange={(e) => {
+                                const updated = [...editProductRows]
+                                updated[actualIdx].class = e.target.value
+                                setEditProductRows(updated)
+                              }}
+                              placeholder="Class"
+                            />
+                          </TableCell>
+                          <TableCell>
                           {/* Level selector based on Products master configuration */}
                           <Select
                             value={
@@ -3949,6 +3960,7 @@ export default function ClientDCPage() {
                           <TableHeader>
                             <TableRow>
                               <TableHead>Product Name</TableHead>
+                              <TableHead>Class</TableHead>
                               <TableHead>Level</TableHead>
                               <TableHead>Quantity</TableHead>
                               <TableHead>Unit Price</TableHead>
@@ -3959,7 +3971,7 @@ export default function ClientDCPage() {
                           <TableBody>
                             {editProductRows.length === 0 ? (
                               <TableRow>
-                                <TableCell colSpan={6} className="text-center text-neutral-500 py-4">
+                                <TableCell colSpan={7} className="text-center text-neutral-500 py-4">
                                   No products added yet
                                 </TableCell>
                               </TableRow>
@@ -3993,6 +4005,7 @@ export default function ClientDCPage() {
                             <TableHeader>
                               <TableRow>
                                 <TableHead>Product Name</TableHead>
+                                <TableHead>Class</TableHead>
                                 <TableHead>Level</TableHead>
                                 <TableHead>Quantity</TableHead>
                                 <TableHead>Unit Price</TableHead>
@@ -4003,7 +4016,7 @@ export default function ClientDCPage() {
                             <TableBody>
                               {term1Products.length === 0 ? (
                                 <TableRow>
-                                  <TableCell colSpan={6} className="text-center text-neutral-500 py-4">
+                                  <TableCell colSpan={7} className="text-center text-neutral-500 py-4">
                                     No Level 1 products added yet
                                   </TableCell>
                                 </TableRow>
@@ -4290,32 +4303,60 @@ export default function ClientDCPage() {
                   <span className="text-black">Rs.{invoiceData.totalDue?.toFixed(2) || '0.00'}</span>
                 </div>
 
-                {/* Products from Database */}
+                {/* Products from Database (group duplicate product rows into one line) */}
                 {invoiceData.paymentBreakdown && invoiceData.paymentBreakdown.length > 0 ? (
-                  invoiceData.paymentBreakdown.map((product: any, index: number) => {
-                    // Use strength as quantity (number of students/items), fallback to quantity field
-                    const quantity = product.strength !== undefined ? product.strength : (product.quantity !== undefined ? product.quantity : 0)
-                    // Get price from database - unitPrice comes from DcOrder or DC productDetails (both from database)
-                    const price = product.unitPrice !== undefined && product.unitPrice !== null 
-                      ? Number(product.unitPrice) 
-                      : (product.price !== undefined && product.price !== null 
-                          ? Number(product.price) 
-                          : 0)
-                    const productName = product.product || 'Product'
-                    const bgColor1 = (index * 2) % 2 === 0 ? 'bg-neutral-50' : 'bg-white'
-                    const bgColor2 = (index * 2 + 1) % 2 === 0 ? 'bg-neutral-50' : 'bg-white'
-                    
+                  Object.values(
+                    invoiceData.paymentBreakdown.reduce((acc: Record<string, any>, product: any) => {
+                      const productName = String(product.product || 'Product').trim() || 'Product'
+                      const quantity =
+                        product.strength !== undefined
+                          ? Number(product.strength) || 0
+                          : Number(product.quantity) || 0
+                      const unitPrice =
+                        product.unitPrice !== undefined && product.unitPrice !== null
+                          ? Number(product.unitPrice) || 0
+                          : Number(product.price) || 0
+                      const rowTotal = Number(product.total) || quantity * unitPrice
+
+                      if (!acc[productName]) {
+                        acc[productName] = {
+                          productName,
+                          quantity: 0,
+                          total: 0,
+                          unitPrices: new Set<number>(),
+                        }
+                      }
+
+                      acc[productName].quantity += quantity
+                      acc[productName].total += rowTotal
+                      if (unitPrice > 0) acc[productName].unitPrices.add(unitPrice)
+                      return acc
+                    }, {})
+                  ).map((group: any, index: number) => {
+                    const prices = Array.from(group.unitPrices || []) as number[]
+                    const unitPriceText =
+                      prices.length === 0
+                        ? '-'
+                        : prices.length === 1
+                          ? `Rs.${prices[0].toFixed(2)}`
+                          : 'Multiple'
+                    const bgColor1 = (index * 3) % 2 === 0 ? 'bg-neutral-50' : 'bg-white'
+                    const bgColor2 = (index * 3 + 1) % 2 === 0 ? 'bg-neutral-50' : 'bg-white'
+                    const bgColor3 = (index * 3 + 2) % 2 === 0 ? 'bg-neutral-50' : 'bg-white'
+
                     return (
-                      <div key={index}>
-                        {/* Product Quantity - show 0 if quantity is 0 */}
+                      <div key={`${group.productName}-${index}`}>
                         <div className={`flex justify-between items-center p-4 ${bgColor1}`}>
-                          <span className="text-teal-600 font-medium">{productName}:</span>
-                          <span className="text-black">{quantity}</span>
+                          <span className="text-teal-600 font-medium">{group.productName}:</span>
+                          <span className="text-black">{group.quantity}</span>
                         </div>
-                        {/* Product Price - from database (DcOrder.unit_price or DC.productDetails.price) */}
                         <div className={`flex justify-between items-center p-4 ${bgColor2}`}>
-                          <span className="text-teal-600 font-medium">{productName}Price:</span>
-                          <span className="text-black">{price > 0 ? `Rs.${price.toFixed(2)}` : '-'}</span>
+                          <span className="text-teal-600 font-medium">{group.productName}Price:</span>
+                          <span className="text-black">{unitPriceText}</span>
+                        </div>
+                        <div className={`flex justify-between items-center p-4 ${bgColor3}`}>
+                          <span className="text-teal-600 font-medium">{group.productName}Total:</span>
+                          <span className="text-black">Rs.{Number(group.total || 0).toFixed(2)}</span>
                         </div>
                       </div>
                     )
