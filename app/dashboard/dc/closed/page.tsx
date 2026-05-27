@@ -1852,8 +1852,8 @@ export default function ClosedSalesPage() {
                   </td>
                   <td className="py-3 px-4">
                     <div className="flex flex-col gap-1.5">
-                      {/* Show Raise DC button for both DcOrders and closed leads */}
-                      {(canRequestDC || canApproveDC) && (
+                      {/* Show Raise DC / Update DC only when NO DC already exists for this deal */}
+                      {(canRequestDC || canApproveDC) && !dealDCs[d._id] && (
                         <Button
                           size="sm"
                           variant={d.status === 'dc_accepted' ? 'default' : 'destructive'}

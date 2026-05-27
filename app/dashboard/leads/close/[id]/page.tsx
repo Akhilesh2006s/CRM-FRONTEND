@@ -364,22 +364,22 @@ function expandSectionsToProductDetails(
         if (!classNum || strengthToUse <= 0) continue
 
         for (const level of levelsToUse) {
-          out.push({
-            id: `${parentId}_${classNum}_${rowIdx++}`,
-            product: line.product,
-            class: classNum.toString(),
+            out.push({
+              id: `${parentId}_${classNum}_${rowIdx++}`,
+              product: line.product,
+              class: classNum.toString(),
             category: defaultCategory,
             productCategory: ctx.hasProductCategories(line.product) ? defaultCategory : undefined,
-            quantity: strengthToUse || 1,
+              quantity: strengthToUse || 1,
             strength: strengthToUse,
-            price: priceToUse || 0,
+              price: priceToUse || 0,
             total: strengthToUse * (priceToUse || 0),
             level,
             specs: defaultSpec,
-            subject: subjectDisplay,
-            isParentRow: false,
-            sameRateForAllClasses: false,
-          })
+              subject: subjectDisplay,
+              isParentRow: false,
+              sameRateForAllClasses: false,
+            })
         }
       }
     }
