@@ -38,6 +38,16 @@ export function productDetailLineKey(p: Record<string, any>): string {
   return [product, klass, level, specs, productCategory, term, qty].join('|')
 }
 
+/** Unit price from DC line (`price`) or DcOrder line (`unit_price`). */
+export function resolveDcProductUnitPrice(p: {
+  unit_price?: number | string | null
+  price?: number | string | null
+}): number {
+  const raw = p.unit_price ?? p.price
+  const n = Number(raw)
+  return Number.isFinite(n) ? n : 0
+}
+
 export function dedupeProductDetailLines(lines: any[]): any[] {
   const seen = new Set<string>()
   const out: any[] = []

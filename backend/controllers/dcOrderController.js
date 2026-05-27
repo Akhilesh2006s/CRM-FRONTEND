@@ -469,7 +469,10 @@ const update = async (req, res) => {
 
     const hasProductsArray = Array.isArray(req.body.products);
     const isEditDetailsProductsUpdate =
-      hasProductsArray && !hasProductsInterested && !isFollowUpSubmission;
+      hasProductsArray &&
+      !hasProductsInterested &&
+      !isFollowUpSubmission &&
+      req.body.status !== 'dc_requested';
     if (isEditDetailsProductsUpdate) {
       const DC_PRODUCT_STATUSES = [
         'Hot',
