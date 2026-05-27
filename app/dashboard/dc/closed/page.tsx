@@ -20,9 +20,7 @@ import { resolveProductSubject } from '@/lib/clientDcProductRows'
 function includeInClosedSalesList(deal: { status?: string; transport_name?: string; transport_location?: string; pincode?: string; pendingEdit?: { transport_name?: string; transport_location?: string; pincode?: string; status?: string } }) {
   const status = deal.status || ''
   if (status === 'completed') return true
-  if (status === 'dc_requested' || status === 'dc_accepted') {
-    return isTransportComplete(deal)
-  }
+  if (status === 'dc_requested' || status === 'dc_accepted') return true
   return false
 }
 
