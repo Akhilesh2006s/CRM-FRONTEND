@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { apiRequest, API_BASE_URL } from '@/lib/api'
+import { apiRequest, API_BASE_URL, resolveUploadUrl } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -63,6 +63,40 @@ type ProductRow = {
   remarks: string
 }
 
+/** Radix Select breaks on empty string; use undefined for "no selection". */
+function selectValueOrUndefined(value: string | undefined | null): string | undefined {
+  const v = (value || '').trim()
+  return v.length > 0 ? v : undefined
+}
+
+const SELECT_IN_DIALOG_CLASS = 'z-[200]'
+
+function mapDcOrderProducts(
+  products: Array<{ product_name?: string; name?: string; quantity?: number; unit_price?: number }> | undefined
+): DcOrder['products'] {
+  if (!Array.isArray(products)) return []
+  return products.map((p) => ({
+    product_name: (p.product_name || p.name || '').trim(),
+    quantity: Number(p.quantity) || 0,
+    unit_price: p.unit_price,
+  }))
+}
+
+function productsFromEmployeeDc(dc: {
+  productDetails?: Array<{ product?: string; product_name?: string; requestedQuantity?: number; quantity?: number }>
+  dcOrderId?: { products?: DcOrder['products']; school_name?: string; dc_code?: string } | string
+}): DcOrder['products'] {
+  const order =
+    dc.dcOrderId && typeof dc.dcOrderId === 'object' ? dc.dcOrderId : null
+  const fromOrder = mapDcOrderProducts(order?.products as DcOrder['products'])
+  if (fromOrder.length > 0) return fromOrder
+  const details = Array.isArray(dc.productDetails) ? dc.productDetails : []
+  return details.map((p) => ({
+    product_name: (p.product || p.product_name || '').trim(),
+    quantity: Number(p.requestedQuantity ?? p.quantity) || 0,
+  }))
+}
+
 export default function ExecutiveStockReturnsPage() {
   const [returns, setReturns] = useState<StockReturn[]>([])
   const [loading, setLoading] = useState(false)
@@ -98,16 +132,15 @@ export default function ExecutiveStockReturnsPage() {
   }, [user])
 
   useEffect(() => {
+    if (!user?._id) return
     loadReturns()
-    loadDcOrders()
-    loadWarehouses()
   }, [user?._id])
 
   const loadReturns = async () => {
     if (!user?._id) return
     setLoading(true)
     try {
-      const response = await apiRequest<any>(`/stock-returns/executive/list`)
+      const response = await apiRequest<any>(`/stock-returns/executive/mine`)
       const returnsList = Array.isArray(response) ? response : (response?.data || [])
       setReturns(
         returnsList.map((r: any) => ({
@@ -126,9 +159,50 @@ export default function ExecutiveStockReturnsPage() {
   const loadDcOrders = async () => {
     if (!user?._id) return
     try {
-      const response = await apiRequest<any>(`/dc-orders?employee=${user._id}&status=completed`)
-      const orders = Array.isArray(response) ? response : (response?.data || [])
-      setDcOrders(orders)
+      const byId = new Map<string, DcOrder>()
+
+      const [dcsRaw, ordersRaw] = await Promise.all([
+        apiRequest<any>(`/dc/employee/my?status=completed&limit=100`).catch(() => []),
+        apiRequest<any>(`/dc-orders?assigned_to=${user._id}&status=completed&limit=100`).catch(() => null),
+      ])
+
+      const dcs = Array.isArray(dcsRaw) ? dcsRaw : (dcsRaw?.data || [])
+      for (const dc of dcs) {
+        const orderRef = dc.dcOrderId
+        const orderId =
+          typeof orderRef === 'object' && orderRef?._id
+            ? String(orderRef._id)
+            : orderRef
+              ? String(orderRef)
+              : ''
+        if (!orderId) continue
+        const populated = typeof orderRef === 'object' ? orderRef : null
+        byId.set(orderId, {
+          _id: orderId,
+          dc_code: populated?.dc_code || dc.saleId || '',
+          school_name: dc.customerName || populated?.school_name || '',
+          products: productsFromEmployeeDc(dc),
+          status: 'completed',
+        })
+      }
+
+      const ordersPage = ordersRaw
+      const orders = Array.isArray(ordersPage) ? ordersPage : (ordersPage?.data || [])
+      for (const order of orders) {
+        if (!order?._id) continue
+        const existing = byId.get(order._id)
+        byId.set(order._id, {
+          _id: order._id,
+          dc_code: order.dc_code || existing?.dc_code || '',
+          school_name: order.school_name || existing?.school_name || '',
+          products: mapDcOrderProducts(order.products).length
+            ? mapDcOrderProducts(order.products)
+            : existing?.products || [],
+          status: order.status || 'completed',
+        })
+      }
+
+      setDcOrders(Array.from(byId.values()))
     } catch (e: any) {
       console.error('Failed to load DC orders:', e)
       setDcOrders([])
@@ -137,14 +211,16 @@ export default function ExecutiveStockReturnsPage() {
 
   const loadWarehouses = async () => {
     try {
-      // Load warehouses from API or use default list
-      const response = await apiRequest<any>(`/warehouses`)
-      const warehouseList = Array.isArray(response) ? response : (response?.data || [])
-      setWarehouses(warehouseList.map((w: any) => w.name || w))
+      const response = await apiRequest<string[]>(`/warehouse/locations`)
+      const warehouseList = Array.isArray(response) ? response : []
+      if (warehouseList.length > 0) {
+        setWarehouses(warehouseList.filter(Boolean))
+        return
+      }
     } catch (e: any) {
-      // Default warehouses if API fails
-      setWarehouses(['Main Warehouse', 'North Warehouse', 'South Warehouse', 'East Warehouse', 'West Warehouse'])
+      console.warn('Failed to load warehouse locations:', e)
     }
+    setWarehouses(['Main Warehouse', 'North Warehouse', 'South Warehouse', 'East Warehouse', 'West Warehouse'])
   }
 
   const generateReturnId = () => {
@@ -153,7 +229,7 @@ export default function ExecutiveStockReturnsPage() {
     return `RET-${timestamp}-${random}`
   }
 
-  const openAddReturnDialog = () => {
+  const openAddReturnDialog = async () => {
     const newReturnId = generateReturnId()
     setReturnId(newReturnId)
     setReturnDate(new Date().toISOString().split('T')[0])
@@ -167,17 +243,16 @@ export default function ExecutiveStockReturnsPage() {
     setCustomerName('')
     setWarehouse('')
     setAddReturnDialogOpen(true)
+    await Promise.all([loadDcOrders(), loadWarehouses()])
   }
 
-  const handleDcOrderChange = (orderId: string) => {
-    setDcOrderId(orderId)
-    const order = dcOrders.find(o => o._id === orderId)
-    if (order) {
-      setCustomerName(order.school_name || '')
-      setSaleId(order.dc_code || order._id)
-      // Pre-populate products from DC order
-      if (order.products && Array.isArray(order.products)) {
-        const rows: ProductRow[] = order.products.map((p, idx) => ({
+  const applyDcOrderToForm = (order: DcOrder) => {
+    setCustomerName(order.school_name || '')
+    setSaleId(order.dc_code || order._id)
+    const products = order.products && order.products.length > 0 ? order.products : []
+    if (products.length > 0) {
+      setProductRows(
+        products.map((p, idx) => ({
           id: `product-${idx}`,
           product: p.product_name || '',
           soldQty: p.quantity || 0,
@@ -185,9 +260,34 @@ export default function ExecutiveStockReturnsPage() {
           reason: '',
           remarks: '',
         }))
-        setProductRows(rows)
+      )
+    } else {
+      setProductRows([])
+      toast.info('No products on this DC — use Add Product to enter return lines.')
+    }
+  }
+
+  const handleDcOrderChange = async (orderId: string) => {
+    setDcOrderId(orderId)
+    let order = dcOrders.find((o) => o._id === orderId)
+    if (!order) return
+
+    const needsProducts = !order.products?.length
+    if (needsProducts) {
+      try {
+        const full = await apiRequest<DcOrder>(`/dc-orders/${orderId}`)
+        order = {
+          ...order,
+          dc_code: full.dc_code || order.dc_code,
+          school_name: full.school_name || order.school_name,
+          products: mapDcOrderProducts(full.products as DcOrder['products']),
+        }
+        setDcOrders((prev) => prev.map((o) => (o._id === orderId ? order! : o)))
+      } catch (e: any) {
+        toast.error(e.message || 'Could not load products for this DC')
       }
     }
+    applyDcOrderToForm(order)
   }
 
   const addProductRow = () => {
@@ -241,7 +341,8 @@ export default function ExecutiveStockReturnsPage() {
         
         if (!response.ok) throw new Error('Upload failed')
         const data = await response.json()
-        return data.url || data.photoUrl
+        const raw = data.url || data.photoUrl || ''
+        return resolveUploadUrl(raw) || raw
       })
 
       const urls = await Promise.all(uploadPromises)
@@ -261,6 +362,18 @@ export default function ExecutiveStockReturnsPage() {
   }
 
   const validateForm = (): boolean => {
+    if (!dcOrderId) {
+      toast.error('Please select a completed Sale / DC Order')
+      return false
+    }
+    if (!warehouse) {
+      toast.error('Please select a warehouse')
+      return false
+    }
+    if (!customerName.trim()) {
+      toast.error('Please enter customer / outlet name')
+      return false
+    }
     if (!returnDate) {
       toast.error('Please select Return Date')
       return false
@@ -502,11 +615,14 @@ export default function ExecutiveStockReturnsPage() {
                 </div>
                 <div>
                   <Label>Sale ID / DC Order *</Label>
-                  <Select value={dcOrderId} onValueChange={handleDcOrderChange}>
-                    <SelectTrigger>
+                  <Select
+                    value={selectValueOrUndefined(dcOrderId)}
+                    onValueChange={handleDcOrderChange}
+                  >
+                    <SelectTrigger className="w-full">
                       <SelectValue placeholder="Select Sale/DC Order" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className={SELECT_IN_DIALOG_CLASS}>
                       {dcOrders.map((order) => (
                         <SelectItem key={order._id} value={order._id}>
                           {order.dc_code || order._id} - {order.school_name || 'N/A'}
@@ -514,14 +630,22 @@ export default function ExecutiveStockReturnsPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {dcOrders.length === 0 && (
+                    <p className="text-xs text-amber-700 mt-1">
+                      No completed DCs found. Complete warehouse delivery on Client Request first.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label>Warehouse *</Label>
-                  <Select value={warehouse} onValueChange={setWarehouse}>
-                    <SelectTrigger>
+                  <Select
+                    value={selectValueOrUndefined(warehouse)}
+                    onValueChange={setWarehouse}
+                  >
+                    <SelectTrigger className="w-full">
                       <SelectValue placeholder="Select warehouse" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className={SELECT_IN_DIALOG_CLASS}>
                       {warehouses.map((wh) => (
                         <SelectItem key={wh} value={wh}>
                           {wh}
@@ -540,11 +664,14 @@ export default function ExecutiveStockReturnsPage() {
                 </div>
                 <div className="md:col-span-2">
                   <Label>Return Type *</Label>
-                  <Select value={returnType} onValueChange={setReturnType}>
-                    <SelectTrigger>
+                  <Select
+                    value={selectValueOrUndefined(returnType)}
+                    onValueChange={setReturnType}
+                  >
+                    <SelectTrigger className="w-full">
                       <SelectValue placeholder="Select return type" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className={SELECT_IN_DIALOG_CLASS}>
                       {returnTypes.map((type) => (
                         <SelectItem key={type} value={type}>
                           {type}
@@ -588,7 +715,7 @@ export default function ExecutiveStockReturnsPage() {
                         <tr key={row.id} className="border-b">
                           <td className="py-2 px-3">
                             <Select
-                              value={row.product}
+                              value={selectValueOrUndefined(row.product)}
                               onValueChange={(value) => {
                                 updateProductRow(row.id, 'product', value)
                                 // Auto-fill soldQty from DC order if available
@@ -604,7 +731,7 @@ export default function ExecutiveStockReturnsPage() {
                               <SelectTrigger className="w-40">
                                 <SelectValue placeholder="Select product" />
                               </SelectTrigger>
-                              <SelectContent>
+                              <SelectContent className={SELECT_IN_DIALOG_CLASS}>
                                 {availableProducts.map((product) => (
                                   <SelectItem key={product} value={product}>
                                     {product}
@@ -642,13 +769,13 @@ export default function ExecutiveStockReturnsPage() {
                           </td>
                           <td className="py-2 px-3">
                             <Select
-                              value={row.reason}
+                              value={selectValueOrUndefined(row.reason)}
                               onValueChange={(value) => updateProductRow(row.id, 'reason', value)}
                             >
                               <SelectTrigger className="w-40">
                                 <SelectValue placeholder="Select reason" />
                               </SelectTrigger>
-                              <SelectContent>
+                              <SelectContent className={SELECT_IN_DIALOG_CLASS}>
                                 {returnReasons.map((reason) => (
                                   <SelectItem key={reason} value={reason}>
                                     {reason}
@@ -707,7 +834,7 @@ export default function ExecutiveStockReturnsPage() {
                   <div className="mt-4 grid grid-cols-4 gap-2">
                     {evidencePhotoUrls.map((url, idx) => (
                       <div key={idx} className="relative">
-                        <img src={url} alt={`Evidence ${idx + 1}`} className="w-full h-24 object-cover rounded border" />
+                        <img src={resolveUploadUrl(url)} alt={`Evidence ${idx + 1}`} className="w-full h-24 object-cover rounded border" />
                         <Button
                           type="button"
                           variant="ghost"
