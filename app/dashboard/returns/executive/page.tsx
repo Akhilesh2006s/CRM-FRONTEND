@@ -30,8 +30,13 @@ type StockReturn = {
   returnDate?: string
   products?: Array<{
     product: string
+    class?: string
+    level?: string
+    subject?: string
     soldQty: number
     returnQty: number
+    unitPrice?: number
+    lineTotal?: number
     reason: string
     remarks?: string
   }>
@@ -40,6 +45,7 @@ type StockReturn = {
   totalItems?: number
   totalQuantity?: number
   returnValue?: number
+  approvedReturnValue?: number
 }
 
 type DcOrder = {
@@ -48,6 +54,9 @@ type DcOrder = {
   school_name?: string
   products?: Array<{
     product_name: string
+    class?: string
+    level?: string
+    subject?: string
     quantity: number
     unit_price?: number
   }>
@@ -57,8 +66,12 @@ type DcOrder = {
 type ProductRow = {
   id: string
   product: string
+  class: string
+  level: string
+  subject: string
   soldQty: number
   returnQty: number
+  unitPrice: number
   reason: string
   remarks: string
 }
@@ -72,18 +85,38 @@ function selectValueOrUndefined(value: string | undefined | null): string | unde
 const SELECT_IN_DIALOG_CLASS = 'z-[200]'
 
 function mapDcOrderProducts(
-  products: Array<{ product_name?: string; name?: string; quantity?: number; unit_price?: number }> | undefined
+  products: Array<{
+    product_name?: string
+    name?: string
+    class?: string
+    level?: string
+    subject?: string
+    quantity?: number
+    unit_price?: number
+  }> | undefined
 ): DcOrder['products'] {
   if (!Array.isArray(products)) return []
   return products.map((p) => ({
     product_name: (p.product_name || p.name || '').trim(),
+    class: String(p.class || '').trim(),
+    level: String(p.level || '').trim(),
+    subject: String(p.subject || '').trim(),
     quantity: Number(p.quantity) || 0,
     unit_price: p.unit_price,
   }))
 }
 
 function productsFromEmployeeDc(dc: {
-  productDetails?: Array<{ product?: string; product_name?: string; requestedQuantity?: number; quantity?: number }>
+  productDetails?: Array<{
+    product?: string
+    product_name?: string
+    class?: string
+    level?: string
+    subject?: string
+    requestedQuantity?: number
+    quantity?: number
+    price?: number
+  }>
   dcOrderId?: { products?: DcOrder['products']; school_name?: string; dc_code?: string } | string
 }): DcOrder['products'] {
   const order =
@@ -93,7 +126,11 @@ function productsFromEmployeeDc(dc: {
   const details = Array.isArray(dc.productDetails) ? dc.productDetails : []
   return details.map((p) => ({
     product_name: (p.product || p.product_name || '').trim(),
+    class: String(p.class || '').trim(),
+    level: String(p.level || '').trim(),
+    subject: String(p.subject || '').trim(),
     quantity: Number(p.requestedQuantity ?? p.quantity) || 0,
+    unit_price: Number(p.price) || 0,
   }))
 }
 
@@ -255,8 +292,12 @@ export default function ExecutiveStockReturnsPage() {
         products.map((p, idx) => ({
           id: `product-${idx}`,
           product: p.product_name || '',
+          class: p.class || '',
+          level: p.level || '',
+          subject: p.subject || '',
           soldQty: p.quantity || 0,
           returnQty: 0,
+          unitPrice: Number(p.unit_price) || 0,
           reason: '',
           remarks: '',
         }))
@@ -294,8 +335,12 @@ export default function ExecutiveStockReturnsPage() {
     const newRow: ProductRow = {
       id: `product-${Date.now()}`,
       product: '',
+      class: '',
+      level: '',
+      subject: '',
       soldQty: 0,
       returnQty: 0,
+      unitPrice: 0,
       reason: '',
       remarks: '',
     }
@@ -429,7 +474,7 @@ export default function ExecutiveStockReturnsPage() {
         warehouse,
         returnDate,
         returnType,
-        products: productRows,
+        products: mapProductsForApi(productRows),
         evidencePhotos: evidencePhotoUrls,
         executiveRemarks,
         totalItems,
@@ -470,7 +515,7 @@ export default function ExecutiveStockReturnsPage() {
         warehouse,
         returnDate,
         returnType,
-        products: productRows,
+        products: mapProductsForApi(productRows),
         evidencePhotos: evidencePhotoUrls,
         executiveRemarks,
         totalItems,
@@ -510,6 +555,19 @@ export default function ExecutiveStockReturnsPage() {
     }
   }
 
+  const mapProductsForApi = (rows: ProductRow[]) =>
+    rows.map((row) => ({
+      product: row.product,
+      class: row.class,
+      level: row.level,
+      subject: row.subject,
+      soldQty: row.soldQty,
+      returnQty: row.returnQty,
+      unitPrice: row.unitPrice,
+      reason: row.reason,
+      remarks: row.remarks,
+    }))
+
   const returnTypes = ['Damaged', 'Expired', 'Excess', 'Wrong item', 'Replacement']
   const returnReasons = ['Damaged', 'Expired', 'Excess', 'Wrong item', 'Replacement', 'Customer request', 'Quality issue', 'Other']
 
@@ -535,6 +593,7 @@ export default function ExecutiveStockReturnsPage() {
                 <th className="py-3 px-4 font-semibold">Sale ID</th>
                 <th className="py-3 px-4 font-semibold">Return Type</th>
                 <th className="py-3 px-4 font-semibold">Return Qty</th>
+                <th className="py-3 px-4 font-semibold">Return Value</th>
                 <th className="py-3 px-4 font-semibold">Return Status</th>
                 <th className="py-3 px-4 font-semibold">Action</th>
               </tr>
@@ -542,13 +601,13 @@ export default function ExecutiveStockReturnsPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="py-8 text-center text-neutral-500" colSpan={6}>
+                  <td className="py-8 text-center text-neutral-500" colSpan={7}>
                     Loading...
                   </td>
                 </tr>
               ) : returns.length === 0 ? (
                 <tr>
-                  <td className="py-8 text-center text-neutral-500" colSpan={6}>
+                  <td className="py-8 text-center text-neutral-500" colSpan={7}>
                     No returns found
                   </td>
                 </tr>
@@ -559,6 +618,9 @@ export default function ExecutiveStockReturnsPage() {
                     <td className="py-3 px-4">{returnItem.saleId || returnItem.dcOrderId || '-'}</td>
                     <td className="py-3 px-4">{returnItem.returnType}</td>
                     <td className="py-3 px-4">{returnItem.returnQty || returnItem.totalQuantity || 0}</td>
+                    <td className="py-3 px-4">
+                      ₹{(Number(returnItem.approvedReturnValue) || Number(returnItem.returnValue) || 0).toFixed(2)}
+                    </td>
                     <td className="py-3 px-4">
                       <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusBadgeColor(returnItem.returnStatus)}`}>
                         {returnItem.returnStatus}
@@ -705,6 +767,7 @@ export default function ExecutiveStockReturnsPage() {
                         <th className="py-2 px-3 text-left">Product</th>
                         <th className="py-2 px-3 text-left">Sold Qty</th>
                         <th className="py-2 px-3 text-left">Return Qty</th>
+                        <th className="py-2 px-3 text-left">Unit Price</th>
                         <th className="py-2 px-3 text-left">Reason</th>
                         <th className="py-2 px-3 text-left">Remarks</th>
                         <th className="py-2 px-3 text-left">Action</th>
@@ -724,6 +787,10 @@ export default function ExecutiveStockReturnsPage() {
                                   const orderProduct = order?.products?.find(p => (p.product_name || '') === value)
                                   if (orderProduct) {
                                     updateProductRow(row.id, 'soldQty', orderProduct.quantity || 0)
+                                    updateProductRow(row.id, 'unitPrice', Number(orderProduct.unit_price) || 0)
+                                    updateProductRow(row.id, 'class', String(orderProduct.class || ''))
+                                    updateProductRow(row.id, 'level', String(orderProduct.level || ''))
+                                    updateProductRow(row.id, 'subject', String(orderProduct.subject || ''))
                                   }
                                 }
                               }}
@@ -765,6 +832,15 @@ export default function ExecutiveStockReturnsPage() {
                               className="w-24"
                               min="0"
                               max={row.soldQty}
+                            />
+                          </td>
+                          <td className="py-2 px-3">
+                            <Input
+                              type="number"
+                              value={row.unitPrice || 0}
+                              onChange={(e) => updateProductRow(row.id, 'unitPrice', Number(e.target.value))}
+                              className="w-28"
+                              min="0"
                             />
                           </td>
                           <td className="py-2 px-3">

@@ -87,3 +87,39 @@ export function computeBucketAmount(opts: {
 export function roundToTwo(value: number): number {
   return Math.round((Number(value) + Number.EPSILON) * 100) / 100
 }
+
+export type ProductBillingResult = {
+  total: number
+  sumStrength: number
+  divisorUsed: number
+  calculationType: CalculationType
+}
+
+/** Unified billing output for returns / invoice adjustments. */
+export function calculateProductTotal(opts: {
+  calculationType: string | undefined | null
+  unitPrice: number
+  rows: Array<{ strength?: number; level?: string; subject?: string; price?: number }>
+  catalogFallbackCount?: number
+}): ProductBillingResult {
+  const ct = normalizeCalculationType(opts.calculationType)
+  const rows = opts.rows || []
+  const sumStrength = rows.reduce((s, r) => s + (Number(r.strength) || 0), 0)
+  const divisorUsed = resolveDivisor({
+    calculationType: ct,
+    rows,
+    catalogFallbackCount: opts.catalogFallbackCount,
+  })
+  const total = computeBucketAmount({
+    calculationType: ct,
+    rows,
+    unitPrice: opts.unitPrice,
+    catalogFallbackCount: opts.catalogFallbackCount,
+  })
+  return {
+    total,
+    sumStrength: roundToTwo(sumStrength),
+    divisorUsed,
+    calculationType: ct,
+  }
+}

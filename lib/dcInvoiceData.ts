@@ -116,17 +116,28 @@ async function loadPaymentBillTotals(
     const dcOrderId = dcOrder?._id
     if (dcOrderId) {
       try {
-        const allReturns = await apiRequest<any[]>(`/stock-returns/executive/list`).catch(() => [])
-        const returns = allReturns.filter((r: any) => {
-          const returnDcOrderId = typeof r.dcOrderId === 'object' ? r.dcOrderId?._id : r.dcOrderId
-          return returnDcOrderId === dcOrderId
-        })
+        const returns = await apiRequest<any[]>(
+          `/stock-returns/executive/list?dcOrderId=${encodeURIComponent(String(dcOrderId))}`
+        ).catch(() => [])
         const approvedReturns = returns.filter((r: any) =>
           ['Approved', 'Partially Approved', 'Stock Updated', 'Closed'].includes(r.status)
         )
         totalReturnValue = approvedReturns.reduce((sum: number, r: any) => {
+          const storedApproved = Number(r.approvedReturnValue)
+          if (storedApproved > 0) return sum + storedApproved
+          const storedRequested = Number(r.returnValue)
+          if (storedRequested > 0) return sum + storedRequested
           const returnValue =
             r.products?.reduce((productSum: number, product: any) => {
+              const lineTotal = Number(product.lineTotal)
+              if (lineTotal > 0) {
+                const approvedQty = Number(product.approvedQty) || 0
+                const requestedQty = Number(product.returnQty) || 0
+                if (approvedQty > 0 && requestedQty > 0) {
+                  return productSum + lineTotal * Math.min(1, approvedQty / requestedQty)
+                }
+                return productSum + lineTotal
+              }
               const approvedQty = Number(product.approvedQty) || 0
               const matchingProduct = paymentBreakdown.find((pb) => {
                 const pbName = (pb.product || '').toLowerCase().trim()
@@ -135,7 +146,7 @@ async function loadPaymentBillTotals(
                   pbName === returnName || pbName.includes(returnName) || returnName.includes(pbName)
                 )
               })
-              const unitPrice = matchingProduct?.unitPrice || 0
+              const unitPrice = Number(product.unitPrice) || matchingProduct?.unitPrice || 0
               return productSum + approvedQty * unitPrice
             }, 0) || 0
           return sum + returnValue

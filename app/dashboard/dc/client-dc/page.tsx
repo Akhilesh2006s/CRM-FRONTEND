@@ -793,17 +793,28 @@ export default function ClientDCPage() {
         // Calculate return value from approved returns
         const approvedReturns = returns.filter((r: any) => ['Approved', 'Partially Approved', 'Stock Updated', 'Closed'].includes(r.status))
         totalReturnValue = approvedReturns.reduce((sum: number, r: any) => {
-          // Calculate return value from products
+          const storedApproved = Number(r.approvedReturnValue)
+          if (storedApproved > 0) return sum + storedApproved
+          const storedRequested = Number(r.returnValue)
+          if (storedRequested > 0) return sum + storedRequested
           const returnValue = r.products?.reduce((productSum: number, product: any) => {
+            const lineTotal = Number(product.lineTotal)
+            if (lineTotal > 0) {
+              const approvedQty = Number(product.approvedQty) || 0
+              const requestedQty = Number(product.returnQty) || 0
+              if (approvedQty > 0 && requestedQty > 0) {
+                return productSum + lineTotal * Math.min(1, approvedQty / requestedQty)
+              }
+              return productSum + lineTotal
+            }
             const approvedQty = Number(product.approvedQty) || 0
-            // Try to get price from matching product in paymentBreakdown
             const matchingProduct = paymentBreakdown.find((pb: any) => {
               const pbName = (pb.product || '').toLowerCase().trim()
               const returnName = (product.product || '').toLowerCase().trim()
               return pbName === returnName || pbName.includes(returnName) || returnName.includes(pbName)
             })
-            const unitPrice = matchingProduct?.unitPrice || 0
-            return productSum + (approvedQty * unitPrice)
+            const unitPrice = Number(product.unitPrice) || matchingProduct?.unitPrice || 0
+            return productSum + approvedQty * unitPrice
           }, 0) || 0
           return sum + returnValue
         }, 0)
