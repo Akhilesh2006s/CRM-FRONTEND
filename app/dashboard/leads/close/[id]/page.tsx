@@ -350,35 +350,37 @@ function expandSectionsToProductDetails(
           ? 'Existing Students'
           : 'New Students'
       const defaultSpec = specsToUse[0]
-      const primaryClass = classSelections.find((s) => Number(s.strength) > 0)
       const subjectDisplay =
         hasSubjects && selectedSubjects.length > 0 ? selectedSubjects.join(', ') : undefined
 
       let rowIdx = 0
       const parentId = line.parentRowId
-      if (levelsToUse.length === 0 || !primaryClass) continue
+      if (levelsToUse.length === 0) continue
 
-      // One table row per selected level (category chosen in dropdown on that row).
-      for (const level of levelsToUse) {
-        const strengthToUse = Number(primaryClass.strength) || 0
-        const classNum = parseInt(primaryClass.class, 10)
+      // One row per (selected class × selected level).
+      for (const classSel of classSelections) {
+        const strengthToUse = Number(classSel.strength) || 0
+        const classNum = parseInt(classSel.class, 10)
         if (!classNum || strengthToUse <= 0) continue
-        out.push({
-          id: `${parentId}_${classNum}_${rowIdx++}`,
-          product: line.product,
-          class: classNum.toString(),
-          category: defaultCategory,
-          productCategory: ctx.hasProductCategories(line.product) ? defaultCategory : undefined,
-          quantity: strengthToUse || 1,
-          strength: strengthToUse,
-          price: priceToUse || 0,
-          total: strengthToUse * (priceToUse || 0),
-          level,
-          specs: defaultSpec,
-          subject: subjectDisplay,
-          isParentRow: false,
-          sameRateForAllClasses: false,
-        })
+
+        for (const level of levelsToUse) {
+          out.push({
+            id: `${parentId}_${classNum}_${rowIdx++}`,
+            product: line.product,
+            class: classNum.toString(),
+            category: defaultCategory,
+            productCategory: ctx.hasProductCategories(line.product) ? defaultCategory : undefined,
+            quantity: strengthToUse || 1,
+            strength: strengthToUse,
+            price: priceToUse || 0,
+            total: strengthToUse * (priceToUse || 0),
+            level,
+            specs: defaultSpec,
+            subject: subjectDisplay,
+            isParentRow: false,
+            sameRateForAllClasses: false,
+          })
+        }
       }
     }
   }

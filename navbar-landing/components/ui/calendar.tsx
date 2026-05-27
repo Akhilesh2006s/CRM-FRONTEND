@@ -19,11 +19,18 @@ function Calendar({
   buttonVariant = 'ghost',
   formatters,
   components,
+  fromDate,
   ...props
-}: React.ComponentProps<typeof DayPicker> & {
+}: Omit<React.ComponentProps<typeof DayPicker>, 'fromDate'> & {
   buttonVariant?: React.ComponentProps<typeof Button>['variant']
+  fromDate?: Date
 }) {
   const defaultClassNames = getDefaultClassNames()
+  const today = React.useMemo(() => {
+    const d = new Date()
+    d.setHours(0, 0, 0, 0)
+    return d
+  }, [])
 
   return (
     <DayPicker
@@ -124,6 +131,7 @@ function Calendar({
         hidden: cn('invisible', defaultClassNames.hidden),
         ...classNames,
       }}
+      fromDate={fromDate ?? today}
       components={{
         Root: ({ className, rootRef, ...props }) => {
           return (
