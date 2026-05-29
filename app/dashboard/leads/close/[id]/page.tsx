@@ -350,8 +350,8 @@ function expandSectionsToProductDetails(
           ? 'Existing Students'
           : 'New Students'
       const defaultSpec = specsToUse[0]
-      const subjectDisplay =
-        hasSubjects && selectedSubjects.length > 0 ? selectedSubjects.join(', ') : undefined
+      const subjectsToUse =
+        hasSubjects && selectedSubjects.length > 0 ? selectedSubjects : [undefined]
 
       let rowIdx = 0
       const parentId = line.parentRowId
@@ -364,22 +364,24 @@ function expandSectionsToProductDetails(
         if (!classNum || strengthToUse <= 0) continue
 
         for (const level of levelsToUse) {
+          for (const subject of subjectsToUse) {
             out.push({
               id: `${parentId}_${classNum}_${rowIdx++}`,
               product: line.product,
               class: classNum.toString(),
-            category: defaultCategory,
-            productCategory: ctx.hasProductCategories(line.product) ? defaultCategory : undefined,
+              category: defaultCategory,
+              productCategory: ctx.hasProductCategories(line.product) ? defaultCategory : undefined,
               quantity: strengthToUse || 1,
-            strength: strengthToUse,
+              strength: strengthToUse,
               price: priceToUse || 0,
-            total: strengthToUse * (priceToUse || 0),
-            level,
-            specs: defaultSpec,
-              subject: subjectDisplay,
+              total: strengthToUse * (priceToUse || 0),
+              level,
+              specs: defaultSpec,
+              subject,
               isParentRow: false,
               sameRateForAllClasses: false,
             })
+          }
         }
       }
     }
@@ -519,6 +521,13 @@ export default function CloseLeadPage() {
     childProductRows,
     groupProductOpts
   )
+  const showSpecsColumn = childProductRows.some((pd) => {
+    const specs = String(pd.specs || '').trim()
+    return specs.length > 0 && specs.toLowerCase() !== 'regular'
+  })
+  const showSubjectsColumn = childProductRows.some(
+    (pd) => String(pd.subject || '').trim().length > 0
+  )
 
   useEffect(() => {
     if (leadId) {
@@ -539,17 +548,50 @@ export default function CloseLeadPage() {
       }
       
       if (leadData) {
-        setLead(leadData)
+        const linkedSchool =
+          leadData.lead_type === 'renewal' &&
+          leadData.school_id &&
+          typeof leadData.school_id === 'object'
+            ? leadData.school_id
+            : null
+
+        const hydratedLead = {
+          ...(linkedSchool || {}),
+          ...leadData,
+          school_name: leadData.school_name || linkedSchool?.school_name || '',
+          contact_person: leadData.contact_person || linkedSchool?.contact_person || '',
+          contact_mobile: leadData.contact_mobile || linkedSchool?.contact_mobile || '',
+          email: leadData.email || linkedSchool?.email || '',
+        }
+
+        setLead(hydratedLead)
         // Pre-fill form with lead data
         // Only use estimated_delivery_date, NOT follow_up_date
-        const deliveryDate = leadData.estimated_delivery_date 
-          ? new Date(leadData.estimated_delivery_date).toISOString().split('T')[0]
+        const deliveryDate = (
+          hydratedLead.estimated_delivery_date ||
+          linkedSchool?.estimated_delivery_date
+        )
+          ? new Date(
+              hydratedLead.estimated_delivery_date || linkedSchool?.estimated_delivery_date
+            )
+              .toISOString()
+              .split('T')[0]
           : ''
         setForm({
-          contact_person2: leadData.decision_maker || leadData.contact_person2 || leadData.contact_person || '',
-          contact_mobile2: leadData.email || leadData.contact_mobile2 || '',
-                delivery_date: deliveryDate, // Do NOT use follow_up_date here
-                year: currentAcademicYear,
+          contact_person2:
+            hydratedLead.decision_maker ||
+            hydratedLead.contact_person2 ||
+            linkedSchool?.contact_person2 ||
+            hydratedLead.contact_person ||
+            '',
+          contact_mobile2:
+            hydratedLead.contact_mobile2 ||
+            linkedSchool?.contact_mobile2 ||
+            hydratedLead.email ||
+            linkedSchool?.email ||
+            '',
+          delivery_date: deliveryDate, // Do NOT use follow_up_date here
+          year: currentAcademicYear,
         })
         
         // Pre-fill selected products and product details - normalize product names to match availableProducts
@@ -671,7 +713,10 @@ export default function CloseLeadPage() {
               isParentRow: true,
               sameRateForAllClasses: false,
               selectedSubjects: [],
-              selectedSpecs: getProductSpecs(product),
+              selectedSpecs:
+                productData?.specs && String(productData.specs).trim()
+                  ? [String(productData.specs).trim()]
+                  : getProductSpecs(product).slice(0, 1),
               selectedDeliverables: productData?.deliverables || [],
               selectedCategories: hasProductCategories(product) 
                 ? getProductCategories(product) 
@@ -912,7 +957,7 @@ export default function CloseLeadPage() {
                 : [],
           classSelections: [],
           sameStrengthForAllClasses: false,
-          selectedSpecs: [],
+          selectedSpecs: getProductSpecs(product).slice(0, 1),
           selectedSubjects: [],
           selectedDeliverables: [],
           selectedCategories: undefined,
@@ -1004,7 +1049,7 @@ export default function CloseLeadPage() {
       const specsToUse = selectedSpecs.length > 0 ? selectedSpecs : ['Regular']
       const selectedSubjects = parentRow.selectedSubjects || []
       const hasSubjects = hasProductSubjects(parentRow.product) && selectedSubjects.length > 0
-      const subjectsToUse = hasSubjects ? selectedSubjects : [undefined] // Use undefined if no subjects
+      const subjectsToUse = hasSubjects ? selectedSubjects : [undefined]
       const selectedCategories = parentRow.selectedCategories || []
       // Use product-specific categories if available, otherwise use default student categories
       const categoriesToUse = hasProductCategories(parentRow.product)
@@ -1026,26 +1071,24 @@ export default function CloseLeadPage() {
       for (let classNum = from; classNum <= to; classNum++) {
         specsToUse.forEach((spec) => {
           categoriesToUse.forEach((category) => {
-            // Create one row per class × spec × category combination
-            // Combine all selected subjects into a single string or use first subject
-            const subjectDisplay = hasSubjects && selectedSubjects.length > 0 
-              ? selectedSubjects.join(', ') 
-              : undefined
-            newRows.push({
-              id: parentId + '_' + classNum + '_' + rowIdx++,
-              product: parentRow.product,
-              class: classNum.toString(),
-              category: category,
-              productCategory: hasProductCategories(parentRow.product) ? category : undefined,
-              quantity: strengthToUse || 1,
-              strength: strengthToUse || 0,
-              price: priceToUse || 0,
-              total: (strengthToUse || 0) * (priceToUse || 0),
-              level: parentRow.level,
-              specs: spec,
-              subject: subjectDisplay, // Combined subjects or undefined
-              isParentRow: false,
-              sameRateForAllClasses: false,
+            subjectsToUse.forEach((subject) => {
+              // Create one row per class × spec × category × subject combination
+              newRows.push({
+                id: parentId + '_' + classNum + '_' + rowIdx++,
+                product: parentRow.product,
+                class: classNum.toString(),
+                category: category,
+                productCategory: hasProductCategories(parentRow.product) ? category : undefined,
+                quantity: strengthToUse || 1,
+                strength: strengthToUse || 0,
+                price: priceToUse || 0,
+                total: (strengthToUse || 0) * (priceToUse || 0),
+                level: parentRow.level,
+                specs: spec,
+                subject,
+                isParentRow: false,
+                sameRateForAllClasses: false,
+              })
             })
           })
         })
@@ -2218,8 +2261,10 @@ export default function CloseLeadPage() {
                                             checked={selectedSpecs.includes(spec)}
                                             onCheckedChange={(checked) => {
                                               const newSpecs = checked
-                                                ? [...selectedSpecs, spec]
-                                                : selectedSpecs.filter((s) => s !== spec)
+                                                ? [spec]
+                                                : selectedSpecs.length > 0
+                                                  ? selectedSpecs
+                                                  : [spec]
                                               updateProductSectionLine(section.id, line.id, {
                                                 selectedSpecs: newSpecs,
                                               })
@@ -2408,40 +2453,39 @@ export default function CloseLeadPage() {
                     <thead className="bg-neutral-100">
                       <tr>
                         <th className="px-3 py-2 text-left">Product</th>
-                        <th className="px-3 py-2 text-left">Class</th>
-                        <th className="px-3 py-2 text-left">Category</th>
-                        <th className="px-3 py-2 text-left">Specs</th>
-                        <th className="px-3 py-2 text-left">Quantity (Strength) *</th>
                         <th className="px-3 py-2 text-left">Level</th>
+                        <th className="px-3 py-2 text-left">Class</th>
+                        <th className="px-3 py-2 text-left">Product Category</th>
+                        {showSpecsColumn && <th className="px-3 py-2 text-left">Specs</th>}
+                        {showSubjectsColumn && <th className="px-3 py-2 text-left">Subjects</th>}
+                        <th className="px-3 py-2 text-left">Quantity (Strength) *</th>
                         <th className="px-3 py-2 text-left">Action</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {productDetails
-                        .filter(pd => !pd.isParentRow) // Only show child rows, not parent rows
-                        .map((pd) => (
+                      {childProductRows.map((pd) => (
                         <tr key={pd.id} className="border-t">
                           <td className="px-3 py-2 font-medium">{pd.product}</td>
+                          <td className="px-3 py-2 whitespace-nowrap">{pd.level || '-'}</td>
                           <td className="px-3 py-2">{pd.class}</td>
                           <td className="px-3 py-2">
-                            <Select value={pd.category} onValueChange={(v) => updateProductDetail(pd.id, 'category', v)}>
-                              <SelectTrigger className="w-32 h-8">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {hasProductCategories(pd.product) ? (
-                                  getProductCategories(pd.product).map(c => (
+                            {hasProductCategories(pd.product) ? (
+                              <Select value={pd.category} onValueChange={(v) => updateProductDetail(pd.id, 'category', v)}>
+                                <SelectTrigger className="w-32 h-8">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {getProductCategories(pd.product).map(c => (
                                     <SelectItem key={c} value={c}>{c}</SelectItem>
-                                  ))
-                                ) : (
-                                  defaultCategories.map(c => (
-                                    <SelectItem key={c} value={c}>{c}</SelectItem>
-                                  ))
-                                )}
-                              </SelectContent>
-                            </Select>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <span className="text-neutral-500">-</span>
+                            )}
                           </td>
-                          <td className="px-3 py-2">{pd.specs}</td>
+                          {showSpecsColumn && <td className="px-3 py-2">{pd.specs}</td>}
+                          {showSubjectsColumn && <td className="px-3 py-2">{pd.subject || '-'}</td>}
                           <td className="px-3 py-2">
                             <Input
                               type="number"
@@ -2469,7 +2513,6 @@ export default function CloseLeadPage() {
                               required
                             />
                           </td>
-                          <td className="px-3 py-2 whitespace-nowrap">{pd.level || '-'}</td>
                           <td className="px-3 py-2">
                             <Button
                               type="button"
@@ -2484,7 +2527,10 @@ export default function CloseLeadPage() {
                       ))}
                       {/* Total Row */}
                       <tr className="border-t-2 border-neutral-300 bg-neutral-100 font-semibold">
-                        <td colSpan={4} className="px-3 py-3 text-right">
+                        <td
+                          colSpan={3 + (showSpecsColumn ? 1 : 0) + (showSubjectsColumn ? 1 : 0)}
+                          className="px-3 py-3 text-right"
+                        >
                           <span className="text-neutral-700">Total:</span>
                         </td>
                         <td className="px-3 py-3 text-right">

@@ -18,6 +18,21 @@ export type ResolveClientDCRowOpts = {
   getProductCategories: (product: string) => string[]
 }
 
+export function formatFlowProductName(
+  productName: string | undefined,
+  productCategory?: string,
+  subject?: string
+): string {
+  const base = String(productName || '').trim()
+  const cat = String(productCategory || '').trim()
+  const subj = String(subject || '').trim()
+  if (!base) return '-'
+  const parts = [base]
+  if (cat) parts.push(cat)
+  if (subj) parts.push(subj)
+  return parts.join(' ')
+}
+
 /** Stable key for duplicate product lines (Request DC / Edit PO). */
 export function productDetailLineKey(p: Record<string, any>): string {
   const product = String(p.product || p.productName || '')

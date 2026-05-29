@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { CheckCircle, XCircle, Eye, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { getCurrentUser } from '@/lib/auth'
+import { formatFlowProductName } from '@/lib/clientDcProductRows'
 
 type PendingEdit = {
   school_name?: string
@@ -24,7 +25,14 @@ type PendingEdit = {
   school_type?: string
   zone?: string
   location?: string
-  products?: Array<{ product_name: string; quantity: number; unit_price: number; term?: string }>
+  products?: Array<{
+    product_name: string
+    quantity: number
+    unit_price: number
+    term?: string
+    productCategory?: string
+    subject?: string
+  }>
   pod_proof_url?: string
   remarks?: string
   total_amount?: number
@@ -61,7 +69,7 @@ type DcOrder = {
   location?: string
   zone?: string
   cluster?: string
-  products?: Array<{ product_name: string; quantity: number }>
+  products?: Array<{ product_name: string; quantity: number; productCategory?: string; subject?: string }>
   assigned_to?: {
     _id: string
     name?: string
@@ -284,7 +292,12 @@ export default function ExecutiveManagerClosedSalesPage() {
 
   const getProductsDisplay = (deal: DcOrder) => {
     if (!deal.products || !Array.isArray(deal.products)) return '-'
-    return deal.products.map(p => `${p.product_name}${p.quantity ? ` - ${p.quantity}` : ''}`).join(', ')
+    return deal.products
+      .map((p) => {
+        const label = formatFlowProductName(p.product_name, p.productCategory, p.subject)
+        return `${label}${p.quantity ? ` - ${p.quantity}` : ''}`
+      })
+      .join(', ')
   }
 
   const formatDate = (dateString?: string) => {
@@ -677,7 +690,8 @@ export default function ExecutiveManagerClosedSalesPage() {
                     selectedEdit.pendingEdit.products.map((p, idx) => (
                       <div key={idx} className="p-3 bg-neutral-50 rounded border">
                         <div className="text-sm">
-                          <span className="font-medium">Product:</span> {p.product_name}
+                          <span className="font-medium">Product:</span>{' '}
+                          {formatFlowProductName(p.product_name, p.productCategory, p.subject)}
                         </div>
                         <div className="text-sm">
                           <span className="font-medium">Quantity:</span> {p.quantity}

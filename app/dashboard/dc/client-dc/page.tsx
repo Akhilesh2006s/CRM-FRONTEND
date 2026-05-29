@@ -30,6 +30,7 @@ import {
   buildEditPOProductRows,
   computeEditPOTotalAmount,
   resolveProductSubject,
+  formatFlowProductName,
   dedupeProductDetailLines,
   mergeRequestDCProductDetails,
   type EditPOProductRow,
@@ -2947,7 +2948,9 @@ export default function ClientDCPage() {
               <TableBody>
                 {shortageRows.map((row, idx) => (
                   <TableRow key={row.id}>
-                    <TableCell>{row.product || '-'}</TableCell>
+                    <TableCell>
+                      {formatFlowProductName(row.product, row.productCategory, row.subject)}
+                    </TableCell>
                     <TableCell className="min-w-[140px]">
                       {hasProductCategories(row.product) ? (
                         <Select
