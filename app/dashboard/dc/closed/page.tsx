@@ -1852,7 +1852,24 @@ export default function ClosedSalesPage() {
                   </td>
                   <td className="py-3 px-4">
                     <div className="flex flex-col gap-1.5">
-                      {/* Show Raise DC / Update DC only when NO DC already exists for this deal */}
+                      {/* Coordinator/Admin: review employee DC request (DC already created from My Clients) */}
+                      {canApproveDC &&
+                        (d.status === 'dc_requested' || d.status === 'dc_accepted') &&
+                        dealDCs[d._id] && (
+                          <Button
+                            size="sm"
+                            variant={d.status === 'dc_accepted' ? 'default' : 'destructive'}
+                            className={
+                              d.status === 'dc_accepted'
+                                ? '!bg-blue-600 hover:!bg-blue-700 !text-white !shadow-sm'
+                                : ''
+                            }
+                            onClick={() => openRaiseDC(d)}
+                          >
+                            {d.status === 'dc_requested' ? 'Review DC Request' : 'Update DC'}
+                          </Button>
+                        )}
+                      {/* Raise DC when no DC record exists yet */}
                       {(canRequestDC || canApproveDC) && !dealDCs[d._id] && (
                         <Button
                           size="sm"
@@ -1894,11 +1911,14 @@ export default function ClosedSalesPage() {
         >
           <DialogHeader className="pb-4 border-b border-slate-200">
             <DialogTitle className="text-slate-900 text-xl font-semibold">
-              {selectedDeal?.school_name || 'Client'} - {
-                selectedDeal?.status === 'dc_requested' ? 'Raise DC' : 
-                selectedDeal?.status === 'dc_accepted' ? 'Update DC' : 
-                'Raise DC'
-              }
+              {selectedDeal?.school_name || 'Client'} -{' '}
+              {selectedDeal?.status === 'dc_requested'
+                ? canApproveDC
+                  ? 'Review DC Request'
+                  : 'Raise DC'
+                : selectedDeal?.status === 'dc_accepted'
+                  ? 'Update DC'
+                  : 'Raise DC'}
             </DialogTitle>
             <DialogDescription className="text-slate-600 text-sm mt-1">
               {selectedDeal?.status === 'dc_requested' 
