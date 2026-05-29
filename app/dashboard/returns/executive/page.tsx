@@ -42,16 +42,73 @@ type StockReturn = {
   }>
   evidencePhotos?: string[]
   executiveRemarks?: string
+  lrNumber?: string
+  lrDate?: string
+  finYear?: string
+  schoolCode?: string
+  schoolType?: string
+  transport?: string
+  town?: string
+  address?: string
+  zone?: string
+  cluster?: string
+  contactPerson?: string
+  contactMobile?: string
+  remarks?: string
   totalItems?: number
   totalQuantity?: number
   returnValue?: number
   approvedReturnValue?: number
 }
 
+const MAIN_WAREHOUSE = 'Main Warehouse'
+
+function defaultFinYear(d = new Date()): string {
+  const y = d.getFullYear()
+  const m = d.getMonth() + 1
+  if (m >= 4) return `${y}-${String(y + 1).slice(-2)}`
+  return `${y - 1}-${String(y).slice(-2)}`
+}
+
+function mergeDcOrderDetail(base: DcOrder, full: DcOrder): DcOrder {
+  return {
+    ...base,
+    dc_code: full.dc_code || base.dc_code,
+    school_name: full.school_name || base.school_name,
+    school_code: full.school_code || base.school_code,
+    school_type: full.school_type || base.school_type,
+    contact_person: full.contact_person || base.contact_person,
+    contact_mobile: full.contact_mobile || base.contact_mobile,
+    address: full.address || base.address,
+    zone: full.zone || base.zone,
+    location: full.location || base.location,
+    city: full.city || base.city,
+    area: full.area || base.area,
+    cluster_code: full.cluster_code || base.cluster_code,
+    transport_name: full.transport_name || base.transport_name,
+    year: (full as DcOrder & { year?: string }).year,
+    products: mapDcOrderProducts(full.products as DcOrder['products']).length
+      ? mapDcOrderProducts(full.products as DcOrder['products'])
+      : base.products,
+  }
+}
+
 type DcOrder = {
   _id: string
   dc_code?: string
   school_name?: string
+  school_code?: string
+  school_type?: string
+  contact_person?: string
+  contact_mobile?: string
+  address?: string
+  zone?: string
+  location?: string
+  city?: string
+  area?: string
+  cluster_code?: string
+  transport_name?: string
+  year?: string
   products?: Array<{
     product_name: string
     class?: string
@@ -156,11 +213,38 @@ export default function ExecutiveStockReturnsPage() {
   const [evidencePhotos, setEvidencePhotos] = useState<File[]>([])
   const [evidencePhotoUrls, setEvidencePhotoUrls] = useState<string[]>([])
   const [executiveRemarks, setExecutiveRemarks] = useState('')
+  const [lrNumber, setLrNumber] = useState('')
+  const [lrDate, setLrDate] = useState('')
+  const [finYear, setFinYear] = useState('')
+  const [schoolCode, setSchoolCode] = useState('')
+  const [schoolType, setSchoolType] = useState('')
+  const [transport, setTransport] = useState('')
+  const [town, setTown] = useState('')
+  const [address, setAddress] = useState('')
+  const [zone, setZone] = useState('')
+  const [cluster, setCluster] = useState('')
+  const [contactPerson, setContactPerson] = useState('')
+  const [contactMobile, setContactMobile] = useState('')
+  const [returnRemarks, setReturnRemarks] = useState('')
   const [saving, setSaving] = useState(false)
   const [uploadingPhotos, setUploadingPhotos] = useState(false)
   
   const user = useMemo(() => getCurrentUser(), [])
   const { productNames: availableProducts } = useProducts()
+
+  const productSuggestions = useMemo(() => {
+    const names = new Set<string>(availableProducts)
+    const order = dcOrders.find((o) => o._id === dcOrderId)
+    order?.products?.forEach((p) => {
+      const n = (p.product_name || '').trim()
+      if (n) names.add(n)
+    })
+    productRows.forEach((r) => {
+      const n = r.product.trim()
+      if (n) names.add(n)
+    })
+    return [...names].sort((a, b) => a.localeCompare(b))
+  }, [availableProducts, dcOrders, dcOrderId, productRows])
 
   useEffect(() => {
     if (user?._id) {
@@ -218,6 +302,17 @@ export default function ExecutiveStockReturnsPage() {
           _id: orderId,
           dc_code: populated?.dc_code || dc.saleId || '',
           school_name: dc.customerName || populated?.school_name || '',
+          school_code: populated?.school_code,
+          school_type: populated?.school_type,
+          contact_person: populated?.contact_person,
+          contact_mobile: populated?.contact_mobile,
+          address: populated?.address,
+          zone: populated?.zone,
+          location: populated?.location,
+          city: populated?.city,
+          area: populated?.area,
+          cluster_code: populated?.cluster_code,
+          transport_name: populated?.transport_name,
           products: productsFromEmployeeDc(dc),
           status: 'completed',
         })
@@ -232,6 +327,17 @@ export default function ExecutiveStockReturnsPage() {
           _id: order._id,
           dc_code: order.dc_code || existing?.dc_code || '',
           school_name: order.school_name || existing?.school_name || '',
+          school_code: order.school_code || existing?.school_code,
+          school_type: order.school_type || existing?.school_type,
+          contact_person: order.contact_person || existing?.contact_person,
+          contact_mobile: order.contact_mobile || existing?.contact_mobile,
+          address: order.address || existing?.address,
+          zone: order.zone || existing?.zone,
+          location: order.location || existing?.location,
+          city: order.city || existing?.city,
+          area: order.area || existing?.area,
+          cluster_code: order.cluster_code || existing?.cluster_code,
+          transport_name: order.transport_name || existing?.transport_name,
           products: mapDcOrderProducts(order.products).length
             ? mapDcOrderProducts(order.products)
             : existing?.products || [],
@@ -247,17 +353,7 @@ export default function ExecutiveStockReturnsPage() {
   }
 
   const loadWarehouses = async () => {
-    try {
-      const response = await apiRequest<string[]>(`/warehouse/locations`)
-      const warehouseList = Array.isArray(response) ? response : []
-      if (warehouseList.length > 0) {
-        setWarehouses(warehouseList.filter(Boolean))
-        return
-      }
-    } catch (e: any) {
-      console.warn('Failed to load warehouse locations:', e)
-    }
-    setWarehouses(['Main Warehouse', 'North Warehouse', 'South Warehouse', 'East Warehouse', 'West Warehouse'])
+    setWarehouses([MAIN_WAREHOUSE])
   }
 
   const generateReturnId = () => {
@@ -275,10 +371,23 @@ export default function ExecutiveStockReturnsPage() {
     setEvidencePhotos([])
     setEvidencePhotoUrls([])
     setExecutiveRemarks('')
+    setLrNumber('')
+    setLrDate('')
+    setFinYear(defaultFinYear())
+    setSchoolCode('')
+    setSchoolType('')
+    setTransport('')
+    setTown('')
+    setAddress('')
+    setZone('')
+    setCluster('')
+    setContactPerson('')
+    setContactMobile('')
+    setReturnRemarks('')
     setSaleId('')
     setDcOrderId('')
     setCustomerName('')
-    setWarehouse('')
+    setWarehouse(MAIN_WAREHOUSE)
     setAddReturnDialogOpen(true)
     await Promise.all([loadDcOrders(), loadWarehouses()])
   }
@@ -286,6 +395,17 @@ export default function ExecutiveStockReturnsPage() {
   const applyDcOrderToForm = (order: DcOrder) => {
     setCustomerName(order.school_name || '')
     setSaleId(order.dc_code || order._id)
+    setSchoolCode(order.school_code || '')
+    setSchoolType(order.school_type || '')
+    setContactPerson(order.contact_person || '')
+    setContactMobile(order.contact_mobile || '')
+    setAddress(order.address || '')
+    setZone(order.zone || '')
+    setTown(order.location || order.city || order.area || '')
+    setCluster(order.cluster_code || '')
+    setTransport(order.transport_name || '')
+    if (order.year?.trim()) setFinYear(order.year.trim())
+    else setFinYear(defaultFinYear())
     const products = order.products && order.products.length > 0 ? order.products : []
     if (products.length > 0) {
       setProductRows(
@@ -313,20 +433,12 @@ export default function ExecutiveStockReturnsPage() {
     let order = dcOrders.find((o) => o._id === orderId)
     if (!order) return
 
-    const needsProducts = !order.products?.length
-    if (needsProducts) {
-      try {
-        const full = await apiRequest<DcOrder>(`/dc-orders/${orderId}`)
-        order = {
-          ...order,
-          dc_code: full.dc_code || order.dc_code,
-          school_name: full.school_name || order.school_name,
-          products: mapDcOrderProducts(full.products as DcOrder['products']),
-        }
-        setDcOrders((prev) => prev.map((o) => (o._id === orderId ? order! : o)))
-      } catch (e: any) {
-        toast.error(e.message || 'Could not load products for this DC')
-      }
+    try {
+      const full = await apiRequest<DcOrder>(`/dc-orders/${orderId}`)
+      order = mergeDcOrderDetail(order, full)
+      setDcOrders((prev) => prev.map((o) => (o._id === orderId ? order! : o)))
+    } catch (e: any) {
+      toast.error(e.message || 'Could not load DC details')
     }
     applyDcOrderToForm(order)
   }
@@ -351,14 +463,41 @@ export default function ExecutiveStockReturnsPage() {
     setProductRows(productRows.filter(r => r.id !== id))
   }
 
+  const fillLineFromDcProduct = (rowId: string, productName: string) => {
+    if (!dcOrderId || !productName.trim()) return
+    const order = dcOrders.find((o) => o._id === dcOrderId)
+    const orderProduct = order?.products?.find(
+      (p) => (p.product_name || '').trim() === productName.trim()
+    )
+    if (!orderProduct) return
+    setProductRows((rows) =>
+      rows.map((row) => {
+        if (row.id !== rowId) return row
+        const soldQty = orderProduct.quantity || 0
+        const returnQty = row.returnQty > soldQty ? soldQty : row.returnQty
+        return {
+          ...row,
+          soldQty,
+          returnQty,
+          unitPrice: Number(orderProduct.unit_price) || 0,
+          class: String(orderProduct.class || ''),
+          level: String(orderProduct.level || ''),
+          subject: String(orderProduct.subject || ''),
+        }
+      })
+    )
+  }
+
   const updateProductRow = (id: string, field: keyof ProductRow, value: any) => {
     setProductRows(productRows.map(row => {
       if (row.id === id) {
         const updated = { ...row, [field]: value }
-        // Validate returnQty <= soldQty
         if (field === 'returnQty' && updated.returnQty > updated.soldQty) {
           toast.error('Return quantity cannot exceed sold quantity')
           return row
+        }
+        if (field === 'soldQty' && updated.returnQty > updated.soldQty) {
+          updated.returnQty = updated.soldQty
         }
         return updated
       }
@@ -406,7 +545,7 @@ export default function ExecutiveStockReturnsPage() {
     setEvidencePhotos(evidencePhotos.filter((_, i) => i !== index))
   }
 
-  const validateForm = (): boolean => {
+  const validateForm = (forSubmit = false): boolean => {
     if (!dcOrderId) {
       toast.error('Please select a completed Sale / DC Order')
       return false
@@ -453,34 +592,73 @@ export default function ExecutiveStockReturnsPage() {
       toast.error('Photo evidence is mandatory for Damaged or Expired returns')
       return false
     }
+    if (forSubmit) {
+      if (!lrNumber.trim()) {
+        toast.error('Please enter LR No from the delivery partner')
+        return false
+      }
+      if (!finYear.trim()) {
+        toast.error('Please enter Fin Year')
+        return false
+      }
+    }
     return true
   }
 
+  const mapProductsForApi = (rows: ProductRow[]) =>
+    rows.map((row) => ({
+      product: row.product,
+      class: row.class,
+      level: row.level,
+      subject: row.subject,
+      soldQty: row.soldQty,
+      returnQty: row.returnQty,
+      unitPrice: row.unitPrice,
+      reason: row.reason,
+      remarks: row.remarks,
+    }))
+
+  const buildReturnPayload = (status: 'Draft' | 'Submitted') => {
+    const totalItems = productRows.length
+    const totalQuantity = productRows.reduce((sum, r) => sum + r.returnQty, 0)
+    return {
+      returnId,
+      executiveId: user?._id,
+      executiveName,
+      customerName,
+      saleId,
+      dcOrderId,
+      warehouse,
+      returnDate,
+      returnType,
+      lrNumber: lrNumber.trim(),
+      lrDate: lrDate.trim() || undefined,
+      finYear: finYear.trim(),
+      schoolType: schoolType.trim(),
+      schoolCode: schoolCode.trim(),
+      transport: transport.trim(),
+      town: town.trim(),
+      address: address.trim(),
+      zone: zone.trim(),
+      cluster: cluster.trim(),
+      contactPerson: contactPerson.trim(),
+      contactMobile: contactMobile.trim(),
+      remarks: returnRemarks.trim(),
+      products: mapProductsForApi(productRows),
+      evidencePhotos: evidencePhotoUrls,
+      executiveRemarks,
+      totalItems,
+      totalQuantity,
+      status,
+    }
+  }
+
   const saveDraft = async () => {
-    if (!validateForm()) return
+    if (!validateForm(false)) return
     
     setSaving(true)
     try {
-      const totalItems = productRows.length
-      const totalQuantity = productRows.reduce((sum, r) => sum + r.returnQty, 0)
-      
-      const payload = {
-        returnId,
-        executiveId: user?._id,
-        executiveName,
-        customerName,
-        saleId,
-        dcOrderId,
-        warehouse,
-        returnDate,
-        returnType,
-        products: mapProductsForApi(productRows),
-        evidencePhotos: evidencePhotoUrls,
-        executiveRemarks,
-        totalItems,
-        totalQuantity,
-        status: 'Draft',
-      }
+      const payload = buildReturnPayload('Draft')
 
       await apiRequest(`/stock-returns/executive`, {
         method: 'POST',
@@ -498,30 +676,11 @@ export default function ExecutiveStockReturnsPage() {
   }
 
   const submitReturn = async () => {
-    if (!validateForm()) return
+    if (!validateForm(true)) return
     
     setSaving(true)
     try {
-      const totalItems = productRows.length
-      const totalQuantity = productRows.reduce((sum, r) => sum + r.returnQty, 0)
-      
-      const payload = {
-        returnId,
-        executiveId: user?._id,
-        executiveName,
-        customerName,
-        saleId,
-        dcOrderId,
-        warehouse,
-        returnDate,
-        returnType,
-        products: mapProductsForApi(productRows),
-        evidencePhotos: evidencePhotoUrls,
-        executiveRemarks,
-        totalItems,
-        totalQuantity,
-        status: 'Submitted',
-      }
+      const payload = buildReturnPayload('Submitted')
 
       await apiRequest(`/stock-returns/executive`, {
         method: 'POST',
@@ -555,19 +714,6 @@ export default function ExecutiveStockReturnsPage() {
     }
   }
 
-  const mapProductsForApi = (rows: ProductRow[]) =>
-    rows.map((row) => ({
-      product: row.product,
-      class: row.class,
-      level: row.level,
-      subject: row.subject,
-      soldQty: row.soldQty,
-      returnQty: row.returnQty,
-      unitPrice: row.unitPrice,
-      reason: row.reason,
-      remarks: row.remarks,
-    }))
-
   const returnTypes = ['Damaged', 'Expired', 'Excess', 'Wrong item', 'Replacement']
   const returnReasons = ['Damaged', 'Expired', 'Excess', 'Wrong item', 'Replacement', 'Customer request', 'Quality issue', 'Other']
 
@@ -590,10 +736,13 @@ export default function ExecutiveStockReturnsPage() {
             <thead>
               <tr className="text-left border-b">
                 <th className="py-3 px-4 font-semibold">Return ID</th>
+                <th className="py-3 px-4 font-semibold">LR No</th>
+                <th className="py-3 px-4 font-semibold">Fin Year</th>
+                <th className="py-3 px-4 font-semibold">School</th>
+                <th className="py-3 px-4 font-semibold">School Code</th>
                 <th className="py-3 px-4 font-semibold">Sale ID</th>
                 <th className="py-3 px-4 font-semibold">Return Type</th>
                 <th className="py-3 px-4 font-semibold">Return Qty</th>
-                <th className="py-3 px-4 font-semibold">Return Value</th>
                 <th className="py-3 px-4 font-semibold">Return Status</th>
                 <th className="py-3 px-4 font-semibold">Action</th>
               </tr>
@@ -601,13 +750,13 @@ export default function ExecutiveStockReturnsPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="py-8 text-center text-neutral-500" colSpan={7}>
+                  <td className="py-8 text-center text-neutral-500" colSpan={10}>
                     Loading...
                   </td>
                 </tr>
               ) : returns.length === 0 ? (
                 <tr>
-                  <td className="py-8 text-center text-neutral-500" colSpan={7}>
+                  <td className="py-8 text-center text-neutral-500" colSpan={10}>
                     No returns found
                   </td>
                 </tr>
@@ -615,12 +764,13 @@ export default function ExecutiveStockReturnsPage() {
                 returns.map((returnItem) => (
                   <tr key={returnItem._id} className="border-b hover:bg-neutral-50">
                     <td className="py-3 px-4">{returnItem.returnId}</td>
+                    <td className="py-3 px-4">{returnItem.lrNumber || '-'}</td>
+                    <td className="py-3 px-4">{returnItem.finYear || '-'}</td>
+                    <td className="py-3 px-4">{returnItem.customerName || '-'}</td>
+                    <td className="py-3 px-4">{returnItem.schoolCode || '-'}</td>
                     <td className="py-3 px-4">{returnItem.saleId || returnItem.dcOrderId || '-'}</td>
                     <td className="py-3 px-4">{returnItem.returnType}</td>
                     <td className="py-3 px-4">{returnItem.returnQty || returnItem.totalQuantity || 0}</td>
-                    <td className="py-3 px-4">
-                      ₹{(Number(returnItem.approvedReturnValue) || Number(returnItem.returnValue) || 0).toFixed(2)}
-                    </td>
                     <td className="py-3 px-4">
                       <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusBadgeColor(returnItem.returnStatus)}`}>
                         {returnItem.returnStatus}
@@ -745,6 +895,107 @@ export default function ExecutiveStockReturnsPage() {
               </div>
             </div>
 
+            {/* School & dispatch (LR from delivery partner / warehouse) */}
+            <div className="space-y-4 border-b pb-4">
+              <h3 className="text-lg font-semibold">School &amp; dispatch details</h3>
+              <p className="text-sm text-neutral-600">
+                School fields are filled from the selected DC. Hand stock to your delivery partner for return to{' '}
+                {MAIN_WAREHOUSE}; enter the LR No from their lorry receipt before you submit (required).
+              </p>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <Label>LR No *</Label>
+                  <Input
+                    value={lrNumber}
+                    onChange={(e) => setLrNumber(e.target.value)}
+                    placeholder="Lorry receipt number from delivery partner"
+                  />
+                </div>
+                <div>
+                  <Label>LR Date</Label>
+                  <Input type="date" value={lrDate} onChange={(e) => setLrDate(e.target.value)} />
+                </div>
+                <div>
+                  <Label>Fin Year *</Label>
+                  <Input
+                    value={finYear}
+                    onChange={(e) => setFinYear(e.target.value)}
+                    placeholder="e.g. 2026-27"
+                  />
+                </div>
+                <div>
+                  <Label>School Code</Label>
+                  <Input
+                    value={schoolCode}
+                    onChange={(e) => setSchoolCode(e.target.value)}
+                    placeholder="School code"
+                  />
+                </div>
+                <div>
+                  <Label>School Type</Label>
+                  <Input
+                    value={schoolType}
+                    onChange={(e) => setSchoolType(e.target.value)}
+                    placeholder="School type"
+                  />
+                </div>
+                <div>
+                  <Label>Transport</Label>
+                  <Input
+                    value={transport}
+                    onChange={(e) => setTransport(e.target.value)}
+                    placeholder="Transport name"
+                  />
+                </div>
+                <div>
+                  <Label>Town / Location</Label>
+                  <Input value={town} onChange={(e) => setTown(e.target.value)} placeholder="Town or city" />
+                </div>
+                <div>
+                  <Label>Zone</Label>
+                  <Input value={zone} onChange={(e) => setZone(e.target.value)} placeholder="Zone" />
+                </div>
+                <div>
+                  <Label>Cluster</Label>
+                  <Input value={cluster} onChange={(e) => setCluster(e.target.value)} placeholder="Cluster code" />
+                </div>
+                <div>
+                  <Label>Contact Person</Label>
+                  <Input
+                    value={contactPerson}
+                    onChange={(e) => setContactPerson(e.target.value)}
+                    placeholder="Contact person"
+                  />
+                </div>
+                <div>
+                  <Label>Contact Mobile</Label>
+                  <Input
+                    value={contactMobile}
+                    onChange={(e) => setContactMobile(e.target.value)}
+                    placeholder="Mobile number"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <Label>Address</Label>
+                  <Textarea
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder="Delivery address"
+                    rows={2}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <Label>Remarks (warehouse list)</Label>
+                  <Textarea
+                    value={returnRemarks}
+                    onChange={(e) => setReturnRemarks(e.target.value)}
+                    placeholder="Short note shown in warehouse executive remarks column"
+                    rows={2}
+                  />
+                </div>
+              </div>
+            </div>
+
             {/* 2. Product Selection */}
             <div className="space-y-4 border-b pb-4">
               <div className="flex items-center justify-between">
@@ -777,43 +1028,22 @@ export default function ExecutiveStockReturnsPage() {
                       {productRows.map((row) => (
                         <tr key={row.id} className="border-b">
                           <td className="py-2 px-3">
-                            <Select
-                              value={selectValueOrUndefined(row.product)}
-                              onValueChange={(value) => {
-                                updateProductRow(row.id, 'product', value)
-                                // Auto-fill soldQty from DC order if available
-                                if (dcOrderId) {
-                                  const order = dcOrders.find(o => o._id === dcOrderId)
-                                  const orderProduct = order?.products?.find(p => (p.product_name || '') === value)
-                                  if (orderProduct) {
-                                    updateProductRow(row.id, 'soldQty', orderProduct.quantity || 0)
-                                    updateProductRow(row.id, 'unitPrice', Number(orderProduct.unit_price) || 0)
-                                    updateProductRow(row.id, 'class', String(orderProduct.class || ''))
-                                    updateProductRow(row.id, 'level', String(orderProduct.level || ''))
-                                    updateProductRow(row.id, 'subject', String(orderProduct.subject || ''))
-                                  }
-                                }
-                              }}
-                            >
-                              <SelectTrigger className="w-40">
-                                <SelectValue placeholder="Select product" />
-                              </SelectTrigger>
-                              <SelectContent className={SELECT_IN_DIALOG_CLASS}>
-                                {availableProducts.map((product) => (
-                                  <SelectItem key={product} value={product}>
-                                    {product}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            <Input
+                              value={row.product}
+                              onChange={(e) => updateProductRow(row.id, 'product', e.target.value)}
+                              onBlur={(e) => fillLineFromDcProduct(row.id, e.target.value)}
+                              list="executive-return-product-suggestions"
+                              placeholder="Product name"
+                              className="min-w-[140px]"
+                            />
                           </td>
                           <td className="py-2 px-3">
                             <Input
-                              type="number"
-                              value={row.soldQty === 0 ? '' : row.soldQty}
+                              type="text"
+                              inputMode="numeric"
+                              value={row.soldQty === 0 ? '' : String(row.soldQty)}
                               onChange={(e) => {
-                                const raw = e.target.value
-                                const cleaned = raw.replace(/^0+(?=\d)/, '')
+                                const cleaned = e.target.value.replace(/\D/g, '')
                                 updateProductRow(
                                   row.id,
                                   'soldQty',
@@ -821,7 +1051,6 @@ export default function ExecutiveStockReturnsPage() {
                                 )
                               }}
                               className="w-24"
-                              min="0"
                             />
                           </td>
                           <td className="py-2 px-3">
@@ -836,11 +1065,19 @@ export default function ExecutiveStockReturnsPage() {
                           </td>
                           <td className="py-2 px-3">
                             <Input
-                              type="number"
-                              value={row.unitPrice || 0}
-                              onChange={(e) => updateProductRow(row.id, 'unitPrice', Number(e.target.value))}
+                              type="text"
+                              inputMode="decimal"
+                              value={row.unitPrice === 0 ? '' : String(row.unitPrice)}
+                              onChange={(e) => {
+                                const raw = e.target.value.replace(/[^\d.]/g, '')
+                                if (raw === '' || raw === '.') {
+                                  updateProductRow(row.id, 'unitPrice', 0)
+                                  return
+                                }
+                                const n = parseFloat(raw)
+                                if (!Number.isNaN(n)) updateProductRow(row.id, 'unitPrice', n)
+                              }}
                               className="w-28"
-                              min="0"
                             />
                           </td>
                           <td className="py-2 px-3">
@@ -882,6 +1119,11 @@ export default function ExecutiveStockReturnsPage() {
                       ))}
                     </tbody>
                   </table>
+                  <datalist id="executive-return-product-suggestions">
+                    {productSuggestions.map((name) => (
+                      <option key={name} value={name} />
+                    ))}
+                  </datalist>
                 </div>
               )}
             </div>
@@ -1021,6 +1263,26 @@ export default function ExecutiveStockReturnsPage() {
                 <div>
                   <Label>Customer Name</Label>
                   <Input value={selectedReturn.customerName || '-'} readOnly className="bg-neutral-50" />
+                </div>
+                <div>
+                  <Label>LR No</Label>
+                  <Input value={selectedReturn.lrNumber || '-'} readOnly className="bg-neutral-50" />
+                </div>
+                <div>
+                  <Label>Fin Year</Label>
+                  <Input value={selectedReturn.finYear || '-'} readOnly className="bg-neutral-50" />
+                </div>
+                <div>
+                  <Label>School Code</Label>
+                  <Input value={selectedReturn.schoolCode || '-'} readOnly className="bg-neutral-50" />
+                </div>
+                <div>
+                  <Label>Transport</Label>
+                  <Input value={selectedReturn.transport || '-'} readOnly className="bg-neutral-50" />
+                </div>
+                <div>
+                  <Label>Remarks</Label>
+                  <Input value={selectedReturn.remarks || '-'} readOnly className="bg-neutral-50" />
                 </div>
                 <div>
                   <Label>Return Date</Label>

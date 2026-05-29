@@ -6,8 +6,7 @@ const StockMovement = require('../models/StockMovement');
 // @access  Private
 const getWarehouseLocations = async (req, res) => {
   try {
-    const locations = await Warehouse.distinct('location', { location: { $exists: true, $ne: '' } });
-    res.json(locations.filter(Boolean).sort());
+    res.json(['Main Warehouse']);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

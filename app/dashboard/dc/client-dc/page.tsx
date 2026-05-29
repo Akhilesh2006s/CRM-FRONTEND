@@ -873,8 +873,10 @@ export default function ClientDCPage() {
       const otherCharges = Number((dcOrder as any)?.otherCharges) || 0
       const discount = Number((dcOrder as any)?.discount) || 0
       const currentTotalBill = totalAmount + otherCharges - discount
-      // TotalDue = TotalPaid - ReturnValue (as per user requirement)
-      const totalDue = Math.max(0, totalPaidAsOn - totalReturnValue)
+      const totalDue = Math.max(
+        0,
+        previousDue + currentTotalBill - totalPaidAsOn - totalReturnValue
+      )
       
       const resolvedDcOrderId =
         dcOrder?._id ||

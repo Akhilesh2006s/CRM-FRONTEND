@@ -22,6 +22,7 @@ import LogoutButton from '../../components/LogoutButton';
 import { useAuth } from '../../context/AuthContext';
 
 const RETURN_TYPES = ['Damaged', 'Expired', 'Excess', 'Wrong item', 'Replacement'];
+const MAIN_WAREHOUSE = 'Main Warehouse';
 
 const NEXT_ACTION_BY_STATUS: Record<string, string> = {
   Draft: 'Complete & Submit',
@@ -90,7 +91,7 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
           apiService.get('/warehouse/locations').catch(() => []),
         ]);
         setCustomers(Array.isArray(custRes) ? custRes : []);
-        setWarehouseLocations(Array.isArray(locRes) ? locRes : []);
+        setWarehouseLocations([MAIN_WAREHOUSE]);
         if (returnIdParam) {
           const ret = await apiService.get(`/stock-returns/${returnIdParam}`);
           setExistingReturn(ret);
@@ -116,6 +117,7 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
           }
         } else {
           setDisplayReturnId(`RET-${Date.now()}`);
+          setWarehouse(MAIN_WAREHOUSE);
         }
       } catch (e: any) {
         Alert.alert('Error', e.message || 'Failed to load data');

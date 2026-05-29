@@ -88,7 +88,6 @@ async function loadPaymentBillTotals(
   previousDue: number
   totalPaidAsOn: number
   totalReturnValue: number
-  totalDue: number
   otherCharges: number
   otherChargesRemarks: string
   discount: number
@@ -191,13 +190,10 @@ async function loadPaymentBillTotals(
     /* non-fatal */
   }
 
-  const totalDue = Math.max(0, totalPaidAsOn - totalReturnValue)
-
   return {
     previousDue,
     totalPaidAsOn,
     totalReturnValue,
-    totalDue,
     otherCharges,
     otherChargesRemarks,
     discount,
@@ -347,7 +343,6 @@ export async function fetchDcInvoiceData(dcId: string, opts: FetchOpts): Promise
           previousDue: 0,
           totalPaidAsOn: 0,
           totalReturnValue: 0,
-          totalDue: 0,
           otherCharges: Number(dcOrder?.otherCharges) || 0,
           otherChargesRemarks: String(dcOrder?.otherChargesRemarks || ''),
           discount: Number(dcOrder?.discount) || 0,
@@ -357,6 +352,12 @@ export async function fetchDcInvoiceData(dcId: string, opts: FetchOpts): Promise
 
   const productsSubtotal = totalAmount
   const currentTotalBill = productsSubtotal + bill.otherCharges - bill.discount
+  const totalDue = gate.invoicePending
+    ? 0
+    : Math.max(
+        0,
+        bill.previousDue + currentTotalBill - bill.totalPaidAsOn - bill.totalReturnValue
+      )
 
   return {
     schoolInfo,
@@ -368,7 +369,7 @@ export async function fetchDcInvoiceData(dcId: string, opts: FetchOpts): Promise
     previousDue: bill.previousDue,
     totalPaidAsOn: bill.totalPaidAsOn,
     totalReturnValue: bill.totalReturnValue,
-    totalDue: bill.totalDue,
+    totalDue,
     otherCharges: bill.otherCharges,
     otherChargesRemarks: bill.otherChargesRemarks,
     discount: bill.discount,

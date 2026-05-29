@@ -182,6 +182,11 @@ export default function WarehouseExecutiveStockReturnsPage() {
     return list
   }, [returns, sortKey, sortDir])
 
+  const canWarehouseEdit = (returnItem: StockReturn) => {
+    const s = (returnItem.status || returnItem.returnStatus || '').trim()
+    return s === 'Submitted' || s === 'Sent Back'
+  }
+
   const openReturnUpdate = (returnItem: StockReturn) => {
     router.push(`/dashboard/returns/warehouse-executive/${returnItem._id}`)
   }
@@ -222,19 +227,20 @@ export default function WarehouseExecutiveStockReturnsPage() {
                 <SortableHeader label="Executive" column="executive" />
                 <SortableHeader label="Return Date" column="returnDate" />
                 <SortableHeader label="Remarks" column="remarks" />
+                <th className="py-3 px-3 font-semibold text-neutral-800 whitespace-nowrap">Status</th>
                 <th className="py-3 px-3 font-semibold text-neutral-800 text-center w-20">Action</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="py-8 text-center text-neutral-500" colSpan={10}>
+                  <td className="py-8 text-center text-neutral-500" colSpan={11}>
                     Loading...
                   </td>
                 </tr>
               ) : sortedReturns.length === 0 ? (
                 <tr>
-                  <td className="py-8 text-center text-neutral-500" colSpan={10}>
+                  <td className="py-8 text-center text-neutral-500" colSpan={11}>
                     No returns found
                   </td>
                 </tr>
@@ -258,13 +264,20 @@ export default function WarehouseExecutiveStockReturnsPage() {
                     <td className="py-2.5 px-3 max-w-[160px] truncate" title={resolveRemarks(returnItem)}>
                       {resolveRemarks(returnItem)}
                     </td>
+                    <td className="py-2.5 px-3 whitespace-nowrap text-xs">
+                      {returnItem.status || returnItem.returnStatus || '-'}
+                    </td>
                     <td className="py-2.5 px-3 text-center">
                       <Button
                         type="button"
                         size="icon"
                         variant="ghost"
                         className="h-9 w-9 text-amber-700 hover:bg-amber-50"
-                        title="Open stock return update"
+                        title={
+                          canWarehouseEdit(returnItem)
+                            ? 'Enter received qty and verify'
+                            : 'View only (not Submitted)'
+                        }
                         onClick={() => openReturnUpdate(returnItem)}
                       >
                         <NotebookPen className="w-5 h-5" />

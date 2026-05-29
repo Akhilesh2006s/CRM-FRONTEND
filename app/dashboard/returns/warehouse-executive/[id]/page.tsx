@@ -1,24 +1,16 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { apiRequest } from '@/lib/api'
-import { useProducts } from '@/hooks/useProducts'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card } from '@/components/ui/card'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { toast } from 'sonner'
-import { PlusCircle, ChevronRight, Loader2 } from 'lucide-react'
+import { ChevronRight, Loader2 } from 'lucide-react'
 
 type DcOrderRef = {
   _id?: string
@@ -40,6 +32,7 @@ type StockReturnDetail = {
   returnId: string
   returnNumber?: number
   status: string
+  verifiedBy?: string | { _id?: string; name?: string }
   returnDate?: string
   lrNumber?: string
   lrDate?: string
@@ -67,11 +60,15 @@ type StockReturnDetail = {
 
 type ProductLine = {
   id: string
-  product: string
-  productName: string
+  productRaw: string
+  productLabel: string
   qty: number
   returnQty: number
   reason: string
+}
+
+function formatReturnProductLabel(p: { product?: string }): string {
+  return (p.product || '').trim() || '—'
 }
 
 function toDateInput(value?: string | Date | null): string {
@@ -81,20 +78,20 @@ function toDateInput(value?: string | Date | null): string {
   return d.toISOString().slice(0, 10)
 }
 
-function canVerify(status: string) {
-  return status === 'Submitted' || status === 'Sent Back'
+function resolveReturnStatus(detail: StockReturnDetail): string {
+  const raw = detail.status || (detail as StockReturnDetail & { returnStatus?: string }).returnStatus
+  return String(raw || '').trim()
 }
 
-function selectValue(v: string) {
-  const t = (v || '').trim()
-  return t.length > 0 ? t : undefined
+function canVerify(status: string) {
+  const s = status.trim()
+  return s === 'Submitted' || s === 'Sent Back'
 }
 
 export default function WarehouseExecutiveReturnUpdatePage() {
   const params = useParams()
   const router = useRouter()
   const id = String(params?.id || '')
-  const { products: catalog, getProductLevels } = useProducts()
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -114,20 +111,24 @@ export default function WarehouseExecutiveReturnUpdatePage() {
   const [returnDate, setReturnDate] = useState('')
   const [whReturnRemarks, setWhReturnRemarks] = useState('')
   const [lrDate, setLrDate] = useState('')
-  const [returnRemarks, setReturnRemarks] = useState('')
   const [transport, setTransport] = useState('')
   const [lrNumber, setLrNumber] = useState('')
   const [lines, setLines] = useState<ProductLine[]>([])
 
-  const readOnly = detail ? !canVerify(detail.status) : true
-  const productNames = useMemo(() => catalog.map((p) => p.productName), [catalog])
+  const returnStatus = detail ? resolveReturnStatus(detail) : ''
+  const canEdit = detail ? canVerify(returnStatus) : false
+  const readOnly = !canEdit
 
   const loadDetail = async () => {
     if (!id) return
     setLoading(true)
     try {
       const data = await apiRequest<StockReturnDetail>(`/stock-returns/warehouse-executive/${id}`)
-      setDetail(data)
+      const normalized: StockReturnDetail = {
+        ...data,
+        status: resolveReturnStatus(data),
+      }
+      setDetail(normalized)
       const dc = data.dcOrderId && typeof data.dcOrderId === 'object' ? data.dcOrderId : null
 
       setSchoolName(dc?.school_name || data.customerName || '')
@@ -143,19 +144,23 @@ export default function WarehouseExecutiveReturnUpdatePage() {
       setReturnDate(toDateInput(data.returnDate))
       setWhReturnRemarks(data.whReturnRemarks || '')
       setLrDate(toDateInput(data.lrDate || data.returnDate))
-      setReturnRemarks(data.executiveRemarks || data.remarks || '')
-      setTransport(data.transport || dc?.transport_name || '')
+      setTransport(
+        data.transport ||
+          dc?.transport_name ||
+          (dc as DcOrderRef & { transport_location?: string })?.transport_location ||
+          ''
+      )
       setLrNumber(data.lrNumber || '')
 
       const rows: ProductLine[] = (data.products || []).map((p, idx) => ({
         id: `line-${idx}`,
-        product: p.product || '',
-        productName: p.level || '',
-        qty: Number(p.receivedQty ?? p.returnQty) || 0,
+        productRaw: (p.product || '').trim(),
+        productLabel: formatReturnProductLabel(p),
+        qty: Number(p.receivedQty) || 0,
         returnQty: Number(p.returnQty) || 0,
         reason: p.reason || 'Excess',
       }))
-      setLines(rows.length > 0 ? rows : [{ id: 'line-0', product: '', productName: '', qty: 0, returnQty: 0, reason: 'Excess' }])
+      setLines(rows)
     } catch (e: any) {
       toast.error(e.message || 'Failed to load return')
       router.push('/dashboard/returns/warehouse-executive')
@@ -182,18 +187,14 @@ export default function WarehouseExecutiveReturnUpdatePage() {
     contactPerson,
     contactMobile,
     schoolCode,
-    products: lines
-      .filter((l) => l.product.trim())
-      .map((l) => ({
-        product: l.product,
-        productName: l.productName,
-        level: l.productName,
-        returnQty: l.returnQty,
-        receivedQty: l.qty,
-        qty: l.qty,
-        reason: l.reason || 'Excess',
-        condition: l.qty > 0 ? 'Sellable' : '',
-      })),
+    products: lines.map((l) => ({
+      product: l.productRaw || l.productLabel,
+      returnQty: l.returnQty,
+      receivedQty: l.qty,
+      qty: l.qty,
+      reason: l.reason || 'Excess',
+      condition: l.qty > 0 ? 'Sellable' : '',
+    })),
   })
 
   const handleSave = async () => {
@@ -219,9 +220,23 @@ export default function WarehouseExecutiveReturnUpdatePage() {
       toast.error('Return date is required')
       return
     }
-    const validLines = lines.filter((l) => l.product.trim())
-    if (validLines.length === 0) {
-      toast.error('Add at least one product')
+    if (!lrNumber.trim()) {
+      toast.error('Enter LR No from the delivery partner lorry receipt')
+      return
+    }
+    if (!lrDate) {
+      toast.error('LR Date is required')
+      return
+    }
+    if (lines.length === 0) {
+      toast.error('No products on this return')
+      return
+    }
+    const missingQty = lines.find((l) => l.qty <= 0)
+    if (missingQty) {
+      toast.error(
+        `Enter received quantity for ${missingQty.productLabel || missingQty.productRaw || 'each product'}`
+      )
       return
     }
     setSubmitting(true)
@@ -237,13 +252,6 @@ export default function WarehouseExecutiveReturnUpdatePage() {
     } finally {
       setSubmitting(false)
     }
-  }
-
-  const addLine = () => {
-    setLines([
-      ...lines,
-      { id: `line-${Date.now()}`, product: '', productName: '', qty: 0, returnQty: 0, reason: 'Excess' },
-    ])
   }
 
   const updateLine = (lineId: string, patch: Partial<ProductLine>) => {
@@ -269,7 +277,7 @@ export default function WarehouseExecutiveReturnUpdatePage() {
           <p className="text-sm text-neutral-600 mt-1">
             Return No. {detail.returnNumber ?? detail.returnId}
             {readOnly && (
-              <span className="ml-2 text-amber-700">({detail.status} — view only)</span>
+              <span className="ml-2 text-amber-700">({returnStatus} — view only)</span>
             )}
           </p>
         </div>
@@ -388,6 +396,13 @@ export default function WarehouseExecutiveReturnUpdatePage() {
           Stock Return Information Update
         </h2>
 
+        {readOnly && (
+          <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+            This return is already <strong>{returnStatus}</strong>. Open a return with status{' '}
+            <strong>Submitted</strong> to enter received quantity, LR details, and submit to the manager.
+          </div>
+        )}
+
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
           <div>
             <Label>Return Date</Label>
@@ -410,29 +425,25 @@ export default function WarehouseExecutiveReturnUpdatePage() {
             />
           </div>
           <div>
-            <Label>LR No</Label>
+            <Label>LR No *</Label>
             <Input
               value={lrNumber}
               onChange={(e) => setLrNumber(e.target.value)}
               readOnly={readOnly}
+              placeholder="From delivery partner lorry receipt"
               className={readOnly ? 'bg-neutral-50 mt-1' : 'mt-1'}
             />
+            {!readOnly && (
+              <p className="text-xs text-neutral-500 mt-1">
+                Enter the lorry receipt number from the delivery partner when goods arrive.
+              </p>
+            )}
           </div>
           <div>
             <Label>Transport</Label>
             <Input
               value={transport}
               onChange={(e) => setTransport(e.target.value)}
-              readOnly={readOnly}
-              className={readOnly ? 'bg-neutral-50 mt-1' : 'mt-1'}
-            />
-          </div>
-          <div className="md:col-span-2">
-            <Label>Return Remarks</Label>
-            <Textarea
-              value={returnRemarks}
-              onChange={(e) => setReturnRemarks(e.target.value)}
-              rows={2}
               readOnly={readOnly}
               className={readOnly ? 'bg-neutral-50 mt-1' : 'mt-1'}
             />
@@ -449,93 +460,59 @@ export default function WarehouseExecutiveReturnUpdatePage() {
           </div>
         </div>
 
+        <p className="text-sm text-neutral-600 mb-3">
+          Enter <strong>Received Qty</strong> — the actual quantity counted when stock arrives at the warehouse.
+        </p>
         <div className="overflow-x-auto border rounded-lg">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-neutral-100 border-b">
-                <th className="py-2 px-3 text-left font-semibold">Product</th>
-                <th className="py-2 px-3 text-left font-semibold">Product Name</th>
-                <th className="py-2 px-3 text-left font-semibold w-28">Qty</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map((line) => {
-                const levelOptions = line.product ? getProductLevels(line.product) : []
-                return (
+          {lines.length === 0 ? (
+            <p className="text-sm text-neutral-500 p-4 text-center">No products on this return.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-neutral-100 border-b">
+                  <th className="py-2 px-3 text-left font-semibold">Product</th>
+                  <th className="py-2 px-3 text-left font-semibold w-32">Received Qty *</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lines.map((line) => (
                   <tr key={line.id} className="border-b">
                     <td className="py-2 px-3">
-                      <Select
-                        value={selectValue(line.product)}
-                        onValueChange={(v) =>
-                          updateLine(line.id, { product: v, productName: '' })
-                        }
-                        disabled={readOnly}
-                      >
-                        <SelectTrigger className="w-full min-w-[140px]">
-                          <SelectValue placeholder="Select product" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {productNames.map((name) => (
-                            <SelectItem key={name} value={name}>
-                              {name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </td>
-                    <td className="py-2 px-3">
-                      {levelOptions.length > 0 ? (
-                        <Select
-                          value={selectValue(line.productName)}
-                          onValueChange={(v) => updateLine(line.id, { productName: v })}
-                          disabled={readOnly}
-                        >
-                          <SelectTrigger className="w-full min-w-[140px]">
-                            <SelectValue placeholder="Select name" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {levelOptions.map((lvl) => (
-                              <SelectItem key={lvl} value={lvl}>
-                                {lvl}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <Input
-                          value={line.productName}
-                          onChange={(e) => updateLine(line.id, { productName: e.target.value })}
-                          placeholder="Product name / level"
-                          readOnly={readOnly}
-                          className={readOnly ? 'bg-neutral-50' : ''}
-                        />
-                      )}
-                    </td>
-                    <td className="py-2 px-3">
                       <Input
-                        type="number"
-                        min={0}
-                        value={line.qty}
-                        onChange={(e) =>
-                          updateLine(line.id, { qty: Number(e.target.value) || 0 })
-                        }
-                        readOnly={readOnly}
-                        className={readOnly ? 'bg-neutral-50' : ''}
+                        value={line.productLabel || line.productRaw || '—'}
+                        readOnly
+                        className="bg-neutral-50 min-w-[160px]"
                       />
                     </td>
+                    <td className="py-2 px-3">
+                      <div>
+                        <Input
+                          type="text"
+                          inputMode="numeric"
+                          value={canEdit ? (line.qty === 0 ? '' : String(line.qty)) : String(line.qty)}
+                          onChange={(e) => {
+                            const cleaned = e.target.value.replace(/\D/g, '')
+                            updateLine(line.id, {
+                              qty: cleaned === '' ? 0 : Number(cleaned),
+                            })
+                          }}
+                          readOnly={!canEdit}
+                          placeholder={canEdit ? 'Enter count' : ''}
+                          className={
+                            canEdit
+                              ? 'w-28 bg-white border-emerald-600/40 focus-visible:border-emerald-600'
+                              : 'bg-neutral-50 w-28'
+                          }
+                          aria-label={`Received quantity for ${line.productLabel}`}
+                        />
+                      </div>
+                    </td>
                   </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
-
-        {!readOnly && (
-          <Button type="button" variant="outline" size="sm" className="mt-3" onClick={addLine}>
-            <PlusCircle className="w-4 h-4 mr-2" />
-            Add
-          </Button>
-        )}
       </Card>
 
       <div className="sticky bottom-0 bg-white border border-neutral-200 rounded-lg shadow-sm px-6 py-4 flex items-center justify-between gap-4 mt-4">
