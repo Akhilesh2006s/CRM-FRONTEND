@@ -28,6 +28,11 @@ const userSchema = new mongoose.Schema({
     enum: ['Super Admin', 'Admin', 'Finance Manager', 'Trainer', 'Coordinator', 'Senior Coordinator', 'Manager', 'Executive', 'Sales BDE', 'Executive Manager', 'Warehouse Executive', 'Warehouse Manager', 'Vendor', 'Partner'],
     default: 'Executive',
   },
+  roleId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Role',
+    default: null,
+  },
   // Support for multiple roles (for mobile app employees who can be both Sales BDE and Trainer)
   roles: [{
     type: String,
@@ -53,10 +58,7 @@ const userSchema = new mongoose.Schema({
   // Trainer specific fields (optional)
   trainerProducts: [{ type: String }],
   trainerLevels: { type: String },
-  trainerAbacusLevels: { type: String },
-  trainerVedicLevels: { type: String },
   trainerType: { type: String, enum: ['BDE', 'Employee', 'Freelancer', 'Teachers'], default: undefined },
-  taggedEmployeeIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   isActive: {
     type: Boolean,
     default: true,

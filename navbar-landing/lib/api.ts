@@ -1,21 +1,29 @@
-/** Local dev default; must match `backend/server.js` when `PORT` is unset (5001 avoids macOS AirPlay on 5000). */
+/** Local dev API — must match `backend/.env` PORT (5001 avoids macOS AirPlay on :5000). */
 export const LOCAL_API_BASE_URL = "http://localhost:5001";
 export const PROD_API_BASE_URL = "https://crm-backend-production-fc85.up.railway.app";
 
+function isBrowserDevProxy(): boolean {
+  if (typeof window === "undefined") return false;
+  if (process.env.NODE_ENV === "production") return false;
+  const h = window.location.hostname;
+  return h === "localhost" || h === "127.0.0.1";
+}
+
 /**
- * Never use port 5000 for the API in the browser: macOS AirPlay binds :5000, so requests get 403 from the wrong service.
- * Stale .env or shell env may still set NEXT_PUBLIC_API_BASE_URL to http://localhost:5000.
+ * Never call localhost:5000 from the browser for the CRM API.
+ * macOS AirPlay Receiver often binds :5000 and returns 403 without CORS headers.
  */
 function normalizeClientApiBase(): string {
+  const fromEnv = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "");
   const raw =
-    process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
-    PROD_API_BASE_URL;
+    fromEnv ||
+    (process.env.NODE_ENV === "production" ? PROD_API_BASE_URL : LOCAL_API_BASE_URL);
+
   try {
     const u = new URL(raw);
     const port = u.port || (u.protocol === "https:" ? "443" : "80");
     const isLocalHost = u.hostname === "localhost" || u.hostname === "127.0.0.1";
 
-    // In production builds we never want localhost API origins.
     if (process.env.NODE_ENV === "production" && isLocalHost) {
       return PROD_API_BASE_URL;
     }
@@ -39,10 +47,16 @@ function normalizeClientApiBase(): string {
 
 export const API_BASE_URL = normalizeClientApiBase();
 
-/**
- * Origin for static `/uploads` (must never be localhost:5000 — macOS AirPlay uses 5000, not Node).
- */
+function stripAirPlayPort(url: string): string {
+  return url
+    .replace(/^http:\/\/localhost:5000(?=\/|$)/, LOCAL_API_BASE_URL)
+    .replace(/^http:\/\/127\.0\.0\.1:5000(?=\/|$)/, LOCAL_API_BASE_URL)
+    .replace(/localhost:5000/g, "localhost:5001")
+    .replace(/127\.0\.0\.1:5000/g, "127.0.0.1:5001");
+}
+
 function uploadsApiOrigin(): string {
+  if (isBrowserDevProxy()) return "";
   const base = API_BASE_URL.replace(/\/$/, "");
   if (
     base.includes(":5000") &&
@@ -53,10 +67,18 @@ function uploadsApiOrigin(): string {
   return base;
 }
 
-/**
- * Files under /uploads are served by the API (Express static), not the Next.js app.
- * Rewrites stale `http://localhost:5000/uploads/...` (DB) and wrong env to LOCAL_API_BASE_URL.
- */
+export function apiFetchUrl(path: string): string {
+  const p = path.startsWith("/") ? path : `/${path}`;
+  const apiPath = p.startsWith("/api") ? p : `/api${p}`;
+
+  if (isBrowserDevProxy()) {
+    return apiPath;
+  }
+
+  const base = normalizeClientApiBase().replace(/\/$/, "");
+  return stripAirPlayPort(`${base}${apiPath}`);
+}
+
 export function resolveUploadUrl(url: string | null | undefined): string {
   if (url == null || typeof url !== "string") return "";
   const trimmed = url.trim();
@@ -65,10 +87,12 @@ export function resolveUploadUrl(url: string | null | undefined): string {
     return trimmed;
   }
   if (trimmed.startsWith("uploads/")) {
-    return stripAirPlayPortFromUploadUrl(`${uploadsApiOrigin()}/${trimmed}`);
+    const origin = uploadsApiOrigin();
+    return origin ? stripAirPlayPort(`${origin}/${trimmed}`) : `/${trimmed}`;
   }
   if (trimmed.startsWith("/uploads/")) {
-    return stripAirPlayPortFromUploadUrl(`${uploadsApiOrigin()}${trimmed}`);
+    const origin = uploadsApiOrigin();
+    return origin ? stripAirPlayPort(`${origin}${trimmed}`) : trimmed;
   }
   if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
     try {
@@ -78,33 +102,24 @@ export function resolveUploadUrl(url: string | null | undefined): string {
         const isBadLocal5000 =
           (u.hostname === "localhost" || u.hostname === "127.0.0.1") &&
           port === "5000";
-        if (isBadLocal5000) {
-          return stripAirPlayPortFromUploadUrl(
-            `${LOCAL_API_BASE_URL}${u.pathname}${u.search}${u.hash}`
-          );
+        if (isBadLocal5000 || isBrowserDevProxy()) {
+          return `${u.pathname}${u.search}${u.hash}`;
         }
-        return stripAirPlayPortFromUploadUrl(
+        return stripAirPlayPort(
           `${uploadsApiOrigin()}${u.pathname}${u.search}${u.hash}`
         );
       }
     } catch {
-      return stripAirPlayPortFromUploadUrl(trimmed);
+      return stripAirPlayPort(trimmed);
     }
-    return stripAirPlayPortFromUploadUrl(trimmed);
+    return stripAirPlayPort(trimmed);
   }
   if (/^po-\d+-\d+\.[a-z0-9]+$/i.test(trimmed)) {
-    return stripAirPlayPortFromUploadUrl(
-      `${uploadsApiOrigin()}/uploads/po/${trimmed}`
-    );
+    const origin = uploadsApiOrigin();
+    const path = `/uploads/po/${trimmed}`;
+    return origin ? stripAirPlayPort(`${origin}${path}`) : path;
   }
-  return stripAirPlayPortFromUploadUrl(trimmed);
-}
-
-function stripAirPlayPortFromUploadUrl(result: string): string {
-  if (!result || !result.includes("/uploads/")) return result;
-  return result
-    .replace(/^http:\/\/localhost:5000(?=\/)/, LOCAL_API_BASE_URL)
-    .replace(/^http:\/\/127\.0\.0\.1:5000(?=\/)/, LOCAL_API_BASE_URL);
+  return stripAirPlayPort(trimmed);
 }
 
 export function poFileApiUrl(poPathOrUrl: string | null | undefined): string | null {
@@ -128,8 +143,13 @@ export function poFileApiUrl(poPathOrUrl: string | null | undefined): string | n
   }
   if (!filename || !/^[a-zA-Z0-9._-]+$/.test(filename)) return null;
   const pathParam = `po/${filename}`;
+  if (isBrowserDevProxy()) {
+    return `/api/dc/po-file?path=${encodeURIComponent(pathParam)}`;
+  }
   const base = API_BASE_URL.replace(/\/$/, "");
-  return `${base}/api/dc/po-file?path=${encodeURIComponent(pathParam)}`;
+  return stripAirPlayPort(
+    `${base}/api/dc/po-file?path=${encodeURIComponent(pathParam)}`
+  );
 }
 
 export async function apiRequest<T>(
@@ -148,8 +168,10 @@ export async function apiRequest<T>(
     (headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
   }
 
+  const url = apiFetchUrl(path);
+
   try {
-    const res = await fetch(`${API_BASE_URL}/api${path}`, {
+    const res = await fetch(url, {
       ...options,
       headers,
       cache: "no-store",
@@ -175,7 +197,7 @@ export async function apiRequest<T>(
   } catch (error: any) {
     if (error instanceof TypeError && error.message.includes("fetch")) {
       throw new Error(
-        `Cannot connect to backend server at ${API_BASE_URL}. Please make sure the backend is running.`
+        `Cannot connect to backend (${url}). Start API: cd navbar-landing/backend && npm run dev — then restart Next (rm -rf .next && npm run dev).`
       );
     }
     throw error;

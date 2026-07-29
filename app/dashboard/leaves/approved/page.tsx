@@ -7,6 +7,7 @@ import { apiRequest } from '@/lib/api'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { getCurrentUser } from '@/lib/auth'
+import { usePermissions } from '@/components/permissions/PermissionsProvider'
 import {
   canViewMyLeaves,
   getLeaveAccessDeniedRedirect,
@@ -27,9 +28,10 @@ type Leave = {
 export default function EmployeeApprovedLeavesPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { user: permUser } = usePermissions()
   const [items, setItems] = useState<Leave[]>([])
   const [loading, setLoading] = useState(true)
-  const currentUser = getCurrentUser()
+  const currentUser = permUser || getCurrentUser()
   const showSubmittedBanner = searchParams.get('submitted') === '1'
 
   useEffect(() => {

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { authMiddleware } = require('../middleware/authMiddleware');
+const { requirePermission } = require('../middleware/permissionMiddleware');
 const multer = require('multer');
 const {
   createExecutiveReturn,
@@ -50,8 +51,18 @@ router.post('/upload-photo', authMiddleware, (req, res, next) => {
   });
 }, uploadReturnPhoto);
 
-router.put('/:id/warehouse-verify', authMiddleware, warehouseVerifyReturn);
-router.put('/:id/manager-action', authMiddleware, managerAction);
+router.put(
+  '/:id/warehouse-verify',
+  authMiddleware,
+  requirePermission('returns.warehouse.verify'),
+  warehouseVerifyReturn
+);
+router.put(
+  '/:id/manager-action',
+  authMiddleware,
+  requirePermission('returns.warehouse.approve'),
+  managerAction
+);
 
 router.get('/:id', authMiddleware, getExecutiveReturnById);
 router.put('/:id', authMiddleware, updateExecutiveReturn);

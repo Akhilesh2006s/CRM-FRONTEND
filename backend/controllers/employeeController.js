@@ -51,9 +51,17 @@ const getEmployee = async (req, res) => {
 // @desc    Create employee
 // @route   POST /api/employees/create
 // @access  Private
+const Role = require('../models/Role');
+
 const createEmployee = async (req, res) => {
   try {
     const body = { ...req.body };
+    if (body.roleId) {
+      const roleDoc = await Role.findById(body.roleId);
+      if (roleDoc?.isActive) {
+        body.role = roleDoc.name;
+      }
+    }
     if (!body.password) {
       body.password = 'Password123';
     }

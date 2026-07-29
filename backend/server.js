@@ -39,12 +39,42 @@ dotenv.config();
 
 const app = express();
 
-// Middleware - CORS: web (localhost) + mobile (Expo on device - allow all in dev)
+// Middleware - CORS: Next.js (3001/3000), Expo (8081), API ports (5000/5001)
 const isDev = process.env.NODE_ENV !== 'production';
-app.use(cors({
-  origin: isDev ? true : ['http://localhost:8081', 'http://localhost:3000'],
-  credentials: true,
-}));
+const DEV_ORIGINS = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:3001',
+  'http://localhost:8081',
+  'http://127.0.0.1:8081',
+];
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin) return callback(null, true);
+      if (isDev) {
+        if (
+          DEV_ORIGINS.includes(origin) ||
+          /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
+        ) {
+          return callback(null, true);
+        }
+        return callback(null, true);
+      }
+      const allowed = [
+        ...DEV_ORIGINS,
+        process.env.FRONTEND_URL,
+      ].filter(Boolean);
+      if (allowed.includes(origin)) return callback(null, true);
+      return callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })
+);
+app.options('*', cors());
 app.use(express.json({ limit: '50mb' })); // Increase limit for base64 image uploads
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
@@ -85,7 +115,7 @@ const startServer = async () => {
     console.log('✅ Database connection established. Starting server...');
     
     // Start server only after database is connected
-    const PORT = process.env.PORT || 5000;
+    const PORT = process.env.PORT || 5001;
     const HOST = process.env.HOST || '0.0.0.0'; // Listen on all interfaces for mobile app access
     const server = app.listen(PORT, HOST, () => {
       console.log(`Server running on ${HOST}:${PORT}`);
@@ -181,6 +211,8 @@ app.get('/api/executive-managers/po-change-requests', authMiddleware, listPoChan
 app.use('/api/executive-managers', executiveManagerRoutes);
 app.use('/api/sample-requests', sampleRequestRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/roles', require('./routes/roleRoutes'));
+app.use('/api/users', require('./routes/userRoleRoutes'));
 app.use('/api/settings', settingsRoutes);
 
 // Health check

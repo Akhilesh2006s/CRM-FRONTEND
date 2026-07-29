@@ -3,6 +3,8 @@
 import { useEffect, useState, useMemo } from 'react'
 import { apiRequest, resolveUploadUrl } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
+import { usePermissions } from '@/components/permissions/PermissionsProvider'
+import { Can } from '@/components/permissions/Can'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -122,14 +124,18 @@ export default function ClosedSalesPage() {
   
   // Get current user to check role
   const currentUser = getCurrentUser()
+  const { hasPermission, rbacActive } = usePermissions()
   const isManager = currentUser?.role === 'Manager'
   const isSuperAdmin = currentUser?.role === 'Super Admin'
   const isCoordinator = currentUser?.role === 'Coordinator'
   const isEmployee = currentUser?.role === 'Executive'
   const isAdmin = currentUser?.role === 'Admin'
-  // Employees can request DC, Coordinators/Admins can approve or send to senior
-  const canRequestDC = isEmployee
-  const canApproveDC = isSuperAdmin || isCoordinator || isAdmin
+  const canRequestDC = rbacActive
+    ? hasPermission('clients.closed_sales.request_dc')
+    : isEmployee
+  const canApproveDC = rbacActive
+    ? hasPermission('clients.closed_sales.approve_dc')
+    : isSuperAdmin || isCoordinator || isAdmin
   
   // Form state for Raise DC modal
   const [dcDate, setDcDate] = useState('')
@@ -1853,37 +1859,39 @@ export default function ClosedSalesPage() {
                   <td className="py-3 px-4">
                     <div className="flex flex-col gap-1.5">
                       {/* Coordinator/Admin: review employee DC request (DC already created from My Clients) */}
-                      {canApproveDC &&
-                        (d.status === 'dc_requested' || d.status === 'dc_accepted') &&
-                        dealDCs[d._id] && (
+                      <Can permission={['clients.closed_sales.request_dc', 'clients.closed_sales.approve_dc']}>
+                        {canApproveDC &&
+                          (d.status === 'dc_requested' || d.status === 'dc_accepted') &&
+                          dealDCs[d._id] && (
+                            <Button
+                              size="sm"
+                              variant={d.status === 'dc_accepted' ? 'default' : 'destructive'}
+                              className={
+                                d.status === 'dc_accepted'
+                                  ? '!bg-blue-600 hover:!bg-blue-700 !text-white !shadow-sm !from-blue-600 !to-blue-700 hover:!from-blue-700 hover:!to-blue-800'
+                                  : ''
+                              }
+                              onClick={() => openRaiseDC(d)}
+                            >
+                              {d.status === 'dc_requested' ? 'Review DC Request' : 'Update DC'}
+                            </Button>
+                          )}
+                        {/* Raise DC when no DC record exists yet */}
+                        {(canRequestDC || canApproveDC) && !dealDCs[d._id] && (
                           <Button
                             size="sm"
                             variant={d.status === 'dc_accepted' ? 'default' : 'destructive'}
                             className={
                               d.status === 'dc_accepted'
-                                ? '!bg-blue-600 hover:!bg-blue-700 !text-white !shadow-sm'
+                                ? '!bg-blue-600 hover:!bg-blue-700 !text-white !shadow-sm !from-blue-600 !to-blue-700 hover:!from-blue-700 hover:!to-blue-800'
                                 : ''
                             }
                             onClick={() => openRaiseDC(d)}
                           >
-                            {d.status === 'dc_requested' ? 'Review DC Request' : 'Update DC'}
+                            {d.status === 'dc_requested' ? 'Raise DC' : d.status === 'dc_accepted' ? 'Update DC' : 'Raise DC'}
                           </Button>
                         )}
-                      {/* Raise DC when no DC record exists yet */}
-                      {(canRequestDC || canApproveDC) && !dealDCs[d._id] && (
-                        <Button
-                          size="sm"
-                          variant={d.status === 'dc_accepted' ? 'default' : 'destructive'}
-                          className={
-                            d.status === 'dc_accepted' 
-                              ? '!bg-blue-600 hover:!bg-blue-700 !text-white !shadow-sm !from-blue-600 !to-blue-700 hover:!from-blue-700 hover:!to-blue-800' 
-                              : ''
-                          }
-                          onClick={() => openRaiseDC(d)}
-                        >
-                          {d.status === 'dc_requested' ? 'Raise DC' : d.status === 'dc_accepted' ? 'Update DC' : 'Raise DC'}
-                        </Button>
-                      )}
+                      </Can>
                       {!isManager && (
                         <Button
                           size="sm"

@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { apiRequest } from '@/lib/api'
+import { apiRequest, resolveUploadUrl } from '@/lib/api'
 import {
   STUDENT_TYPE_OPTIONS,
   STUDENT_TYPE_PLACEHOLDER,
@@ -16,7 +16,10 @@ import {
   parseFollowUpStudentTypeSelectValue,
   isShortageStudentType,
 } from '@/lib/dcStudentTypeOptions'
+import { SCHOOL_TYPE_OPTIONS } from '@/lib/warehouseOptions'
+import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
+import { Can } from '@/components/permissions/Can'
 import { Pencil, X, Upload, FileText, Download } from 'lucide-react'
 import jsPDF from 'jspdf'
 
@@ -49,6 +52,7 @@ type Row = {
 export default function CompletedDCPage() {
   const [rows, setRows] = useState<Row[]>([])
   const [allRows, setAllRows] = useState<Row[]>([]) // Store all data for filtering
+  const [backendSearching, setBackendSearching] = useState(false)
   const [loading, setLoading] = useState(true)
   const [editingDC, setEditingDC] = useState<Row | null>(null)
   const [editForm, setEditForm] = useState({
@@ -126,8 +130,8 @@ export default function CompletedDCPage() {
     }
     
     if (filters.schoolType) {
-      filtered = filtered.filter(r => 
-        (r.schoolType || '').toLowerCase().includes(filters.schoolType.toLowerCase())
+      filtered = filtered.filter(r =>
+        (r.schoolType || '').toLowerCase() === filters.schoolType.toLowerCase()
       )
     }
     
@@ -356,6 +360,10 @@ export default function CompletedDCPage() {
             row.poDocument = matchingDC.poDocument || matchingDC.poPhotoUrl || row.poDocument
             row.poPhotoUrl = matchingDC.poPhotoUrl || matchingDC.poDocument || row.poPhotoUrl
             row.lrCost = matchingDC.lrCost || row.lrCost
+            row.lrNo = matchingDC.lrNo || row.lrNo
+            row.deliveryStatus = matchingDC.deliveryStatus || row.deliveryStatus
+            row.schoolType = matchingDC.dcOrderId?.school_type || row.schoolType
+            row.zone = matchingDC.dcOrderId?.zone || row.zone
             console.log(`Found DC ${row.dcId} for DcOrder ${row._id}`)
           } else {
             console.warn(`No DC found for DcOrder ${row._id} - this entry cannot be updated`)
@@ -443,6 +451,50 @@ export default function CompletedDCPage() {
   }
 
   useEffect(() => { load() }, [])
+
+  const searchBySchoolCode = async (code: string) => {
+    if (!code || code.length < 3) return
+    setBackendSearching(true)
+    try {
+      const results = await apiRequest<any[]>(`/dc-orders?school_code=${encodeURIComponent(code)}`)
+      if (results?.length) {
+        setAllRows((prev) => {
+          const existingIds = new Set(prev.map((i) => i._id))
+          const mapped: Row[] = results
+            .filter((r) => !existingIds.has(r._id))
+            .map((r) => ({
+              _id: r._id,
+              dcNo: r.dc_code || '-',
+              dcDate: r.createdAt || undefined,
+              dcCategory: r.dcCategory || '',
+              schoolName: r.school_name || '',
+              schoolCode: r.school_code || '',
+              schoolType: r.school_type || '',
+              zone: r.zone || '',
+              executive: r.assigned_to?.name || '',
+              remarks: r.remarks || '',
+              completedDate: r.updatedAt || undefined,
+              poPhotoUrl: r.pod_proof_url || '',
+              poDocument: r.pod_proof_url || '',
+              isDcOrder: true,
+            }))
+          return [...prev, ...mapped]
+        })
+      }
+    } catch (e) {
+      // silently fail — local results still shown
+    } finally {
+      setBackendSearching(false)
+    }
+  }
+
+  useEffect(() => {
+    const code = filters.schoolCode
+    const isCodeLike = /^[a-zA-Z]{2,5}\d*/i.test(code)
+    if (!isCodeLike) return
+    const t = setTimeout(() => searchBySchoolCode(code), 500)
+    return () => clearTimeout(t)
+  }, [filters.schoolCode])
 
   function actionPlaceholder(msg: string) {
     toast.message(msg)
@@ -1140,7 +1192,7 @@ export default function CompletedDCPage() {
       const url = latestDC?.poDocument || latestDC?.poPhotoUrl || row.poDocument || row.poPhotoUrl
       
       if (url) {
-        setPdfUrl(url)
+        setPdfUrl(resolveUploadUrl(url))
         setPdfDC(row)
       } else {
         toast.error('No PDF document available for this DC')
@@ -1150,7 +1202,7 @@ export default function CompletedDCPage() {
       // Fallback to row data
       const url = row.poPhotoUrl || row.poDocument
       if (url) {
-        setPdfUrl(url)
+        setPdfUrl(resolveUploadUrl(url))
         setPdfDC(row)
       } else {
         toast.error('No PDF document available for this DC')
@@ -1238,7 +1290,22 @@ export default function CompletedDCPage() {
           <Input placeholder="Employee/Executive" value={filters.employee} onChange={(e) => setFilters({ ...filters, employee: e.target.value })} />
           <Input placeholder="School Code" value={filters.schoolCode} onChange={(e) => setFilters({ ...filters, schoolCode: e.target.value })} />
           <Input placeholder="School Name" value={filters.schoolName} onChange={(e) => setFilters({ ...filters, schoolName: e.target.value })} />
-          <Input placeholder="School Type" value={filters.schoolType} onChange={(e) => setFilters({ ...filters, schoolType: e.target.value })} />
+          <Select
+            value={filters.schoolType || 'all'}
+            onValueChange={(v) => setFilters({ ...filters, schoolType: v === 'all' ? '' : v })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="School Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All School Types</SelectItem>
+              {SCHOOL_TYPE_OPTIONS.map((t) => (
+                <SelectItem key={t} value={t}>
+                  {t}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Input placeholder="DC No" value={filters.dcNo} onChange={(e) => setFilters({ ...filters, dcNo: e.target.value })} />
           <Select value={filters.dcCategory || 'all'} onValueChange={(v) => setFilters({ ...filters, dcCategory: v === 'all' ? '' : v })}>
             <SelectTrigger>
@@ -1265,11 +1332,28 @@ export default function CompletedDCPage() {
               <SelectItem value="Completed">Completed</SelectItem>
             </SelectContent>
           </Select>
-          <Input type="date" placeholder="From Date" value={filters.fromDate} onChange={(e) => setFilters({ ...filters, fromDate: e.target.value })} />
-          <Input type="date" placeholder="To Date" value={filters.toDate} onChange={(e) => setFilters({ ...filters, toDate: e.target.value })} />
+          <div className="space-y-2">
+            <Label htmlFor="completed-dc-from">From Date</Label>
+            <Input
+              id="completed-dc-from"
+              type="date"
+              value={filters.fromDate}
+              onChange={(e) => setFilters({ ...filters, fromDate: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="completed-dc-to">To Date</Label>
+            <Input
+              id="completed-dc-to"
+              type="date"
+              value={filters.toDate}
+              onChange={(e) => setFilters({ ...filters, toDate: e.target.value })}
+            />
+          </div>
         </div>
         <div className="mt-3 flex items-center gap-3">
           <Button onClick={load}>Search</Button>
+          {backendSearching && <span className="text-xs text-neutral-500">Searching backend...</span>}
           <Button onClick={() => {
             setFilters({
               zone: '',
@@ -1350,29 +1434,33 @@ export default function CompletedDCPage() {
                     <div className="flex items-center gap-2">
                       <Button size="sm" variant="secondary" onClick={(e) => { e.stopPropagation(); openEditDialog(r) }}><Pencil size={14} /></Button>
                       {(r.poDocument || r.poPhotoUrl) && (
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          onClick={(e) => { 
-                            e.stopPropagation(); 
-                            openPDF(r) 
-                          }}
-                          title="View PDF"
-                        >
-                          View PDF
-                        </Button>
+                        <Can permission="warehouse.completed_dc.view_pdf">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              openPDF(r)
+                            }}
+                            title="View PDF"
+                          >
+                            View PDF
+                          </Button>
+                        </Can>
                       )}
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
-                        onClick={(e) => { 
-                          e.stopPropagation(); 
-                          openReplacePdfDialog(r) 
-                        }}
-                        title="Replace PDF"
-                      >
-                        Replace PDF
-                      </Button>
+                      <Can permission="warehouse.completed_dc.replace_pdf">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            openReplacePdfDialog(r)
+                          }}
+                          title="Replace PDF"
+                        >
+                          Replace PDF
+                        </Button>
+                      </Can>
                       <div
                         className="flex flex-col gap-1 min-w-[200px]"
                         onClick={(e) => e.stopPropagation()}
@@ -1416,7 +1504,13 @@ export default function CompletedDCPage() {
                     <Button size="sm" onClick={(e) => { e.stopPropagation(); actionPlaceholder('Stock Return') }}>Stock Return</Button>
                   </TableCell>
                   <TableCell className="truncate max-w-[240px]">{r.remarks || '-'}</TableCell>
-                  <TableCell className="whitespace-nowrap">{r.deliveryStatus || '-'}</TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {r.deliveryStatus ? (
+                      <Badge variant="outline">{r.deliveryStatus}</Badge>
+                    ) : (
+                      '-'
+                    )}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

@@ -1,12 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { apiRequest } from '@/lib/api'
-import { getCurrentUser } from '@/lib/auth'
-import { canViewLeavesReport } from '@/lib/leaveAccess'
-import { toast } from 'sonner'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -35,39 +31,30 @@ type Leave = {
 }
 
 export default function LeavesReportPage() {
-  const router = useRouter()
-  const currentUser = getCurrentUser()
   const [items, setItems] = useState<Leave[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [date, setDate] = useState<string>('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
 
-  useEffect(() => {
-    if (!currentUser) {
-      router.push('/auth/login')
-      return
-    }
-    if (!canViewLeavesReport(currentUser.role)) {
-      toast.error('You do not have permission to access this page.')
-      router.push('/dashboard')
-    }
-  }, [currentUser, router])
-
   const load = async () => {
     setLoading(true)
+    setLoadError(null)
     try {
       const data = await apiRequest<Leave[]>('/leaves')
-      setItems(data)
+      setItems(Array.isArray(data) ? data : [])
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to load leaves report'
+      setLoadError(msg)
+      setItems([])
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    if (currentUser && canViewLeavesReport(currentUser.role)) {
-      load()
-    }
-  }, [currentUser?.role])
+    load()
+  }, [])
 
   const counts = useMemo(() => {
     const total = items.length
@@ -106,12 +93,14 @@ export default function LeavesReportPage() {
     )
   }, [items, date, statusFilter])
 
-  const employeeName = (l: Leave) =>
-    typeof l.employeeId === 'string' ? l.employeeId : l.employeeId?.name || 'Unknown'
+  const employeeName = (l: Leave) => {
+    if (!l.employeeId) return 'Unknown'
+    return typeof l.employeeId === 'string' ? l.employeeId : l.employeeId?.name || 'Unknown'
+  }
 
   const managerName = (l: Leave) => {
-    if (typeof l.employeeId === 'string') return '—'
-    const mgr = l.employeeId?.executiveManagerId
+    if (!l.employeeId || typeof l.employeeId === 'string') return '—'
+    const mgr = l.employeeId.executiveManagerId
     if (!mgr) return '— Not assigned'
     if (typeof mgr === 'string') return mgr
     return mgr.name || '—'
@@ -125,10 +114,6 @@ export default function LeavesReportPage() {
 
   const approvalDate = (l: Leave) =>
     l.approvedAt ? new Date(l.approvedAt).toLocaleDateString() : '—'
-
-  if (!currentUser || !canViewLeavesReport(currentUser.role)) {
-    return null
-  }
 
   return (
     <div className="space-y-6">

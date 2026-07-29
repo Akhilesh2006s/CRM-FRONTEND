@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
+import { Can } from '@/components/permissions/Can'
 import { Eye, CheckCircle2, XCircle, RotateCcw, Package, AlertTriangle, CheckCircle, X } from 'lucide-react'
 
 type StockReturn = {
@@ -701,14 +702,17 @@ export default function WarehouseManagerStockReturnsPage() {
               <XCircle className="w-4 h-4 mr-2" />
               Reject
             </Button>
-            <Button onClick={handleApprove} disabled={processing}>
-              <CheckCircle2 className="w-4 h-4 mr-2" />
-              Approve Return
-            </Button>
+            <Can permission="returns.warehouse.approve">
+              <Button onClick={handleApprove} disabled={processing}>
+                <CheckCircle2 className="w-4 h-4 mr-2" />
+                Approve Return
+              </Button>
+            </Can>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
   )
 }
+
 

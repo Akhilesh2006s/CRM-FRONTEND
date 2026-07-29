@@ -23,6 +23,7 @@ const {
   uploadExpenseBillSingleMiddleware,
 } = require('../controllers/expenseController');
 const { authMiddleware } = require('../middleware/authMiddleware');
+const { requirePermission } = require('../middleware/permissionMiddleware');
 
 // Specific routes must come before parameterized routes
 router.get('/', authMiddleware, getExpenses);
@@ -64,7 +65,12 @@ router.post('/create', authMiddleware, (req, res, next) => {
     next();
   });
 }, createExpense);
-router.post('/approve-multiple', authMiddleware, approveMultipleExpenses);
+router.post(
+  '/approve-multiple',
+  authMiddleware,
+  requirePermission('expenses.pending.page.view', 'expenses.finance_pending.page.view'),
+  approveMultipleExpenses
+);
 router.put('/:id/resubmit', authMiddleware, (req, res, next) => {
   uploadExpenseBillMiddleware(req, res, (err) => {
     if (err) {
@@ -76,7 +82,12 @@ router.put('/:id/resubmit', authMiddleware, (req, res, next) => {
     next();
   });
 }, resubmitExpense);
-router.put('/:id/approve', authMiddleware, approveExpense);
+router.put(
+  '/:id/approve',
+  authMiddleware,
+  requirePermission('expenses.pending.page.view', 'expenses.finance_pending.page.view'),
+  approveExpense
+);
 // Parameterized routes must come last
 router.get('/:id', authMiddleware, getExpense);
 router.put('/:id', authMiddleware, updateExpense);

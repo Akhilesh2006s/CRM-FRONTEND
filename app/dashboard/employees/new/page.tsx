@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -9,13 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { apiRequest } from '@/lib/api'
-import {
-  filterTagOptions,
-  getTaggingSectionLabel,
-  supportsEmployeeTagging,
-} from '@/lib/employeeTagging'
-
-type EmployeeOption = { _id: string; name: string; role: string }
+import { getCurrentUser } from '@/lib/auth'
 
 export default function NewEmployeePage() {
   const router = useRouter()
@@ -35,13 +29,9 @@ export default function NewEmployeePage() {
     city: '',
     pincode: '',
     role: 'Executive',
-    taggedEmployeeIds: [] as string[],
+    roleId: '',
   })
-  const [tagOptions, setTagOptions] = useState<EmployeeOption[]>([])
-  const filteredTagOptions = useMemo(
-    () => filterTagOptions(tagOptions, form.role),
-    [tagOptions, form.role]
-  )
+  const [rbacRoles, setRbacRoles] = useState<{ _id: string; name: string }[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loadingPincode, setLoadingPincode] = useState(false)
@@ -136,19 +126,13 @@ export default function NewEmployeePage() {
 
   useEffect(() => {
     loadZones()
-    apiRequest<EmployeeOption[]>('/employees?isActive=true')
-      .then((data) => setTagOptions(Array.isArray(data) ? data : []))
-      .catch(() => setTagOptions([]))
+    const u = getCurrentUser()
+    if (u?.isSuperAdmin || u?.role === 'Super Admin') {
+      apiRequest<{ _id: string; name: string }[]>('/roles')
+        .then(setRbacRoles)
+        .catch(() => {})
+    }
   }, [])
-
-  const toggleTagged = (empId: string) => {
-    setForm((f) => ({
-      ...f,
-      taggedEmployeeIds: f.taggedEmployeeIds.includes(empId)
-        ? f.taggedEmployeeIds.filter((x) => x !== empId)
-        : [...f.taggedEmployeeIds, empId],
-    }))
-  }
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -170,8 +154,10 @@ export default function NewEmployeePage() {
       if (form.role !== 'Executive') {
         delete payload.cluster
       }
-      if (!supportsEmployeeTagging(form.role)) {
-        delete payload.taggedEmployeeIds
+      if (form.roleId) {
+        payload.roleId = form.roleId
+      } else {
+        delete payload.roleId
       }
       await apiRequest('/employees/create', {
         method: 'POST',
@@ -323,22 +309,7 @@ export default function NewEmployeePage() {
           </div>
           <div>
             <Label>User Type *</Label>
-            <Select
-              value={form.role}
-              onValueChange={(v) =>
-                setForm((f) => {
-                  const allowed = new Set(filterTagOptions(tagOptions, v).map((e) => e._id))
-                  return {
-                    ...f,
-                    role: v,
-                    cluster: v === 'Executive' ? f.cluster : '',
-                    taggedEmployeeIds: supportsEmployeeTagging(v)
-                      ? f.taggedEmployeeIds.filter((id) => allowed.has(id))
-                      : [],
-                  }
-                })
-              }
-            >
+            <Select value={form.role} onValueChange={(v) => setForm((f) => ({ ...f, role: v, cluster: v === 'Executive' ? f.cluster : '' }))}>
               <SelectTrigger className="bg-white text-neutral-900">
                 <SelectValue placeholder="Select Option" />
               </SelectTrigger>
@@ -357,41 +328,36 @@ export default function NewEmployeePage() {
               </SelectContent>
             </Select>
           </div>
+          {rbacRoles.length > 0 && (
+            <div>
+              <Label>Permission role (optional)</Label>
+              <Select
+                value={form.roleId || '__none__'}
+                onValueChange={(v) =>
+                  setForm((f) => ({
+                    ...f,
+                    roleId: v === '__none__' ? '' : v,
+                  }))
+                }
+              >
+                <SelectTrigger className="bg-white text-neutral-900">
+                  <SelectValue placeholder="Use legacy role string only" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— Default from User Type —</SelectItem>
+                  {rbacRoles.map((r) => (
+                    <SelectItem key={r._id} value={r._id}>
+                      {r.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div>
             <Label>Password *</Label>
             <Input className="bg-white text-neutral-900" type="password" name="password" value={form.password} onChange={onChange} required />
           </div>
-
-          {supportsEmployeeTagging(form.role) && (
-            <div className="md:col-span-2">
-              <Label className="mb-2 block">{getTaggingSectionLabel(form.role)}</Label>
-              <p className="text-xs text-neutral-500 mb-2">
-                {form.role === 'Executive Manager' || form.role === 'Manager'
-                  ? 'Select executives assigned to this role.'
-                  : 'Select employees to tag under this role.'}
-              </p>
-              <div className="max-h-48 overflow-y-auto border rounded p-3 bg-white space-y-2">
-                {filteredTagOptions.length === 0 ? (
-                  <p className="text-sm text-neutral-500">
-                    {form.role === 'Executive Manager' || form.role === 'Manager'
-                      ? 'No active executives available to tag'
-                      : 'No employees available to tag'}
-                  </p>
-                ) : (
-                  filteredTagOptions.map((e) => (
-                    <label key={e._id} className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={form.taggedEmployeeIds.includes(e._id)}
-                        onChange={() => toggleTagged(e._id)}
-                      />
-                      {e.name} ({e.role})
-                    </label>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
 
           {error && <div className="md:col-span-2 text-red-600 text-sm">{error}</div>}
           <div className="md:col-span-2 flex justify-end">

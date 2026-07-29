@@ -1,44 +1,39 @@
 'use client'
 
 import type React from "react"
-import { useEffect } from "react"
 import { TopBar } from "@/components/dashboard/TopBar"
 import { Sidebar } from "@/components/dashboard/Sidebar"
 import { RequireAuth } from "@/components/require-auth"
-import { SidebarProvider } from "@/contexts/SidebarContext"
+import { SidebarProvider, useSidebar } from "@/contexts/SidebarContext"
+import { PermissionsProvider } from "@/components/permissions/PermissionsProvider"
+import { RouteGuard } from "@/components/permissions/RouteGuard"
 
+// Main content component that uses sidebar state
 function MainContent({ children }: { children: React.ReactNode }) {
   return (
-    <main
-      className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-auto p-6 md:p-8"
+    <main 
+      className="flex-1 flex flex-col min-h-0 p-6 md:p-8 ml-16 md:ml-0 overflow-hidden min-w-0" 
       id="main-content"
+      style={{ minWidth: 0 }}
     >
       <RequireAuth>
-        <div className="w-full min-w-0">{children}</div>
+        <RouteGuard>
+          <div className="w-full min-w-0 flex flex-col flex-1 min-h-0">
+            {children}
+          </div>
+        </RouteGuard>
       </RequireAuth>
     </main>
   )
 }
 
+// Premium Dashboard layout - Apple x Notion x Linear x Stripe inspired
 function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
-  useEffect(() => {
-    const html = document.documentElement
-    const body = document.body
-    const prevHtml = html.style.overflow
-    const prevBody = body.style.overflow
-    html.style.overflow = 'hidden'
-    body.style.overflow = 'hidden'
-    return () => {
-      html.style.overflow = prevHtml
-      body.style.overflow = prevBody
-    }
-  }, [])
-
   return (
-    <div className="flex h-[100dvh] max-h-[100dvh] overflow-hidden bg-neutral-50/50">
-      <Sidebar />
-      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden pl-16 md:pl-0">
-        <TopBar />
+    <div className="min-h-screen bg-neutral-50/50">
+      <TopBar />
+      <div className="flex items-start min-h-[calc(100dvh-4rem)] pt-16">
+        <Sidebar />
         <MainContent>{children}</MainContent>
       </div>
     </div>
@@ -47,8 +42,12 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <SidebarProvider>
-      <DashboardLayoutContent>{children}</DashboardLayoutContent>
-    </SidebarProvider>
+    <PermissionsProvider>
+      <SidebarProvider>
+        <DashboardLayoutContent>{children}</DashboardLayoutContent>
+      </SidebarProvider>
+    </PermissionsProvider>
   )
 }
+
+

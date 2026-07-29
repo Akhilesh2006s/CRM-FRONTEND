@@ -3,6 +3,7 @@ const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const mockDataService = require('../services/mockDataService');
+const { buildAuthPayload, loadUserPermissions, isSuperAdminUser } = require('../utils/permissions');
 
 // Generate JWT Token
 const generateToken = (id) => {
@@ -37,13 +38,8 @@ const register = async (req, res) => {
     });
 
     if (user) {
-      res.status(201).json({
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        token: generateToken(user._id),
-      });
+      const payload = await buildAuthPayload(user, generateToken(user._id));
+      res.status(201).json(payload);
     } else {
       res.status(400).json({ message: 'Invalid user data' });
       }
@@ -65,11 +61,7 @@ const register = async (req, res) => {
       });
 
       res.status(201).json({
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        token: generateToken(user._id),
+        ...(await buildAuthPayload({ ...user, _id: user._id }, generateToken(user._id))),
       });
     }
   } catch (error) {
@@ -82,90 +74,49 @@ const register = async (req, res) => {
 // @access  Public
 const login = async (req, res) => {
   try {
-    const { email, password, mobile } = req.body;
-    const identifier = String(email || mobile || '').trim();
-    if (!identifier || !password) {
-      return res.status(400).json({ message: 'Mobile number or email and password are required' });
-    }
-
-    const buildLoginQuery = () => {
-      const normalized = identifier.toLowerCase();
-      const digits = identifier.replace(/\D/g, '');
-      const or = [{ email: normalized }];
-      if (digits.length >= 10) {
-        or.push({ mobile: digits });
-        or.push({ phone: digits });
-        const last10 = digits.slice(-10);
-        if (last10.length === 10) {
-          or.push({ mobile: { $regex: `${last10}$` } });
-          or.push({ phone: { $regex: `${last10}$` } });
-        }
-      }
-      return { $or: or };
-    };
+    const { email, password } = req.body;
 
     if (mongoose.connection.readyState === 1) {
-    const user = await User.findOne(buildLoginQuery());
-
-    if (user && user.isActive === false) {
-      return res.status(403).json({ message: 'Account is deactivated. Please contact admin.' });
-    }
+    const user = await User.findOne({ email });
 
     if (user && (await user.comparePassword(password))) {
       // Ensure special admin emails have correct role
       const superAdminEmails = (process.env.SUPER_ADMIN_EMAILS || 'amenityforge@gmail.com')
         .split(',')
         .map((s) => s.trim().toLowerCase())
-      if (superAdminEmails.includes(String(user.email || '').toLowerCase()) && user.role !== 'Super Admin') {
+      if (superAdminEmails.includes(String(email).toLowerCase()) && user.role !== 'Super Admin') {
         user.role = 'Super Admin'
       }
       // Update last login
       user.lastLogin = new Date();
       await user.save();
 
-      res.json({
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        mobile: user.mobile,
-        role: user.role,
-        roles: user.roles || [],
-        hasCompletedFirstTimeSetup: user.hasCompletedFirstTimeSetup || false,
-        token: generateToken(user._id),
-      });
+      const payload = await buildAuthPayload(user, generateToken(user._id));
+      res.json(payload);
     } else {
-      res.status(401).json({ message: 'Invalid mobile number, email, or password' });
+      res.status(401).json({ message: 'Invalid email or password' });
       }
     } else {
       // Use mock data service
-      const user = await mockDataService.findUser({ email: identifier });
-
-      if (user && user.isActive === false) {
-        return res.status(403).json({ message: 'Account is deactivated. Please contact admin.' });
-      }
+      const user = await mockDataService.findUser({ email });
 
       if (user && (await bcrypt.compare(password, user.password))) {
         const superAdminEmails = (process.env.SUPER_ADMIN_EMAILS || 'amenityforge@gmail.com')
           .split(',')
           .map((s) => s.trim().toLowerCase())
-        if (superAdminEmails.includes(String(user.email || '').toLowerCase()) && user.role !== 'Super Admin') {
+        if (superAdminEmails.includes(String(email).toLowerCase()) && user.role !== 'Super Admin') {
           user.role = 'Super Admin'
         }
         // Update last login
         await mockDataService.updateUser(user._id, { lastLogin: new Date() });
 
-        res.json({
-          _id: user._id,
-          name: user.name,
-          email: user.email,
-          mobile: user.mobile,
-          role: user.role,
-          roles: user.roles || [],
-          hasCompletedFirstTimeSetup: user.hasCompletedFirstTimeSetup || false,
-          token: generateToken(user._id),
-        });
+        const payload = await buildAuthPayload(
+          { ...user, lastLogin: new Date() },
+          generateToken(user._id)
+        );
+        res.json(payload);
       } else {
-        res.status(401).json({ message: 'Invalid mobile number, email, or password' });
+        res.status(401).json({ message: 'Invalid email or password' });
       }
     }
   } catch (error) {
@@ -180,7 +131,16 @@ const getMe = async (req, res) => {
   try {
     if (mongoose.connection.readyState === 1) {
     const user = await User.findById(req.user._id).select('-password');
-    res.json(user);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    const { permissionKeys, isSuperAdmin, roleName, roleId } = await loadUserPermissions(user);
+    res.json({
+      ...user.toObject(),
+      roleName: roleName || user.role,
+      roleId: roleId || user.roleId,
+      permissions: permissionKeys,
+      isSuperAdmin,
+      rbacEnabled: process.env.RBAC_ENABLED !== 'false',
+    });
     } else {
       // Use mock data service
       const user = await mockDataService.findUser({ _id: req.user._id });

@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { getCurrentUser } from '@/lib/auth'
+import { usePermissions } from '@/components/permissions/PermissionsProvider'
+import { canAccessHref } from '@/lib/access'
 import { useSidebar } from '@/contexts/SidebarContext'
 import {
   LayoutDashboard,
@@ -42,7 +43,24 @@ import {
   Menu,
   X,
   Phone,
+  ChevronDown,
 } from 'lucide-react'
+
+function isChildRouteActive(pathname: string, href: string, siblings?: { href: string }[]) {
+  if (pathname === href) return true
+  if (href === '/dashboard' || !pathname.startsWith(href + '/')) return false
+  const hasBetterMatch = siblings?.some(
+    (other) =>
+      other.href !== href &&
+      pathname.startsWith(other.href + '/') &&
+      other.href.length > href.length
+  )
+  return !hasBetterMatch
+}
+
+function hasActiveChild(pathname: string, children: { href: string }[]) {
+  return children.some((c) => isChildRouteActive(pathname, c.href, children))
+}
 
 type NavItem = {
   label: string
@@ -115,19 +133,19 @@ function HoverTooltip({ item, pathname, onClose }: { item: NavItem; pathname: st
                   onClick={onClose}
                   className={`flex items-center gap-2.5 text-sm px-3 py-2.5 font-medium transition-all duration-200 rounded-lg relative ${
                     isActive 
-                      ? 'bg-blue-50 text-blue-700 shadow-md shadow-blue-100/50 border border-blue-200 rounded-lg' 
+                      ? 'bg-neutral-100 text-neutral-900 shadow-sm border border-neutral-300 rounded-lg' 
                       : 'text-neutral-700 hover:bg-neutral-50 hover:text-neutral-900'
                   }`}
                 >
                   {isActive && (
-                    <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-blue-50 to-transparent pointer-events-none" />
+                    <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-white/5 to-transparent pointer-events-none" />
                   )}
                   {c.icon && typeof c.icon === 'function' && (
                     <c.icon size={14} className={`flex-shrink-0 relative z-10 ${isActive ? 'text-blue-700' : 'text-neutral-600'}`} />
                   )}
                   <span className="relative z-10">{c.label}</span>
                   {isActive && (
-                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-blue-500 rounded-r-full" />
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-white rounded-r-full" />
                   )}
                 </Link>
               </li>
@@ -151,6 +169,8 @@ const NAV: NavItem[] = [
       { label: 'Pending DC', href: '/dashboard/dc/pending', icon: Clock },
       { label: 'EMP DC', href: '/dashboard/dc/emp', icon: UserCircle2 },
       { label: 'Term-Wise DC', href: '/dashboard/dc/term-wise', icon: FileText },
+      { label: 'My Clients', href: '/dashboard/dc/client-dc', icon: Users },
+      { label: 'Term-Wise My Clients', href: '/dashboard/dc/client-dc/term-wise', icon: FileText },
     ],
   },
   {
@@ -160,6 +180,8 @@ const NAV: NavItem[] = [
       { label: 'New Employee', href: '/dashboard/employees/new' },
       { label: 'Active Employees', href: '/dashboard/employees/active' },
       { label: 'Inactive Employees', href: '/dashboard/employees/inactive' },
+      { label: 'Zones', href: '/dashboard/employees/zones', icon: Database },
+      { label: 'Clusters', href: '/dashboard/employees/clusters', icon: Database },
     ],
   },
   {
@@ -248,7 +270,7 @@ const NAV: NavItem[] = [
       { label: 'All Products', href: '/dashboard/products', icon: Database },
       { label: 'Add New Product', href: '/dashboard/products/new', icon: PlusCircle },
       { label: 'Deliverables', href: '/dashboard/products/deliverables', icon: Eye, adminOnly: true },
-      { label: 'Vendor', href: '/dashboard/products/vendors', icon: Building2, adminOnly: true },
+      { label: 'Partner', href: '/dashboard/products/vendors', icon: Building2, adminOnly: true },
     ],
   },
   {
@@ -259,10 +281,30 @@ const NAV: NavItem[] = [
       { label: 'App Dashboard Data Upload', href: '/dashboard/settings/upload' },
       { label: 'SMS', href: '/dashboard/settings/sms' },
       { label: 'DB Backup', href: '/dashboard/settings/backup' },
+      { label: 'Expense policy', href: '/dashboard/settings/expenses', adminOnly: true },
+      { label: 'Roles & Permissions', href: '/dashboard/settings/roles' },
     ],
   },
   { label: 'Sign out', icon: LogOut, href: '/auth/login' },
 ]
+
+function filterNavByPermissions(
+  nav: NavItem[],
+  user: { permissions?: string[]; role?: string; isSuperAdmin?: boolean; rbacEnabled?: boolean } | null
+): NavItem[] {
+  return nav
+    .map((item) => {
+      if (item.href === '/auth/login') return item
+      if (item.children?.length) {
+        const children = item.children.filter((c) => canAccessHref(user as any, c.href))
+        if (children.length === 0) return null
+        return { ...item, children }
+      }
+      if (item.href && !canAccessHref(user as any, item.href)) return null
+      return item
+    })
+    .filter((x): x is NavItem => x !== null)
+}
 
 export function Sidebar() {
   const router = useRouter()
@@ -271,6 +313,8 @@ export function Sidebar() {
   const [user, setUser] = useState<{ _id?: string; name?: string; email?: string; role?: string } | null>(null)
   const { sidebarOpen, setSidebarOpen, toggleSidebar: toggleSidebarContext } = useSidebar()
   const [hoveredItem, setHoveredItem] = useState<string | null>(null)
+  const { user: permUser, rbacActive, permissionsReady } = usePermissions()
+  const [mounted, setMounted] = useState(false)
 
   // Load sidebar state from localStorage
   useEffect(() => {
@@ -278,8 +322,7 @@ export function Sidebar() {
       try {
         const raw = localStorage.getItem('authUser')
         if (raw) setUser(JSON.parse(raw))
-        
-        // Load persisted sidebar state
+
         const savedOpenState = localStorage.getItem('sidebarOpenState')
         if (savedOpenState) {
           try {
@@ -288,6 +331,7 @@ export function Sidebar() {
           } catch {}
         }
       } catch {}
+      setMounted(true)
     }
   }, [])
 
@@ -300,7 +344,7 @@ export function Sidebar() {
   const isTrainer = user?.role === 'Trainer'
   const isWarehouseExecutive = user?.role === 'Warehouse Executive'
   const isWarehouseManager = user?.role === 'Warehouse Manager'
-  const isVendor = user?.role === 'Vendor'
+  const isPartner = user?.role === 'Partner'
 
   // Add employee leave menu if employee, replace admin Leave Management
   const employeeLeavesMenu: NavItem = {
@@ -354,7 +398,10 @@ export function Sidebar() {
       {
         label: 'Employee Sample',
         icon: Package,
-        href: '/dashboard/samples/request',
+        children: [
+          { label: 'Request Samples', href: '/dashboard/samples/request', icon: PlusCircle },
+          { label: 'My Samples', href: '/dashboard/samples/my', icon: FileText },
+        ],
       },
       {
         label: 'Stock Returns',
@@ -529,8 +576,23 @@ export function Sidebar() {
         label: 'Leave Management',
         icon: CalendarCheck2,
         children: [
-          { label: 'Leave Request', href: '/dashboard/leaves/request', icon: PlusCircle },
+          { label: 'Apply for Leave', href: '/dashboard/leaves/request', icon: PlusCircle },
           { label: 'My Leaves', href: '/dashboard/leaves/approved', icon: CheckCircle2 },
+        ],
+      },
+      {
+        label: 'Reports',
+        icon: BarChart3,
+        children: [
+          { label: 'Leads', href: '/dashboard/reports/leads', icon: FileText },
+          { label: 'All Expenses', href: '/dashboard/reports/expenses', icon: Receipt },
+        ],
+      },
+      {
+        label: 'Settings',
+        icon: Settings,
+        children: [
+          { label: 'Change Password', href: '/dashboard/settings/password', icon: UserCircle2 },
         ],
       },
       { label: 'Sign out', icon: LogOut, href: '/auth/login' },
@@ -568,8 +630,8 @@ export function Sidebar() {
       },
       { label: 'Sign out', icon: LogOut, href: '/auth/login' },
     ]
-  } else if (isVendor) {
-    // For Vendor role: Dashboard + Stocks + DCs (assigned products only)
+  } else if (isPartner) {
+    // For Partner role: Dashboard + Stocks + DCs (assigned products only)
     finalNav = [
       { label: 'My Dashboard', icon: LayoutDashboard, href: '/dashboard' },
       { label: 'Stocks', icon: Boxes, href: '/dashboard/stocks' },
@@ -618,9 +680,19 @@ export function Sidebar() {
     })
   }
 
+  if (rbacActive && permissionsReady) {
+    const baseNav = finalNav.length > 0 ? finalNav : NAV
+    finalNav = filterNavByPermissions(baseNav, permUser)
+    if (!finalNav.some((i) => i.href === '/auth/login')) {
+      finalNav = [...finalNav, { label: 'Sign out', icon: LogOut, href: '/auth/login' }]
+    }
+  }
+
+  const navReady = mounted && (!rbacActive || permissionsReady)
+
   // Auto-expand menu sections based on current route
   useEffect(() => {
-    if (!pathname) return
+    if (!pathname || !navReady) return
 
     setOpen((currentOpen) => {
       const newOpenState = { ...currentOpen }
@@ -684,50 +756,72 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Sidebar - Premium Linear-style design */}
-      <aside className={`${sidebarOpen ? 'w-64' : 'w-16'} bg-[#0F0F0F] text-white min-h-screen fixed md:sticky top-0 left-0 z-50 border-r border-white/5 transition-all duration-300 ease-out relative backdrop-blur-xl`}>
-        {/* User Profile Section - Premium styling */}
-        <div className={`py-5 border-b border-white/5 ${sidebarOpen ? 'px-4' : 'px-0'} hidden md:block`}>
+      {/* Sidebar — AmenityForge green accent */}
+      <aside
+        className={`${sidebarOpen ? 'w-64' : 'w-16'} shrink-0 flex h-[100dvh] md:h-full flex-col overflow-hidden bg-[#0b1210] text-white fixed inset-y-0 left-0 z-50 md:static md:z-auto border-r border-[#16A34A]/25 shadow-[4px_0_24px_rgba(0,0,0,0.12)] transition-[width] duration-300 ease-out`}
+      >
+        {/* User profile */}
+        <div className={`shrink-0 py-4 border-b border-white/15 ${sidebarOpen ? 'px-4' : 'px-0'} hidden md:block`}>
           {sidebarOpen ? (
             <div className="flex items-center gap-3">
-              <div className="relative w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center text-sm font-semibold text-white flex-shrink-0 ring-1 ring-white/10">
+              <div className="relative w-10 h-10 rounded-xl bg-white/25 flex items-center justify-center text-sm font-semibold text-white flex-shrink-0 ring-2 ring-white/35">
                 {user?.name?.charAt(0).toUpperCase() || 'U'}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="font-medium text-sm truncate text-white/90">{user?.name || 'User'}</div>
-                <div className="text-xs text-white/50 flex items-center gap-1.5 mt-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/80 shadow-sm shadow-emerald-500/50"></span>
-                  <span className="font-normal">Active</span>
+                <div className="font-semibold text-sm truncate text-white">{user?.name || 'User'}</div>
+                <div className="text-[11px] text-white/80 flex items-center gap-1.5 mt-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A] shadow-[0_0_6px_rgba(22,163,74,0.8)]" />
+                  <span>Active</span>
                 </div>
               </div>
             </div>
           ) : (
             <div className="flex justify-center">
-              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center text-sm font-semibold text-white ring-1 ring-white/10">
+              <div className="w-10 h-10 rounded-xl bg-white/25 flex items-center justify-center text-sm font-semibold text-white ring-2 ring-white/35">
                 {user?.name?.charAt(0).toUpperCase() || 'U'}
               </div>
             </div>
           )}
         </div>
-        
-        {/* Main Navigation Header with Hamburger - Minimal */}
-        <div className={`py-3.5 border-b border-white/5 hidden md:flex items-center ${sidebarOpen ? 'px-4 justify-between' : 'px-0 justify-center'} relative`}>
+
+        {/* Nav header + collapse */}
+        <div
+          className={`shrink-0 py-3 border-b border-white/15 hidden md:flex items-center ${sidebarOpen ? 'px-4 justify-between' : 'px-0 justify-center'} relative`}
+        >
           {sidebarOpen && (
-            <div className="text-[10px] tracking-widest text-white/40 font-medium uppercase">Navigation</div>
+            <div className="text-[10px] tracking-[0.2em] text-white/60 font-semibold uppercase">
+              Navigation
+            </div>
           )}
-          {/* Hamburger button - Premium styling */}
           <button
             onClick={toggleSidebar}
-            className={`bg-transparent text-white/60 p-1.5 rounded-md hover:bg-white/5 hover:text-white transition-all duration-200 flex-shrink-0 ${sidebarOpen ? '' : 'absolute top-1/2 -translate-y-1/2'}`}
+            className={`text-white/50 p-2 rounded-lg hover:bg-white/15 hover:text-white transition-all duration-200 flex-shrink-0 ${sidebarOpen ? '' : ''}`}
             aria-label="Toggle sidebar"
           >
             {sidebarOpen ? <X size={16} /> : <Menu size={16} />}
           </button>
         </div>
-      <nav className="py-2">
-        <ul className="flex md:block gap-0 overflow-x-auto scrollbar-hide">
-          {finalNav.map((item) => (
-            <li key={item.label} className="w-full" data-item={item.label}>
+
+        <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden dashboard-sidebar-scroll bg-[#0b1210] py-2">
+        <ul className="block gap-0 px-2">
+          {!navReady
+            ? Array.from({ length: 6 }).map((_, i) => (
+                <li key={`nav-skeleton-${i}`} className="w-full px-2 py-1">
+                  <div
+                    className={`h-9 rounded-lg bg-white/10 animate-pulse ${
+                      sidebarOpen ? 'w-full' : 'w-9 mx-auto'
+                    }`}
+                  />
+                </li>
+              ))
+            : null}
+          {navReady &&
+            finalNav.map((item) => (
+            <li
+              key={item.label}
+              className={`w-full ${item.label === 'Sign out' ? 'mt-3 pt-3 border-t border-white/15' : ''}`}
+              data-item={item.label}
+            >
               {item.children ? (
                 <div 
                   className="relative"
@@ -750,14 +844,35 @@ export function Sidebar() {
                         toggle(item.label)
                       }
                     }}
-                    className={`w-full flex items-center justify-center text-white/70 py-2.5 rounded-lg hover:bg-white/5 hover:text-white font-medium transition-all duration-200 group ${
-                      sidebarOpen ? 'px-3 gap-2.5 justify-start' : 'px-0'
+                    className={`w-full flex items-center text-white/75 py-2.5 rounded-lg font-medium transition-all duration-200 group ${
+                      sidebarOpen ? 'px-3 gap-2.5 justify-start' : 'px-0 justify-center'
+                    } ${
+                      hasActiveChild(pathname, item.children)
+                        ? `bg-[#16A34A]/20 text-white ${sidebarOpen ? 'border-l-[3px] border-[#16A34A] pl-[10px]' : ''}`
+                        : `hover:bg-white/10 hover:text-white ${sidebarOpen ? 'border-l-[3px] border-transparent' : ''}`
                     }`}
                     title={!sidebarOpen ? item.label : ''}
                   >
-                    {item.icon && typeof item.icon === 'function' && <item.icon size={18} className="text-white/60 group-hover:text-white flex-shrink-0 transition-colors" />}
+                    {item.icon && typeof item.icon === 'function' && (
+                      <item.icon
+                        size={18}
+                        className={`flex-shrink-0 transition-colors ${
+                          hasActiveChild(pathname, item.children)
+                            ? 'text-[#4ade80]'
+                            : 'text-white/55 group-hover:text-[#4ade80]'
+                        }`}
+                      />
+                    )}
                     {sidebarOpen && (
-                      <span className="text-[13px] text-white/70 group-hover:text-white transition-colors">{item.label}</span>
+                      <>
+                        <span className="text-[13px] flex-1 text-left">{item.label}</span>
+                        <ChevronDown
+                          size={14}
+                          className={`text-white/40 shrink-0 transition-transform duration-200 ${
+                            open[item.label] ? 'rotate-0' : '-rotate-90'
+                          }`}
+                        />
+                      </>
                     )}
                   </button>
                   
@@ -772,46 +887,32 @@ export function Sidebar() {
                   
                   {/* Expanded submenu */}
                   {sidebarOpen && (
-                    <div className={`overflow-hidden transition-all duration-300 ease-out ${open[item.label] ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
-                      <ul className="ml-6 mt-1 mb-2 space-y-1 border-l border-white/5 pl-3">
+                    <div
+                      className={`overflow-hidden transition-all duration-300 ease-out ${
+                        open[item.label] ? 'max-h-[min(24rem,70vh)] opacity-100' : 'max-h-0 opacity-0'
+                      }`}
+                    >
+                      <ul className="ml-3 mt-1 mb-2 space-y-0.5 border-l-2 border-white/25 pl-2">
                         {item.children.map((c) => {
-                          // More precise active check: exact match only, or check if this is the longest matching route
-                          // This prevents "My Clients" (/dashboard/dc/client-dc) from being active when on "Term-Wise DC" (/dashboard/dc/client-dc/term-wise)
-                          let isActive = pathname === c.href
-                          
-                          // If not exact match, check if pathname starts with this href
-                          // But only mark as active if no other child route is a better match (longer prefix)
-                          if (!isActive && c.href !== '/dashboard' && pathname.startsWith(c.href + '/')) {
-                            // Check if any other child has a longer matching prefix
-                            const hasBetterMatch = item.children.some(otherChild => 
-                              otherChild.href !== c.href && 
-                              pathname.startsWith(otherChild.href + '/') &&
-                              otherChild.href.length > c.href.length
-                            )
-                            // Only mark as active if no better match exists
-                            isActive = !hasBetterMatch
-                          }
-                          
+                          const isActive = isChildRouteActive(pathname, c.href, item.children)
+
                           return (
                             <li key={c.label}>
-                              <Link 
-                                href={c.href} 
-                                className={`flex items-center gap-2.5 text-[12.5px] px-3 py-2.5 rounded-lg font-medium transition-all duration-200 relative ${
-                                  isActive 
-                                    ? 'bg-white/15 text-white shadow-lg shadow-white/5 border border-white/20 rounded-lg' 
-                                    : 'text-white/50 hover:bg-white/5 hover:text-white/80'
+                              <Link
+                                href={c.href}
+                                className={`flex items-center gap-2 text-[12.5px] px-2.5 py-2 rounded-md font-medium transition-all duration-150 ${
+                                  isActive
+                                    ? 'bg-[#16A34A]/25 text-white border-l-2 border-[#16A34A]'
+                                    : 'text-white/70 hover:bg-white/10 hover:text-white'
                                 }`}
                               >
-                                {isActive && (
-                                  <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-white/10 to-transparent pointer-events-none" />
-                                )}
                                 {c.icon && typeof c.icon === 'function' && (
-                                  <c.icon size={14} className={`flex-shrink-0 relative z-10 ${isActive ? 'text-white' : 'text-white/50'}`} />
+                                  <c.icon
+                                    size={14}
+                                    className={`flex-shrink-0 ${isActive ? 'text-[#4ade80]' : 'text-white/50'}`}
+                                  />
                                 )}
-                                <span className="relative z-10">{c.label}</span>
-                                {isActive && (
-                                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-white/40 rounded-r-full" />
-                                )}
+                                <span>{c.label}</span>
                               </Link>
                             </li>
                           )
@@ -857,18 +958,23 @@ export function Sidebar() {
                   >
                     <Link 
                       href={item.href || '#'} 
-                      className={`w-full flex items-center justify-center text-white/70 py-2.5 rounded-lg font-medium transition-all duration-200 group ${
-                        sidebarOpen ? 'px-3 gap-2.5 justify-start' : 'px-0'
+                      className={`w-full flex items-center text-white/75 py-2.5 rounded-lg font-medium transition-all duration-200 group ${
+                        sidebarOpen ? 'px-3 gap-2.5 justify-start' : 'px-0 justify-center'
                       } ${
-                        pathname === item.href 
-                          ? 'bg-white/10 text-white shadow-sm' 
-                          : 'hover:bg-white/5 hover:text-white'
+                        pathname === item.href
+                          ? `bg-[#16A34A]/25 text-white ${sidebarOpen ? 'border-l-[3px] border-[#16A34A] pl-[10px]' : ''}`
+                          : `hover:bg-white/10 hover:text-white ${sidebarOpen ? 'border-l-[3px] border-transparent' : ''}`
                       }`}
                       title={!sidebarOpen ? item.label : ''}
                     >
-                      {item.icon && typeof item.icon === 'function' && <item.icon size={18} className={`flex-shrink-0 transition-colors ${
-                        pathname === item.href ? 'text-white' : 'text-white/60 group-hover:text-white'
-                      }`} />}
+                      {item.icon && typeof item.icon === 'function' && (
+                        <item.icon
+                          size={18}
+                          className={`flex-shrink-0 transition-colors ${
+                            pathname === item.href ? 'text-[#4ade80]' : 'text-white/55 group-hover:text-[#4ade80]'
+                          }`}
+                        />
+                      )}
                       {sidebarOpen && (
                         <span className={`text-[13px] transition-colors ${
                           pathname === item.href ? 'text-white' : 'text-white/70 group-hover:text-white'
@@ -890,8 +996,8 @@ export function Sidebar() {
             </li>
           ))}
         </ul>
-      </nav>
-    </aside>
+        </nav>
+      </aside>
     </>
   )
 }

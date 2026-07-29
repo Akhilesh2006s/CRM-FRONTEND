@@ -5,19 +5,23 @@ import { TopBar } from "@/components/dashboard/TopBar"
 import { Sidebar } from "@/components/dashboard/Sidebar"
 import { RequireAuth } from "@/components/require-auth"
 import { SidebarProvider, useSidebar } from "@/contexts/SidebarContext"
+import { PermissionsProvider } from "@/components/permissions/PermissionsProvider"
+import { RouteGuard } from "@/components/permissions/RouteGuard"
 
 // Main content component that uses sidebar state
 function MainContent({ children }: { children: React.ReactNode }) {
   return (
     <main 
-      className="flex-1 p-6 md:p-8 pt-24 md:pt-24 ml-16 md:ml-0 overflow-x-auto" 
+      className="flex-1 flex flex-col min-h-0 p-6 md:p-8 ml-16 md:ml-0 overflow-hidden min-w-0" 
       id="main-content"
       style={{ minWidth: 0 }}
     >
       <RequireAuth>
-        <div className="w-full min-w-0">
-          {children}
-        </div>
+        <RouteGuard>
+          <div className="w-full min-w-0 flex flex-col flex-1 min-h-0">
+            {children}
+          </div>
+        </RouteGuard>
       </RequireAuth>
     </main>
   )
@@ -28,7 +32,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-neutral-50/50">
       <TopBar />
-      <div className="flex pt-0">
+      <div className="flex items-start min-h-[calc(100dvh-4rem)] pt-16">
         <Sidebar />
         <MainContent>{children}</MainContent>
       </div>
@@ -38,9 +42,11 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <SidebarProvider>
-      <DashboardLayoutContent>{children}</DashboardLayoutContent>
-    </SidebarProvider>
+    <PermissionsProvider>
+      <SidebarProvider>
+        <DashboardLayoutContent>{children}</DashboardLayoutContent>
+      </SidebarProvider>
+    </PermissionsProvider>
   )
 }
 

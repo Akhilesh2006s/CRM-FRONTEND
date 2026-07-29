@@ -4,7 +4,16 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { getCurrentUser } from '@/lib/auth'
+import { apiRequest } from '@/lib/api'
 import { useSidebar } from '@/contexts/SidebarContext'
+import { usePermissions } from '@/components/permissions/PermissionsProvider'
+import { canAccessHref } from '@/lib/access'
+import {
+  buildRbacSidebarNav,
+  rbacCatalogHrefs,
+  type BuiltRbacNavItem,
+} from '@/lib/rbac-nav'
+import { isChildNavActive } from '@/lib/navActive'
 import {
   LayoutDashboard,
   Truck,
@@ -42,24 +51,7 @@ import {
   Menu,
   X,
   Phone,
-  ChevronDown,
 } from 'lucide-react'
-
-function isChildRouteActive(pathname: string, href: string, siblings?: { href: string }[]) {
-  if (pathname === href) return true
-  if (href === '/dashboard' || !pathname.startsWith(href + '/')) return false
-  const hasBetterMatch = siblings?.some(
-    (other) =>
-      other.href !== href &&
-      pathname.startsWith(other.href + '/') &&
-      other.href.length > href.length
-  )
-  return !hasBetterMatch
-}
-
-function hasActiveChild(pathname: string, children: { href: string }[]) {
-  return children.some((c) => isChildRouteActive(pathname, c.href, children))
-}
 
 type NavItem = {
   label: string
@@ -110,21 +102,9 @@ function HoverTooltip({ item, pathname, onClose }: { item: NavItem; pathname: st
         </div>
         <ul className="py-1">
           {item.children.map((c) => {
-            // More precise active check: exact match only, or check if this is the longest matching route
-            let isActive = pathname === c.href
-            
-            // If not exact match, check if pathname starts with this href
-            // But only mark as active if no other child route is a better match (longer prefix)
-            if (!isActive && c.href !== '/dashboard' && pathname.startsWith(c.href + '/')) {
-              // Check if any other child has a longer matching prefix
-              const hasBetterMatch = item.children.some(otherChild => 
-                otherChild.href !== c.href && 
-                pathname.startsWith(otherChild.href + '/') &&
-                otherChild.href.length > c.href.length
-              )
-              // Only mark as active if no better match exists
-              isActive = !hasBetterMatch
-            }
+            const isActive = c.href
+              ? isChildNavActive(pathname, c.href, item.children)
+              : false
             return (
               <li key={c.label}>
                 <Link 
@@ -132,19 +112,19 @@ function HoverTooltip({ item, pathname, onClose }: { item: NavItem; pathname: st
                   onClick={onClose}
                   className={`flex items-center gap-2.5 text-sm px-3 py-2.5 font-medium transition-all duration-200 rounded-lg relative ${
                     isActive 
-                      ? 'bg-neutral-100 text-neutral-900 shadow-sm border border-neutral-300 rounded-lg' 
+                      ? 'bg-blue-50 text-blue-700 shadow-md shadow-blue-100/50 border border-blue-200 rounded-lg' 
                       : 'text-neutral-700 hover:bg-neutral-50 hover:text-neutral-900'
                   }`}
                 >
                   {isActive && (
-                    <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-white/5 to-transparent pointer-events-none" />
+                    <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-blue-50 to-transparent pointer-events-none" />
                   )}
                   {c.icon && typeof c.icon === 'function' && (
                     <c.icon size={14} className={`flex-shrink-0 relative z-10 ${isActive ? 'text-blue-700' : 'text-neutral-600'}`} />
                   )}
                   <span className="relative z-10">{c.label}</span>
                   {isActive && (
-                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-white rounded-r-full" />
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-blue-500 rounded-r-full" />
                   )}
                 </Link>
               </li>
@@ -168,6 +148,8 @@ const NAV: NavItem[] = [
       { label: 'Pending DC', href: '/dashboard/dc/pending', icon: Clock },
       { label: 'EMP DC', href: '/dashboard/dc/emp', icon: UserCircle2 },
       { label: 'Term-Wise DC', href: '/dashboard/dc/term-wise', icon: FileText },
+      { label: 'My Clients', href: '/dashboard/dc/client-dc', icon: Users },
+      { label: 'Term-Wise My Clients', href: '/dashboard/dc/client-dc/term-wise', icon: FileText },
     ],
   },
   {
@@ -177,8 +159,18 @@ const NAV: NavItem[] = [
       { label: 'New Employee', href: '/dashboard/employees/new' },
       { label: 'Active Employees', href: '/dashboard/employees/active' },
       { label: 'Inactive Employees', href: '/dashboard/employees/inactive' },
+      { label: 'Pending Leaves', href: '/dashboard/employees/leaves', icon: CalendarCheck2 },
       { label: 'Zones', href: '/dashboard/employees/zones', icon: Database },
       { label: 'Clusters', href: '/dashboard/employees/clusters', icon: Database },
+    ],
+  },
+  {
+    label: 'Executive Managers',
+    icon: Shield,
+    children: [
+      { label: 'All Managers', href: '/dashboard/executive-managers' },
+      { label: 'Create Manager', href: '/dashboard/executive-managers/new' },
+      { label: 'Executives', href: '/dashboard/executive-managers/executives' },
     ],
   },
   {
@@ -265,7 +257,6 @@ const NAV: NavItem[] = [
     icon: Package,
     children: [
       { label: 'All Products', href: '/dashboard/products', icon: Database },
-      { label: 'Add New Product', href: '/dashboard/products/new', icon: PlusCircle },
       { label: 'Deliverables', href: '/dashboard/products/deliverables', icon: Eye, adminOnly: true },
       { label: 'Partner', href: '/dashboard/products/vendors', icon: Building2, adminOnly: true },
     ],
@@ -279,10 +270,93 @@ const NAV: NavItem[] = [
       { label: 'SMS', href: '/dashboard/settings/sms' },
       { label: 'DB Backup', href: '/dashboard/settings/backup' },
       { label: 'Expense policy', href: '/dashboard/settings/expenses', adminOnly: true },
+      { label: 'Roles & Permissions', href: '/dashboard/settings/roles' },
     ],
   },
   { label: 'Sign out', icon: LogOut, href: '/auth/login' },
 ]
+
+const RBAC_MODULE_ICONS: Record<string, typeof LayoutDashboard> = {
+  dashboard: LayoutDashboard,
+  clients: Truck,
+  leads: TrendingUp,
+  employees: Users,
+  leaves: CalendarCheck2,
+  training: GraduationCap,
+  warehouse: Boxes,
+  returns: RefreshCw,
+  payments: CreditCard,
+  expenses: Calculator,
+  reports: BarChart3,
+  products: Package,
+  settings: Settings,
+  executive_managers: Users,
+  samples: Package,
+  vendor: Boxes,
+}
+
+function filterNavByPermissions(
+  nav: NavItem[],
+  user: { permissions?: string[]; role?: string; isSuperAdmin?: boolean; rbacEnabled?: boolean } | null
+): NavItem[] {
+  return nav
+    .map((item) => {
+      if (item.href === '/auth/login') return item
+      if (item.children?.length) {
+        const children = item.children.filter((c) => canAccessHref(user as any, c.href))
+        if (children.length === 0) return null
+        return { ...item, children }
+      }
+      if (item.href && !canAccessHref(user as any, item.href)) return null
+      return item
+    })
+    .filter((x): x is NavItem => x !== null)
+}
+
+function rbacBuiltToNavItems(built: BuiltRbacNavItem[]): NavItem[] {
+  return built.map((item) => {
+    const icon = RBAC_MODULE_ICONS[item.module] || LayoutDashboard
+    if (item.href) {
+      return { label: item.label, href: item.href, icon }
+    }
+    return {
+      label: item.label,
+      icon,
+      children: item.children?.map((c) => ({ label: c.label, href: c.href })) || [],
+    }
+  })
+}
+
+function extractExtraNavItems(
+  nav: NavItem[],
+  user: { permissions?: string[]; isSuperAdmin?: boolean } | null,
+  catalogHrefs: Set<string>
+): NavItem[] {
+  const extras: NavItem[] = []
+  for (const item of nav) {
+    if (item.href === '/auth/login') continue
+    if (item.children?.length) {
+      const children = item.children.filter(
+        (c) =>
+          c.href &&
+          !catalogHrefs.has(c.href) &&
+          canAccessHref(user as any, c.href)
+      )
+      if (children.length > 0) {
+        extras.push({ ...item, children })
+      }
+      continue
+    }
+    if (
+      item.href &&
+      !catalogHrefs.has(item.href) &&
+      canAccessHref(user as any, item.href)
+    ) {
+      extras.push(item)
+    }
+  }
+  return extras
+}
 
 export function Sidebar() {
   const router = useRouter()
@@ -291,6 +365,15 @@ export function Sidebar() {
   const [user, setUser] = useState<{ _id?: string; name?: string; email?: string; role?: string } | null>(null)
   const { sidebarOpen, setSidebarOpen, toggleSidebar: toggleSidebarContext } = useSidebar()
   const [hoveredItem, setHoveredItem] = useState<string | null>(null)
+  const { user: permUser, rbacActive, permissionsReady } = usePermissions()
+  const [skipFinanceStage, setSkipFinanceStage] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    apiRequest<{ skipFinanceStage?: boolean }>('/expenses/policy')
+      .then((p) => setSkipFinanceStage(Boolean(p.skipFinanceStage)))
+      .catch(() => {})
+  }, [])
 
   // Load sidebar state from localStorage
   useEffect(() => {
@@ -298,8 +381,7 @@ export function Sidebar() {
       try {
         const raw = localStorage.getItem('authUser')
         if (raw) setUser(JSON.parse(raw))
-        
-        // Load persisted sidebar state
+
         const savedOpenState = localStorage.getItem('sidebarOpenState')
         if (savedOpenState) {
           try {
@@ -308,10 +390,12 @@ export function Sidebar() {
           } catch {}
         }
       } catch {}
+      setMounted(true)
     }
   }, [])
 
   const isEmployee = user?.role === 'Executive'
+  const isSalesBDE = user?.role === 'Sales BDE'
   const isManager = user?.role === 'Manager'
   const isCoordinator = user?.role === 'Coordinator'
   const isSeniorCoordinator = user?.role === 'Senior Coordinator'
@@ -324,11 +408,11 @@ export function Sidebar() {
 
   // Add employee leave menu if employee, replace admin Leave Management
   const employeeLeavesMenu: NavItem = {
-    label: 'My Leaves',
+    label: 'Leave Management',
     icon: CalendarCheck2,
     children: [
-      { label: 'Leave Request', href: '/dashboard/leaves/request', icon: PlusCircle },
-      { label: 'Leaves', href: '/dashboard/leaves/approved', icon: CheckCircle2 },
+      { label: 'Apply for Leave', href: '/dashboard/leaves/request', icon: PlusCircle },
+      { label: 'My Leaves', href: '/dashboard/leaves/approved', icon: CheckCircle2 },
     ],
   }
 
@@ -374,10 +458,7 @@ export function Sidebar() {
       {
         label: 'Employee Sample',
         icon: Package,
-        children: [
-          { label: 'Request Samples', href: '/dashboard/samples/request', icon: PlusCircle },
-          { label: 'My Samples', href: '/dashboard/samples/my', icon: FileText },
-        ],
+        href: '/dashboard/samples/request',
       },
       {
         label: 'Stock Returns',
@@ -388,6 +469,15 @@ export function Sidebar() {
       { label: 'Sign out', icon: LogOut, href: '/auth/login' },
     ]
   } else if (isManager) {
+    const managerLeavesMenu: NavItem = {
+      label: 'Leave Management',
+      icon: CalendarCheck2,
+      children: [
+        { label: 'Pending Leaves', href: '/dashboard/leaves/pending', icon: Clock },
+        { label: 'Apply for Leave', href: '/dashboard/leaves/request', icon: PlusCircle },
+        { label: 'My Leaves', href: '/dashboard/leaves/approved', icon: CheckCircle2 },
+      ],
+    }
     // For Manager role, only show: Dashboard, Clients, Warehouse, Expenses, Reports, Settings, Sign out
     const allowedMenuItems = ['Dashboard', 'Clients', 'Warehouse', 'Expenses', 'Reports', 'Settings', 'Sign out']
     finalNav = NAV.filter(item => allowedMenuItems.includes(item.label))
@@ -432,6 +522,12 @@ export function Sidebar() {
         }
         return item
       })
+    const signOutIdx = finalNav.findIndex((item) => item.label === 'Sign out')
+    if (signOutIdx >= 0) {
+      finalNav.splice(signOutIdx, 0, managerLeavesMenu)
+    } else {
+      finalNav.push(managerLeavesMenu)
+    }
   } else if (isCoordinator) {
     // For Coordinator role, only show: Dashboard, Clients, Users / Employees, Trainings & Services, Warehouse, Payments, Reports, Settings, Sign out
     const allowedMenuItems = ['Dashboard', 'Clients', 'Users / Employees', 'Trainings & Services', 'Warehouse', 'Payments', 'Reports', 'Settings', 'Sign out']
@@ -556,21 +652,6 @@ export function Sidebar() {
           { label: 'My Leaves', href: '/dashboard/leaves/approved', icon: CheckCircle2 },
         ],
       },
-      {
-        label: 'Reports',
-        icon: BarChart3,
-        children: [
-          { label: 'Leads', href: '/dashboard/reports/leads', icon: FileText },
-          { label: 'All Expenses', href: '/dashboard/reports/expenses', icon: Receipt },
-        ],
-      },
-      {
-        label: 'Settings',
-        icon: Settings,
-        children: [
-          { label: 'Change Password', href: '/dashboard/settings/password', icon: UserCircle2 },
-        ],
-      },
       { label: 'Sign out', icon: LogOut, href: '/auth/login' },
     ]
   } else if (isExecutive) {
@@ -664,9 +745,37 @@ export function Sidebar() {
           }),
         }
       }
+      if (item.label === 'Expenses' && item.children && skipFinanceStage) {
+        return {
+          ...item,
+          children: item.children.filter(
+            (child) => child.href !== '/dashboard/expenses/finance-pending'
+          ),
+        }
+      }
       return item
     })
+    if (isSalesBDE) {
+      const withoutAdminLeave = finalNav.filter((item) => item.label !== 'Leave Management')
+      const signOut = withoutAdminLeave.find((item) => item.label === 'Sign out')
+      const rest = withoutAdminLeave.filter((item) => item.label !== 'Sign out')
+      finalNav = [...rest, employeeLeavesMenu, ...(signOut ? [signOut] : [])]
+    }
   }
+
+  if (rbacActive && permissionsReady) {
+    const baseNav = finalNav.length > 0 ? finalNav : NAV
+    const catalogHrefs = rbacCatalogHrefs()
+    const fromPermissions = rbacBuiltToNavItems(buildRbacSidebarNav(permUser))
+    const extras = extractExtraNavItems(baseNav, permUser, catalogHrefs)
+    finalNav = [
+      ...fromPermissions,
+      ...extras,
+      { label: 'Sign out', icon: LogOut, href: '/auth/login' },
+    ]
+  }
+
+  const navReady = mounted && (!rbacActive || permissionsReady)
 
   // Auto-expand menu sections based on current route
   useEffect(() => {
@@ -734,60 +843,62 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Sidebar — AmenityForge green accent */}
-      <aside
-        className={`${sidebarOpen ? 'w-64' : 'w-16'} shrink-0 flex h-[100dvh] md:h-full flex-col overflow-hidden bg-[#0b1210] text-white fixed inset-y-0 left-0 z-50 md:static md:z-auto border-r border-[#16A34A]/25 shadow-[4px_0_24px_rgba(0,0,0,0.12)] transition-[width] duration-300 ease-out`}
-      >
-        {/* User profile */}
-        <div className={`shrink-0 py-4 border-b border-white/15 ${sidebarOpen ? 'px-4' : 'px-0'} hidden md:block`}>
+      {/* Sidebar - Premium Linear-style design */}
+      <aside className={`${sidebarOpen ? 'w-64' : 'w-16'} shrink-0 bg-[#0F0F0F] text-white fixed md:sticky top-16 left-0 z-50 self-start h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)] overflow-y-auto scrollbar-hide border-r border-white/5 transition-all duration-300 ease-out backdrop-blur-xl`}>
+        {/* User Profile Section - Premium styling */}
+        <div className={`py-5 border-b border-white/5 ${sidebarOpen ? 'px-4' : 'px-0'} hidden md:block`}>
           {sidebarOpen ? (
             <div className="flex items-center gap-3">
-              <div className="relative w-10 h-10 rounded-xl bg-white/25 flex items-center justify-center text-sm font-semibold text-white flex-shrink-0 ring-2 ring-white/35">
+              <div className="relative w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center text-sm font-semibold text-white flex-shrink-0 ring-1 ring-white/10">
                 {user?.name?.charAt(0).toUpperCase() || 'U'}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="font-semibold text-sm truncate text-white">{user?.name || 'User'}</div>
-                <div className="text-[11px] text-white/80 flex items-center gap-1.5 mt-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A] shadow-[0_0_6px_rgba(22,163,74,0.8)]" />
-                  <span>Active</span>
+                <div className="font-medium text-sm truncate text-white/90">{user?.name || 'User'}</div>
+                <div className="text-xs text-white/50 flex items-center gap-1.5 mt-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/80 shadow-sm shadow-emerald-500/50"></span>
+                  <span className="font-normal">Active</span>
                 </div>
               </div>
             </div>
           ) : (
             <div className="flex justify-center">
-              <div className="w-10 h-10 rounded-xl bg-white/25 flex items-center justify-center text-sm font-semibold text-white ring-2 ring-white/35">
+              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center text-sm font-semibold text-white ring-1 ring-white/10">
                 {user?.name?.charAt(0).toUpperCase() || 'U'}
               </div>
             </div>
           )}
         </div>
-
-        {/* Nav header + collapse */}
-        <div
-          className={`shrink-0 py-3 border-b border-white/15 hidden md:flex items-center ${sidebarOpen ? 'px-4 justify-between' : 'px-0 justify-center'} relative`}
-        >
+        
+        {/* Main Navigation Header with Hamburger - Minimal */}
+        <div className={`py-3.5 border-b border-white/5 hidden md:flex items-center ${sidebarOpen ? 'px-4 justify-between' : 'px-0 justify-center'} relative`}>
           {sidebarOpen && (
-            <div className="text-[10px] tracking-[0.2em] text-white/60 font-semibold uppercase">
-              Navigation
-            </div>
+            <div className="text-[10px] tracking-widest text-white/40 font-medium uppercase">Navigation</div>
           )}
+          {/* Hamburger button - Premium styling */}
           <button
             onClick={toggleSidebar}
-            className={`text-white/50 p-2 rounded-lg hover:bg-white/15 hover:text-white transition-all duration-200 flex-shrink-0 ${sidebarOpen ? '' : ''}`}
+            className={`bg-transparent text-white/60 p-1.5 rounded-md hover:bg-white/5 hover:text-white transition-all duration-200 flex-shrink-0 ${sidebarOpen ? '' : 'absolute top-1/2 -translate-y-1/2'}`}
             aria-label="Toggle sidebar"
           >
             {sidebarOpen ? <X size={16} /> : <Menu size={16} />}
           </button>
         </div>
-
-        <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden dashboard-sidebar-scroll bg-[#0b1210] py-2">
-        <ul className="block gap-0 px-2">
-          {finalNav.map((item) => (
-            <li
-              key={item.label}
-              className={`w-full ${item.label === 'Sign out' ? 'mt-3 pt-3 border-t border-white/15' : ''}`}
-              data-item={item.label}
-            >
+      <nav className="py-2">
+        <ul className="flex md:block gap-0 overflow-x-auto scrollbar-hide">
+          {!navReady
+            ? Array.from({ length: 6 }).map((_, i) => (
+                <li key={`nav-skeleton-${i}`} className="w-full px-2 py-1">
+                  <div
+                    className={`h-9 rounded-lg bg-white/10 animate-pulse ${
+                      sidebarOpen ? 'w-full' : 'w-9 mx-auto'
+                    }`}
+                  />
+                </li>
+              ))
+            : null}
+          {navReady &&
+            finalNav.map((item) => (
+            <li key={item.label} className="w-full" data-item={item.label}>
               {item.children ? (
                 <div 
                   className="relative"
@@ -810,35 +921,14 @@ export function Sidebar() {
                         toggle(item.label)
                       }
                     }}
-                    className={`w-full flex items-center text-white/75 py-2.5 rounded-lg font-medium transition-all duration-200 group ${
-                      sidebarOpen ? 'px-3 gap-2.5 justify-start' : 'px-0 justify-center'
-                    } ${
-                      hasActiveChild(pathname, item.children)
-                        ? `bg-[#16A34A]/20 text-white ${sidebarOpen ? 'border-l-[3px] border-[#16A34A] pl-[10px]' : ''}`
-                        : `hover:bg-white/10 hover:text-white ${sidebarOpen ? 'border-l-[3px] border-transparent' : ''}`
+                    className={`w-full flex items-center justify-center text-white/70 py-2.5 rounded-lg hover:bg-white/5 hover:text-white font-medium transition-all duration-200 group ${
+                      sidebarOpen ? 'px-3 gap-2.5 justify-start' : 'px-0'
                     }`}
                     title={!sidebarOpen ? item.label : ''}
                   >
-                    {item.icon && typeof item.icon === 'function' && (
-                      <item.icon
-                        size={18}
-                        className={`flex-shrink-0 transition-colors ${
-                          hasActiveChild(pathname, item.children)
-                            ? 'text-[#4ade80]'
-                            : 'text-white/55 group-hover:text-[#4ade80]'
-                        }`}
-                      />
-                    )}
+                    {item.icon && typeof item.icon === 'function' && <item.icon size={18} className="text-white/60 group-hover:text-white flex-shrink-0 transition-colors" />}
                     {sidebarOpen && (
-                      <>
-                        <span className="text-[13px] flex-1 text-left">{item.label}</span>
-                        <ChevronDown
-                          size={14}
-                          className={`text-white/40 shrink-0 transition-transform duration-200 ${
-                            open[item.label] ? 'rotate-0' : '-rotate-90'
-                          }`}
-                        />
-                      </>
+                      <span className="text-[13px] text-white/70 group-hover:text-white transition-colors">{item.label}</span>
                     )}
                   </button>
                   
@@ -853,32 +943,33 @@ export function Sidebar() {
                   
                   {/* Expanded submenu */}
                   {sidebarOpen && (
-                    <div
-                      className={`overflow-hidden transition-all duration-300 ease-out ${
-                        open[item.label] ? 'max-h-[min(24rem,70vh)] opacity-100' : 'max-h-0 opacity-0'
-                      }`}
-                    >
-                      <ul className="ml-3 mt-1 mb-2 space-y-0.5 border-l-2 border-white/25 pl-2">
+                    <div className={`overflow-hidden transition-all duration-300 ease-out ${open[item.label] ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}`}>
+                      <ul className="ml-6 mt-1 mb-2 space-y-1 border-l border-white/5 pl-3">
                         {item.children.map((c) => {
-                          const isActive = isChildRouteActive(pathname, c.href, item.children)
-
+                          const isActive = c.href
+                            ? isChildNavActive(pathname, c.href, item.children)
+                            : false
+                          
                           return (
                             <li key={c.label}>
-                              <Link
-                                href={c.href}
-                                className={`flex items-center gap-2 text-[12.5px] px-2.5 py-2 rounded-md font-medium transition-all duration-150 ${
-                                  isActive
-                                    ? 'bg-[#16A34A]/25 text-white border-l-2 border-[#16A34A]'
-                                    : 'text-white/70 hover:bg-white/10 hover:text-white'
+                              <Link 
+                                href={c.href} 
+                                className={`flex items-center gap-2.5 text-[12.5px] px-3 py-2.5 rounded-lg font-medium transition-all duration-200 relative ${
+                                  isActive 
+                                    ? 'bg-white/15 text-white shadow-lg shadow-white/5 border border-white/20 rounded-lg' 
+                                    : 'text-white/50 hover:bg-white/5 hover:text-white/80'
                                 }`}
                               >
-                                {c.icon && typeof c.icon === 'function' && (
-                                  <c.icon
-                                    size={14}
-                                    className={`flex-shrink-0 ${isActive ? 'text-[#4ade80]' : 'text-white/50'}`}
-                                  />
+                                {isActive && (
+                                  <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-white/10 to-transparent pointer-events-none" />
                                 )}
-                                <span>{c.label}</span>
+                                {c.icon && typeof c.icon === 'function' && (
+                                  <c.icon size={14} className={`flex-shrink-0 relative z-10 ${isActive ? 'text-white' : 'text-white/50'}`} />
+                                )}
+                                <span className="relative z-10">{c.label}</span>
+                                {isActive && (
+                                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-white/40 rounded-r-full" />
+                                )}
                               </Link>
                             </li>
                           )
@@ -924,23 +1015,18 @@ export function Sidebar() {
                   >
                     <Link 
                       href={item.href || '#'} 
-                      className={`w-full flex items-center text-white/75 py-2.5 rounded-lg font-medium transition-all duration-200 group ${
-                        sidebarOpen ? 'px-3 gap-2.5 justify-start' : 'px-0 justify-center'
+                      className={`w-full flex items-center justify-center text-white/70 py-2.5 rounded-lg font-medium transition-all duration-200 group ${
+                        sidebarOpen ? 'px-3 gap-2.5 justify-start' : 'px-0'
                       } ${
-                        pathname === item.href
-                          ? `bg-[#16A34A]/25 text-white ${sidebarOpen ? 'border-l-[3px] border-[#16A34A] pl-[10px]' : ''}`
-                          : `hover:bg-white/10 hover:text-white ${sidebarOpen ? 'border-l-[3px] border-transparent' : ''}`
+                        pathname === item.href 
+                          ? 'bg-white/10 text-white shadow-sm' 
+                          : 'hover:bg-white/5 hover:text-white'
                       }`}
                       title={!sidebarOpen ? item.label : ''}
                     >
-                      {item.icon && typeof item.icon === 'function' && (
-                        <item.icon
-                          size={18}
-                          className={`flex-shrink-0 transition-colors ${
-                            pathname === item.href ? 'text-[#4ade80]' : 'text-white/55 group-hover:text-[#4ade80]'
-                          }`}
-                        />
-                      )}
+                      {item.icon && typeof item.icon === 'function' && <item.icon size={18} className={`flex-shrink-0 transition-colors ${
+                        pathname === item.href ? 'text-white' : 'text-white/60 group-hover:text-white'
+                      }`} />}
                       {sidebarOpen && (
                         <span className={`text-[13px] transition-colors ${
                           pathname === item.href ? 'text-white' : 'text-white/70 group-hover:text-white'
@@ -962,8 +1048,8 @@ export function Sidebar() {
             </li>
           ))}
         </ul>
-        </nav>
-      </aside>
+      </nav>
+    </aside>
     </>
   )
 }

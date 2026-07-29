@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const productController = require('../controllers/productController');
-const { authMiddleware, roleMiddleware } = require('../middleware/authMiddleware');
+const { authMiddleware } = require('../middleware/authMiddleware');
+const { requirePermission } = require('../middleware/permissionMiddleware');
 
 // Get active products (public endpoint for use throughout the app)
 router.get('/active', productController.getActiveProducts);
@@ -10,19 +11,15 @@ router.get('/active', productController.getActiveProducts);
 router.use(authMiddleware);
 
 // Get all products (admin only)
-router.get('/', roleMiddleware('Admin', 'Super Admin'), productController.list);
+router.get('/', requirePermission('products.list.page.view'), productController.list);
 
-// Get single product (admin only)
-router.get('/:id', roleMiddleware('Admin', 'Super Admin'), productController.getOne);
+router.get('/:id', requirePermission('products.list.page.view'), productController.getOne);
 
-// Create product (admin only)
-router.post('/', roleMiddleware('Admin', 'Super Admin'), productController.create);
+router.post('/', requirePermission('products.new.page.view'), productController.create);
 
-// Update product (admin only)
-router.put('/:id', roleMiddleware('Admin', 'Super Admin'), productController.update);
+router.put('/:id', requirePermission('products.new.page.view'), productController.update);
 
-// Delete product (admin only)
-router.delete('/:id', roleMiddleware('Admin', 'Super Admin'), productController.remove);
+router.delete('/:id', requirePermission('products.new.page.view'), productController.remove);
 
 module.exports = router;
 

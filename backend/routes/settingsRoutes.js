@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const { authMiddleware, roleMiddleware } = require('../middleware/authMiddleware');
+const { authMiddleware } = require('../middleware/authMiddleware');
+const { requirePermission } = require('../middleware/permissionMiddleware');
+const { isSuperAdminUser } = require('../utils/permissions');
 const {
   getSmsSettings,
   updateSmsSettings,
@@ -15,15 +17,25 @@ const {
   updateExpensePolicyAdmin,
 } = require('../controllers/settingsController');
 
-const adminOnly = roleMiddleware('Admin', 'Super Admin');
+const LEGACY_SETTINGS_ROLES = ['Admin', 'Super Admin'];
+
+const settingsPage = (resource) => {
+  const permissionMw = requirePermission(`settings.${resource}.page.view`);
+  return (req, res, next) => {
+    if (isSuperAdminUser(req.user) || LEGACY_SETTINGS_ROLES.includes(req.user?.role)) {
+      return next();
+    }
+    return permissionMw(req, res, next);
+  };
+};
 
 router.use(authMiddleware);
 
-router.get('/sms', adminOnly, getSmsSettings);
-router.put('/sms', adminOnly, updateSmsSettings);
+router.get('/sms', settingsPage('sms'), getSmsSettings);
+router.put('/sms', settingsPage('sms'), updateSmsSettings);
 
-router.get('/uploads', adminOnly, listUploads);
-router.post('/upload', adminOnly, (req, res, next) => {
+router.get('/uploads', settingsPage('upload'), listUploads);
+router.post('/upload', settingsPage('upload'), (req, res, next) => {
   uploadMiddleware.single('file')(req, res, (err) => {
     if (err) {
       return res.status(400).json({ message: err.message || 'Upload error' });
@@ -32,12 +44,12 @@ router.post('/upload', adminOnly, (req, res, next) => {
   });
 }, uploadDashboardData);
 
-router.get('/backup', adminOnly, getBackupSettings);
-router.put('/backup', adminOnly, updateBackupSettings);
-router.post('/backup/run', adminOnly, runBackup);
-router.get('/backup/download/:filename', adminOnly, downloadBackup);
+router.get('/backup', settingsPage('backup'), getBackupSettings);
+router.put('/backup', settingsPage('backup'), updateBackupSettings);
+router.post('/backup/run', settingsPage('backup'), runBackup);
+router.get('/backup/download/:filename', settingsPage('backup'), downloadBackup);
 
-router.get('/expense-policy', adminOnly, getExpensePolicyAdmin);
-router.put('/expense-policy', adminOnly, updateExpensePolicyAdmin);
+router.get('/expense-policy', settingsPage('expenses'), getExpensePolicyAdmin);
+router.put('/expense-policy', settingsPage('expenses'), updateExpensePolicyAdmin);
 
 module.exports = router;

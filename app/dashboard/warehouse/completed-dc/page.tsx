@@ -9,6 +9,13 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { apiRequest, resolveUploadUrl } from '@/lib/api'
+import {
+  STUDENT_TYPE_OPTIONS,
+  STUDENT_TYPE_PLACEHOLDER,
+  followUpStudentTypeSelectValue,
+  parseFollowUpStudentTypeSelectValue,
+  isShortageStudentType,
+} from '@/lib/dcStudentTypeOptions'
 import { SCHOOL_TYPE_OPTIONS } from '@/lib/warehouseOptions'
 import { Badge } from '@/components/ui/badge'
 import { shortageParentRowKey } from '@/lib/shortageDcRowKey'
@@ -16,6 +23,7 @@ import { useProducts } from '@/hooks/useProducts'
 import { fetchDcInvoiceData, type DcInvoiceData } from '@/lib/dcInvoiceData'
 import DcInvoiceViewDialog from '@/components/dc/DcInvoiceViewDialog'
 import { toast } from 'sonner'
+import { Can } from '@/components/permissions/Can'
 import { Pencil, X, Upload, FileText, Download, Loader2 } from 'lucide-react'
 import jsPDF from 'jspdf'
 
@@ -390,6 +398,22 @@ export default function CompletedDCPage() {
     const t = setTimeout(() => searchBySchoolCode(code), 500)
     return () => clearTimeout(t)
   }, [filters.schoolCode])
+
+  const followUpRowKey = (row: Row) => row.dcId || row._id
+
+  const handleFollowUpStudentTypeContinue = (row: Row) => {
+    const id = followUpRowKey(row)
+    const sel = followUpStudentTypeByDcId[id]
+    if (!sel) {
+      toast.error('Select a student type first')
+      return
+    }
+    if (isShortageStudentType(sel)) {
+      openRecordShortageDialog(row)
+      return
+    }
+    toast.info('This student type is not available yet. Only Shortage is supported today.')
+  }
 
   const openRecordShortageDialog = async (row: Row) => {
     if (!row.dcId) {
@@ -1346,17 +1370,19 @@ export default function CompletedDCPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <Button size="sm" variant="secondary" onClick={(e) => { e.stopPropagation(); openEditDialog(r) }} title="Edit"><Pencil size={14} /></Button>
                       {(r.poDocument || r.poPhotoUrl) && (
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          onClick={(e) => { 
-                            e.stopPropagation(); 
-                            openPDF(r) 
-                          }}
-                          title="View PDF"
-                        >
-                          View PDF
-                        </Button>
+                        <Can permission="warehouse.completed_dc.view_pdf">
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              openPDF(r) 
+                            }}
+                            title="View PDF"
+                          >
+                            View PDF
+                          </Button>
+                        </Can>
                       )}
                       <Button
                         size="sm"
@@ -1374,6 +1400,56 @@ export default function CompletedDCPage() {
                           'View Invoice'
                         )}
                       </Button>
+                      <Can permission="warehouse.completed_dc.replace_pdf">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            openReplacePdfDialog(r)
+                          }}
+                          title="Replace PDF"
+                        >
+                          Replace PDF
+                        </Button>
+                      </Can>
+                      <div
+                        className="flex flex-col gap-1 min-w-[200px]"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Select
+                          value={followUpStudentTypeSelectValue(followUpStudentTypeByDcId[followUpRowKey(r)])}
+                          onValueChange={(v) =>
+                            setFollowUpStudentTypeByDcId((p) => ({
+                              ...p,
+                              [followUpRowKey(r)]: parseFollowUpStudentTypeSelectValue(v),
+                            }))
+                          }
+                        >
+                          <SelectTrigger className="h-8 text-xs border-orange-200">
+                            <SelectValue placeholder="Student type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={STUDENT_TYPE_PLACEHOLDER}>Select student type</SelectItem>
+                            {STUDENT_TYPE_OPTIONS.map((opt) => (
+                              <SelectItem key={opt} value={opt}>
+                                {opt}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleFollowUpStudentTypeContinue(r)
+                          }}
+                          className="border-orange-200 text-orange-700 hover:bg-orange-50"
+                        >
+                          Continue
+                        </Button>
+                      </div>
                     </div>
                   </TableCell>
                   <TableCell className="truncate max-w-[240px]">{r.remarks || '-'}</TableCell>
@@ -1596,6 +1672,89 @@ export default function CompletedDCPage() {
         onOpenChange={setInvoiceModalOpen}
         invoiceData={invoiceData}
       />
+
+      {/* Replace PDF Dialog */}
+      <Dialog open={!!replacingPdfFor} onOpenChange={(open) => {
+        if (!open) {
+          setReplacingPdfFor(null)
+          setUploadedPdf(null)
+          setPdfPreview(null)
+        }
+      }}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Replace PDF Document</DialogTitle>
+            <DialogDescription>
+              Replace PDF document for DC No: {replacingPdfFor?.dcNo}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label>PDF Document</Label>
+              <div className="mt-1 space-y-2">
+                {pdfPreview && (
+                  <div className="flex items-center gap-2 p-2 bg-neutral-50 rounded border">
+                    <FileText className="h-4 w-4 text-neutral-600" />
+                    <span className="text-sm text-neutral-700 flex-1">
+                      {uploadedPdf ? uploadedPdf.name : 'Current PDF document'}
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setUploadedPdf(null)
+                        setPdfPreview(null)
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="file"
+                    accept="application/pdf"
+                    onChange={handlePdfUpload}
+                    className="hidden"
+                    id="pdf-replace-upload"
+                  />
+                  <Label
+                    htmlFor="pdf-replace-upload"
+                    className="flex items-center gap-2 px-4 py-2 border border-neutral-300 rounded-md cursor-pointer hover:bg-neutral-50 transition-colors"
+                  >
+                    <Upload className="h-4 w-4" />
+                    <span className="text-sm">{uploadedPdf ? 'Change PDF' : pdfPreview ? 'Replace PDF' : 'Upload PDF'}</span>
+                  </Label>
+                  {pdfPreview && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        window.open(pdfPreview, '_blank')
+                      }}
+                    >
+                      View PDF
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-neutral-500">Upload a PDF file (max 10MB)</p>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setReplacingPdfFor(null)
+              setUploadedPdf(null)
+              setPdfPreview(null)
+            }}>Cancel</Button>
+            <Button onClick={handleReplacePdf} disabled={saving || !uploadedPdf}>
+              {saving ? 'Replacing...' : 'Replace PDF'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* PDF Viewer Dialog */}
       <Dialog open={!!pdfUrl} onOpenChange={(open) => {

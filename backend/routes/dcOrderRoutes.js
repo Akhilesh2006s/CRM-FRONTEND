@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { authMiddleware } = require('../middleware/authMiddleware');
+const { requirePermissionWhen } = require('../middleware/permissionMiddleware');
 const ctrl = require('../controllers/dcOrderController');
 
 // Static path first so it is not matched by /:id (would 404 as invalid ObjectId)
@@ -22,7 +23,24 @@ router.put('/:id/complete', authMiddleware, ctrl.complete);
 router.put('/:id/hold', authMiddleware, ctrl.hold);
 router.get('/:id/history', authMiddleware, ctrl.getHistory);
 router.get('/:id', authMiddleware, ctrl.getOne);
-router.put('/:id', authMiddleware, ctrl.update);
+router.put(
+  '/:id',
+  authMiddleware,
+  requirePermissionWhen(
+    (req) => req.body?.status === 'dc_requested',
+    'clients.closed_sales.request_dc'
+  ),
+  requirePermissionWhen(
+    (req) =>
+      req.body?.status &&
+      req.body.status !== 'dc_requested' &&
+      ['dc_accepted', 'dc_approved', 'dc_sent_to_senior', 'pending', 'in_transit'].includes(
+        req.body.status
+      ),
+    'clients.closed_sales.approve_dc'
+  ),
+  ctrl.update
+);
 
 module.exports = router;
 

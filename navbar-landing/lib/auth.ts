@@ -1,24 +1,17 @@
 'use client'
 
+import type { AuthUserWithPermissions } from './permissions'
+import { persistAuthUser } from './permissions'
 import { apiRequest } from './api'
 
-type AuthResponse = {
-  _id: string
-  name: string
-  email: string
-  role: string
-  token: string
-}
+type AuthResponse = AuthUserWithPermissions
 
-export async function login(email: string, password: string) {
+export async function login(mobile: string, password: string) {
   const data = await apiRequest<AuthResponse>('/auth/login', {
     method: 'POST',
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ mobile, email: mobile, password }),
   })
-  if (typeof window !== 'undefined') {
-    localStorage.setItem('authToken', data.token)
-    localStorage.setItem('authUser', JSON.stringify(data))
-  }
+  persistAuthUser(data)
   return data
 }
 
@@ -34,10 +27,7 @@ export async function registerUser(payload: {
     method: 'POST',
     body: JSON.stringify(payload),
   })
-  if (typeof window !== 'undefined') {
-    localStorage.setItem('authToken', data.token)
-    localStorage.setItem('authUser', JSON.stringify(data))
-  }
+  persistAuthUser(data)
   return data
 }
 
@@ -48,14 +38,26 @@ export function logout() {
   }
 }
 
-export function getCurrentUser(): AuthResponse | null {
+export function getCurrentUser(): AuthUserWithPermissions | null {
   if (typeof window === 'undefined') return null
   const raw = localStorage.getItem('authUser')
   if (!raw) return null
   try {
-    return JSON.parse(raw) as AuthResponse
+    return JSON.parse(raw) as AuthUserWithPermissions
   } catch {
     return null
+  }
+}
+
+export async function refreshAuthUser(): Promise<AuthUserWithPermissions | null> {
+  try {
+    const me = await apiRequest<AuthUserWithPermissions>('/auth/me')
+    const existing = getCurrentUser()
+    const merged = { ...existing, ...me, token: existing?.token || '' } as AuthUserWithPermissions
+    persistAuthUser(merged)
+    return merged
+  } catch {
+    return getCurrentUser()
   }
 }
 

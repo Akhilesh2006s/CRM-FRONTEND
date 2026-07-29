@@ -32,6 +32,7 @@ const {
   uploadPOMiddleware,
 } = require('../controllers/dcController');
 const { authMiddleware } = require('../middleware/authMiddleware');
+const { requirePermission, requirePermissionWhen } = require('../middleware/permissionMiddleware');
 
 // Get all DCs with filtering
 router.get('/', authMiddleware, getDCs);
@@ -80,7 +81,7 @@ router.post('/:id/submit-to-manager', authMiddleware, submitDCToManager);
 router.post('/:id/record-shortage', authMiddleware, recordShortageDC);
 
 // Legacy actions
-router.post('/raise', authMiddleware, raiseDC);
+router.post('/raise', authMiddleware, requirePermission('clients.closed_sales.approve_dc'), raiseDC);
 router.post('/:id/request-warehouse', authMiddleware, requestWarehouse);
 router.post('/:id/warehouse-submit', authMiddleware, warehouseSubmit);
 router.post('/:id/delivery-submit', authMiddleware, deliverySubmit);
@@ -88,7 +89,17 @@ router.post('/:id/complete', authMiddleware, completeDC);
 router.post('/:id/hold', authMiddleware, holdDC);
 
 // Update DC
-router.put('/:id', authMiddleware, updateDC);
+router.put(
+  '/:id',
+  authMiddleware,
+  requirePermissionWhen(
+    (req) =>
+      req.body &&
+      (req.body.poDocument !== undefined || req.body.poPhotoUrl !== undefined),
+    'warehouse.completed_dc.replace_pdf'
+  ),
+  updateDC
+);
 
 // Get single DC
 router.get('/:id', authMiddleware, getDC);

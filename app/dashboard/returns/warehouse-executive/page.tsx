@@ -6,6 +6,7 @@ import { apiRequest } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { toast } from 'sonner'
+import { Can } from '@/components/permissions/Can'
 import { NotebookPen, ArrowUpDown } from 'lucide-react'
 
 type DcOrderRef = {
@@ -267,21 +268,23 @@ export default function WarehouseExecutiveStockReturnsPage() {
                     <td className="py-2.5 px-3 whitespace-nowrap text-xs">
                       {returnItem.status || returnItem.returnStatus || '-'}
                     </td>
-                    <td className="py-2.5 px-3 text-center">
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        className="h-9 w-9 text-amber-700 hover:bg-amber-50"
-                        title={
-                          canWarehouseEdit(returnItem)
-                            ? 'Enter received qty and verify'
-                            : 'View only (not Submitted)'
-                        }
-                        onClick={() => openReturnUpdate(returnItem)}
-                      >
-                        <NotebookPen className="w-5 h-5" />
-                      </Button>
+                      <td className="py-2.5 px-3 text-center">
+                      <Can permission="returns.warehouse.verify">
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-9 w-9 text-amber-700 hover:bg-amber-50"
+                          title={
+                            canWarehouseEdit(returnItem)
+                              ? 'Enter received qty and verify'
+                              : 'View only (not Submitted)'
+                          }
+                          onClick={() => openReturnUpdate(returnItem)}
+                        >
+                          <NotebookPen className="w-5 h-5" />
+                        </Button>
+                      </Can>
                     </td>
                   </tr>
                 ))

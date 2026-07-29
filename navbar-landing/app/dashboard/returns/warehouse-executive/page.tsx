@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
+import { Can } from '@/components/permissions/Can'
 import { Eye, X, Upload, CheckCircle2 } from 'lucide-react'
 
 type StockReturn = {
@@ -643,17 +644,19 @@ export default function WarehouseExecutiveStockReturnsPage() {
             <Button variant="outline" onClick={() => setViewReturnDialogOpen(false)}>
               Cancel
             </Button>
-            <Button
-              onClick={submitToManager}
-              disabled={submitting || !selectedReturn || !canVerifyReturn(selectedReturn.status)}
-            >
-              {submitting ? 'Submitting...' : (
-                <>
-                  <CheckCircle2 className="w-4 h-4 mr-2" />
-                  Submit to Warehouse Manager
-                </>
-              )}
-            </Button>
+            <Can permission="returns.warehouse.verify">
+              <Button
+                onClick={submitToManager}
+                disabled={submitting || !selectedReturn || !canVerifyReturn(selectedReturn.status)}
+              >
+                {submitting ? 'Submitting...' : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 mr-2" />
+                    Submit to Warehouse Manager
+                  </>
+                )}
+              </Button>
+            </Can>
           </DialogFooter>
         </DialogContent>
       </Dialog>

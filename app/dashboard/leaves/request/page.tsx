@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { apiRequest } from '@/lib/api'
@@ -11,25 +11,12 @@ import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
-import { getCurrentUser } from '@/lib/auth'
-import { canApplyForLeave, getLeaveAccessDeniedRedirect } from '@/lib/leaveAccess'
 import { todayDateString, isBeforeToday } from '@/lib/todayDate'
+
+const LEAVE_REQUEST_PATH = '/dashboard/leaves/request'
 
 export default function LeaveRequestPage() {
   const router = useRouter()
-  const currentUser = getCurrentUser()
-
-  useEffect(() => {
-    if (!currentUser) {
-      router.push('/auth/login')
-      return
-    }
-    if (!canApplyForLeave(currentUser.role)) {
-      toast.error('You do not have permission to access this page.')
-      router.push(getLeaveAccessDeniedRedirect(currentUser.role))
-    }
-  }, [currentUser, router])
-
   const [form, setForm] = useState({ leaveType: 'Casual Leave', startDate: '', endDate: '', reason: '' })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -72,89 +59,85 @@ export default function LeaveRequestPage() {
     }
   }
 
-  if (!currentUser || !canApplyForLeave(currentUser.role)) {
-    return null
-  }
-
   const minDate = todayDateString()
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Apply for Leave</h1>
-        <Link
-          href="/dashboard/leaves/approved"
-          className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-        >
-          View My Leaves
+        <Link href="/dashboard/leaves/approved">
+          <Button variant="outline">View My Leaves</Button>
         </Link>
       </div>
-      <Card className="p-4 md:p-6">
-        <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label>Leave Type</Label>
-            <Select value={form.leaveType} onValueChange={(v) => setForm((f) => ({ ...f, leaveType: v }))}>
-              <SelectTrigger className="bg-white text-neutral-900">
-                <SelectValue />
+
+      <Card className="p-6 shadow-sm max-w-2xl">
+        <form onSubmit={onSubmit} className="space-y-4">
+          {error && (
+            <div className="p-3 rounded-md bg-red-50 text-red-700 text-sm border border-red-200">{error}</div>
+          )}
+
+          <div>
+            <Label htmlFor="leaveType">Leave Type</Label>
+            <Select
+              value={form.leaveType}
+              onValueChange={(v) => setForm((f) => ({ ...f, leaveType: v }))}
+            >
+              <SelectTrigger className="mt-1 bg-white">
+                <SelectValue placeholder="Select leave type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Sick Leave">Sick Leave</SelectItem>
-                <SelectItem value="Annual Leave">Annual Leave</SelectItem>
                 <SelectItem value="Casual Leave">Casual Leave</SelectItem>
-                <SelectItem value="Emergency Leave">Emergency Leave</SelectItem>
+                <SelectItem value="Sick Leave">Sick Leave</SelectItem>
+                <SelectItem value="Earned Leave">Earned Leave</SelectItem>
                 <SelectItem value="Other">Other</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="leave-start">Start Date</Label>
-            <Input
-              id="leave-start"
-              className="bg-white text-neutral-900"
-              type="date"
-              name="startDate"
-              value={form.startDate}
-              min={minDate}
-              onChange={onChange}
-              required
-            />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="startDate">Start Date</Label>
+              <Input
+                id="startDate"
+                name="startDate"
+                type="date"
+                min={minDate}
+                className="bg-white mt-1"
+                value={form.startDate}
+                onChange={onChange}
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="endDate">End Date</Label>
+              <Input
+                id="endDate"
+                name="endDate"
+                type="date"
+                min={minDate}
+                className="bg-white mt-1"
+                value={form.endDate}
+                onChange={onChange}
+                required
+              />
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="leave-end">End Date</Label>
-            <Input
-              id="leave-end"
-              className="bg-white text-neutral-900"
-              type="date"
-              name="endDate"
-              value={form.endDate}
-              min={form.startDate && form.startDate >= minDate ? form.startDate : minDate}
-              onChange={onChange}
-              required
-            />
-          </div>
-          <div className="md:col-span-2 space-y-2">
-            <Label htmlFor="leave-reason">Reason</Label>
+
+          <div>
+            <Label htmlFor="reason">Reason</Label>
             <Textarea
-              id="leave-reason"
-              className="bg-white text-neutral-900"
+              id="reason"
               name="reason"
+              className="bg-white mt-1 min-h-[100px]"
               value={form.reason}
               onChange={onChange}
               required
-              placeholder="Brief reason for leave"
             />
           </div>
-          {error && <div className="md:col-span-2 text-red-600 text-sm">{error}</div>}
-          <div className="md:col-span-2 flex flex-wrap gap-3">
-            <Button type="submit" disabled={submitting} className="bg-blue-600 hover:bg-blue-700 text-white">
-              {submitting ? 'Submitting…' : 'Submit Request'}
-            </Button>
-            <Link href="/dashboard/leaves/approved">
-              <Button type="button" variant="outline">
-                Cancel
-              </Button>
-            </Link>
-          </div>
+
+          <Button type="submit" disabled={submitting}>
+            {submitting ? 'Submitting…' : 'Submit Leave Request'}
+          </Button>
         </form>
       </Card>
     </div>

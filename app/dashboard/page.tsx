@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { getCurrentUser } from '@/lib/auth'
+import { usePermissions } from '@/components/permissions/PermissionsProvider'
 import VendorDashboard from '@/components/dashboard/VendorDashboard'
 import {
   AI_TEASER_TOOLS,
@@ -184,6 +185,7 @@ export default function DashboardPage() {
   const [executiveAnalytics, setExecutiveAnalytics] = useState<any>(null)
   const [executiveLoading, setExecutiveLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState<any>(null)
+  const { user: permUser } = usePermissions()
   const [pendingLeaveCount, setPendingLeaveCount] = useState(0)
   const [teamPendingLeaveCount, setTeamPendingLeaveCount] = useState(0)
 
@@ -207,8 +209,10 @@ export default function DashboardPage() {
     setCurrentUser(user)
   }, [])
 
+  const leaveContextUser = permUser || currentUser
+
   useEffect(() => {
-    if (!currentUser?._id || !showDashboardLeaveSection(currentUser.role)) return
+    if (!currentUser?._id || !showDashboardLeaveSection(leaveContextUser)) return
 
     const role = currentUser.role
     if (canManageTeamLeaves(role)) {
@@ -222,7 +226,7 @@ export default function DashboardPage() {
     apiRequest<{ status: string }[]>(`/leaves?employeeId=${currentUser._id}&status=Pending`)
       .then((data) => setPendingLeaveCount(Array.isArray(data) ? data.length : 0))
       .catch(() => setPendingLeaveCount(0))
-  }, [currentUser?._id, currentUser?.role])
+  }, [currentUser?._id, currentUser?.role, leaveContextUser])
 
   const fetchExecutiveAnalytics = async () => {
     setExecutiveLoading(true)
@@ -472,11 +476,11 @@ export default function DashboardPage() {
         })}
       </div>
 
-      {showDashboardLeaveSection(role) && (
+      {showDashboardLeaveSection(leaveContextUser) && (
         <div className="space-y-3">
           <h2 className="text-lg font-semibold text-neutral-900">Leave Management</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {getDashboardLeaveCards(role).map((card) => {
+            {getDashboardLeaveCards(leaveContextUser).map((card) => {
               const styles =
                 card.variant === 'pending'
                   ? {

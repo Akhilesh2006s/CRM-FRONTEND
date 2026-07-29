@@ -9,7 +9,6 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import { Toaster } from '@/components/ui/sonner'
 import { toast } from 'sonner'
 import { login } from '@/lib/auth'
 import Link from 'next/link'
@@ -114,7 +113,6 @@ export default function LoginPage() {
           </motion.div>
         </main>
       </div>
-      <Toaster richColors position="top-center" />
     </div>
   )
 }

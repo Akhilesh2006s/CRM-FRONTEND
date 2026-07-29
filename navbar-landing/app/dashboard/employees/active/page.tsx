@@ -9,10 +9,23 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { apiRequest } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
+import { Can } from '@/components/permissions/Can'
+import { usePermissions } from '@/components/permissions/PermissionsProvider'
 import { toast } from 'sonner'
 import { Pencil } from 'lucide-react'
 
-type Employee = { _id: string; name: string; email: string; phone?: string; role: string; department?: string; cluster?: string }
+type Employee = {
+  _id: string
+  name: string
+  email: string
+  phone?: string
+  mobile?: string
+  role: string
+  roleId?: string | null
+  department?: string
+  cluster?: string
+  inactiveReason?: string
+}
 
 export default function ActiveEmployeesPage() {
   const [items, setItems] = useState<Employee[]>([])
@@ -24,17 +37,24 @@ export default function ActiveEmployeesPage() {
     name: '',
     email: '',
     phone: '',
+    mobile: '',
     role: '',
+    roleId: '' as string,
     department: '',
     cluster: '',
   })
   const [saving, setSaving] = useState(false)
+  const [rbacRoles, setRbacRoles] = useState<Array<{ _id: string; name: string }>>([])
   
   // Get current user to check role
   const currentUser = getCurrentUser()
+  const { rbacActive, hasPermission } = usePermissions()
+  const isSuperAdmin = currentUser?.isSuperAdmin || currentUser?.role === 'Super Admin'
   const isCoordinator = currentUser?.role === 'Coordinator'
   const isSeniorCoordinator = currentUser?.role === 'Senior Coordinator'
-  const shouldHideAction = isCoordinator || isSeniorCoordinator
+  const shouldHideAction = rbacActive
+    ? !hasPermission('employees.active.edit') && !hasPermission('employees.active.delete')
+    : isCoordinator || isSeniorCoordinator
   
   const availableRoles = ['Executive', 'Trainer', 'Finance Manager', 'Coordinator', 'Senior Coordinator', 'Manager', 'Admin', 'Super Admin', 'Executive Manager']
 
@@ -49,6 +69,12 @@ export default function ActiveEmployeesPage() {
   }
 
   useEffect(() => { load() }, [])
+  useEffect(() => {
+    if (!isSuperAdmin) return
+    apiRequest<Array<{ _id: string; name: string }>>('/roles')
+      .then(setRbacRoles)
+      .catch(() => {})
+  }, [isSuperAdmin])
 
   const resetPassword = async (id: string, name: string) => {
     if (!confirm(`Reset password for ${name} to "Password123"?`)) return
@@ -67,7 +93,9 @@ export default function ActiveEmployeesPage() {
       name: employee.name || '',
       email: employee.email || '',
       phone: employee.phone || '',
+      mobile: employee.mobile || '',
       role: employee.role || '',
+      roleId: employee.roleId || '',
       department: employee.department || '',
       cluster: employee.cluster || '',
     })
@@ -97,13 +125,26 @@ export default function ActiveEmployeesPage() {
         body: JSON.stringify({
           name: editForm.name.trim(),
           email: editForm.email.trim(),
-          phone: editForm.phone || '0',
+          phone: editForm.phone || editForm.mobile || '',
+          mobile: editForm.mobile || editForm.phone || '',
           role: editForm.role,
           department: editForm.department || undefined,
           cluster: editForm.cluster || undefined,
         }),
       })
+      if (isSuperAdmin) {
+        const body = { roleId: editForm.roleId ? editForm.roleId : null }
+        await apiRequest(`/users/${editingEmployee._id}/role`, {
+          method: 'PUT',
+          body: JSON.stringify(body),
+        })
+      }
       toast.success('Employee updated successfully')
+      if (isSuperAdmin) {
+        toast.message('RBAC note', {
+          description: 'User should log out and log back in to refresh permissions.',
+        })
+      }
       setEditDialogOpen(false)
       setEditingEmployee(null)
       load()
@@ -114,10 +155,27 @@ export default function ActiveEmployeesPage() {
     }
   }
 
-  const filtered = items.filter(e => 
-    e.name.toLowerCase().includes(q.toLowerCase()) || 
-    e.email.toLowerCase().includes(q.toLowerCase()) || 
+  const displayMobile = (e: Employee) => e.mobile || (e.phone && e.phone !== '0' ? e.phone : '') || '-'
+
+  const deactivate = async (id: string, name: string) => {
+    if (!confirm(`Deactivate ${name}?`)) return
+    try {
+      await apiRequest(`/employees/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ isActive: false, inactiveReason: 'manual' }),
+      })
+      toast.success(`${name} deactivated`)
+      load()
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to deactivate')
+    }
+  }
+
+  const filtered = items.filter(e =>
+    e.name.toLowerCase().includes(q.toLowerCase()) ||
+    e.email.toLowerCase().includes(q.toLowerCase()) ||
     (e.phone || '').includes(q) ||
+    (e.mobile || '').includes(q) ||
     (e.cluster || '').toLowerCase().includes(q.toLowerCase())
   )
 
@@ -125,7 +183,7 @@ export default function ActiveEmployeesPage() {
     <div className="space-y-6">
       <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Employees List</h1>
       <div className="flex gap-2">
-        <Input placeholder="Search name/email/phone/cluster" value={q} onChange={(e) => setQ(e.target.value)} />
+        <Input placeholder="Search name/email/mobile/cluster" value={q} onChange={(e) => setQ(e.target.value)} />
         <Button onClick={load}>Refresh</Button>
       </div>
       <Card className="p-0 overflow-x-auto">
@@ -134,7 +192,7 @@ export default function ActiveEmployeesPage() {
             <tr className="text-neutral-600 border-b bg-neutral-50">
               <th className="py-2 px-3 text-left">Name</th>
               <th className="py-2 px-3 text-left">Email</th>
-              <th className="py-2 px-3">Phone</th>
+              <th className="py-2 px-3">Mobile</th>
               <th className="py-2 px-3">Role</th>
               <th className="py-2 px-3">Department</th>
               <th className="py-2 px-3">Cluster</th>
@@ -146,20 +204,27 @@ export default function ActiveEmployeesPage() {
               <tr key={e._id} className="border-b last:border-0">
                 <td className="py-2 px-3">{e.name}</td>
                 <td className="py-2 px-3">{e.email}</td>
-                <td className="py-2 px-3 text-center">{e.phone || '-'}</td>
+                <td className="py-2 px-3 text-center">{displayMobile(e)}</td>
                 <td className="py-2 px-3 text-center">{e.role}</td>
                 <td className="py-2 px-3 text-center">{e.department || '-'}</td>
                 <td className="py-2 px-3 text-center">{e.cluster || '-'}</td>
                 {!shouldHideAction && (
                   <td className="py-2 px-3 text-right">
                     <div className="flex gap-2 justify-end">
-                      <Button size="sm" variant="outline" onClick={() => openEditDialog(e)}>
-                        <Pencil className="w-3 h-3 mr-1" />
-                        Edit
-                      </Button>
-                      <Button size="sm" variant="secondary" onClick={() => resetPassword(e._id, e.name)}>
-                        Reset Password
-                      </Button>
+                      <Can permission="employees.active.edit">
+                        <Button size="sm" variant="outline" onClick={() => openEditDialog(e)}>
+                          <Pencil className="w-3 h-3 mr-1" />
+                          Edit
+                        </Button>
+                        <Button size="sm" variant="secondary" onClick={() => resetPassword(e._id, e.name)}>
+                          Reset Password
+                        </Button>
+                      </Can>
+                      <Can permission="employees.active.delete">
+                        <Button size="sm" variant="outline" className="text-amber-700 border-amber-300" onClick={() => deactivate(e._id, e.name)}>
+                          Deactivate
+                        </Button>
+                      </Can>
                     </div>
                   </td>
                 )}
@@ -205,13 +270,24 @@ export default function ActiveEmployeesPage() {
             </div>
             
             <div>
-              <Label htmlFor="edit-phone">Phone</Label>
+              <Label htmlFor="edit-mobile">Mobile *</Label>
+              <Input
+                id="edit-mobile"
+                type="tel"
+                value={editForm.mobile}
+                onChange={(e) => setEditForm({ ...editForm, mobile: e.target.value })}
+                placeholder="Primary mobile number"
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-phone">Phone (optional)</Label>
               <Input
                 id="edit-phone"
                 type="tel"
                 value={editForm.phone}
                 onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-                placeholder="Enter phone number"
+                placeholder="Secondary phone"
                 className="mt-1"
               />
             </div>
@@ -229,6 +305,33 @@ export default function ActiveEmployeesPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {isSuperAdmin && (
+              <div>
+                <Label>Permission Role (RBAC)</Label>
+                <Select
+                  value={editForm.roleId || '__none__'}
+                  onValueChange={(v) =>
+                    setEditForm({
+                      ...editForm,
+                      roleId: v === '__none__' ? '' : v,
+                    })
+                  }
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Default from legacy role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">— Default from legacy role —</SelectItem>
+                    {rbacRoles.map((r) => (
+                      <SelectItem key={r._id} value={r._id}>
+                        {r.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             
             <div>
               <Label htmlFor="edit-department">Department</Label>
