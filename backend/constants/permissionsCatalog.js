@@ -196,6 +196,8 @@ const ROLE_TEMPLATE_KEYS = {
     moduleKey('clients'),
     pageKey('clients', 'my_clients'),
     pageKey('clients', 'my_clients_term_wise'),
+    // Needed for My Clients → Request DC (moves sale to Closed Sales as dc_requested)
+    buttonKey('clients', 'closed_sales', 'request_dc'),
     moduleKey('payments'),
     pageKey('payments', 'pending'),
     pageKey('payments', 'add'),

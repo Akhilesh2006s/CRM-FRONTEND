@@ -79,6 +79,14 @@ async function loadUserPermissions(user) {
 function hasPermission(permissionKeys, key, user) {
   if (!key) return true;
   if (isSuperAdminUser(user)) return true;
+  // Executives request DC from My Clients; keep working even if Role docs were seeded before this key existed
+  if (
+    key === 'clients.closed_sales.request_dc' &&
+    user &&
+    ['Executive', 'Sales BDE', 'Admin', 'Coordinator', 'Senior Coordinator'].includes(user.role)
+  ) {
+    return true;
+  }
   if (!permissionKeys || !Array.isArray(permissionKeys)) return false;
   return permissionKeys.includes(key);
 }

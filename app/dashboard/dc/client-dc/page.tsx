@@ -1739,13 +1739,19 @@ export default function ClientDCPage() {
               ? selectedDC.dcOrderId._id 
               : selectedDC.dcOrderId
           })
-          // Continue even if DcOrder update fails, but show warning
-          toast.warning('DC updated but failed to update DcOrder status. Please check Closed Sales manually.')
+          // Do not show success for Closed Sales if DcOrder never became dc_requested
+          throw new Error(
+            dcOrderErr?.message ||
+              'Failed to move sale to Closed Sales (dc_requested). Check Request DC permission and transport fields.'
+          )
         }
       } else if (term2Only) {
         console.log('📦 Term 2 only DC - no DcOrder update needed, appears in Term-Wise DC (NOT Closed Sales)')
       } else {
         console.warn('⚠️ No dcOrderId found on DC, cannot update DcOrder status')
+        throw new Error(
+          'This client request has no linked sale/DcOrder, so it cannot appear in Closed Sales.'
+        )
       }
 
       // If PO photo is provided and status is created, also submit PO
