@@ -68,8 +68,17 @@ async function loadUserPermissions(user) {
     };
   }
 
+  const fromDb = Array.isArray(role.permissionKeys) ? role.permissionKeys : [];
+  // System roles: keep DB keys and ensure catalog template keys (e.g. Request DC for Executive)
+  const template =
+    role.isSystem && role.slug && ROLE_TEMPLATE_KEYS[role.slug]
+      ? ROLE_TEMPLATE_KEYS[role.slug]
+      : [];
+  const permissionKeys =
+    template.length > 0 ? [...new Set([...fromDb, ...template])] : fromDb;
+
   return {
-    permissionKeys: role.permissionKeys || [],
+    permissionKeys,
     isSuperAdmin: false,
     roleName: role.name,
     roleId: role._id,
@@ -79,14 +88,6 @@ async function loadUserPermissions(user) {
 function hasPermission(permissionKeys, key, user) {
   if (!key) return true;
   if (isSuperAdminUser(user)) return true;
-  // Executives request DC from My Clients; keep working even if Role docs were seeded before this key existed
-  if (
-    key === 'clients.closed_sales.request_dc' &&
-    user &&
-    ['Executive', 'Sales BDE', 'Admin', 'Coordinator', 'Senior Coordinator'].includes(user.role)
-  ) {
-    return true;
-  }
   if (!permissionKeys || !Array.isArray(permissionKeys)) return false;
   return permissionKeys.includes(key);
 }

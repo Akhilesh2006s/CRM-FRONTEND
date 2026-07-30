@@ -1739,19 +1739,23 @@ export default function ClientDCPage() {
               ? selectedDC.dcOrderId._id 
               : selectedDC.dcOrderId
           })
-          // Do not show success for Closed Sales if DcOrder never became dc_requested
-          throw new Error(
-            dcOrderErr?.message ||
-              'Failed to move sale to Closed Sales (dc_requested). Check Request DC permission and transport fields.'
-          )
+          const msg = String(dcOrderErr?.message || '')
+          if (/403|insufficient permissions|access denied/i.test(msg)) {
+            toast.error(
+              'Request DC blocked: your role is missing “Request DC” permission. Ask Super Admin to grant clients.closed_sales.request_dc (or redeploy with Executive role fix).'
+            )
+          } else {
+            toast.warning(
+              msg ||
+                'DC updated but failed to update DcOrder status. Please check Closed Sales manually.'
+            )
+          }
+          return
         }
       } else if (term2Only) {
         console.log('📦 Term 2 only DC - no DcOrder update needed, appears in Term-Wise DC (NOT Closed Sales)')
       } else {
         console.warn('⚠️ No dcOrderId found on DC, cannot update DcOrder status')
-        throw new Error(
-          'This client request has no linked sale/DcOrder, so it cannot appear in Closed Sales.'
-        )
       }
 
       // If PO photo is provided and status is created, also submit PO

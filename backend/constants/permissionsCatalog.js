@@ -117,7 +117,7 @@ const PAGE_ENTRIES = [
 const BUTTON_ENTRIES = [
   { key: buttonKey('warehouse', 'completed_dc', 'view_pdf'), module: 'warehouse', resource: 'completed_dc', action: 'view_pdf', label: 'View PDF (Completed DC)' },
   { key: buttonKey('warehouse', 'completed_dc', 'replace_pdf'), module: 'warehouse', resource: 'completed_dc', action: 'replace_pdf', label: 'Replace PDF (Completed DC)' },
-  { key: buttonKey('clients', 'closed_sales', 'request_dc'), module: 'clients', resource: 'closed_sales', action: 'request_dc', label: 'Request DC (Closed Sales)' },
+  { key: buttonKey('clients', 'closed_sales', 'request_dc'), module: 'clients', resource: 'closed_sales', action: 'request_dc', label: 'Request DC (My Clients → Closed Sales)' },
   { key: buttonKey('clients', 'closed_sales', 'approve_dc'), module: 'clients', resource: 'closed_sales', action: 'approve_dc', label: 'Approve DC (Closed Sales)' },
   { key: buttonKey('employees', 'active', 'add'), module: 'employees', resource: 'active', action: 'add', label: 'Add Employee' },
   { key: buttonKey('employees', 'active', 'edit'), module: 'employees', resource: 'active', action: 'edit', label: 'Edit Employee' },
@@ -196,7 +196,7 @@ const ROLE_TEMPLATE_KEYS = {
     moduleKey('clients'),
     pageKey('clients', 'my_clients'),
     pageKey('clients', 'my_clients_term_wise'),
-    // Needed for My Clients → Request DC (moves sale to Closed Sales as dc_requested)
+    // My Clients → Request DC (moves sale to Closed Sales as dc_requested)
     buttonKey('clients', 'closed_sales', 'request_dc'),
     moduleKey('payments'),
     pageKey('payments', 'pending'),
