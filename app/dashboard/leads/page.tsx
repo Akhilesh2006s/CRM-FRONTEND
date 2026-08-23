@@ -4,7 +4,15 @@ import { useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { apiRequest } from '@/lib/api'
 
-type Lead = { _id: string; name?: string; zone?: string; status?: string }
+type Lead = { _id: string; name?: string; school_name?: string; zone?: string; status?: string; lead_status?: string }
+
+function normalizeLeadsResponse(res: unknown): Lead[] {
+  if (Array.isArray(res)) return res
+  if (res && typeof res === 'object' && Array.isArray((res as { data?: unknown }).data)) {
+    return (res as { data: Lead[] }).data
+  }
+  return []
+}
 
 export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([])
@@ -13,18 +21,22 @@ export default function LeadsPage() {
   useEffect(() => {
     ;(async () => {
       try {
-        const data = await apiRequest<Lead[]>('/leads')
-        setLeads(data)
-      } catch (_) {}
+        const data = await apiRequest<Lead[] | { data?: Lead[] }>('/leads')
+        setLeads(normalizeLeadsResponse(data))
+      } catch (_) {
+        setLeads([])
+      }
       setLoading(false)
     })()
   }, [])
 
+  const leadList = Array.isArray(leads) ? leads : []
+
   const totals = {
-    total: leads.length,
-    hot: leads.filter((l) => l.status === 'Hot').length,
-    warm: leads.filter((l) => l.status === 'Warm').length,
-    cold: leads.filter((l) => l.status === 'Cold').length,
+    total: leadList.length,
+    hot: leadList.filter((l) => (l.status || l.lead_status) === 'Hot').length,
+    warm: leadList.filter((l) => (l.status || l.lead_status) === 'Warm').length,
+    cold: leadList.filter((l) => (l.status || l.lead_status) === 'Cold').length,
   }
 
   return (
@@ -44,13 +56,15 @@ export default function LeadsPage() {
       <Card className="p-0 overflow-hidden">
         <div className="bg-[#eef3f9] px-4 py-3 font-semibold text-[#454c53]">Leads by Zone</div>
         <div className="p-4 text-sm text-neutral-700">
-          {!loading && leads.length === 0 && 'No leads yet.'}
-          {leads.slice(0, 20).map((l) => (
-            <div key={l._id} className="flex items-center justify-between py-2 border-b last:border-0">
-              <div className="font-medium text-neutral-900">{l.name || 'Lead'}</div>
-              <div className="text-neutral-500">{l.zone || '-'}</div>
-            </div>
-          ))}
+          {loading && 'Loading...'}
+          {!loading && leadList.length === 0 && 'No leads yet.'}
+          {!loading &&
+            leadList.slice(0, 20).map((l) => (
+              <div key={l._id} className="flex items-center justify-between py-2 border-b last:border-0">
+                <div className="font-medium text-neutral-900">{l.school_name || l.name || 'Lead'}</div>
+                <div className="text-neutral-500">{l.zone || '-'}</div>
+              </div>
+            ))}
         </div>
       </Card>
     </div>
@@ -65,5 +79,3 @@ function Stat({ label, value, color }: { label: string; value: number | string; 
     </div>
   )
 }
-
-

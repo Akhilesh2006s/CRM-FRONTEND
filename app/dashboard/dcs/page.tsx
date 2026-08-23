@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { apiRequest } from '@/lib/api'
-import { Building2, Package, Search, Truck, User, MapPin, Phone, Mail, DollarSign, Briefcase } from 'lucide-react'
+import { Building2, Package, Search, Truck, User, MapPin, Phone, DollarSign } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 type VendorDC = {
@@ -52,9 +52,10 @@ export default function VendorDCsPage() {
       setLoading(true)
       try {
         const data = await apiRequest<VendorDC[]>('/vendor-user/dcs')
-        setDcs(data || [])
+        setDcs(Array.isArray(data) ? data : [])
       } catch (err: any) {
         console.error('Failed to load DCs:', err)
+        setDcs([])
       } finally {
         setLoading(false)
       }
@@ -327,30 +328,10 @@ export default function VendorDCsPage() {
                       <Badge variant="secondary">{dc.school.zone}</Badge>
                     </TableCell>
                     <TableCell>
-                      <div className="space-y-2">
+                      <div className="space-y-1">
                         {dc.products.map((product, idx) => (
-                          <div key={idx} className="space-y-1 p-2 bg-neutral-50 rounded border border-neutral-200">
-                            <div className="flex items-center gap-2">
-                              <Package className="w-3 h-3 text-neutral-500" />
-                              <span className="text-sm font-medium">{product.productName}</span>
-                              {product.isEnterprise && (
-                                <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-                                  <Briefcase className="w-3 h-3 mr-1" />
-                                  Enterprise
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="text-neutral-600">
-                                Qty: <span className="font-medium">{product.quantity}</span>
-                              </span>
-                              <span className="text-neutral-600">
-                                Unit: <span className="font-medium">₹{product.unitPrice.toLocaleString('en-IN')}</span>
-                              </span>
-                              <span className="text-neutral-900 font-semibold">
-                                ₹{product.price.toLocaleString('en-IN')}
-                              </span>
-                            </div>
+                          <div key={idx} className="text-sm">
+                            {product.productName} · Qty {product.quantity} · Unit ₹{product.unitPrice.toLocaleString('en-IN')} · ₹{product.price.toLocaleString('en-IN')}
                           </div>
                         ))}
                       </div>

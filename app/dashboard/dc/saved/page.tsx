@@ -11,6 +11,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useProducts } from '@/hooks/useProducts'
+import { keepMyClientsOwnedProductRows } from '@/lib/clientDcProductRows'
+import { resolveExistingProductTerm } from '@/lib/productTerm'
 
 type DcOrder = {
   _id: string
@@ -24,6 +26,8 @@ type DcOrder = {
   location?: string
   zone?: string
   cluster?: string
+  status?: string
+  workflowStage?: string
   products?: Array<{ product_name: string; quantity: number }>
   assigned_to?: {
     _id: string
@@ -33,6 +37,15 @@ type DcOrder = {
   created_at?: string
   createdAt?: string
   remarks?: string
+  dcRequestData?: {
+    dcDate?: string
+    dcRemarks?: string
+    dcNotes?: string
+    dcCategory?: string
+    requestedQuantity?: number
+    productDetails?: any[]
+    employeeId?: string
+  }
 }
 
 type DC = {
@@ -53,14 +66,65 @@ type DC = {
   dcRemarks?: string
   dcCategory?: string
   dcNotes?: string
+  createdAt?: string
+  updatedAt?: string
   productDetails?: Array<{
     product: string
     class: string
     category: string
     productName: string
+    productCategory?: string
+    specs?: string
+    subject?: string
     quantity: number
     strength?: number
+    level?: string
+    term?: string
   }>
+}
+
+function quantityOfProduct(p: any) {
+  return Number(p?.quantity) || Number(p?.strength) || 0
+}
+
+function mapToSavedProductRow(p: any, idx: number) {
+  const name = p.product || p.productName || p.product_name || 'Abacus'
+  return {
+    id: String(idx + 1),
+    product: name,
+    class: p.class && String(p.class).trim() !== '' ? String(p.class) : '1',
+    category: p.category || 'New Students',
+    productName: p.productName || name,
+    quantity: quantityOfProduct(p),
+    strength: Number(p.strength) || quantityOfProduct(p),
+    productCategory: p.productCategory,
+    specs: p.specs,
+    subject: p.subject,
+    level: p.level,
+    term: resolveExistingProductTerm(p),
+  }
+}
+
+function resolveSavedDcProductLines(...sources: any[][]) {
+  for (const src of sources) {
+    if (Array.isArray(src) && src.length > 0) {
+      return keepMyClientsOwnedProductRows(src)
+    }
+  }
+  return []
+}
+
+function pickSavedPipelineDc(dcs: DC[]): DC | null {
+  if (!Array.isArray(dcs) || dcs.length === 0) return null
+  const active = dcs.filter((d) => d.status !== 'scheduled_for_later')
+  const pool = active.length > 0 ? active : dcs
+  const preferred = pool.filter((d) =>
+    ['created', 'po_submitted', 'pending_dc'].includes(String(d.status || ''))
+  )
+  const ranked = (preferred.length > 0 ? preferred : pool).slice().sort((a, b) => {
+    return new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime()
+  })
+  return ranked[0] || null
 }
 
 export default function SavedDCPage() {
@@ -90,6 +154,11 @@ export default function SavedDCPage() {
   const [dcRemarks, setDcRemarks] = useState('')
   const [dcCategory, setDcCategory] = useState('')
   const [dcNotes, setDcNotes] = useState('')
+  const [dcDetailsErrors, setDcDetailsErrors] = useState<{
+    dcDate?: string
+    dcCategory?: string
+    dcRemarks?: string
+  }>({})
   
   // Product rows for DC (like in the Raise DC form)
   type ProductRow = {
@@ -100,6 +169,11 @@ export default function SavedDCPage() {
     productName: string
     quantity: number
     strength?: number
+    productCategory?: string
+    specs?: string
+    subject?: string
+    level?: string
+    term?: string
   }
   const [productRows, setProductRows] = useState<ProductRow[]>([
     { id: '1', product: 'Abacus', class: '1', category: 'New Students', productName: '', quantity: 0, strength: 0 }
@@ -112,9 +186,20 @@ export default function SavedDCPage() {
   const load = async () => {
     setLoading(true)
     try {
-      const data = await apiRequest<DcOrder[]>(`/dc-orders?status=saved`)
-      // Ensure data is an array before using array methods
-      const dataArray = Array.isArray(data) ? data : []
+      const unwrap = (response: any) => (Array.isArray(response) ? response : (response?.data || []))
+      // Saved DC = Closed Sales Accept (`dc_approved`), not My Clients (`saved`).
+      // Also include legacy Accepts that were written as saved + ClosedSales.
+      const [approvedRes, savedRes] = await Promise.all([
+        apiRequest<any>(`/dc-orders?status=dc_approved&limit=500`),
+        apiRequest<any>(`/dc-orders?status=saved&limit=500`),
+      ])
+      const approved = unwrap(approvedRes)
+      const legacyAccepted = unwrap(savedRes).filter((d: any) => d.workflowStage === 'ClosedSales')
+      const byId = new Map<string, any>()
+      ;[...approved, ...legacyAccepted].forEach((d: any) => {
+        if (d?._id) byId.set(String(d._id), d)
+      })
+      const dataArray = Array.from(byId.values())
 
       // Load existing DCs for all deals with poPhotoUrl
       const dcMap: Record<string, DC> = {}
@@ -124,9 +209,7 @@ export default function SavedDCPage() {
           try {
             const dcs = await apiRequest<DC[]>(`/dc?dcOrderId=${dealId}`)
             if (dcs && dcs.length > 0) {
-              // Get the DC with poPhotoUrl if available
-              const dcWithPO = dcs.find(dc => dc.poPhotoUrl) || dcs[0]
-              dcMap[dealId] = dcWithPO
+              dcMap[dealId] = pickSavedPipelineDc(dcs) || dcs[0]
             }
           } catch (_) {}
         }
@@ -211,82 +294,48 @@ export default function SavedDCPage() {
       } else {
         setSelectedEmployeeId('')
       }
+      const dcRequestData = (fullDeal as any).dcRequestData || (normalizedDeal as any).dcRequestData || {}
+      const applyProductRows = (fullDC?: DC | null) => {
+        const richest = resolveSavedDcProductLines(
+          fullDC?.productDetails,
+          existingDCForDeal?.productDetails,
+          dcRequestData.productDetails,
+          normalizedDeal.products
+        )
+        if (richest.length > 0) {
+          setProductRows(richest.map((p, idx) => mapToSavedProductRow(p, idx)))
+        } else {
+          setProductRows([{ id: '1', product: 'Abacus', class: '1', category: 'New Students', productName: '', quantity: 0, strength: 0 }])
+        }
+      }
       // If DC exists, load its data; otherwise start fresh
       if (existingDCForDeal) {
         // Load full DC details to get all fields
         try {
           const fullDC = await apiRequest<DC>(`/dc/${existingDCForDeal._id}`)
           
-          setDcDate(fullDC.dcDate ? new Date(fullDC.dcDate).toISOString().split('T')[0] : '')
-          setDcRemarks(fullDC.dcRemarks || '')
-          setDcCategory(fullDC.dcCategory || '')
-          setDcNotes(fullDC.dcNotes || '')
-          
-          // Load product rows from DC productDetails or DcOrder products
-          if (fullDC.productDetails && Array.isArray(fullDC.productDetails) && fullDC.productDetails.length > 0) {
-            setProductRows(fullDC.productDetails.map((p, idx) => ({
-              id: String(idx + 1),
-              product: p.product || 'Abacus',
-              class: p.class || '1',
-              category: p.category || 'New Students',
-              productName: p.productName || '',
-              quantity: p.quantity || 0,
-              strength: p.strength || 0,
-            })))
-          } else if (normalizedDeal.products && Array.isArray(normalizedDeal.products) && normalizedDeal.products.length > 0) {
-            setProductRows(normalizedDeal.products.map((p: any, idx: number) => ({
-              id: String(idx + 1),
-              product: p.product_name || 'Abacus',
-              class: '1',
-              category: 'New Students',
-              productName: p.product_name || '',
-              quantity: p.quantity || 0,
-              strength: p.strength || 0,
-            })))
-          } else {
-            setProductRows([{ id: '1', product: 'Abacus', class: '1', category: 'New Students', productName: '', quantity: 0, strength: 0 }])
-          }
+          setDcDate(fullDC.dcDate ? new Date(fullDC.dcDate).toISOString().split('T')[0] : (dcRequestData.dcDate || ''))
+          setDcRemarks(fullDC.dcRemarks || dcRequestData.dcRemarks || '')
+          setDcCategory(fullDC.dcCategory || dcRequestData.dcCategory || '')
+          setDcNotes(fullDC.dcNotes || dcRequestData.dcNotes || '')
+          setDcDetailsErrors({})
+          applyProductRows(fullDC)
         } catch (e) {
           console.error('Failed to load existing DC:', e)
-          // Fallback to empty form
-          setDcDate('')
-          setDcRemarks('')
-          setDcCategory('')
-          setDcNotes('')
-          if (normalizedDeal.products && Array.isArray(normalizedDeal.products) && normalizedDeal.products.length > 0) {
-            setProductRows(normalizedDeal.products.map((p: any, idx: number) => ({
-              id: String(idx + 1),
-              product: p.product_name || 'Abacus',
-              class: '1',
-              category: 'New Students',
-              productName: p.product_name || '',
-              quantity: p.quantity || 0,
-              strength: p.strength || 0,
-            })))
-          } else {
-            setProductRows([{ id: '1', product: 'Abacus', class: '1', category: 'New Students', productName: '', quantity: 0, strength: 0 }])
-          }
+          setDcDate(dcRequestData.dcDate || '')
+          setDcRemarks(dcRequestData.dcRemarks || '')
+          setDcCategory(dcRequestData.dcCategory || '')
+          setDcNotes(dcRequestData.dcNotes || '')
+          setDcDetailsErrors({})
+          applyProductRows(null)
         }
       } else {
-        // No existing DC, start with fresh form
-        setDcDate('')
-        setDcRemarks('')
-        setDcCategory('')
-        setDcNotes('')
-        // Initialize product rows from existing products in deal, or start with one empty row
-        if (normalizedDeal.products && Array.isArray(normalizedDeal.products) && normalizedDeal.products.length > 0) {
-          setProductRows(normalizedDeal.products.map((p: any, idx: number) => ({
-            id: String(idx + 1),
-            product: p.product_name || 'Abacus',
-            class: '1',
-            category: 'New Students',
-            productName: p.product_name || '',
-            quantity: p.quantity || 0,
-            strength: p.strength || 0,
-          })))
-        } else {
-          setProductRows([{ id: '1', product: 'Abacus', class: '1', category: 'New Students', productName: '', quantity: 0, strength: 0 }])
-        }
+        setDcDate(dcRequestData.dcDate || '')
+        setDcRemarks(dcRequestData.dcRemarks || '')
+        setDcCategory(dcRequestData.dcCategory || '')
+        setDcNotes(dcRequestData.dcNotes || '')
+        setDcDetailsErrors({})
+        applyProductRows(null)
       }
       setOpenRaiseDCDialog(true)
     } catch (e: any) {
@@ -303,8 +352,37 @@ export default function SavedDCPage() {
     setOpenLocationDialog(true)
   }
 
+  /** DC Date, Category, and Remarks are mandatory before Submit to Senior Coordinator. Notes optional. */
+  const validateDcDetailsFields = (): boolean => {
+    const next: { dcDate?: string; dcCategory?: string; dcRemarks?: string } = {}
+    if (!dcDate || !String(dcDate).trim()) {
+      next.dcDate = 'DC Date is required.'
+    }
+    if (!dcCategory || !String(dcCategory).trim()) {
+      next.dcCategory = 'DC Category is required.'
+    }
+    if (!dcRemarks || !String(dcRemarks).trim()) {
+      next.dcRemarks = 'DC Remarks is required.'
+    }
+    setDcDetailsErrors(next)
+    return Object.keys(next).length === 0
+  }
+
+  const clearDcDetailsError = (field: 'dcDate' | 'dcCategory' | 'dcRemarks') => {
+    setDcDetailsErrors((prev) => {
+      if (!prev[field]) return prev
+      const next = { ...prev }
+      delete next[field]
+      return next
+    })
+  }
+
   const handleSubmitToSeniorCoordinator = async () => {
     if (!selectedDeal) return
+
+    if (!validateDcDetailsFields()) {
+      return
+    }
 
     // Check if employee is assigned - prioritize deal's assigned employee
     let employeeId = null
@@ -334,9 +412,12 @@ export default function SavedDCPage() {
       // First, raise DC (creates or gets existing DC)
       const raisePayload: any = {
         dcOrderId: selectedDeal._id,
-        dcDate: dcDate || undefined,
-        dcRemarks: dcRemarks || undefined,
-        dcNotes: dcNotes || undefined,
+        dcDate: String(dcDate).trim(),
+        dcCategory: String(dcCategory).trim(),
+        dcRemarks: String(dcRemarks).trim(),
+        dcNotes: dcNotes.trim() || undefined,
+        requireDcRemarks: true,
+        status: 'pending_dc',
       }
       
       // Only include employeeId if deal doesn't already have one assigned (backend will use deal's assigned_to if available)
@@ -354,8 +435,13 @@ export default function SavedDCPage() {
         class: row.class,
         category: row.category,
         productName: row.productName,
+        productCategory: row.productCategory,
+        specs: row.specs || 'Regular',
+        subject: row.subject,
         quantity: row.quantity,
         strength: row.strength || 0,
+        level: row.level && String(row.level).trim() !== '-' ? String(row.level).trim() : '',
+        term: row.term || 'Term 1',
       }))
 
       let dc: DC
@@ -385,7 +471,7 @@ export default function SavedDCPage() {
         })
       }
 
-      // Then submit to manager (moves to sent_to_manager, then appears in Pending DC)
+      // Then send to Senior Coordinator (Pending DC — not warehouse)
       await apiRequest(`/dc/${dc._id}/submit-to-manager`, {
         method: 'POST',
         body: JSON.stringify({
@@ -394,7 +480,14 @@ export default function SavedDCPage() {
         }),
       })
 
-      alert(existingDC ? 'DC updated and submitted to Senior Coordinator successfully!' : 'DC created and submitted to Senior Coordinator successfully! It will appear in Pending DC list.')
+      await apiRequest(`/dc-orders/${selectedDeal._id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          status: 'dc_sent_to_senior',
+        }),
+      })
+
+      alert('DC sent to Senior Coordinator successfully. It will appear in Pending DC.')
       setOpenRaiseDCDialog(false)
       // Reload to refresh the DC map
       load()
@@ -437,8 +530,10 @@ export default function SavedDCPage() {
       const raisePayload: any = {
         dcOrderId: selectedDeal._id,
         dcDate: dcDate || undefined,
+        dcCategory: dcCategory || undefined,
         dcRemarks: dcRemarks || undefined,
         dcNotes: dcNotes || undefined,
+        status: 'created',
       }
       
       // Only include employeeId if deal doesn't already have one assigned (backend will use deal's assigned_to if available)
@@ -456,8 +551,13 @@ export default function SavedDCPage() {
         class: row.class,
         category: row.category,
         productName: row.productName,
+        productCategory: row.productCategory,
+        specs: row.specs || 'Regular',
+        subject: row.subject,
         quantity: row.quantity,
         strength: row.strength || 0,
+        level: row.level && String(row.level).trim() !== '-' ? String(row.level).trim() : '',
+        term: row.term || 'Term 1',
       }))
 
       let dc: DC
@@ -487,10 +587,10 @@ export default function SavedDCPage() {
         })
       }
 
-      // Update DcOrder status to 'saved' so it appears in Saved DC page
+      // Stay on Saved DC (dc_approved). Do not revert to My Clients `saved`.
       await apiRequest(`/dc-orders/${selectedDeal._id}`, {
         method: 'PUT',
-        body: JSON.stringify({ status: 'saved' }),
+        body: JSON.stringify({ status: 'dc_approved', workflowStage: 'ClosedSales' }),
       })
 
       alert(existingDC ? 'DC updated and saved successfully! It will appear in Saved DC page.' : 'DC created and saved successfully! It will appear in Saved DC page.')
@@ -512,14 +612,8 @@ export default function SavedDCPage() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Input placeholder="By School Name" />
           <Input placeholder="By Contact Mobile No" />
-          <div className="space-y-2">
-            <Label htmlFor="saved-from-date">From Date</Label>
-            <Input id="saved-from-date" type="date" />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="saved-to-date">To Date</Label>
-            <Input id="saved-to-date" type="date" />
-          </div>
+          <Input type="date" placeholder="From Date" />
+          <Input type="date" placeholder="To Date" />
           <Input placeholder="Select Zone" />
           <Input placeholder="Select Executive" />
           <Input placeholder="By Town" />
@@ -561,15 +655,16 @@ export default function SavedDCPage() {
                     {(() => {
                       const dc = dealDCs[d._id]
                       const poUrl = dc?.poPhotoUrl || (typeof dc?.dcOrderId === 'object' && dc.dcOrderId && 'poPhotoUrl' in dc.dcOrderId ? (dc.dcOrderId as any).poPhotoUrl : null)
+                      const poDisplayUrl = poUrl ? resolveUploadUrl(poUrl) : ''
                       
                       if (poUrl) {
                         return (
                           <div className="flex items-center justify-center">
                             <img
-                              src={resolveUploadUrl(poUrl)}
+                              src={poDisplayUrl}
                               alt="PO Document"
                               className="w-14 h-14 object-contain rounded border border-slate-200 cursor-pointer hover:opacity-75 hover:border-slate-400 transition-all shadow-sm bg-white p-1"
-                              onClick={() => window.open(resolveUploadUrl(poUrl), '_blank')}
+                              onClick={() => window.open(poDisplayUrl, '_blank')}
                               title="Click to view full size"
                               onError={(e) => {
                                 // If image fails to load, show a link instead
@@ -578,7 +673,7 @@ export default function SavedDCPage() {
                                 const parent = target.parentElement
                                 if (parent) {
                                   const link = document.createElement('a')
-                                  link.href = poUrl
+                                  link.href = poDisplayUrl
                                   link.target = '_blank'
                                   link.className = 'text-xs text-slate-600 hover:text-slate-800 underline'
                                   link.textContent = 'View PO'
@@ -801,25 +896,6 @@ export default function SavedDCPage() {
               <div className="border-t border-slate-200 pt-6 mt-6">
                 <div className="flex items-center justify-between mb-4">
                   <Label className="text-base font-semibold text-slate-900">Products & Quantities</Label>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="border-slate-300 hover:bg-slate-50 text-slate-700 shadow-sm"
-                    onClick={() => {
-                      setProductRows([...productRows, {
-                        id: Date.now().toString(),
-                        product: 'Abacus',
-                        class: '1',
-                        category: 'New Students',
-                        productName: '',
-                        quantity: 0,
-                        strength: 0
-                      }])
-                    }}
-                  >
-                    (+) Add Row
-                  </Button>
                 </div>
                 
                 <div className="overflow-x-auto">
@@ -954,18 +1030,31 @@ export default function SavedDCPage() {
                 <h3 className="font-semibold text-slate-900 text-base border-b border-slate-200 pb-2 mb-4">DC Details</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label>DC Date</Label>
+                    <Label>DC Date *</Label>
                     <Input
                       type="date"
                       value={dcDate}
-                      onChange={(e) => setDcDate(e.target.value)}
+                      onChange={(e) => {
+                        setDcDate(e.target.value)
+                        clearDcDetailsError('dcDate')
+                      }}
                       placeholder="mm/dd/yyyy"
+                      className={dcDetailsErrors.dcDate ? 'border-red-500' : ''}
                     />
+                    {dcDetailsErrors.dcDate && (
+                      <p className="text-xs text-red-600 mt-1">{dcDetailsErrors.dcDate}</p>
+                    )}
                   </div>
                   <div>
-                    <Label>DC Category</Label>
-                    <Select value={dcCategory} onValueChange={setDcCategory}>
-                      <SelectTrigger>
+                    <Label>DC Category *</Label>
+                    <Select
+                      value={dcCategory || undefined}
+                      onValueChange={(v) => {
+                        setDcCategory(v)
+                        clearDcDetailsError('dcCategory')
+                      }}
+                    >
+                      <SelectTrigger className={dcDetailsErrors.dcCategory ? 'border-red-500' : ''}>
                         <SelectValue placeholder="Select DC Category" />
                       </SelectTrigger>
                       <SelectContent>
@@ -974,21 +1063,31 @@ export default function SavedDCPage() {
                         <SelectItem value="Both">Both</SelectItem>
                       </SelectContent>
                     </Select>
+                    {dcDetailsErrors.dcCategory && (
+                      <p className="text-xs text-red-600 mt-1">{dcDetailsErrors.dcCategory}</p>
+                    )}
                   </div>
                   <div>
-                    <Label>DC Remarks</Label>
+                    <Label>DC Remarks *</Label>
                     <Input
                       value={dcRemarks}
-                      onChange={(e) => setDcRemarks(e.target.value)}
+                      onChange={(e) => {
+                        setDcRemarks(e.target.value)
+                        clearDcDetailsError('dcRemarks')
+                      }}
                       placeholder="Remarks"
+                      className={dcDetailsErrors.dcRemarks ? 'border-red-500' : ''}
                     />
+                    {dcDetailsErrors.dcRemarks && (
+                      <p className="text-xs text-red-600 mt-1">{dcDetailsErrors.dcRemarks}</p>
+                    )}
                   </div>
                   <div className="md:col-span-2">
                     <Label>DC Notes</Label>
                     <Textarea
                       value={dcNotes}
                       onChange={(e) => setDcNotes(e.target.value)}
-                      placeholder="Notes"
+                      placeholder="Notes (optional)"
                       rows={3}
                     />
                   </div>

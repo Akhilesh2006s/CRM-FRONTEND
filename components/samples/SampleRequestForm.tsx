@@ -149,7 +149,7 @@ export default function SampleRequestForm({ onSuccess }: Props) {
       level: getDefaultLevel(product),
       class: resolved.class,
       productCategory: resolved.productCategory,
-      specs: specsList[0] || resolved.specs,
+      specs: specsList[0] || '',
     })
   }
 
@@ -439,7 +439,7 @@ export default function SampleRequestForm({ onSuccess }: Props) {
                           </SelectContent>
                         </Select>
                       </div>
-                      {hasProductCategories(row.product) && (
+                      {hasProductCategories(row.product) ? (
                         <div>
                           <Label className="text-xs">Category</Label>
                           <Select
@@ -457,6 +457,11 @@ export default function SampleRequestForm({ onSuccess }: Props) {
                               ))}
                             </SelectContent>
                           </Select>
+                        </div>
+                      ) : (
+                        <div>
+                          <Label className="text-xs">Category</Label>
+                          <div className="h-9 flex items-center text-sm text-neutral-600">-</div>
                         </div>
                       )}
                       {hasProductSpecs(row.product) && (
@@ -476,21 +481,28 @@ export default function SampleRequestForm({ onSuccess }: Props) {
                           </Select>
                         </div>
                       )}
-                      <div>
-                        <Label className="text-xs">Level</Label>
-                        <Select value={row.level} onValueChange={(v) => updateRow(index, { level: v })}>
-                          <SelectTrigger className="bg-white h-9">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {getProductLevels(row.product).map((l) => (
-                              <SelectItem key={l} value={l}>
-                                {l}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      {row.product && getProductLevels(row.product).length > 0 ? (
+                        <div>
+                          <Label className="text-xs">Level</Label>
+                          <Select value={row.level} onValueChange={(v) => updateRow(index, { level: v })}>
+                            <SelectTrigger className="bg-white h-9">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {getProductLevels(row.product).map((l) => (
+                                <SelectItem key={l} value={l}>
+                                  {l}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ) : (
+                        <div>
+                          <Label className="text-xs">Level</Label>
+                          <div className="h-9 flex items-center text-sm text-neutral-600">-</div>
+                        </div>
+                      )}
                       <div>
                         <Label className="text-xs">Qty</Label>
                         <Input

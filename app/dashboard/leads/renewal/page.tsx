@@ -821,7 +821,7 @@ export default function RenewalLeadsPage() {
                             min={1}
                             max={100}
                             className="w-20"
-                            placeholder="%"
+                            placeholder="Chance %"
                             value={row.renewal_pct === '' ? '' : row.renewal_pct}
                             onChange={(e) => {
                               const v = e.target.value
@@ -1285,7 +1285,7 @@ export default function RenewalLeadsPage() {
                             min={1}
                             max={100}
                             className="h-9 text-center"
-                            placeholder="%"
+                            placeholder="Chance %"
                             value={product.renewal_pct === '' ? '' : product.renewal_pct}
                             onChange={(e) => {
                               const v = e.target.value

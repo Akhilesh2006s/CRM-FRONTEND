@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { apiRequest, resolveUploadUrl } from '@/lib/api'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -13,6 +14,7 @@ import { toast } from 'sonner'
 
 type DC = {
   _id: string
+  dc_code?: string
   saleId?: {
     _id: string
     customerName?: string
@@ -26,21 +28,55 @@ type DC = {
     contact_mobile?: string
     email?: string
     products?: any
+    school_code?: string
+    dc_code?: string
   }
   customerName?: string
   customerPhone?: string
   product?: string
+  productDetails?: any[]
   status?: string
   poPhotoUrl?: string
+  deliveryNotes?: string
   createdAt?: string
   employeeId?: {
     _id: string
     name?: string
     email?: string
+    role?: string
+  } | string
+  createdBy?: {
+    _id: string
+    name?: string
+    email?: string
+    role?: string
   } | string
 }
 
-export default function AdminMyDCPage() {
+function personName(value: DC['employeeId'] | DC['createdBy']) {
+  if (typeof value === 'object' && value?.name) return value.name
+  return '—'
+}
+
+function productsLabel(d: DC) {
+  if (d.productDetails && Array.isArray(d.productDetails) && d.productDetails.length > 0) {
+    return d.productDetails
+      .map((p: any) => p.productName || p.product_name || p.product)
+      .filter(Boolean)
+      .join(', ') || d.product || '—'
+  }
+  if (d.dcOrderId?.products && Array.isArray(d.dcOrderId.products)) {
+    return (
+      d.dcOrderId.products
+        .map((p: any) => p.product_name || p.product)
+        .filter(Boolean)
+        .join(', ') || d.product || '—'
+    )
+  }
+  return d.product || d.saleId?.product || '—'
+}
+
+export default function AllCreatedDCsPage() {
   const [items, setItems] = useState<DC[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedDC, setSelectedDC] = useState<DC | null>(null)
@@ -48,9 +84,8 @@ export default function AdminMyDCPage() {
   const [remarks, setRemarks] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [openDialog, setOpenDialog] = useState(false)
+  const [viewOpen, setViewOpen] = useState(false)
   const [filterEmployee, setFilterEmployee] = useState('')
-  const [searchQuery, setSearchQuery] = useState('')
-  const [backendSearching, setBackendSearching] = useState(false)
   const [allEmployees, setAllEmployees] = useState<{ _id: string; name: string }[]>([])
 
   const [raiseDialogOpen, setRaiseDialogOpen] = useState(false)
@@ -58,24 +93,33 @@ export default function AdminMyDCPage() {
   const [raising, setRaising] = useState(false)
 
   const currentUser = getCurrentUser()
-  const isAdmin = currentUser?.role === 'Admin' || currentUser?.role === 'Super Admin'
+  const isSuperAdminUser =
+    currentUser?.role === 'Super Admin' || Boolean((currentUser as any)?.isSuperAdmin)
+  const isAdmin = currentUser?.role === 'Admin'
+  const isCoordinator =
+    currentUser?.role === 'Coordinator' || currentUser?.role === 'Senior Coordinator'
+  // Super Admin / Admin / Coordinator — Create Sale auto-DCs list here.
+  const canAccess = isSuperAdminUser || isAdmin || isCoordinator
 
   const load = async () => {
     setLoading(true)
     try {
-      // Load all DCs with status 'created' (not filtered by employee)
-      const data = await apiRequest<DC[]>(`/dc?status=created`)
-      console.log('Loaded all created DCs:', data)
-      
-      // Filter by employee if selected
-      let filtered = data
+      // Admin / Coordinator source of truth — complete created DC list.
+      const data = await apiRequest<DC[] | { data?: DC[] }>(`/dc?status=created`)
+      const list = Array.isArray(data)
+        ? data
+        : Array.isArray((data as any)?.data)
+          ? (data as any).data
+          : []
+
+      let filtered = list
       if (filterEmployee) {
-        filtered = data.filter(dc => {
+        filtered = list.filter((dc) => {
           const empId = typeof dc.employeeId === 'object' ? dc.employeeId?._id : dc.employeeId
-          return empId === filterEmployee
+          return String(empId) === String(filterEmployee)
         })
       }
-      
+
       setItems(filtered)
     } catch (e: any) {
       console.error('Failed to load DCs:', e)
@@ -90,73 +134,22 @@ export default function AdminMyDCPage() {
     try {
       const data = await apiRequest<any[]>('/employees?isActive=true')
       const list = Array.isArray(data) ? data : []
-      setAllEmployees(list.map((u: any) => ({ _id: u._id || u.id, name: u.name || 'Unknown' })).filter(e => e.name !== 'Unknown'))
+      setAllEmployees(
+        list
+          .map((u: any) => ({ _id: u._id || u.id, name: u.name || 'Unknown' }))
+          .filter((e) => e.name !== 'Unknown')
+      )
     } catch (e) {
       console.error('Failed to load employees:', e)
     }
   }
 
   useEffect(() => {
+    if (!canAccess) return
     load()
     loadEmployees()
-  }, [filterEmployee])
-
-  const filteredItems = items.filter((d) => {
-    const schoolCode = (typeof d.dcOrderId === 'object' && (d.dcOrderId as any)?.school_code) ? (d.dcOrderId as any).school_code : ''
-    const customerName = d.customerName || d.saleId?.customerName || d.dcOrderId?.school_name || ''
-    const query = searchQuery.toLowerCase()
-
-    const matchesSearch = !query ||
-      schoolCode.toLowerCase().includes(query) ||
-      customerName.toLowerCase().includes(query)
-
-    const empId = typeof d.employeeId === 'object' ? d.employeeId?._id : d.employeeId
-    const matchesEmployee = !filterEmployee || empId === filterEmployee || (d as any).assigned_to === filterEmployee
-
-    return matchesSearch && matchesEmployee
-  })
-
-  const searchBySchoolCode = async (code: string) => {
-    if (!code || code.length < 3) return
-    setBackendSearching(true)
-    try {
-      const results = await apiRequest<any[]>(`/dc-orders?school_code=${encodeURIComponent(code)}`)
-      if (results?.length) {
-        setItems((prev) => {
-          const existingIds = new Set(prev.map((i) => i._id))
-          const mapped: DC[] = results
-            .filter((r) => !existingIds.has(r._id))
-            .map((r) => ({
-              _id: r._id,
-              customerName: r.school_name || '',
-              customerPhone: r.contact_mobile || '',
-              status: r.status || 'created',
-              dcOrderId: {
-                _id: r._id,
-                school_name: r.school_name,
-                school_code: r.school_code,
-                contact_mobile: r.contact_mobile,
-                email: r.email,
-                products: r.products,
-              } as any,
-              employeeId: r.assigned_to || undefined,
-            }))
-          return [...prev, ...mapped]
-        })
-      }
-    } catch (e) {
-      // silently fail — local results still shown
-    } finally {
-      setBackendSearching(false)
-    }
-  }
-
-  useEffect(() => {
-    const isCodeLike = /^[a-zA-Z]{2,5}\d*/i.test(searchQuery)
-    if (!isCodeLike) return
-    const t = setTimeout(() => searchBySchoolCode(searchQuery), 500)
-    return () => clearTimeout(t)
-  }, [searchQuery])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterEmployee, canAccess])
 
   const openSubmitDialog = (dc: DC) => {
     setSelectedDC(dc)
@@ -165,10 +158,14 @@ export default function AdminMyDCPage() {
     setOpenDialog(true)
   }
 
+  const openViewDialog = (dc: DC) => {
+    setSelectedDC(dc)
+    setViewOpen(true)
+  }
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
-      // Convert to base64 data URL
       const reader = new FileReader()
       reader.onloadend = () => {
         setPoPhotoUrl(reader.result as string)
@@ -177,21 +174,21 @@ export default function AdminMyDCPage() {
     }
   }
 
-  const submitPO = async () => {
-    if (!selectedDC || !poPhotoUrl) {
+  const handleSubmitPO = async () => {
+    if (!selectedDC) return
+    if (!poPhotoUrl.trim()) {
       toast.error('Please provide a PO photo URL or upload a file')
       return
     }
 
     setSubmitting(true)
     try {
-      // Admin can update PO photo directly via PUT endpoint
       await apiRequest(`/dc/${selectedDC._id}`, {
         method: 'PUT',
-        body: JSON.stringify({ 
-          poPhotoUrl, 
+        body: JSON.stringify({
+          poPhotoUrl,
           poDocument: poPhotoUrl,
-          deliveryNotes: remarks || selectedDC.deliveryNotes 
+          deliveryNotes: remarks || selectedDC.deliveryNotes,
         }),
       })
       toast.success('PO photo updated successfully!')
@@ -202,13 +199,6 @@ export default function AdminMyDCPage() {
     } finally {
       setSubmitting(false)
     }
-  }
-
-  const getExecutiveName = (dc: DC) => {
-    if (typeof dc.employeeId === 'object' && dc.employeeId?.name) {
-      return dc.employeeId.name
-    }
-    return 'Not Assigned'
   }
 
   const openRaiseDialog = (dc: DC) => {
@@ -231,9 +221,20 @@ export default function AdminMyDCPage() {
 
     setRaising(true)
     try {
+      const orderProducts =
+        typeof selectedForRaise.dcOrderId === 'object'
+          ? selectedForRaise.dcOrderId?.products
+          : undefined
       await apiRequest(`/dc-orders/${dcOrderId}`, {
         method: 'PUT',
-        body: JSON.stringify({ status: 'saved' }),
+        body: JSON.stringify({
+          status: 'dc_requested',
+          dcRequestData: {
+            requestedFrom: 'admin_raise_dc',
+            productDetails: Array.isArray(orderProducts) ? orderProducts : undefined,
+            requestedAt: new Date().toISOString(),
+          },
+        }),
       })
       toast.success('DC raised successfully. It will now appear in Closed Sales.')
       setRaiseDialogOpen(false)
@@ -245,7 +246,7 @@ export default function AdminMyDCPage() {
     }
   }
 
-  if (!isAdmin) {
+  if (!canAccess) {
     return (
       <div className="space-y-6">
         <Card className="p-6">
@@ -258,26 +259,23 @@ export default function AdminMyDCPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">All Created DCs - Admin View</h1>
-        <Button variant="outline" onClick={load}>Refresh</Button>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">All Created DCs</h1>
+          <p className="text-sm text-neutral-500 mt-1">
+            All automatically created DCs from Create Sale across the system.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" asChild>
+            <Link href="/dashboard/dc/create">Create Sale</Link>
+          </Button>
+          <Button variant="outline" onClick={load}>
+            Refresh
+          </Button>
+        </div>
       </div>
 
-      <Card className="p-4 mb-3">
-        <div className="flex items-center gap-3">
-          <Label className="whitespace-nowrap">Search:</Label>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by school code or name..."
-            className="border border-gray-300 rounded px-3 py-1.5 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          {backendSearching && <span className="text-xs text-neutral-500">Searching backend...</span>}
-        </div>
-      </Card>
-
-      {/* Filter by Employee */}
       <Card className="p-4">
         <div className="flex items-center gap-4">
           <Label className="whitespace-nowrap">Filter by Executive:</Label>
@@ -301,71 +299,74 @@ export default function AdminMyDCPage() {
         </div>
       </Card>
 
-      <Card className="p-0 overflow-x-auto">
+      <Card className="p-0 overflow-auto max-h-[calc(100vh-220px)]">
         {loading && <div className="p-4">Loading…</div>}
-        {!loading && filteredItems.length === 0 && (
+        {!loading && items.length === 0 && (
           <div className="p-4">
-            <p className="text-neutral-600">No DCs found with status "created".</p>
+            <p className="text-neutral-600">No DCs found with status &quot;created&quot;.</p>
             <p className="text-sm text-neutral-500 mt-2">
-              DCs are automatically created when a Deal is created and assigned to an employee.
+              DCs are automatically created when a Deal is created and assigned to an executive.
             </p>
           </div>
         )}
-        {!loading && filteredItems.length > 0 && (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-sky-50/70 border-b text-neutral-700">
-                <th className="py-2 px-3 text-left">Created On</th>
-                <th className="py-2 px-3 text-left">Executive Name</th>
-                <th className="py-2 px-3 text-left">School Code</th>
-                <th className="py-2 px-3 text-left">Customer Name</th>
-                <th className="py-2 px-3 text-left">Customer Phone</th>
-                <th className="py-2 px-3 text-left">Product</th>
-                <th className="py-2 px-3 text-left">Status</th>
-                <th className="py-2 px-3 text-left">PO Photo</th>
-                <th className="py-2 px-3 text-left">Action</th>
-                <th className="py-2 px-3 text-right">Raise DC</th>
+        {!loading && items.length > 0 && (
+          <table className="w-full text-sm min-w-[1200px]">
+            <thead className="sticky top-0 z-10">
+              <tr className="bg-sky-50/95 border-b text-neutral-700">
+                <th className="py-2 px-3 text-left whitespace-nowrap">Created On</th>
+                <th className="py-2 px-3 text-left whitespace-nowrap">DC Number</th>
+                <th className="py-2 px-3 text-left whitespace-nowrap">Created By</th>
+                <th className="py-2 px-3 text-left whitespace-nowrap">Assigned Executive</th>
+                <th className="py-2 px-3 text-left whitespace-nowrap">Customer Name</th>
+                <th className="py-2 px-3 text-left whitespace-nowrap">Customer Phone</th>
+                <th className="py-2 px-3 text-left whitespace-nowrap">Products</th>
+                <th className="py-2 px-3 text-left whitespace-nowrap">DC Status</th>
+                <th className="py-2 px-3 text-left whitespace-nowrap">Action</th>
+                <th className="py-2 px-3 text-right whitespace-nowrap">Raise DC</th>
               </tr>
             </thead>
             <tbody>
-              {filteredItems.map((d) => (
+              {items.map((d) => (
                 <tr key={d._id} className="border-b last:border-0 hover:bg-gray-50">
-                  <td className="py-2 px-3">{d.createdAt ? new Date(d.createdAt).toLocaleDateString() : '-'}</td>
-                  <td className="py-2 px-3 font-medium">{getExecutiveName(d)}</td>
-                  <td className="py-2 px-3 font-mono text-xs">
-                    {(typeof d.dcOrderId === 'object' && (d.dcOrderId as any)?.school_code) ? (d.dcOrderId as any).school_code : '-'}
+                  <td className="py-2 px-3 whitespace-nowrap">
+                    {d.createdAt ? new Date(d.createdAt).toLocaleDateString() : '—'}
                   </td>
-                  <td className="py-2 px-3">{d.customerName || d.saleId?.customerName || d.dcOrderId?.school_name || '-'}</td>
-                  <td className="py-2 px-3">{d.customerPhone || d.dcOrderId?.contact_mobile || '-'}</td>
-                  <td className="py-2 px-3">{d.product || d.saleId?.product || (d.dcOrderId?.products && Array.isArray(d.dcOrderId.products) ? d.dcOrderId.products.map((p: any) => p.product_name || p.product).join(', ') : '-')}</td>
-                  <td className="py-2 px-3">
-                    <span className={`px-2 py-1 rounded text-xs ${
-                      d.status === 'created' ? 'bg-blue-100 text-blue-700' :
-                      d.status === 'po_submitted' ? 'bg-yellow-100 text-yellow-700' :
-                      'bg-gray-100 text-gray-700'
-                    }`}>
+                  <td className="py-2 px-3 font-mono text-xs whitespace-nowrap">
+                    {d.dc_code || d.dcOrderId?.dc_code || d._id?.slice(-8) || '—'}
+                  </td>
+                  <td className="py-2 px-3 whitespace-nowrap">{personName(d.createdBy)}</td>
+                  <td className="py-2 px-3 font-medium whitespace-nowrap">{personName(d.employeeId)}</td>
+                  <td className="py-2 px-3 whitespace-nowrap">
+                    {d.customerName || d.saleId?.customerName || d.dcOrderId?.school_name || '—'}
+                  </td>
+                  <td className="py-2 px-3 whitespace-nowrap">
+                    {d.customerPhone || d.dcOrderId?.contact_mobile || '—'}
+                  </td>
+                  <td className="py-2 px-3 min-w-[160px]">{productsLabel(d)}</td>
+                  <td className="py-2 px-3 whitespace-nowrap">
+                    <span
+                      className={`px-2 py-1 rounded text-xs ${
+                        d.status === 'created'
+                          ? 'bg-blue-100 text-blue-700'
+                          : d.status === 'po_submitted'
+                            ? 'bg-yellow-100 text-yellow-700'
+                            : 'bg-gray-100 text-gray-700'
+                      }`}
+                    >
                       {d.status || 'created'}
                     </span>
                   </td>
-                  <td className="py-2 px-3">
-                    {d.poPhotoUrl ? (
-                      <img
-                        src={resolveUploadUrl(d.poPhotoUrl)}
-                        alt="PO"
-                        className="w-12 h-12 object-cover rounded border cursor-pointer"
-                        onClick={() => window.open(resolveUploadUrl(d.poPhotoUrl), '_blank')}
-                        title="Click to view full size"
-                      />
-                    ) : (
-                      <span className="text-xs text-gray-500">No photo</span>
-                    )}
+                  <td className="py-2 px-3 whitespace-nowrap">
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" onClick={() => openViewDialog(d)}>
+                        View
+                      </Button>
+                      <Button size="sm" onClick={() => openSubmitDialog(d)}>
+                        {d.poPhotoUrl ? 'Update Photo' : 'Add Photo'}
+                      </Button>
+                    </div>
                   </td>
-                  <td className="py-2 px-3 text-right">
-                    <Button size="sm" onClick={() => openSubmitDialog(d)}>
-                      {d.poPhotoUrl ? 'Update Photo' : 'Add Photo'}
-                    </Button>
-                  </td>
-                  <td className="py-2 px-3 text-right">
+                  <td className="py-2 px-3 text-right whitespace-nowrap">
                     <Button size="sm" variant="default" onClick={() => openRaiseDialog(d)}>
                       Raise DC
                     </Button>
@@ -377,15 +378,75 @@ export default function AdminMyDCPage() {
         )}
       </Card>
 
+      <Dialog open={viewOpen} onOpenChange={setViewOpen}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>DC Details</DialogTitle>
+            <DialogDescription>Automatically created DC from Create Sale.</DialogDescription>
+          </DialogHeader>
+          {selectedDC && (
+            <div className="space-y-2 text-sm py-2">
+              <p>
+                <span className="text-neutral-500">DC Number:</span>{' '}
+                {selectedDC.dc_code || selectedDC._id}
+              </p>
+              <p>
+                <span className="text-neutral-500">Created On:</span>{' '}
+                {selectedDC.createdAt ? new Date(selectedDC.createdAt).toLocaleString() : '—'}
+              </p>
+              <p>
+                <span className="text-neutral-500">Created By:</span> {personName(selectedDC.createdBy)}
+              </p>
+              <p>
+                <span className="text-neutral-500">Assigned Executive:</span>{' '}
+                {personName(selectedDC.employeeId)}
+              </p>
+              <p>
+                <span className="text-neutral-500">Customer:</span>{' '}
+                {selectedDC.customerName || selectedDC.dcOrderId?.school_name || '—'}
+              </p>
+              <p>
+                <span className="text-neutral-500">Phone:</span>{' '}
+                {selectedDC.customerPhone || selectedDC.dcOrderId?.contact_mobile || '—'}
+              </p>
+              <p>
+                <span className="text-neutral-500">Products:</span> {productsLabel(selectedDC)}
+              </p>
+              <p>
+                <span className="text-neutral-500">Status:</span> {selectedDC.status || 'created'}
+              </p>
+              {selectedDC.poPhotoUrl && (
+                <img
+                  src={resolveUploadUrl(selectedDC.poPhotoUrl)}
+                  alt="PO"
+                  className="w-24 h-24 object-cover rounded border mt-2"
+                />
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setViewOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={openDialog} onOpenChange={setOpenDialog}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>{selectedDC?.poPhotoUrl ? 'Update' : 'Add'} Purchase Order (PO) Photo</DialogTitle>
+            <DialogTitle>
+              {selectedDC?.poPhotoUrl ? 'Update' : 'Add'} Purchase Order (PO) Photo
+            </DialogTitle>
             <DialogDescription>
-              {selectedDC?.poPhotoUrl ? 'Update' : 'Upload'} PO photo for {selectedDC?.customerName || selectedDC?.saleId?.customerName || selectedDC?.dcOrderId?.school_name || 'this DC'}
+              {selectedDC?.poPhotoUrl ? 'Update' : 'Upload'} PO photo for{' '}
+              {selectedDC?.customerName ||
+                selectedDC?.saleId?.customerName ||
+                selectedDC?.dcOrderId?.school_name ||
+                'this DC'}
               <br />
               <span className="text-sm font-medium mt-1 block">
-                Executive: {selectedDC ? getExecutiveName(selectedDC) : '-'}
+                Executive: {selectedDC ? personName(selectedDC.employeeId) : '—'}
               </span>
             </DialogDescription>
           </DialogHeader>
@@ -399,98 +460,46 @@ export default function AdminMyDCPage() {
                 onChange={(e) => setPoPhotoUrl(e.target.value)}
                 className="mb-2"
               />
-              <Input
-                type="file"
-                accept="image/*,application/pdf"
-                onChange={handleFileChange}
-              />
-              {poPhotoUrl && (
-                <div className="mt-2">
-                  <img src={resolveUploadUrl(poPhotoUrl)} alt="PO Preview" className="max-w-full h-auto max-h-48 rounded border" />
-                </div>
-              )}
-              {selectedDC?.poPhotoUrl && !poPhotoUrl.startsWith('data:') && poPhotoUrl === selectedDC.poPhotoUrl && (
-                <div className="mt-2">
-                  <Label className="text-sm text-gray-600">Current Photo:</Label>
-                  <img src={resolveUploadUrl(selectedDC.poPhotoUrl)} alt="Current PO" className="max-w-full h-auto max-h-48 rounded border mt-1" />
-                </div>
-              )}
+              <Input type="file" accept="image/*,application/pdf" onChange={handleFileChange} />
             </div>
             <div>
-              <Label>Remarks (Optional)</Label>
+              <Label>Remarks (optional)</Label>
               <Textarea
-                placeholder="Add any remarks about the PO..."
                 value={remarks}
                 onChange={(e) => setRemarks(e.target.value)}
-                rows={3}
+                placeholder="Notes about this PO…"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpenDialog(false)}>Cancel</Button>
-            <Button onClick={submitPO} disabled={submitting || !poPhotoUrl}>
-              {submitting ? 'Updating...' : selectedDC?.poPhotoUrl ? 'Update Photo' : 'Add Photo'}
+            <Button variant="outline" onClick={() => setOpenDialog(false)} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button onClick={handleSubmitPO} disabled={submitting}>
+              {submitting ? 'Saving…' : 'Save'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={raiseDialogOpen} onOpenChange={setRaiseDialogOpen}>
-        <DialogContent className="sm:max-w-[520px]">
+        <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
             <DialogTitle>Raise DC</DialogTitle>
             <DialogDescription>
-              Review the summary below. Raising DC will move this deal into Closed Sales so DC details can be managed there.
+              Move this deal into Closed Sales for{' '}
+              {selectedForRaise?.customerName ||
+                selectedForRaise?.dcOrderId?.school_name ||
+                'this customer'}
+              ?
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 py-2 text-sm">
-            <div>
-              <Label className="font-medium">School / Customer</Label>
-              <div className="mt-1">
-                {selectedForRaise?.customerName ||
-                  (selectedForRaise?.dcOrderId as any)?.school_name ||
-                  (selectedForRaise?.saleId as any)?.customerName ||
-                  '-'}
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="font-medium">Executive</Label>
-                <div className="mt-1">{selectedForRaise ? getExecutiveName(selectedForRaise) : '-'}</div>
-              </div>
-              <div>
-                <Label className="font-medium">Phone</Label>
-                <div className="mt-1">
-                  {selectedForRaise?.customerPhone ||
-                    (selectedForRaise?.dcOrderId as any)?.contact_mobile ||
-                    '-'}
-                </div>
-              </div>
-            </div>
-            <div>
-              <Label className="font-medium">Products</Label>
-              <div className="mt-1">
-                {selectedForRaise?.product ||
-                  (selectedForRaise?.saleId as any)?.product ||
-                  ((selectedForRaise?.dcOrderId as any)?.products &&
-                  Array.isArray((selectedForRaise as any).dcOrderId.products)
-                    ? (selectedForRaise as any).dcOrderId.products
-                        .map((p: any) => p.product_name || p.product)
-                        .join(', ')
-                    : '-')}
-              </div>
-            </div>
-            <div>
-              <Label className="font-medium">Current Status</Label>
-              <div className="mt-1 capitalize">{selectedForRaise?.status || 'created'}</div>
-            </div>
-          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRaiseDialogOpen(false)} disabled={raising}>
               Cancel
             </Button>
             <Button onClick={confirmRaiseDc} disabled={raising}>
-              {raising ? 'Raising…' : 'Raise DC'}
+              {raising ? 'Raising…' : 'Confirm Raise'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -498,26 +507,3 @@ export default function AdminMyDCPage() {
     </div>
   )
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

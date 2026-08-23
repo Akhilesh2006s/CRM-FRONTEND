@@ -42,9 +42,12 @@ export default function EditTrainingPage() {
   const [feedbackPdfUrl, setFeedbackPdfUrl] = useState<string | undefined>()
   const feedbackInputRef = useRef<HTMLInputElement>(null)
   const [form, setForm] = useState({
-    status: 'Scheduled' as 'Scheduled' | 'Completed' | 'Cancelled',
+    // Empty until user picks Completed/Cancelled (Scheduled is not a selectable update status)
+    status: '' as '' | 'Completed' | 'Cancelled',
     remarks: '',
   })
+  const [statusError, setStatusError] = useState('')
+  const [feedbackError, setFeedbackError] = useState('')
 
   const isPdfFile = (file: File) => {
     const name = file.name.toLowerCase()
@@ -64,9 +67,14 @@ export default function EditTrainingPage() {
       if (data) {
         setTraining(data)
         setForm({
-          status: data.status || 'Scheduled',
+          // Only Completed/Cancelled are valid selections on this form
+          status:
+            data.status === 'Completed' || data.status === 'Cancelled'
+              ? data.status
+              : '',
           remarks: data.remarks || '',
         })
+        setStatusError('')
         setFeedbackPdfUrl(data.feedbackPdfUrl)
       } else {
         toast.error('Training not found')
@@ -101,6 +109,7 @@ export default function EditTrainingPage() {
       }
       const result = await response.json()
       setFeedbackPdfUrl(result.feedbackPdfUrl || result.training?.feedbackPdfUrl)
+      setFeedbackError('')
       toast.success('Feedback form uploaded')
     } catch (error: any) {
       toast.error(error?.message || 'Failed to upload feedback')
@@ -111,23 +120,26 @@ export default function EditTrainingPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    if (!form.status) {
-      toast.error('Training Status is required')
-      return
-    }
 
-    if (form.status === 'Completed' && !feedbackPdfUrl) {
-      toast.error('Please upload the feedback form (PDF) for completed training')
+    const status = typeof form.status === 'string' ? form.status.trim() : ''
+    if (!status) {
+      setStatusError('Training Status is required.')
       return
     }
+    setStatusError('')
+
+    if (status === 'Completed' && !feedbackPdfUrl) {
+      setFeedbackError('Please upload the feedback form (PDF) for completed training.')
+      return
+    }
+    setFeedbackError('')
 
     setSubmitting(true)
     try {
-      const payload: any = {
-        status: form.status,
+      const payload: Record<string, string> = {
+        status,
       }
-      
+
       // Only include remarks if it's provided
       if (form.remarks) {
         payload.remarks = form.remarks
@@ -246,13 +258,21 @@ export default function EditTrainingPage() {
               />
             </div>
             <div>
-              <Label>Training Status *</Label>
+              <Label htmlFor="training-status">Training Status *</Label>
               <Select
-                value={form.status}
-                onValueChange={(v: 'Scheduled' | 'Completed' | 'Cancelled') => setForm(f => ({ ...f, status: v }))}
-                required
+                value={form.status || undefined}
+                onValueChange={(v: 'Completed' | 'Cancelled') => {
+                  setForm((f) => ({ ...f, status: v }))
+                  setStatusError('')
+                  if (v !== 'Completed') setFeedbackError('')
+                }}
               >
-                <SelectTrigger className="bg-white text-neutral-900">
+                <SelectTrigger
+                  id="training-status"
+                  className={`bg-white text-neutral-900 ${statusError ? 'border-red-500 focus:ring-red-500' : ''}`}
+                  aria-invalid={!!statusError}
+                  aria-describedby={statusError ? 'training-status-error' : undefined}
+                >
                   <SelectValue placeholder="Select Training Status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -260,6 +280,11 @@ export default function EditTrainingPage() {
                   <SelectItem value="Cancelled">Cancelled</SelectItem>
                 </SelectContent>
               </Select>
+              {statusError && (
+                <p id="training-status-error" className="mt-1.5 text-sm text-red-600">
+                  {statusError}
+                </p>
+              )}
             </div>
             <div className="md:col-span-2">
               <Label>Remarks</Label>
@@ -307,6 +332,9 @@ export default function EditTrainingPage() {
                     </Button>
                   )}
                 </div>
+                {feedbackError && (
+                  <p className="text-sm text-red-600">{feedbackError}</p>
+                )}
               </div>
             )}
           </div>

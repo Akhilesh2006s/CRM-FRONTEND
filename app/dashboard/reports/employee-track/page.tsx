@@ -1,15 +1,20 @@
 'use client'
 
-import { useEffect, useState, Suspense } from 'react'
-import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { useEffect, useMemo, useState } from 'react'
 import { Card } from '@/components/ui/card'
-import { apiRequest, API_BASE_URL } from '@/lib/api'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { apiRequest } from '@/lib/api'
+import { downloadReportFile } from '@/lib/reportDownload'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Download, ArrowUpDown, Eye, ArrowLeft } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Download, MapPin, Radio, Search, Users } from 'lucide-react'
 import { toast } from 'sonner'
 
 type TrackingData = {
@@ -28,34 +33,49 @@ type TrackingData = {
 type Employee = {
   _id: string
   name?: string
+  phone?: string
+  mobile?: string
+  zone?: string
 }
 
-function EmployeeTrackingReportContent() {
-  const searchParams = useSearchParams()
-  const returnTo = searchParams.get('returnTo')
-  const contextEmployeeName = searchParams.get('employeeName') || ''
+function localYmd(dateStr?: string) {
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  if (Number.isNaN(d.getTime())) return ''
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
 
+function isSameLocalDay(dateStr?: string) {
+  if (!dateStr) return false
+  const d = new Date(dateStr)
+  if (Number.isNaN(d.getTime())) return false
+  const now = new Date()
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  )
+}
+
+export default function EmployeeTrackingReportPage() {
   const [trackingData, setTrackingData] = useState<TrackingData[]>([])
+  const [allTrackingData, setAllTrackingData] = useState<TrackingData[]>([])
   const [loading, setLoading] = useState(true)
   const [employees, setEmployees] = useState<Employee[]>([])
+  const [selectedTrack, setSelectedTrack] = useState<TrackingData | null>(null)
 
+  const [searchText, setSearchText] = useState('')
   const [employee, setEmployee] = useState('')
+  const [zone, setZone] = useState('')
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
 
   useEffect(() => {
-    const empId = searchParams.get('employeeId')
-    const from = searchParams.get('fromDate')
-    const to = searchParams.get('toDate')
-    if (empId) setEmployee(empId)
-    if (from) setFromDate(from)
-    if (to) setToDate(to)
-  }, [searchParams])
-
-  useEffect(() => {
     loadEmployees()
-    handleSearch()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    loadTrackingData()
   }, [])
 
   const loadEmployees = async () => {
@@ -65,87 +85,68 @@ function EmployeeTrackingReportContent() {
     } catch (_) {}
   }
 
-  const applyClientFilters = (data: TrackingData[]) => {
-    let filtered = [...data]
-
-    if (employee) {
-      filtered = filtered.filter((t) => t._id === employee)
-    }
-
-    if (fromDate) {
-      const from = new Date(fromDate)
-      filtered = filtered.filter((t) => {
-        const lastUsed = new Date(t.lastUsed)
-        return lastUsed >= from
-      })
-    }
-
-    if (toDate) {
-      const to = new Date(toDate + 'T23:59:59')
-      filtered = filtered.filter((t) => {
-        const lastUsed = new Date(t.lastUsed)
-        return lastUsed <= to
-      })
-    }
-
-    return filtered
+  const resolveEmployeeId = (query: string) => {
+    const q = query.trim().toLowerCase()
+    if (!q) return ''
+    const matches = employees.filter((emp) => {
+      const name = (emp.name || '').toLowerCase()
+      const phone = String(emp.phone || emp.mobile || '')
+      return name.includes(q) || phone.includes(query.trim())
+    })
+    return matches.length === 1 ? matches[0]._id : ''
   }
 
-  const handleSearch = async () => {
+  const loadTrackingData = async () => {
     setLoading(true)
     try {
+      const resolvedId = resolveEmployeeId(searchText)
+      setEmployee(resolvedId)
+
       const qs = new URLSearchParams()
-      if (employee) qs.append('employeeId', employee)
+      if (resolvedId) qs.append('employeeId', resolvedId)
       if (fromDate) qs.append('fromDate', fromDate)
       if (toDate) qs.append('toDate', toDate)
+      const data = await apiRequest<TrackingData[]>(`/employees/tracking${qs.toString() ? `?${qs.toString()}` : ''}`)
+      const rows = Array.isArray(data) ? data : []
+      setAllTrackingData(rows)
 
-      const url = qs.toString()
-        ? `/employees/tracking?${qs.toString()}`
-        : '/employees/tracking'
-      const data = await apiRequest<TrackingData[]>(url)
-      setTrackingData(applyClientFilters(data || []))
+      const q = searchText.trim().toLowerCase()
+      let filtered = rows
+      if (q) {
+        filtered = filtered.filter((row) =>
+          (row.employeeName || '').toLowerCase().includes(q) ||
+          (row.mobileNo || '').toLowerCase().includes(q)
+        )
+      }
+      if (zone) {
+        filtered = filtered.filter((row) => (row.zone || '') === zone)
+      }
+      if (fromDate) {
+        filtered = filtered.filter((row) => localYmd(row.started) === fromDate)
+      }
+      if (toDate) {
+        filtered = filtered.filter((row) => localYmd(row.lastUsed) === toDate)
+      }
+      setTrackingData(filtered)
     } catch (_) {
       toast.error('Failed to load employee tracking data')
-      setTrackingData([])
     }
     setLoading(false)
+  }
+
+  const handleSearch = () => {
+    loadTrackingData()
   }
 
   const handleExport = async () => {
     try {
       const qs = new URLSearchParams()
-      if (employee) qs.append('employeeId', employee)
+      const resolvedId = employee || resolveEmployeeId(searchText)
+      if (resolvedId) qs.append('employeeId', resolvedId)
       if (fromDate) qs.append('fromDate', fromDate)
       if (toDate) qs.append('toDate', toDate)
-
-      const token =
-        typeof window !== 'undefined' ? localStorage.getItem('authToken') : null
-
-      const response = await fetch(
-        `${API_BASE_URL}/api/employees/tracking/export?${qs.toString()}`,
-        {
-          method: 'GET',
-          headers: {
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-        }
-      )
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ message: 'Export failed' }))
-        throw new Error(error.message || 'Export failed')
-      }
-
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `Employee_Tracking_Report_${new Date().toISOString().split('T')[0]}.xlsx`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
-      toast.success('Excel file downloaded successfully')
+      await downloadReportFile(`/employees/tracking/export?${qs.toString()}`, 'Employee_Tracking_Report.xlsx')
+      toast.success('Excel file downloaded')
     } catch (err: any) {
       toast.error(err?.message || 'Failed to export to Excel')
     }
@@ -160,194 +161,271 @@ function EmployeeTrackingReportContent() {
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
+      hour12: true,
     })
   }
 
-  const mapLink = (track: TrackingData) => {
-    if (track.lastLatitude != null && track.lastLongitude != null) {
-      return `https://www.google.com/maps?q=${track.lastLatitude},${track.lastLongitude}`
-    }
-    return null
+  const handleViewDetails = (track: TrackingData) => {
+    setSelectedTrack(track)
   }
+
+  const zones = useMemo(() => {
+    const fromTracking = allTrackingData.map((row) => row.zone).filter(Boolean)
+    const fromEmployees = employees.map((emp) => emp.zone).filter(Boolean) as string[]
+    return Array.from(new Set([...fromTracking, ...fromEmployees])).sort()
+  }, [allTrackingData, employees])
+
+  const kpis = useMemo(() => {
+    const fieldExecutives = trackingData.length
+    const totalGpsLogs = trackingData.reduce((sum, row) => sum + (Number(row.logCount) || 0), 0)
+    const zoneCoverage = new Set(trackingData.map((row) => row.zone).filter(Boolean)).size
+    return { fieldExecutives, totalGpsLogs, zoneCoverage }
+  }, [trackingData])
+
+  const maxLogs = useMemo(
+    () => Math.max(1, ...trackingData.map((row) => Number(row.logCount) || 0)),
+    [trackingData]
+  )
 
   return (
     <div className="space-y-6 w-full">
-      {returnTo && (
-        <Card className="p-4 bg-blue-50 border-blue-100">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-neutral-800">
-              Tracking for{' '}
-              <span className="font-semibold text-blue-700">
-                {contextEmployeeName || 'selected employee'}
-              </span>
-            </p>
-            <Button variant="outline" size="sm" className="bg-white" asChild>
-              <Link href={returnTo}>
-                <ArrowLeft className="h-4 w-4 mr-1" />
-                Back to Expense Update
-              </Link>
-            </Button>
-          </div>
-        </Card>
-      )}
-
-      <div className="flex justify-end">
-        <Button
-          onClick={handleExport}
-          className="bg-blue-600 hover:bg-blue-700 text-white whitespace-nowrap shrink-0"
-        >
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-semibold text-slate-900">Employee Tracking Report</h1>
+          <p className="text-sm text-slate-500 mt-1">Field executive activity, GPS logs, and last known location</p>
+        </div>
+        <Button onClick={handleExport} className="bg-blue-600 hover:bg-blue-700 text-white whitespace-nowrap shrink-0">
           <Download className="mr-2 h-4 w-4" />
           Export to Excel
         </Button>
       </div>
 
-      <Card className="p-4 md:p-6 w-full">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="text-sm font-medium text-neutral-700 mb-2 block">
-              Select Employee
-            </label>
-            <Select
-              value={employee || 'all'}
-              onValueChange={(val) => setEmployee(val === 'all' ? '' : val)}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="All Employees" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Employees</SelectItem>
-                {employees.map((emp) => (
-                  <SelectItem key={emp._id} value={emp._id}>
-                    {emp.name || 'Unknown'}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Field Executives</p>
+          <div className="mt-2 flex items-center justify-between">
+            <p className="text-2xl font-semibold text-slate-800">{kpis.fieldExecutives}</p>
+            <Users className="h-5 w-5 text-slate-400" />
+          </div>
+        </Card>
+        <Card className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Total GPS Logs</p>
+          <div className="mt-2 flex items-center justify-between">
+            <p className="text-2xl font-semibold text-slate-800">{kpis.totalGpsLogs.toLocaleString('en-IN')}</p>
+            <Radio className="h-5 w-5 text-slate-400" />
+          </div>
+        </Card>
+        <Card className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Zone Coverage</p>
+          <div className="mt-2 flex items-center justify-between">
+            <p className="text-2xl font-semibold text-slate-800">{kpis.zoneCoverage}</p>
+            <MapPin className="h-5 w-5 text-slate-400" />
+          </div>
+        </Card>
+      </div>
+
+      <Card className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col xl:flex-row xl:items-end gap-3">
+          <div className="relative flex-1 min-w-[220px]">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSearch() }}
+              placeholder="Search for Employee or Mobile"
+              className="pl-9 rounded-xl bg-white"
+            />
           </div>
 
+          <Select value={zone || 'all'} onValueChange={(val) => setZone(val === 'all' ? '' : val)}>
+            <SelectTrigger className="w-full xl:w-48 rounded-xl bg-white">
+              <SelectValue placeholder="All Zones" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Zones</SelectItem>
+              {zones.map((z) => (
+                <SelectItem key={z} value={z}>{z}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           <div>
-            <label className="text-sm font-medium text-neutral-700 mb-2 block">
-              From Date
-            </label>
+            <label className="text-xs font-medium text-slate-600 mb-1 block">Started</label>
             <Input
               type="date"
               value={fromDate}
               onChange={(e) => setFromDate(e.target.value)}
-              className="w-full"
+              className="rounded-xl bg-white w-full xl:w-40"
             />
           </div>
-
           <div>
-            <label className="text-sm font-medium text-neutral-700 mb-2 block">
-              To Date
-            </label>
+            <label className="text-xs font-medium text-slate-600 mb-1 block">Last Used</label>
             <Input
               type="date"
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}
-              className="w-full"
+              className="rounded-xl bg-white w-full xl:w-40"
             />
           </div>
 
-          <div className="flex items-end">
-            <Button
-              onClick={handleSearch}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              Search
-            </Button>
-          </div>
+          <Button onClick={handleSearch} className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white shrink-0">
+            Search
+          </Button>
         </div>
       </Card>
 
-      <Card className="p-4 md:p-6 w-full">
-        <div className="text-sm text-neutral-600 mb-4">
-          Total:{' '}
-          <span className="font-semibold text-neutral-900">{trackingData.length}</span>{' '}
-          employees found
+      <Card className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="px-4 md:px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-slate-800">Tracking log</h2>
+          <span className="text-xs text-slate-500">{trackingData.length} employees found</span>
         </div>
 
         {loading ? (
-          <div className="text-center py-8 text-neutral-500">Loading...</div>
+          <div className="text-center py-12 text-slate-500">Loading...</div>
         ) : trackingData.length === 0 ? (
-          <div className="text-center py-8 text-neutral-500">No tracking data found.</div>
+          <div className="text-center py-12 text-slate-500">No tracking data found.</div>
         ) : (
           <div className="w-full overflow-x-auto">
-            <Table className="w-full min-w-[1000px]">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>S.No</TableHead>
-                  <TableHead>Employee Name</TableHead>
-                  <TableHead>Mobile No</TableHead>
-                  <TableHead>Zone</TableHead>
-                  <TableHead>Started</TableHead>
-                  <TableHead>Last Used</TableHead>
-                  <TableHead>Last Location</TableHead>
-                  <TableHead>Log Count</TableHead>
-                  <TableHead>Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <table className="w-full min-w-[1100px] text-sm">
+              <thead>
+                <tr className="bg-slate-50 text-slate-700 font-semibold text-xs uppercase tracking-wider">
+                  <th className="text-left px-4 py-3">S.No</th>
+                  <th className="text-left px-4 py-3">Employee</th>
+                  <th className="text-left px-4 py-3">Zone</th>
+                  <th className="text-left px-4 py-3">Live Status</th>
+                  <th className="text-left px-4 py-3">Activity Timestamps</th>
+                  <th className="text-left px-4 py-3">Last Location</th>
+                  <th className="text-left px-4 py-3">Logs</th>
+                  <th className="text-left px-4 py-3">Action</th>
+                </tr>
+              </thead>
+              <tbody>
                 {trackingData.map((track, index) => {
-                  const maps = mapLink(track)
+                  const activeToday = isSameLocalDay(track.lastUsed)
+                  const logPct = Math.min(100, Math.round(((Number(track.logCount) || 0) / maxLogs) * 100))
                   return (
-                    <TableRow key={track._id}>
-                      <TableCell>{index + 1}</TableCell>
-                      <TableCell className="font-medium">{track.employeeName}</TableCell>
-                      <TableCell>{track.mobileNo || '-'}</TableCell>
-                      <TableCell>{track.zone || '-'}</TableCell>
-                      <TableCell>{formatDate(track.started)}</TableCell>
-                      <TableCell>{formatDate(track.lastUsed)}</TableCell>
-                      <TableCell className="max-w-md">
-                        <span className="truncate block" title={track.lastLocation}>
-                          {track.lastLocation || '-'}
-                        </span>
-                        {maps && (
-                          <a
-                            href={maps}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-blue-600 hover:underline"
-                          >
-                            View on map
-                          </a>
+                    <tr key={track._id} className="border-t border-slate-100 hover:bg-slate-50/80 transition-colors">
+                      <td className="px-4 py-3 text-slate-500">{index + 1}</td>
+                      <td className="px-4 py-3">
+                        <p className="font-semibold text-slate-800">{track.employeeName || '-'}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">{track.mobileNo || '-'}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        {track.zone ? (
+                          <span className="inline-flex text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                            {track.zone}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">-</span>
                         )}
-                      </TableCell>
-                      <TableCell>
-                        <span className="px-2 py-1 rounded text-xs bg-blue-100 text-blue-800 font-semibold">
-                          {track.logCount}
+                      </td>
+                      <td className="px-4 py-3">
+                        {activeToday ? (
+                          <span className="inline-flex text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            Active Today
+                          </span>
+                        ) : (
+                          <span className="inline-flex text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
+                            Idle
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        <p>First Check-in: {formatDate(track.started)}</p>
+                        <p className="mt-0.5">Last Active: {formatDate(track.lastUsed)}</p>
+                      </td>
+                      <td className="px-4 py-3 max-w-[240px]">
+                        <div className="flex items-start gap-1.5 min-w-0">
+                          <MapPin className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+                          <span className="truncate text-slate-700" title={track.lastLocation || '-'}>
+                            {track.lastLocation || '-'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 w-36">
+                        <span className="inline-flex text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                          {track.logCount || 0}
                         </span>
-                      </TableCell>
-                      <TableCell>
+                        <div className="mt-2 h-1.5 w-24 rounded-full bg-slate-100 overflow-hidden">
+                          <div className="h-full rounded-full bg-blue-500" style={{ width: `${logPct}%` }} />
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
                         <Button
-                          variant="ghost"
+                          type="button"
+                          variant="outline"
                           size="sm"
-                          onClick={() => {
-                            window.location.href = `/dashboard/employees/${track._id}`
-                          }}
-                          className="h-8 w-8 p-0 hover:bg-green-100"
+                          onClick={() => handleViewDetails(track)}
+                          className="rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50"
                         >
-                          <Eye className="h-4 w-4 text-green-600" />
+                          View Activity
                         </Button>
-                      </TableCell>
-                    </TableRow>
+                      </td>
+                    </tr>
                   )
                 })}
-              </TableBody>
-            </Table>
+              </tbody>
+            </table>
           </div>
         )}
       </Card>
-    </div>
-  )
-}
 
-export default function EmployeeTrackingReportPage() {
-  return (
-    <Suspense fallback={<div className="py-8 text-neutral-500">Loading report...</div>}>
-      <EmployeeTrackingReportContent />
-    </Suspense>
+      <Dialog open={!!selectedTrack} onOpenChange={(open) => { if (!open) setSelectedTrack(null) }}>
+        <DialogContent className="rounded-xl sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>View Activity</DialogTitle>
+            <DialogDescription>Tracking details for this field executive</DialogDescription>
+          </DialogHeader>
+          {selectedTrack && (
+            <div className="space-y-3 text-sm">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Employee</p>
+                <p className="font-semibold text-slate-800">{selectedTrack.employeeName || '-'}</p>
+                <p className="text-xs text-slate-500">{selectedTrack.mobileNo || '-'}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Zone</p>
+                  <p className="text-slate-800">{selectedTrack.zone || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Live Status</p>
+                  <p className="text-slate-800">{isSameLocalDay(selectedTrack.lastUsed) ? 'Active Today' : 'Idle'}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">First Check-in</p>
+                  <p className="text-slate-800">{formatDate(selectedTrack.started)}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Last Active</p>
+                  <p className="text-slate-800">{formatDate(selectedTrack.lastUsed)}</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Last Location</p>
+                <p className="text-slate-800">{selectedTrack.lastLocation || '-'}</p>
+                {selectedTrack.lastLatitude != null && selectedTrack.lastLongitude != null && (
+                  <a
+                    href={`https://www.google.com/maps?q=${selectedTrack.lastLatitude},${selectedTrack.lastLongitude}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 mt-1 text-blue-600 hover:underline"
+                  >
+                    <MapPin className="h-3.5 w-3.5" />
+                    Open in Maps
+                  </a>
+                )}
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">GPS Logs</p>
+                <p className="text-slate-800">{selectedTrack.logCount || 0}</p>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
   )
 }

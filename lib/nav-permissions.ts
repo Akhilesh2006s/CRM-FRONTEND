@@ -6,6 +6,7 @@
 export const HREF_PERMISSION_MAP: Record<string, string> = {
   '/dashboard': 'dashboard.home.page.view',
   '/dashboard/dc/create': 'clients.create_sale.page.view',
+  '/dashboard/dc/admin/my': 'clients.admin_created_dcs.page.view',
   '/dashboard/dc/closed': 'clients.closed_sales.page.view',
   '/dashboard/dc/saved': 'clients.saved_dc.page.view',
   '/dashboard/dc/pending': 'clients.pending_dc.page.view',
@@ -68,6 +69,7 @@ export const HREF_PERMISSION_MAP: Record<string, string> = {
   '/dashboard/reports/dc': 'reports.dc.page.view',
   '/dashboard/reports/returns': 'reports.returns.page.view',
   '/dashboard/reports/expenses': 'reports.expenses.page.view',
+  '/dashboard/reports/training-service': 'reports.training_service.page.view',
   '/dashboard/products': 'products.list.page.view',
   '/dashboard/products/new': 'products.new.page.view',
   '/dashboard/products/deliverables': 'products.deliverables.page.view',
@@ -89,6 +91,19 @@ export const HREF_PERMISSION_MAP: Record<string, string> = {
 /** Longest-prefix match for dynamic routes */
 export function permissionForPath(pathname: string): string | null {
   if (!pathname) return null
+
+  // Personal Executive Manager dashboard/leaves are not the admin "All Managers" list page.
+  // Leaving these unmapped here; canAccessPath applies the role/ownership check.
+  if (
+    /^\/dashboard\/executive-managers\/[^/]+\/(dashboard|leaves)(?:\/|$)/.test(
+      pathname
+    )
+  ) {
+    return null
+  }
+
+  // EM Executives list is role-scoped (my/executives API); do not treat as admin All Managers.
+  // Still mapped below to executives.page.view for Admin RBAC; EM access is via role check in access.ts.
   if (HREF_PERMISSION_MAP[pathname]) return HREF_PERMISSION_MAP[pathname]
   const sorted = Object.keys(HREF_PERMISSION_MAP).sort((a, b) => b.length - a.length)
   for (const href of sorted) {

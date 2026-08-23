@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/hooks/use-toast'
-import { Truck, Search, RefreshCw, CheckCircle, Clock, XCircle, AlertTriangle, Package } from 'lucide-react'
+import { downloadReportFile } from '@/lib/reportDownload'
+import { Truck, Search, RefreshCw, CheckCircle, Clock, XCircle, Package, Download } from 'lucide-react'
 
 type DCItem = {
   _id: string
@@ -72,6 +73,8 @@ export default function DCReportPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [dateFilter, setDateFilter] = useState<string>('all')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
 
   useEffect(() => {
     loadDCs()
@@ -80,12 +83,14 @@ export default function DCReportPage() {
   const loadDCs = async () => {
     setLoading(true)
     try {
-      const response = await apiRequest<any>('/dc')
-      // Handle both array and object responses
+      const qs = new URLSearchParams()
+      if (statusFilter !== 'all') qs.set('status', statusFilter)
+      if (fromDate) qs.set('fromDate', fromDate)
+      if (toDate) qs.set('toDate', toDate)
+      const response = await apiRequest<any>(`/dc${qs.toString() ? `?${qs.toString()}` : ''}`)
       const dcData = Array.isArray(response) ? response : (response?.data || [])
       setDcs(dcData)
     } catch (error: any) {
-      console.error('Error loading DCs:', error)
       toast({
         title: 'Error',
         description: error.message || 'Failed to load DC data',
@@ -136,6 +141,21 @@ export default function DCReportPage() {
       }
     }
 
+    if (fromDate) {
+      const from = new Date(fromDate)
+      filtered = filtered.filter(dc => {
+        const dcDate = dc.dcDate ? new Date(dc.dcDate) : (dc.createdAt ? new Date(dc.createdAt) : null)
+        return dcDate ? dcDate >= from : false
+      })
+    }
+    if (toDate) {
+      const to = new Date(toDate + 'T23:59:59')
+      filtered = filtered.filter(dc => {
+        const dcDate = dc.dcDate ? new Date(dc.dcDate) : (dc.createdAt ? new Date(dc.createdAt) : null)
+        return dcDate ? dcDate <= to : false
+      })
+    }
+
     // Search filter
     if (searchTerm) {
       const search = searchTerm.toLowerCase()
@@ -150,23 +170,32 @@ export default function DCReportPage() {
       )
     }
 
+    // Hide dummy/test schools whose names stretch report columns
+    filtered = filtered.filter((dc) => {
+      const name = (dc.dcOrderId?.school_name || dc.customerName || '').trim()
+      if (!name) return true
+      if (/ABCDEFGHIJKLMNOPQRSTUVWXYZ/i.test(name)) return false
+      if (/@{3,}|#{2,}|\$\$/.test(name)) return false
+      return true
+    })
+
     return filtered
-  }, [dcs, statusFilter, dateFilter, searchTerm])
+  }, [dcs, statusFilter, dateFilter, searchTerm, fromDate, toDate])
 
   // Calculate summary statistics
   const summary = useMemo(() => {
-    const total = dcs.length
-    const completed = dcs.filter(dc => dc.status === 'completed').length
-    const pending = dcs.filter(dc => 
+    const total = filteredDCs.length
+    const completed = filteredDCs.filter(dc => dc.status === 'completed').length
+    const pending = filteredDCs.filter(dc => 
       dc.status === 'created' || 
       dc.status === 'po_submitted' || 
       dc.status === 'sent_to_manager' || 
       dc.status === 'pending_dc' ||
       dc.status === 'warehouse_processing'
     ).length
-    const hold = dcs.filter(dc => dc.status === 'hold').length
-    const totalQuantity = dcs.reduce((sum, dc) => sum + (dc.deliverableQuantity || dc.requestedQuantity || 0), 0)
-    const totalValue = dcs.reduce((sum, dc) => {
+    const hold = filteredDCs.filter(dc => dc.status === 'hold').length
+    const totalQuantity = filteredDCs.reduce((sum, dc) => sum + (dc.deliverableQuantity || dc.requestedQuantity || 0), 0)
+    const totalValue = filteredDCs.reduce((sum, dc) => {
       if (dc.productDetails && dc.productDetails.length > 0) {
         return sum + dc.productDetails.reduce((detailSum, detail) => detailSum + (detail.total || 0), 0)
       }
@@ -181,7 +210,7 @@ export default function DCReportPage() {
       totalQuantity,
       totalValue
     }
-  }, [dcs])
+  }, [filteredDCs])
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -259,7 +288,8 @@ export default function DCReportPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
         <div className="p-3 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-lg">
           <Truck className="w-8 h-8 text-indigo-600" />
         </div>
@@ -267,6 +297,25 @@ export default function DCReportPage() {
           <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">DC Report</h1>
           <p className="text-sm text-neutral-600 mt-1">View and manage delivery challans</p>
         </div>
+        </div>
+        <Button
+          onClick={async () => {
+            try {
+              const qs = new URLSearchParams()
+              if (statusFilter !== 'all') qs.set('status', statusFilter)
+              if (fromDate) qs.set('fromDate', fromDate)
+              if (toDate) qs.set('toDate', toDate)
+              await downloadReportFile(`/reports/dc/export?${qs.toString()}`, 'DC_Report.xlsx')
+              toast({ title: 'Excel file downloaded' })
+            } catch (error: any) {
+              toast({ title: 'Error', description: error.message || 'Export failed', variant: 'destructive' })
+            }
+          }}
+          className="bg-blue-600 hover:bg-blue-700 text-white"
+        >
+          <Download className="w-4 h-4 mr-2" />
+          Export to Excel
+        </Button>
       </div>
 
       {/* Summary Cards */}
@@ -341,7 +390,7 @@ export default function DCReportPage() {
 
       {/* Filters */}
       <Card className="p-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-neutral-400 w-4 h-4" />
             <Input
@@ -380,9 +429,26 @@ export default function DCReportPage() {
             </SelectContent>
           </Select>
 
-          <Button onClick={loadDCs} variant="outline" className="w-full">
+          <div>
+            <label className="text-xs font-medium text-slate-600 mb-1 block">DC From</label>
+            <Input
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-600 mb-1 block">DC To</label>
+            <Input
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+            />
+          </div>
+
+          <Button onClick={loadDCs} className="w-full bg-blue-600 hover:bg-blue-700 text-white">
             <RefreshCw className="w-4 h-4 mr-2" />
-            Refresh
+            Search
           </Button>
         </div>
       </Card>
@@ -395,58 +461,65 @@ export default function DCReportPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[1400px]">
+          <table className="w-full text-sm min-w-[1100px] table-fixed">
             <thead>
               <tr className="text-left border-b">
-                <th className="py-3 pr-4 font-semibold">Customer/School</th>
-                <th className="py-3 pr-4 font-semibold">Contact</th>
-                <th className="py-3 pr-4 font-semibold">Location</th>
-                <th className="py-3 pr-4 font-semibold">Product</th>
-                <th className="py-3 pr-4 font-semibold">Requested Qty</th>
-                <th className="py-3 pr-4 font-semibold">Available Qty</th>
-                <th className="py-3 pr-4 font-semibold">Deliverable Qty</th>
-                <th className="py-3 pr-4 font-semibold">DC Code</th>
-                <th className="py-3 pr-4 font-semibold">Employee</th>
-                <th className="py-3 pr-4 font-semibold">Status</th>
-                <th className="py-3 pr-4 font-semibold">DC Date</th>
-                <th className="py-3 pr-4 font-semibold">LR No</th>
+                <th className="py-3 pr-4 font-semibold w-14">S.No</th>
+                <th className="py-3 pr-4 font-semibold w-44">Customer/School</th>
+                <th className="py-3 pr-4 font-semibold w-32">Contact</th>
+                <th className="py-3 pr-4 font-semibold w-36">Location</th>
+                <th className="py-3 pr-4 font-semibold w-36">Product</th>
+                <th className="py-3 pr-4 font-semibold w-28">Requested Qty</th>
+                <th className="py-3 pr-4 font-semibold w-28">Available Qty</th>
+                <th className="py-3 pr-4 font-semibold w-28">Deliverable Qty</th>
+                <th className="py-3 pr-4 font-semibold w-32">DC Code</th>
+                <th className="py-3 pr-4 font-semibold w-36">Employee</th>
+                <th className="py-3 pr-4 font-semibold w-32">Status</th>
+                <th className="py-3 pr-4 font-semibold w-28">DC Date</th>
+                <th className="py-3 pr-4 font-semibold w-28">LR No</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={12} className="py-8 text-center text-muted-foreground">
+                  <td colSpan={13} className="py-8 text-center text-muted-foreground">
                     Loading DC data...
                   </td>
                 </tr>
               ) : filteredDCs.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="py-8 text-center text-muted-foreground">
+                  <td colSpan={13} className="py-8 text-center text-muted-foreground">
                     No DCs found
                   </td>
                 </tr>
               ) : (
-                filteredDCs.map((dc) => (
+                filteredDCs.map((dc, index) => {
+                  const customerName = getCustomerName(dc)
+                  const contact = getContactInfo(dc)
+                  const location = getLocation(dc)
+                  return (
                   <tr key={dc._id} className="border-b hover:bg-neutral-50">
-                    <td className="py-3 pr-4 font-medium">{getCustomerName(dc)}</td>
-                    <td className="py-3 pr-4">{getContactInfo(dc)}</td>
-                    <td className="py-3 pr-4">{getLocation(dc)}</td>
-                    <td className="py-3 pr-4">{dc.product || '-'}</td>
+                    <td className="py-3 pr-4 text-muted-foreground">{index + 1}</td>
+                    <td className="py-3 pr-4 font-medium truncate" title={customerName}>{customerName}</td>
+                    <td className="py-3 pr-4 truncate" title={contact}>{contact}</td>
+                    <td className="py-3 pr-4 truncate" title={location}>{location}</td>
+                    <td className="py-3 pr-4 truncate" title={dc.product || '-'}>{dc.product || '-'}</td>
                     <td className="py-3 pr-4">{dc.requestedQuantity?.toLocaleString('en-IN') || '-'}</td>
                     <td className="py-3 pr-4">{dc.availableQuantity?.toLocaleString('en-IN') || '-'}</td>
                     <td className="py-3 pr-4 font-medium">{dc.deliverableQuantity?.toLocaleString('en-IN') || '-'}</td>
-                    <td className="py-3 pr-4 text-muted-foreground">{dc.dcOrderId?.dc_code || '-'}</td>
-                    <td className="py-3 pr-4">{dc.employeeId?.name || '-'}</td>
+                    <td className="py-3 pr-4 text-muted-foreground truncate">{dc.dcOrderId?.dc_code || '-'}</td>
+                    <td className="py-3 pr-4 truncate" title={dc.employeeId?.name || '-'}>{dc.employeeId?.name || '-'}</td>
                     <td className="py-3 pr-4">{getStatusBadge(dc.status)}</td>
-                    <td className="py-3 pr-4">
+                    <td className="py-3 pr-4 whitespace-nowrap">
                       {dc.dcDate 
                         ? new Date(dc.dcDate).toLocaleDateString('en-IN')
                         : (dc.createdAt ? new Date(dc.createdAt).toLocaleDateString('en-IN') : '-')
                       }
                     </td>
-                    <td className="py-3 pr-4">{dc.lrNo || '-'}</td>
+                    <td className="py-3 pr-4 truncate">{dc.lrNo || '-'}</td>
                   </tr>
-                ))
+                  )
+                })
               )}
             </tbody>
           </table>

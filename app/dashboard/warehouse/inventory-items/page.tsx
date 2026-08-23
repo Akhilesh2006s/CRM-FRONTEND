@@ -8,17 +8,21 @@ import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { apiRequest } from '@/lib/api'
 import { Pencil } from 'lucide-react'
+import {
+  remapAndMergeInventoryRows,
+  vendorMapFromApiPayloads,
+  type PartnerAssignment,
+} from '@/lib/vendorProductAssignment'
 
 type WarehouseItem = {
   _id: string
   productName: string
   category?: string
-  // Some deployments store level under location or a custom field; treat both as possible sources
+  class?: string
   location?: string
   level?: string
   specs?: string
   subject?: string
-  itemType?: string
   supplier?: string
   currentStock?: number
 }
@@ -32,8 +36,20 @@ export default function WarehouseInventoryItems() {
   useEffect(() => {
     ;(async () => {
       try {
-        const data = await apiRequest<WarehouseItem[]>('/warehouse')
-        setItems(data)
+        const [data, opts, warehouseVendors, partners, products] = await Promise.all([
+          apiRequest<WarehouseItem[]>('/warehouse'),
+          apiRequest<{ productVendors?: Record<string, string[]> }>('/metadata/inventory-options').catch(() => ({})),
+          apiRequest<{ productVendors?: Record<string, string[]> }>('/warehouse/vendors').catch(() => ({})),
+          apiRequest<PartnerAssignment[]>('/partners').catch(() => []),
+          apiRequest<Array<{ _id?: string; productName?: string }>>('/products').catch(() => []),
+        ])
+        const vendorMap = vendorMapFromApiPayloads({
+          partners,
+          productVendors: opts?.productVendors,
+          warehouseProductVendors: warehouseVendors?.productVendors,
+          products: Array.isArray(products) ? products : [],
+        })
+        setItems(remapAndMergeInventoryRows(Array.isArray(data) ? data : [], vendorMap))
       } catch (_) {}
       setLoading(false)
     })()
@@ -43,6 +59,8 @@ export default function WarehouseInventoryItems() {
     const lcCategory = category.trim().toLowerCase()
     const lcLevel = level.trim().toLowerCase()
     return items.filter((it) => {
+      const vendor = String(it.supplier || '').trim()
+      if (!vendor || vendor === '-') return false
       const itemLevel = (it.level || it.location || '').toString().toLowerCase()
       const itemCategory = (it.category || '').toString().toLowerCase()
       const catOk = lcCategory ? itemCategory.includes(lcCategory) : true
@@ -66,8 +84,8 @@ export default function WarehouseInventoryItems() {
       <Card className="p-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
-            <div className="text-sm text-neutral-600 mb-1">Category</div>
-            <Input placeholder="Category" value={category} onChange={(e) => setCategory(e.target.value)} />
+            <div className="text-sm text-neutral-600 mb-1">Product Category</div>
+            <Input placeholder="Product Category" value={category} onChange={(e) => setCategory(e.target.value)} />
           </div>
           <div>
             <div className="text-sm text-neutral-600 mb-1">Level</div>
@@ -85,11 +103,10 @@ export default function WarehouseInventoryItems() {
             <TableRow>
               <TableHead className="w-16">S.No</TableHead>
               <TableHead>Product</TableHead>
-              <TableHead>Category</TableHead>
+              <TableHead>Product Category</TableHead>
               <TableHead>Level</TableHead>
               <TableHead>Specs</TableHead>
               <TableHead>Subject</TableHead>
-              <TableHead>Item Type</TableHead>
               <TableHead>Vendor</TableHead>
               <TableHead>Quantity</TableHead>
               <TableHead className="w-12"></TableHead>
@@ -98,7 +115,7 @@ export default function WarehouseInventoryItems() {
           <TableBody>
             {!loading && filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={10} className="text-center text-neutral-500">No items found.</TableCell>
+                <TableCell colSpan={9} className="text-center text-neutral-500">No items found.</TableCell>
               </TableRow>
             )}
             {filtered.map((row, idx) => (
@@ -107,10 +124,9 @@ export default function WarehouseInventoryItems() {
                 <TableCell className="font-medium text-neutral-900">{row.productName}</TableCell>
                 <TableCell>{row.category || '-'}</TableCell>
                 <TableCell>{row.level || row.location || '-'}</TableCell>
-                <TableCell>{row.specs || 'Regular'}</TableCell>
+                <TableCell>{row.specs || '-'}</TableCell>
                 <TableCell>{row.subject || '-'}</TableCell>
-                <TableCell>{row.itemType || '—'}</TableCell>
-                <TableCell>{row.supplier || '—'}</TableCell>
+                <TableCell>{row.supplier || '-'}</TableCell>
                 <TableCell>{row.currentStock !== undefined && row.currentStock !== null ? row.currentStock : 0}</TableCell>
                 <TableCell>
                   <Link href={`/dashboard/warehouse/inventory-items/${row._id}`} aria-label="Edit">

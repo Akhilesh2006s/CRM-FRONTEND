@@ -2,12 +2,13 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { Card } from '@/components/ui/card'
-import { apiRequest, API_BASE_URL } from '@/lib/api'
+import { apiRequest } from '@/lib/api'
+import { downloadReportFile } from '@/lib/reportDownload'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Download, ArrowUpDown, TrendingUp, Users, MapPin, Calendar } from 'lucide-react'
+import { Download, TrendingUp, Users, MapPin, Calendar } from 'lucide-react'
 import { toast } from 'sonner'
 import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
@@ -15,6 +16,7 @@ type Lead = {
   _id: string
   school_name?: string
   contact_person?: string
+  contact_person2?: string
   contact_mobile?: string
   zone?: string
   status?: string
@@ -23,9 +25,10 @@ type Lead = {
   location?: string
   strength?: number
   createdAt?: string
-  managed_by?: { name?: string }
-  assigned_by?: { name?: string }
-  createdBy?: { name?: string }
+  updatedAt?: string
+  managed_by?: { _id?: string; name?: string }
+  assigned_by?: { _id?: string; name?: string }
+  createdBy?: { _id?: string; name?: string }
 }
 
 type Employee = {
@@ -54,10 +57,6 @@ export default function ReportsOpenLeadsPage() {
     loadLeads()
   }, [])
 
-  useEffect(() => {
-    applyFilters()
-  }, [allLeads, zone, employee, priority, fromDate, toDate, contactMobile, schoolName])
-
   const loadEmployees = async () => {
     try {
       const data = await apiRequest<Employee[]>('/employees?isActive=true')
@@ -68,131 +67,51 @@ export default function ReportsOpenLeadsPage() {
   const loadLeads = async () => {
     setLoading(true)
     try {
-      // Open leads are only Pending status
-      const response = await apiRequest<any>('/leads?status=Pending&limit=1000')
-      console.log('API Response:', response)
-      
-      // Handle both array and paginated response formats
-      let allData: Lead[] = []
-      
-      if (Array.isArray(response)) {
-        // Direct array response
-        allData = response
-      } else if (response?.data && Array.isArray(response.data)) {
-        // Paginated response with data array
-        allData = response.data
-        
-        // If there are more pages, fetch them
-        if (response.pagination && response.pagination.totalPages > 1) {
-          const totalPages = response.pagination.totalPages
-          for (let page = 2; page <= totalPages; page++) {
-            try {
-              const pageResponse = await apiRequest<any>(`/leads?status=Pending&limit=1000&page=${page}`)
-              const pageData = Array.isArray(pageResponse) 
-                ? pageResponse 
-                : (pageResponse?.data || [])
-              allData = [...allData, ...pageData]
-            } catch (err) {
-              console.warn(`Failed to fetch page ${page}:`, err)
-              break
-            }
-          }
-        }
-      }
-      
-      // Ensure we only have pending leads (double-check)
-      allData = allData.filter((lead: Lead) => lead.status === 'Pending')
-      
-      console.log('Total pending leads found:', allData.length)
-      setAllLeads(allData)
-      
-      // Extract unique zones
-      const uniqueZones = Array.from(new Set(allData.map(l => l.zone).filter(Boolean))) as string[]
-      setZones(uniqueZones.sort())
-      
-      if (allData.length === 0) {
-        toast.info('No pending leads found in the database.')
-      } else {
-        toast.success(`Loaded ${allData.length} pending lead(s)`)
-      }
+      const qs = new URLSearchParams()
+      qs.set('status', 'Pending')
+      qs.set('limit', '200')
+      qs.set('page', '1')
+      if (zone) qs.set('zone', zone)
+      if (employee) qs.set('employee', employee)
+      if (priority) qs.set('priority', priority)
+      if (fromDate) qs.set('fromDate', fromDate)
+      if (toDate) qs.set('toDate', toDate)
+      if (contactMobile) qs.set('contactMobile', contactMobile)
+      if (schoolName) qs.set('schoolName', schoolName)
+
+      const response = await apiRequest<any>(`/leads?${qs.toString()}`)
+      const allData: Lead[] = Array.isArray(response)
+        ? response
+        : (response?.data || [])
+      const pending = allData.filter((lead: Lead) => lead.status === 'Pending')
+      setAllLeads(pending)
+      setLeads(pending)
+      const uniqueZones = Array.from(new Set(pending.map((l) => l.zone).filter(Boolean))) as string[]
+      if (!zone) setZones(uniqueZones.sort())
     } catch (err: any) {
-      console.error('Error loading pending leads:', err)
-      if (err?.message?.includes('Failed to fetch') || err?.message?.includes('ERR_CONNECTION_REFUSED')) {
-        toast.error('Cannot connect to backend server. Please check your connection or contact support.')
-      } else {
-        toast.error(err?.message || 'Failed to load leads')
-      }
+      toast.error(err?.message || 'Failed to load leads')
     } finally {
       setLoading(false)
     }
   }
 
-  const applyFilters = () => {
-    let filtered = [...allLeads]
-
-    if (zone) filtered = filtered.filter(l => l.zone?.toLowerCase().includes(zone.toLowerCase()))
-    if (priority) filtered = filtered.filter(l => l.priority === priority)
-    if (contactMobile) filtered = filtered.filter(l => l.contact_mobile?.includes(contactMobile))
-    if (schoolName) filtered = filtered.filter(l => l.school_name?.toLowerCase().includes(schoolName.toLowerCase()))
-    if (employee) {
-      filtered = filtered.filter(l => 
-        l.managed_by?._id === employee || 
-        l.assigned_by?._id === employee ||
-        l.createdBy?._id === employee
-      )
-    }
-    if (fromDate) {
-      const from = new Date(fromDate)
-      filtered = filtered.filter(l => l.createdAt && new Date(l.createdAt) >= from)
-    }
-    if (toDate) {
-      const to = new Date(toDate + 'T23:59:59')
-      filtered = filtered.filter(l => l.createdAt && new Date(l.createdAt) <= to)
-    }
-
-    setLeads(filtered)
-  }
-
   const handleSearch = () => {
-    applyFilters()
+    loadLeads()
   }
 
   const handleExport = async () => {
     try {
       const qs = new URLSearchParams()
-      qs.append('status', 'Pending')
-      if (zone) qs.append('zone', zone)
-      if (employee) qs.append('employee', employee)
-      if (priority) qs.append('priority', priority)
-      if (fromDate) qs.append('fromDate', fromDate)
-      if (toDate) qs.append('toDate', toDate)
-      if (contactMobile) qs.append('contactMobile', contactMobile)
-      if (schoolName) qs.append('schoolName', schoolName)
-
-      const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null
-
-      const response = await fetch(`${API_BASE_URL}/api/leads/export?${qs.toString()}`, {
-        method: 'GET',
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      })
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ message: 'Export failed' }))
-        throw new Error(error.message || 'Export failed')
-      }
-
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `Open_Leads_Report_${new Date().toISOString().split('T')[0]}.xlsx`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
-      toast.success('Excel file downloaded successfully')
+      qs.set('status', 'Pending')
+      if (zone) qs.set('zone', zone)
+      if (employee) qs.set('employee', employee)
+      if (priority) qs.set('priority', priority)
+      if (fromDate) qs.set('fromDate', fromDate)
+      if (toDate) qs.set('toDate', toDate)
+      if (contactMobile) qs.set('contactMobile', contactMobile)
+      if (schoolName) qs.set('schoolName', schoolName)
+      await downloadReportFile(`/leads/export?${qs.toString()}`, 'Open_Leads_Report.xlsx')
+      toast.success('Excel file downloaded')
     } catch (err: any) {
       toast.error(err?.message || 'Failed to export to Excel')
     }
@@ -218,11 +137,11 @@ export default function ReportsOpenLeadsPage() {
 
   // Calculate analytics data
   const analyticsData = useMemo(() => {
-    if (!allLeads.length) return null
+    if (!leads.length) return null
 
     // Leads by Zone
     const zoneData: Record<string, number> = {}
-    allLeads.forEach(lead => {
+    leads.forEach(lead => {
       const zone = lead.zone || 'Unassigned'
       zoneData[zone] = (zoneData[zone] || 0) + 1
     })
@@ -233,7 +152,7 @@ export default function ReportsOpenLeadsPage() {
 
     // Leads by Priority
     const priorityData: Record<string, number> = {}
-    allLeads.forEach(lead => {
+    leads.forEach(lead => {
       const priority = lead.priority || 'Cold'
       priorityData[priority] = (priorityData[priority] || 0) + 1
     })
@@ -246,7 +165,7 @@ export default function ReportsOpenLeadsPage() {
 
     // Leads by Employee
     const employeeData: Record<string, number> = {}
-    allLeads.forEach(lead => {
+    leads.forEach(lead => {
       const employee = getAssignedTo(lead)
       employeeData[employee] = (employeeData[employee] || 0) + 1
     })
@@ -263,7 +182,7 @@ export default function ReportsOpenLeadsPage() {
     })
     
     const leadsOverTime = last30Days.map(date => {
-      const count = allLeads.filter(lead => {
+      const count = leads.filter(lead => {
         if (!lead.createdAt) return false
         const leadDate = new Date(lead.createdAt).toISOString().split('T')[0]
         return leadDate === date
@@ -275,11 +194,11 @@ export default function ReportsOpenLeadsPage() {
     })
 
     // Summary metrics
-    const totalLeads = allLeads.length
-    const hotLeads = allLeads.filter(l => l.priority === 'Hot').length
-    const warmLeads = allLeads.filter(l => l.priority === 'Warm').length
-    const uniqueZones = new Set(allLeads.map(l => l.zone).filter(Boolean)).size
-    const uniqueEmployees = new Set(allLeads.map(l => getAssignedTo(l))).size
+    const totalLeads = leads.length
+    const hotLeads = leads.filter(l => l.priority === 'Hot').length
+    const warmLeads = leads.filter(l => l.priority === 'Warm').length
+    const uniqueZones = new Set(leads.map(l => l.zone).filter(Boolean)).size
+    const uniqueEmployees = new Set(leads.map(l => getAssignedTo(l))).size
 
     return {
       leadsByZone,
@@ -294,7 +213,7 @@ export default function ReportsOpenLeadsPage() {
         uniqueEmployees
       }
     }
-  }, [allLeads])
+  }, [leads])
 
   const COLORS = ['#3b82f6', '#ef4444', '#f97316', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899']
 
@@ -616,21 +535,11 @@ export default function ReportsOpenLeadsPage() {
               <Table className="w-full min-w-[1200px]">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="cursor-pointer">
-                    S.No <ArrowUpDown className="inline h-3 w-3 ml-1" />
-                  </TableHead>
-                  <TableHead className="cursor-pointer">
-                    Created On <ArrowUpDown className="inline h-3 w-3 ml-1" />
-                  </TableHead>
-                  <TableHead className="cursor-pointer">
-                    Zone <ArrowUpDown className="inline h-3 w-3 ml-1" />
-                  </TableHead>
-                  <TableHead className="cursor-pointer">
-                    Assigned To <ArrowUpDown className="inline h-3 w-3 ml-1" />
-                  </TableHead>
-                  <TableHead className="cursor-pointer">
-                    Priority <ArrowUpDown className="inline h-3 w-3 ml-1" />
-                  </TableHead>
+                  <TableHead>S.No</TableHead>
+                  <TableHead>Created On</TableHead>
+                  <TableHead>Zone</TableHead>
+                  <TableHead>Assigned To</TableHead>
+                  <TableHead>Priority</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead>School Name</TableHead>
                   <TableHead>Contact Person</TableHead>
@@ -662,7 +571,7 @@ export default function ReportsOpenLeadsPage() {
                     <TableCell>{lead.location || '-'}</TableCell>
                     <TableCell className="font-medium">{lead.school_name || '-'}</TableCell>
                     <TableCell>{lead.contact_person || '-'}</TableCell>
-                    <TableCell>{lead.contact_person || '-'}</TableCell>
+                    <TableCell>{lead.contact_person2 || '-'}</TableCell>
                     <TableCell>{lead.contact_mobile || '-'}</TableCell>
                     <TableCell>{lead.follow_up_date ? formatDate(lead.follow_up_date) : '-'}</TableCell>
                     <TableCell>{lead.strength || 0}</TableCell>

@@ -126,6 +126,10 @@ export default function LeavesReportPage() {
         </Link>
       </div>
 
+      {loadError && (
+        <Card className="p-4 border-red-200 bg-red-50 text-red-800 text-sm">{loadError}</Card>
+      )}
+
       <Card className="p-4 grid grid-cols-2 md:grid-cols-5 gap-3">
         <Card className="p-3">
           <div className="text-xs text-neutral-600">Total</div>
@@ -149,81 +153,98 @@ export default function LeavesReportPage() {
         </Card>
       </Card>
 
-      <Card className="p-4 flex flex-wrap gap-4 items-end">
-        <div className="space-y-2">
-          <Label htmlFor="leave-report-status">Status</Label>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger id="leave-report-status" className="w-[180px] bg-white">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="Pending">Pending</SelectItem>
-              <SelectItem value="Approved">Approved</SelectItem>
-              <SelectItem value="Rejected">Rejected</SelectItem>
-            </SelectContent>
-          </Select>
+      <Card className="overflow-hidden border border-neutral-200">
+        <div className="p-3 md:p-4 border-b border-neutral-200 bg-white">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 items-end">
+            <div className="space-y-1.5 min-w-0">
+              <Label htmlFor="leave-report-status" className="text-sm text-neutral-700">
+                Status
+              </Label>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger id="leave-report-status" className="w-full bg-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All statuses</SelectItem>
+                  <SelectItem value="Pending">Pending</SelectItem>
+                  <SelectItem value="Approved">Approved</SelectItem>
+                  <SelectItem value="Rejected">Rejected</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5 min-w-0">
+              <Label htmlFor="leave-report-date" className="text-sm text-neutral-700">
+                On Leave Date
+              </Label>
+              <Input
+                id="leave-report-date"
+                type="date"
+                className="bg-white w-full"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                allowPastDates
+              />
+            </div>
+            <div className="sm:col-span-2 lg:col-span-1 flex lg:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full lg:w-auto"
+                onClick={load}
+                disabled={loading}
+              >
+                Refresh
+              </Button>
+            </div>
+          </div>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="leave-report-date">On leave date (approved only)</Label>
-          <Input
-            id="leave-report-date"
-            type="date"
-            className="bg-white w-[180px]"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
-        </div>
-        <Button type="button" variant="outline" onClick={load} disabled={loading}>
-          Refresh
-        </Button>
-      </Card>
 
-      <Card className="p-0 overflow-x-auto">
-        {loading && <div className="p-4 text-sm text-neutral-600">Loading…</div>}
-        {!loading && (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-sky-50/70 border-b text-neutral-700">
-                <th className="py-2 px-3 text-left">Employee</th>
-                <th className="py-2 px-3 text-left">Manager</th>
-                <th className="py-2 px-3">Status</th>
-                <th className="py-2 px-3 text-left">Leave Type</th>
-                <th className="py-2 px-3">From</th>
-                <th className="py-2 px-3">To</th>
-                <th className="py-2 px-3 text-left">Approved by</th>
-                <th className="py-2 px-3">Approval date</th>
-                <th className="py-2 px-3 text-left">Reason</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredLeaves.length === 0 && (
-                <tr>
-                  <td colSpan={9} className="py-4 px-3 text-center text-neutral-500">
-                    No leaves match filters
-                  </td>
+        <div className="overflow-x-auto">
+          {loading && <div className="p-4 text-sm text-neutral-600">Loading…</div>}
+          {!loading && (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-sky-50/70 border-b text-neutral-700">
+                  <th className="py-2 px-3 text-left">Employee</th>
+                  <th className="py-2 px-3 text-left">Manager</th>
+                  <th className="py-2 px-3">Status</th>
+                  <th className="py-2 px-3 text-left">Leave Type</th>
+                  <th className="py-2 px-3">From</th>
+                  <th className="py-2 px-3">To</th>
+                  <th className="py-2 px-3 text-left">Approved by</th>
+                  <th className="py-2 px-3">Approval date</th>
+                  <th className="py-2 px-3 text-left">Reason</th>
                 </tr>
-              )}
-              {filteredLeaves.map((l) => (
-                <tr key={l._id} className="border-b last:border-0">
-                  <td className="py-2 px-3">{employeeName(l)}</td>
-                  <td className="py-2 px-3 text-sm text-neutral-600">{managerName(l)}</td>
-                  <td className="py-2 px-3 text-center">{l.status}</td>
-                  <td className="py-2 px-3">{l.leaveType || '-'}</td>
-                  <td className="py-2 px-3 text-center">
-                    {new Date(l.startDate).toLocaleDateString()}
-                  </td>
-                  <td className="py-2 px-3 text-center">
-                    {new Date(l.endDate).toLocaleDateString()}
-                  </td>
-                  <td className="py-2 px-3">{approvedByName(l)}</td>
-                  <td className="py-2 px-3 text-center">{approvalDate(l)}</td>
-                  <td className="py-2 px-3">{l.reason || '-'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+              </thead>
+              <tbody>
+                {filteredLeaves.length === 0 && (
+                  <tr>
+                    <td colSpan={9} className="py-4 px-3 text-center text-neutral-500">
+                      No leaves match filters
+                    </td>
+                  </tr>
+                )}
+                {filteredLeaves.map((l) => (
+                  <tr key={l._id} className="border-b last:border-0">
+                    <td className="py-2 px-3">{employeeName(l)}</td>
+                    <td className="py-2 px-3 text-sm text-neutral-600">{managerName(l)}</td>
+                    <td className="py-2 px-3 text-center">{l.status}</td>
+                    <td className="py-2 px-3">{l.leaveType || '-'}</td>
+                    <td className="py-2 px-3 text-center">
+                      {new Date(l.startDate).toLocaleDateString()}
+                    </td>
+                    <td className="py-2 px-3 text-center">
+                      {new Date(l.endDate).toLocaleDateString()}
+                    </td>
+                    <td className="py-2 px-3">{approvedByName(l)}</td>
+                    <td className="py-2 px-3 text-center">{approvalDate(l)}</td>
+                    <td className="py-2 px-3">{l.reason || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       </Card>
     </div>
   )

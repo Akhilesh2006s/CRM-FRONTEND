@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { apiRequest } from '@/lib/api'
+import { downloadReportFile } from '@/lib/reportDownload'
 import { toast } from 'sonner'
 import { BarChart3, TrendingUp, Download, GraduationCap, CheckCircle2 } from 'lucide-react'
 
@@ -34,9 +35,8 @@ export default function TrainingServiceReportsPage() {
 
   const loadZones = async () => {
     try {
-      const data = await apiRequest<any[]>('/dc-orders')
-      const uniqueZones = [...new Set((data || []).map((d: any) => d.zone).filter(Boolean))]
-      setZones(uniqueZones)
+      const data = await apiRequest<{ name?: string }[]>('/zones')
+      setZones((data || []).map((z) => z.name).filter((name): name is string => Boolean(name)))
     } catch {}
   }
 
@@ -61,50 +61,17 @@ export default function TrainingServiceReportsPage() {
     }
   }
 
-  const exportReport = () => {
-    const report = {
-      generatedAt: new Date().toISOString(),
-      filters,
-      training: trainingStats,
-      service: serviceStats,
+  const exportReport = async () => {
+    try {
+      const params = new URLSearchParams()
+      if (filters.fromDate) params.append('fromDate', filters.fromDate)
+      if (filters.toDate) params.append('toDate', filters.toDate)
+      if (filters.zone) params.append('zone', filters.zone)
+      await downloadReportFile(`/reports/training/export?${params.toString()}`, 'Training_Service_Report.xlsx')
+      toast.success('Excel file downloaded')
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to export report')
     }
-
-    const csv = [
-      ['Training & Service Report', ''],
-      ['Generated At', new Date().toLocaleString()],
-      ['From Date', filters.fromDate || 'All'],
-      ['To Date', filters.toDate || 'All'],
-      ['Zone', filters.zone || 'All'],
-      [''],
-      ['TRAINING STATISTICS', ''],
-      ['Total Trainings', trainingStats?.total || 0],
-      ['Scheduled', trainingStats?.byStatus.Scheduled || 0],
-      ['Completed', trainingStats?.byStatus.Completed || 0],
-      ['Cancelled', trainingStats?.byStatus.Cancelled || 0],
-      [''],
-      ['SERVICE STATISTICS', ''],
-      ['Total Services', serviceStats?.total || 0],
-      ['Scheduled', serviceStats?.byStatus.Scheduled || 0],
-      ['Completed', serviceStats?.byStatus.Completed || 0],
-      ['Cancelled', serviceStats?.byStatus.Cancelled || 0],
-      [''],
-      ['ZONE-WISE TRAINING', ''],
-      ['Zone', 'Total', 'Completed'],
-      ...(trainingStats?.zoneStats || []).map(z => [z._id || 'N/A', z.total, z.completed]),
-      [''],
-      ['SUBJECT-WISE TRAINING', ''],
-      ['Subject', 'Total', 'Completed'],
-      ...(trainingStats?.subjectStats || []).map(s => [s._id, s.total, s.completed]),
-    ]
-
-    const csvContent = csv.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n')
-    const blob = new Blob([csvContent], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `training-service-report-${new Date().toISOString().split('T')[0]}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
   }
 
   if (loading) {
@@ -121,21 +88,25 @@ export default function TrainingServiceReportsPage() {
       </div>
 
       <Card className="p-4">
-        <form onSubmit={(e) => { e.preventDefault(); loadStats() }} className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <Input
-            type="date"
-            placeholder="From Date"
-            value={filters.fromDate}
-            onChange={(e) => setFilters(f => ({ ...f, fromDate: e.target.value }))}
-            className="bg-white text-neutral-900"
-          />
-          <Input
-            type="date"
-            placeholder="To Date"
-            value={filters.toDate}
-            onChange={(e) => setFilters(f => ({ ...f, toDate: e.target.value }))}
-            className="bg-white text-neutral-900"
-          />
+        <form onSubmit={(e) => { e.preventDefault(); loadStats() }} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+          <div>
+            <label className="text-xs font-medium text-slate-600 mb-1 block">From Date</label>
+            <Input
+              type="date"
+              value={filters.fromDate}
+              onChange={(e) => setFilters(f => ({ ...f, fromDate: e.target.value }))}
+              className="bg-white text-neutral-900"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-600 mb-1 block">To Date</label>
+            <Input
+              type="date"
+              value={filters.toDate}
+              onChange={(e) => setFilters(f => ({ ...f, toDate: e.target.value }))}
+              className="bg-white text-neutral-900"
+            />
+          </div>
           <Select value={filters.zone || 'all'} onValueChange={(v) => setFilters(f => ({ ...f, zone: v === 'all' ? '' : v }))}>
             <SelectTrigger className="bg-white text-neutral-900">
               <SelectValue placeholder="Filter by Zone" />
@@ -202,28 +173,20 @@ export default function TrainingServiceReportsPage() {
                   <th className="text-left py-2 px-3">Zone</th>
                   <th className="text-right py-2 px-3">Total Trainings</th>
                   <th className="text-right py-2 px-3">Completed</th>
-                  <th className="text-right py-2 px-3">Scheduled</th>
-                  <th className="text-right py-2 px-3">Cancelled</th>
                   <th className="text-right py-2 px-3">Completion %</th>
                 </tr>
               </thead>
               <tbody>
-                {trainingStats.zoneStats.map((zone) => {
-                  const scheduled = trainingStats.byStatus.Scheduled
-                  const cancelled = trainingStats.byStatus.Cancelled
-                  return (
+                {trainingStats.zoneStats.map((zone) => (
                     <tr key={zone._id} className="border-b last:border-0">
                       <td className="py-2 px-3 font-medium">{zone._id || 'N/A'}</td>
                       <td className="py-2 px-3 text-right">{zone.total}</td>
                       <td className="py-2 px-3 text-right text-green-600 font-medium">{zone.completed}</td>
-                      <td className="py-2 px-3 text-right text-yellow-600">{scheduled}</td>
-                      <td className="py-2 px-3 text-right text-red-600">{cancelled}</td>
                       <td className="py-2 px-3 text-right">
                         {zone.total > 0 ? Math.round((zone.completed / zone.total) * 100) : 0}%
                       </td>
                     </tr>
-                  )
-                })}
+                ))}
               </tbody>
             </table>
           </div>

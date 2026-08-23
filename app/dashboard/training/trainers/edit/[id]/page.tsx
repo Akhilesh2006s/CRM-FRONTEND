@@ -8,9 +8,17 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { SearchableSelect } from '@/components/ui/searchable-select'
 import { toast } from 'sonner'
 import { apiRequest } from '@/lib/api'
 import { INDIAN_STATES } from '@/lib/indianStatesCities'
+import {
+  sanitizeTrainerMobileInput,
+  validateTrainerMobile,
+  validateTrainerEmail,
+  validateTrainerZone,
+  validateTrainerContactFields,
+} from '@/lib/trainerFormValidation'
 
 const TRAINER_CATEGORIES = ['Abacus', 'Vedic Maths', 'ECC', 'IIT']
 
@@ -38,6 +46,9 @@ export default function EditTrainerPage() {
   })
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [mobileError, setMobileError] = useState<string | null>(null)
+  const [emailError, setEmailError] = useState<string | null>(null)
+  const [zoneError, setZoneError] = useState<string | null>(null)
   const [zones, setZones] = useState<string[]>([])
   const [clustersByZone, setClustersByZone] = useState<Record<string, string[]>>({})
 
@@ -85,19 +96,51 @@ export default function EditTrainerPage() {
     })()
   }, [id])
 
-  const clusterList = useMemo(() => {
-    return form.zone ? clustersByZone[form.zone] || [] : []
+  const stateOptions = useMemo(() => INDIAN_STATES.map((s) => ({ value: s, label: s })), [])
+  const zoneOptions = useMemo(() => zones.map((z) => ({ value: z, label: z })), [zones])
+  const clusterOptions = useMemo(() => {
+    const list = form.zone ? clustersByZone[form.zone] || [] : []
+    return list.map((c) => ({ value: c, label: c }))
   }, [form.zone, clustersByZone])
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    const contactCheck = validateTrainerContactFields({
+      mobile: form.mobile,
+      email: form.email,
+      zone: form.zone,
+    })
+    if (!contactCheck.ok) {
+      setMobileError(contactCheck.errors.mobile || null)
+      setEmailError(contactCheck.errors.email || null)
+      setZoneError(contactCheck.errors.zone || null)
+      toast.error(
+        contactCheck.errors.mobile ||
+          contactCheck.errors.email ||
+          contactCheck.errors.zone ||
+          'Please fix the highlighted fields.'
+      )
+      return
+    }
+    setMobileError(null)
+    setEmailError(null)
+    setZoneError(null)
+
     if (!form.trainerProducts?.length) {
       toast.error('Please select at least one product category')
       return
     }
     setSubmitting(true)
     try {
-      await apiRequest(`/trainers/${id}`, { method: 'PUT', body: JSON.stringify(form) })
+      await apiRequest(`/trainers/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          ...form,
+          mobile: contactCheck.values.mobile,
+          email: contactCheck.values.email,
+          zone: contactCheck.values.zone,
+        }),
+      })
       toast.success('Trainer updated successfully!')
       router.push('/dashboard/training/trainers/active')
     } catch (e: any) {
@@ -129,11 +172,53 @@ export default function EditTrainerPage() {
           </div>
           <div>
             <Label>Mobile *</Label>
-            <Input className="bg-white text-neutral-900" value={form.mobile} onChange={(e) => setForm((f) => ({ ...f, mobile: e.target.value }))} required />
+            <Input
+              className={`bg-white text-neutral-900 ${mobileError ? 'border-red-500' : ''}`}
+              type="tel"
+              inputMode="numeric"
+              maxLength={15}
+              value={form.mobile}
+              onChange={(e) => {
+                const value = sanitizeTrainerMobileInput(e.target.value)
+                setForm((f) => ({ ...f, mobile: value }))
+                if (!value) {
+                  setMobileError(null)
+                } else {
+                  const check = validateTrainerMobile(value)
+                  setMobileError(check.ok ? null : check.message)
+                }
+              }}
+              onBlur={() => {
+                const check = validateTrainerMobile(form.mobile)
+                setMobileError(check.ok ? null : check.message)
+              }}
+              required
+            />
+            {mobileError && <p className="text-xs text-red-600 mt-1">{mobileError}</p>}
           </div>
           <div>
-            <Label>Email</Label>
-            <Input className="bg-white text-neutral-900" type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
+            <Label>Email *</Label>
+            <Input
+              className={`bg-white text-neutral-900 ${emailError ? 'border-red-500' : ''}`}
+              type="email"
+              value={form.email}
+              onChange={(e) => {
+                const value = e.target.value
+                setForm((f) => ({ ...f, email: value }))
+                if (!value.trim()) {
+                  setEmailError(null)
+                } else {
+                  const check = validateTrainerEmail(value)
+                  setEmailError(check.ok ? null : check.message)
+                }
+              }}
+              onBlur={() => {
+                const check = validateTrainerEmail(form.email)
+                setEmailError(check.ok ? null : check.message)
+              }}
+              required
+            />
+            {emailError && <p className="text-xs text-red-600 mt-1">{emailError}</p>}
           </div>
           <div>
             <Label>Employment Type *</Label>
@@ -145,62 +230,44 @@ export default function EditTrainerPage() {
               </SelectContent>
             </Select>
           </div>
-          <div>
+          <div className="space-y-2">
             <Label htmlFor="trainer-state">State</Label>
-            <Select value={form.state} onValueChange={(v) => setForm((f) => ({ ...f, state: v }))}>
-              <SelectTrigger id="trainer-state" className="bg-white text-neutral-900">
-                <SelectValue placeholder="Select State" />
-              </SelectTrigger>
-              <SelectContent>
-                {INDIAN_STATES.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {s}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              id="trainer-state"
+              value={form.state}
+              onValueChange={(v) => setForm((f) => ({ ...f, state: v }))}
+              placeholder="Select State"
+              searchPlaceholder="Search states…"
+              options={stateOptions}
+            />
           </div>
-          <div>
-            <Label htmlFor="trainer-zone">Zone</Label>
-            <Select value={form.zone} onValueChange={(v) => setForm((f) => ({ ...f, zone: v, cluster: '' }))}>
-              <SelectTrigger id="trainer-zone" className="bg-white text-neutral-900">
-                <SelectValue placeholder="Select Zone" />
-              </SelectTrigger>
-              <SelectContent>
-                {zones.map((z) => (
-                  <SelectItem key={z} value={z}>
-                    {z}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="space-y-2">
+            <Label htmlFor="trainer-zone">Zone *</Label>
+            <SearchableSelect
+              id="trainer-zone"
+              value={form.zone}
+              onValueChange={(v) => {
+                setForm((f) => ({ ...f, zone: v, cluster: '' }))
+                const check = validateTrainerZone(v)
+                setZoneError(check.ok ? null : check.message)
+              }}
+              placeholder="Select Zone"
+              searchPlaceholder="Search zones…"
+              options={zoneOptions}
+            />
+            {zoneError && <p className="text-xs text-red-600 mt-1">{zoneError}</p>}
           </div>
-          <div>
+          <div className="space-y-2">
             <Label htmlFor="trainer-cluster">Cluster</Label>
-            <Select
+            <SearchableSelect
+              id="trainer-cluster"
               value={form.cluster}
               onValueChange={(v) => setForm((f) => ({ ...f, cluster: v }))}
+              placeholder={form.zone ? 'Select Cluster' : 'Select zone first'}
+              searchPlaceholder="Search clusters…"
+              options={clusterOptions}
               disabled={!form.zone}
-            >
-              <SelectTrigger id="trainer-cluster" className="bg-white text-neutral-900">
-                <SelectValue
-                  placeholder={
-                    !form.zone
-                      ? 'Select zone first'
-                      : clusterList.length === 0
-                        ? 'No clusters for this zone'
-                        : 'Select Cluster'
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {clusterList.map((c) => (
-                  <SelectItem key={c} value={c}>
-                    {c}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
           </div>
           <div className="md:col-span-2">
             <Label>Address</Label>

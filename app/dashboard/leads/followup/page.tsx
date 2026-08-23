@@ -17,6 +17,11 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { todayDateString } from '@/lib/todayDate'
 import {
+  formatFollowUpDate,
+  isFollowUpDateOverdue,
+  toFollowUpDatePayload,
+} from '@/lib/followUpDate'
+import {
   isFollowUpProductLineComplete,
   leadProductsToInterestedRows,
   normalizeLeadProductLineStatus,
@@ -55,13 +60,6 @@ type ProductInterested = {
   status: string
   strength: string
   chance: string
-}
-
-function combineFollowUpDateTime(dateStr: string, timeStr: string): string {
-  const [h, m] = (timeStr || '10:00').split(':').map((v) => parseInt(v, 10) || 0)
-  const d = new Date(`${dateStr}T00:00:00`)
-  d.setHours(h, m, 0, 0)
-  return d.toISOString()
 }
 
 /** Align product-line enums across Lead/DcOrder schemas */
@@ -181,7 +179,6 @@ export default function FollowupLeadsPage() {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
   const [updateForm, setUpdateForm] = useState({
     follow_up_date: '',
-    follow_up_time: '10:00',
     status: '',
     remarks: '',
     productsInterested: [] as ProductInterested[],
@@ -222,11 +219,11 @@ export default function FollowupLeadsPage() {
       // Fetch ALL leads assigned to current employee (not paginated) - we'll paginate after filtering
       // Use Promise.all for parallel requests
       const [leadsResponse, dcOrdersResponse] = await Promise.all([
-        apiRequest<any>(`/leads?employee=${currentUser._id}`).catch(err => {
+        apiRequest<any>(`/leads?employee=${currentUser._id}&pipeline=followup&limit=500`).catch(err => {
           console.warn('Failed to fetch leads:', err)
           return { data: [], pagination: null }
         }),
-        apiRequest<any>(`/dc-orders?assigned_to=${currentUser._id}`).catch(err => {
+        apiRequest<any>(`/dc-orders?assigned_to=${currentUser._id}&pipeline=followup&limit=500`).catch(err => {
           console.warn('Failed to fetch dc-orders:', err)
           return { data: [], pagination: null }
         })
@@ -235,10 +232,20 @@ export default function FollowupLeadsPage() {
       const allData = Array.isArray(leadsResponse) ? leadsResponse : (leadsResponse?.data || [])
       const dcOrders = Array.isArray(dcOrdersResponse) ? dcOrdersResponse : (dcOrdersResponse?.data || [])
       
+      const CLOSED_FOLLOWUP_STATUSES = new Set([
+        'saved', 'completed', 'closed', 'converted', 'client',
+        'in_transit', 'dc_requested', 'dc_accepted', 'dc_approved', 'dc_sent_to_senior',
+      ])
+      const isOpenFollowUpStatus = (status?: string) => {
+        const s = (status || '').toLowerCase()
+        if (!s) return true
+        if (CLOSED_FOLLOWUP_STATUSES.has(s)) return false
+        return s === 'pending' || s === 'processing'
+      }
+
       // Filter out closed/saved/completed leads from allData and ensure school_code is included
       const activeLeads = (Array.isArray(allData) ? allData : []).filter((lead: Lead) => {
-        const status = lead.status?.toLowerCase()
-        return status !== 'saved' && status !== 'completed' && status !== 'closed'
+        return isOpenFollowUpStatus(lead.status)
       }).map((lead: any) => {
         // First try to get school_code from the lead itself
         let schoolCode = lead.school_code || lead.schoolCode
@@ -264,11 +271,7 @@ export default function FollowupLeadsPage() {
       
       // Convert dc-orders to lead format and exclude closed/saved leads
       const leadsFromOrders: Lead[] = dcOrders
-        .filter((order: any) => {
-          // Exclude leads that are closed/saved/completed
-          const status = order.status?.toLowerCase()
-          return status !== 'saved' && status !== 'completed' && status !== 'closed'
-        })
+        .filter((order: any) => isOpenFollowUpStatus(order.status))
         .map((order: any) => {
           const mapped: Lead = {
           _id: order._id,
@@ -295,19 +298,7 @@ export default function FollowupLeadsPage() {
       const combinedLeads = [...activeLeads, ...leadsFromOrders]
       
       // Filter leads that need follow-up - exclude closed/saved/completed leads
-      const followUpLeads = combinedLeads.filter((lead: Lead) => {
-        const status = lead.status?.toLowerCase()
-        // Exclude closed/saved/completed leads
-        if (status === 'saved' || status === 'completed' || status === 'closed') {
-          return false
-        }
-        // Include pending/processing leads or leads with future follow-up dates
-        return (
-          status === 'pending' ||
-          status === 'processing' ||
-          (lead.follow_up_date && new Date(lead.follow_up_date) >= new Date())
-        )
-      })
+      const followUpLeads = combinedLeads.filter((lead: Lead) => isOpenFollowUpStatus(lead.status))
       
       // Remove duplicates by _id
       const uniqueLeads = followUpLeads.filter((lead, index, self) =>
@@ -358,16 +349,6 @@ export default function FollowupLeadsPage() {
     })
 
     setLeads(filtered)
-  }
-
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return '-'
-    try {
-      const date = new Date(dateString)
-      return date.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
-    } catch {
-      return '-'
-    }
   }
 
   const formatDateTime = (dateString?: string) => {
@@ -433,7 +414,6 @@ export default function FollowupLeadsPage() {
     // Clear form for creating a new follow-up entry (don't pre-fill with old data)
     setUpdateForm({
       follow_up_date: '',
-      follow_up_time: '10:00',
       status: displayLeadDealPriority(lead), // Reflects per-product + deal priority
       remarks: '',
       productsInterested: leadProductsToInterestedRows(lead),
@@ -446,7 +426,6 @@ export default function FollowupLeadsPage() {
     setSelectedLead(null)
     setUpdateForm({
       follow_up_date: '',
-      follow_up_time: '10:00',
       status: '',
       remarks: '',
       productsInterested: [],
@@ -463,10 +442,6 @@ export default function FollowupLeadsPage() {
     }
     if (updateForm.follow_up_date < todayDateString()) {
       toast.error('Follow-up date cannot be in the past')
-      return
-    }
-    if (!updateForm.follow_up_time || !updateForm.follow_up_time.trim()) {
-      toast.error('Follow-up time is required')
       return
     }
     if (!updateForm.remarks || !updateForm.remarks.trim()) {
@@ -515,10 +490,7 @@ export default function FollowupLeadsPage() {
       const derivedPriority = deriveLeadPriorityFromDealProducts(validProducts)
       const schoolLeadStatus = (selectedLead.lead_status || '').trim()
       const payload: any = {
-        follow_up_date: combineFollowUpDateTime(
-          updateForm.follow_up_date,
-          updateForm.follow_up_time
-        ),
+        follow_up_date: toFollowUpDatePayload(updateForm.follow_up_date),
         remarks: updateForm.remarks,
       }
       if (SCHOOL_LEAD_STATUSES.has(schoolLeadStatus)) {
@@ -872,9 +844,9 @@ export default function FollowupLeadsPage() {
                       <div>
                         <span className="text-neutral-600">Follow Up Date:</span>
                         <span className={`ml-2 font-medium ${
-                          new Date(lead.follow_up_date) < new Date() ? 'text-red-600' : 'text-neutral-900'
+                          isFollowUpDateOverdue(lead.follow_up_date) ? 'text-red-600' : 'text-neutral-900'
                         }`}>
-                          {formatDateTime(lead.follow_up_date)}
+                          {formatFollowUpDate(lead.follow_up_date)}
                         </span>
                       </div>
                     )}
@@ -964,7 +936,7 @@ export default function FollowupLeadsPage() {
           {/* Form Content with Professional Spacing */}
           <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 bg-gradient-to-b from-white to-neutral-50">
             <div className="space-y-5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold text-neutral-700 flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-purple-500"></span>
@@ -979,22 +951,6 @@ export default function FollowupLeadsPage() {
                     required
                   />
                   <p className="text-xs text-neutral-500">Past dates cannot be selected.</p>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold text-neutral-700 flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-purple-500"></span>
-                    Follow-up Time *
-                  </Label>
-                  <Input
-                    type="time"
-                    className="h-11 bg-white border-neutral-300 focus:border-purple-500 focus:ring-purple-500/20 transition-all"
-                    value={updateForm.follow_up_time}
-                    onChange={(e) =>
-                      setUpdateForm({ ...updateForm, follow_up_time: e.target.value })
-                    }
-                    required
-                  />
-                  <p className="text-xs text-neutral-500">Choose when the executive will follow up.</p>
                 </div>
               </div>
               
@@ -1270,7 +1226,7 @@ export default function FollowupLeadsPage() {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                   </svg>
                                   <span className="text-sm font-medium text-blue-900">
-                                    Next Follow-up: {formatDateTime(item.follow_up_date)}
+                                    Next Follow-up: {formatFollowUpDate(item.follow_up_date)}
                                   </span>
                                 </div>
                               </div>

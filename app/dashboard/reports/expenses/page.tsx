@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { apiRequest, API_BASE_URL } from '@/lib/api'
+import { apiRequest } from '@/lib/api'
+import { downloadReportFile } from '@/lib/reportDownload'
 import { toast } from 'sonner'
 import { Download } from 'lucide-react'
 
@@ -124,30 +125,7 @@ export default function ExpensesReportPage() {
       if (filters.status && filters.status !== 'all') params.append('status', filters.status)
       if (filters.fromDate) params.append('fromDate', filters.fromDate)
       if (filters.toDate) params.append('toDate', filters.toDate)
-
-      const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null
-      const url = `${API_BASE_URL}/api/expenses/export${params.toString() ? `?${params.toString()}` : ''}`
-      
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error('Export failed')
-      }
-
-      const blob = await response.blob()
-      const downloadUrl = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = downloadUrl
-      link.download = `Expenses_Report_${new Date().toISOString().split('T')[0]}.xlsx`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(downloadUrl)
-
+      await downloadReportFile(`/expenses/export${params.toString() ? `?${params.toString()}` : ''}`, 'Expenses_Report.xlsx')
       toast.success('Export started')
     } catch (error: any) {
       toast.error(error?.message || 'Failed to export expenses')
@@ -170,8 +148,10 @@ export default function ExpensesReportPage() {
   }
 
   const formatExpDate = (dateString: string) => {
+    if (!dateString) return '-'
     const date = new Date(dateString)
-    return date.toISOString().split('T')[0]
+    if (Number.isNaN(date.getTime())) return '-'
+    return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
   }
 
   const getStatusDisplay = (status: string) => {
@@ -332,7 +312,7 @@ export default function ExpensesReportPage() {
                       {expense.managerApprovedBy?.name || '-'}
                     </TableCell>
                     <TableCell>
-                      {expense.approvedBy?.name || 'Vishwam Edutech'}
+                      {expense.approvedBy?.name || '-'}
                     </TableCell>
                     <TableCell className="text-right font-medium">
                       {(expense.employeeAmount || expense.amount).toFixed(2)}

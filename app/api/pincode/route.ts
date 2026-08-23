@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import {
-  fetchPostalPincodeData,
-  parsePostalPincodeResponse,
-} from '@/lib/server/postalPincode'
+import { lookupPostalPincode } from '@/lib/server/postalPincode'
 
 export async function GET(request: NextRequest) {
   const pincode = (request.nextUrl.searchParams.get('pincode') || '')
@@ -17,8 +14,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const data = await fetchPostalPincodeData(pincode)
-    const parsed = parsePostalPincodeResponse(pincode, data)
+    const parsed = await lookupPostalPincode(pincode)
 
     if (!parsed.success) {
       return NextResponse.json(parsed, { status: 404 })

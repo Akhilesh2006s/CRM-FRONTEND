@@ -11,9 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { apiRequest } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
-import { Eye, Pencil, Search, X } from 'lucide-react'
+import { Eye, Search, X } from 'lucide-react'
 import { useProducts } from '@/hooks/useProducts'
 import { Badge } from '@/components/ui/badge'
+import { sortDcsNewestFirst } from '@/lib/dcListSort'
 
 type DC = {
   _id: string
@@ -169,7 +170,7 @@ export default function SearchDCPage() {
         })
       }
 
-      setDcs(filteredDCs)
+      setDcs(sortDcsNewestFirst(filteredDCs))
       toast.success(`Found ${filteredDCs.length} DC(s)`)
     } catch (error: any) {
       console.error('Error searching DCs:', error)
@@ -222,25 +223,6 @@ export default function SearchDCPage() {
     if (selectedDCCategory) count++
     if (selectedZone) count++
     return count
-  }
-
-  const getDcOrderId = (dc: DC): string | null => {
-    if (!dc.dcOrderId) return null
-    if (typeof dc.dcOrderId === 'object' && dc.dcOrderId._id) return dc.dcOrderId._id
-    return String(dc.dcOrderId)
-  }
-
-  const navigateToDc = (dc: DC, mode: 'view' | 'edit') => {
-    const orderId = getDcOrderId(dc)
-    if (orderId) {
-      router.push(`/dashboard/warehouse/dc-at-warehouse/${orderId}?mode=${mode}`)
-      return
-    }
-    if (mode === 'edit') {
-      router.push(`/dashboard/warehouse/dc-at-warehouse?openDcId=${dc._id}`)
-      return
-    }
-    router.push('/dashboard/dc/pending')
   }
 
   const getDCNumber = (dc: DC) => {
@@ -436,6 +418,7 @@ export default function SearchDCPage() {
                 onChange={(e) => setSelectedDate(e.target.value)}
                 className="w-full"
                 placeholder="Select date (optional)"
+                allowPastDates
               />
             </div>
 
@@ -613,24 +596,14 @@ export default function SearchDCPage() {
                     <TableCell className="text-right whitespace-nowrap">{getTotalItems(dc)}</TableCell>
                     <TableCell className="whitespace-nowrap">{getCreatedBy(dc)}</TableCell>
                     <TableCell className="text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => navigateToDc(dc, 'view')}
-                        >
-                          <Eye className="w-4 h-4 mr-1" />
-                          View DC
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => navigateToDc(dc, 'edit')}
-                        >
-                          <Pencil className="w-4 h-4 mr-1" />
-                          Edit DC
-                        </Button>
-                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => router.push(`/dashboard/warehouse/dc-at-warehouse/${dc._id}`)}
+                      >
+                        <Eye className="w-4 h-4 mr-1" />
+                        View DC
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}

@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/hooks/use-toast'
-import { Package, Search, RefreshCw, AlertTriangle, CheckCircle, XCircle, TrendingDown } from 'lucide-react'
+import { downloadReportFile } from '@/lib/reportDownload'
+import { Package, Search, RefreshCw, AlertTriangle, CheckCircle, XCircle, TrendingDown, Download } from 'lucide-react'
 
 type StockItem = {
   _id: string
@@ -88,12 +89,12 @@ export default function StockReportPage() {
 
   // Calculate summary statistics
   const summary = useMemo(() => {
-    const totalItems = stocks.length
-    const inStock = stocks.filter(s => s.status === 'In Stock').length
-    const lowStock = stocks.filter(s => s.status === 'Low Stock').length
-    const outOfStock = stocks.filter(s => s.status === 'Out of Stock').length
-    const totalValue = stocks.reduce((sum, item) => sum + (item.currentStock * item.unitPrice), 0)
-    const totalQuantity = stocks.reduce((sum, item) => sum + item.currentStock, 0)
+    const totalItems = filteredStocks.length
+    const inStock = filteredStocks.filter(s => s.status === 'In Stock').length
+    const lowStock = filteredStocks.filter(s => s.status === 'Low Stock').length
+    const outOfStock = filteredStocks.filter(s => s.status === 'Out of Stock').length
+    const totalValue = filteredStocks.reduce((sum, item) => sum + (item.currentStock * item.unitPrice), 0)
+    const totalQuantity = filteredStocks.reduce((sum, item) => sum + item.currentStock, 0)
 
     return {
       totalItems,
@@ -103,7 +104,7 @@ export default function StockReportPage() {
       totalValue,
       totalQuantity
     }
-  }, [stocks])
+  }, [filteredStocks])
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -142,7 +143,8 @@ export default function StockReportPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
         <div className="p-3 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-lg">
           <Package className="w-8 h-8 text-blue-600" />
         </div>
@@ -150,6 +152,21 @@ export default function StockReportPage() {
           <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Stock Report</h1>
           <p className="text-sm text-neutral-600 mt-1">View and manage warehouse inventory</p>
         </div>
+        </div>
+        <Button
+          onClick={async () => {
+            try {
+              await downloadReportFile('/reports/stock/export', 'Stock_Report.xlsx')
+              toast({ title: 'Excel file downloaded' })
+            } catch (error: any) {
+              toast({ title: 'Error', description: error.message || 'Export failed', variant: 'destructive' })
+            }
+          }}
+          className="bg-blue-600 hover:bg-blue-700 text-white"
+        >
+          <Download className="w-4 h-4 mr-2" />
+          Export to Excel
+        </Button>
       </div>
 
       {/* Summary Cards */}
@@ -260,9 +277,9 @@ export default function StockReportPage() {
             </SelectContent>
           </Select>
 
-          <Button onClick={loadStocks} variant="outline" className="w-full">
+          <Button onClick={loadStocks} className="w-full bg-blue-600 hover:bg-blue-700 text-white">
             <RefreshCw className="w-4 h-4 mr-2" />
-            Refresh
+            Search
           </Button>
         </div>
       </Card>

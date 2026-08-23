@@ -204,6 +204,7 @@ export default function ExecutiveManagerLeavesPage() {
               value={fromDate}
               onChange={(e) => setFromDate(e.target.value)}
               className="bg-white"
+              allowPastDates
             />
           </div>
           <div>
@@ -213,6 +214,7 @@ export default function ExecutiveManagerLeavesPage() {
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}
               className="bg-white"
+              allowPastDates
             />
           </div>
         </div>

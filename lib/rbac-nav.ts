@@ -29,10 +29,10 @@ export const RBAC_MODULE_ORDER = [
   'expenses',
   'reports',
   'products',
+  'vendor',
   'settings',
   'executive_managers',
   'samples',
-  'vendor',
 ] as const
 
 /**
@@ -49,6 +49,8 @@ export const RBAC_NAV_MODULES: RbacNavModule[] = [
     label: MODULE_LABELS.clients,
     pages: [
       { label: 'Create Sale', href: '/dashboard/dc/create' },
+      // All Created DCs: Admin / Coordinator only (not Super Admin Clients nav)
+      { label: 'All Created DCs', href: '/dashboard/dc/admin/my' },
       { label: 'Closed Sales', href: '/dashboard/dc/closed' },
       { label: 'Saved DC', href: '/dashboard/dc/saved' },
       { label: 'Pending DC', href: '/dashboard/dc/pending' },
@@ -117,10 +119,10 @@ export const RBAC_NAV_MODULES: RbacNavModule[] = [
     label: MODULE_LABELS.returns,
     pages: [
       { label: 'Employee Returns List', href: '/dashboard/returns/employees' },
-      { label: 'Warehouse Returns List', href: '/dashboard/returns/warehouse' },
       { label: 'Executive Stock Returns', href: '/dashboard/returns/executive' },
       { label: 'Warehouse Executive Returns', href: '/dashboard/returns/warehouse-executive' },
       { label: 'Warehouse Manager Returns', href: '/dashboard/returns/warehouse-manager' },
+      { label: 'Warehouse Returns List', href: '/dashboard/returns/warehouse' },
     ],
   },
   {
@@ -155,12 +157,13 @@ export const RBAC_NAV_MODULES: RbacNavModule[] = [
       { label: 'Leads Report', href: '/dashboard/reports/leads' },
       { label: 'Sales Visit', href: '/dashboard/reports/sales-visit' },
       { label: 'Employee Track', href: '/dashboard/reports/employee-track' },
-      { label: 'Contact Queries', href: '/dashboard/reports/contact-queries' },
+      { label: 'Contact Enquiries', href: '/dashboard/reports/contact-queries' },
       { label: 'Change Logs', href: '/dashboard/reports/change-logs' },
       { label: 'Stock Report', href: '/dashboard/reports/stock' },
       { label: 'DC Report', href: '/dashboard/reports/dc' },
       { label: 'Returns Report', href: '/dashboard/reports/returns' },
       { label: 'All Expenses Report', href: '/dashboard/reports/expenses' },
+      { label: 'Training & Service', href: '/dashboard/reports/training-service' },
     ],
   },
   {
@@ -170,7 +173,15 @@ export const RBAC_NAV_MODULES: RbacNavModule[] = [
       { label: 'All Products', href: '/dashboard/products' },
       { label: 'Add New Product', href: '/dashboard/products/new' },
       { label: 'Deliverables', href: '/dashboard/products/deliverables' },
-      { label: 'Vendor', href: '/dashboard/products/vendors' },
+    ],
+  },
+  {
+    module: 'vendor',
+    label: MODULE_LABELS.vendor,
+    pages: [
+      { label: 'Vendors', href: '/dashboard/products/vendors' },
+      { label: 'Stocks', href: '/dashboard/stocks' },
+      { label: 'My DCs', href: '/dashboard/dcs' },
     ],
   },
   {
@@ -199,14 +210,6 @@ export const RBAC_NAV_MODULES: RbacNavModule[] = [
     label: MODULE_LABELS.samples,
     pages: [{ label: 'Request Samples', href: '/dashboard/samples/request' }],
   },
-  {
-    module: 'vendor',
-    label: MODULE_LABELS.vendor,
-    pages: [
-      { label: 'Stocks', href: '/dashboard/stocks' },
-      { label: 'My DCs', href: '/dashboard/dcs' },
-    ],
-  },
 ]
 
 export type BuiltRbacNavItem = {
@@ -230,14 +233,42 @@ export function buildRbacSidebarNav(
   user: AuthUserWithPermissions | null
 ): BuiltRbacNavItem[] {
   const items: BuiltRbacNavItem[] = []
+  const isSa = user?.role === 'Super Admin'
 
   for (const mod of RBAC_NAV_MODULES) {
-    const allowed = pagesForUser(user, mod.pages)
+    // Operational Leads (Add/Renewal/Followup) is for Executive/Coordinator workflows —
+    // Super Admin dashboard/nav should not surface that module.
+    if (isSa && mod.module === 'leads') continue
+
+    // Super Admin: no separate Executive Managers section — Assign Managers lives under Users / Employees.
+    if (isSa && mod.module === 'executive_managers') continue
+
+    // Super Admin: Samples is not shown in sidebar.
+    if (isSa && mod.module === 'samples') continue
+
+    let pages = mod.pages
+    if (isSa && mod.module === 'employees') {
+      pages = [
+        { label: 'Assign Managers', href: '/dashboard/executive-managers' },
+        ...mod.pages,
+      ]
+    }
+
+    const allowed = pagesForUser(user, pages)
     if (allowed.length === 0) continue
 
     if (mod.module === 'dashboard' && allowed.length === 1) {
       items.push({
         label: allowed[0].label,
+        module: mod.module,
+        href: allowed[0].href,
+      })
+      continue
+    }
+
+    if (mod.module === 'vendor' && allowed.length === 1) {
+      items.push({
+        label: mod.label,
         module: mod.module,
         href: allowed[0].href,
       })

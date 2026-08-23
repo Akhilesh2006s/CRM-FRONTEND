@@ -3,7 +3,7 @@
 import { Card } from '@/components/ui/card'
 import Link from 'next/link'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Zap, TrendingUp, DollarSign, GraduationCap, AlertTriangle, X, Minimize2, Calculator, MapPin, Package, ShoppingCart, Sparkles, Users, Shield, CalendarCheck2, PlusCircle, Clock } from 'lucide-react'
+import { Zap, TrendingUp, DollarSign, GraduationCap, AlertTriangle, X, Minimize2, Calculator, MapPin, Package, ShoppingCart, Sparkles, Users, Shield } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import BarGradient from '@/components/charts/BarGradient'
 import AreaGradient from '@/components/charts/AreaGradient'
@@ -16,20 +16,20 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { getCurrentUser } from '@/lib/auth'
-import { usePermissions } from '@/components/permissions/PermissionsProvider'
 import VendorDashboard from '@/components/dashboard/VendorDashboard'
-import {
-  AI_TEASER_TOOLS,
-  canViewChangeLogs,
-  DASHBOARD_ALERTS_VIEW_ALL,
-  getAlertHref,
-  getStatHref,
-} from '@/lib/dashboardLinks'
-import {
-  canManageTeamLeaves,
-  getDashboardLeaveCards,
-  showDashboardLeaveSection,
-} from '@/lib/leaveAccess'
+
+const sections = [
+  { href: '/dashboard/leads', label: 'Leads' },
+  { href: '/dashboard/sales', label: 'Sales' },
+  { href: '/dashboard/employees', label: 'Employees' },
+  { href: '/dashboard/expenses', label: 'Expenses' },
+  { href: '/dashboard/payments', label: 'Payments' },
+  { href: '/dashboard/reports', label: 'Reports' },
+  { href: '/dashboard/training', label: 'Training' },
+  { href: '/dashboard/warehouse', label: 'Warehouse' },
+  { href: '/dashboard/dc', label: 'Delivery Challans' },
+  { href: '/dashboard/inventory', label: 'Inventory' },
+]
 
 const STAT_CONFIG = [
   { label: 'Active Leads', icon: Zap, accent: 'sky' },
@@ -40,6 +40,68 @@ const STAT_CONFIG = [
   { label: 'Pending Services', icon: TrendingUp, accent: 'yellow' },
   { label: 'Completed Services', icon: TrendingUp, accent: 'teal' },
 ]
+
+/** Role-aware KPI card destinations (index matches STAT_CONFIG). */
+const DEFAULT_STAT_HREFS: (string | null)[] = [
+  '/dashboard/leads',
+  '/dashboard/dc/closed',
+  '/dashboard/leads/renewal',
+  '/dashboard/training/list',
+  '/dashboard/training/list',
+  '/dashboard/training/services',
+  '/dashboard/training/services',
+]
+
+const ROLES_WITHOUT_CLIENTS = new Set([
+  'Manager',
+  'Warehouse Executive',
+  'Warehouse Manager',
+  'Trainer',
+])
+
+const ROLES_WITHOUT_TRAINING = new Set([
+  'Manager',
+  'Executive',
+  'Executive Manager',
+  'Warehouse Executive',
+  'Warehouse Manager',
+  'Trainer',
+])
+
+function getStatHref(role: string | undefined, index: number): string | null {
+  if (index < 0 || index >= DEFAULT_STAT_HREFS.length) return null
+  const r = role || ''
+
+  if (index === 0) {
+    if (r === 'Executive') return '/dashboard/leads/followup'
+    if (ROLES_WITHOUT_CLIENTS.has(r) && r !== 'Coordinator' && r !== 'Senior Coordinator') {
+      if (r === 'Manager') return '/dashboard/reports/leads'
+      return null
+    }
+    return DEFAULT_STAT_HREFS[0]
+  }
+
+  if (index === 1) {
+    if (r === 'Executive') return '/dashboard/dc/client-dc'
+    if (r === 'Trainer') return '/dashboard/training/trainer/my'
+    if (r === 'Warehouse Executive' || r === 'Warehouse Manager') {
+      return '/dashboard/returns/warehouse-executive'
+    }
+    return DEFAULT_STAT_HREFS[1]
+  }
+
+  if (index === 2) {
+    if (ROLES_WITHOUT_CLIENTS.has(r)) return null
+    return DEFAULT_STAT_HREFS[2]
+  }
+
+  if (index >= 3 && index <= 6) {
+    if (ROLES_WITHOUT_TRAINING.has(r)) return null
+    return DEFAULT_STAT_HREFS[index]
+  }
+
+  return DEFAULT_STAT_HREFS[index]
+}
 
 const accentToClasses: Record<string, { chip: string; icon: string }> = {
   sky: { chip: 'bg-sky-100', icon: 'text-sky-50' },
@@ -78,15 +140,65 @@ const cardColorMap: Record<string, { bg: string; border: string; text: string; i
   teal: { bg: 'from-teal-50 to-teal-100', border: 'border-teal-200', text: 'text-teal-700', icon: 'text-teal-500' },
 }
 
-const EMPTY_STATS = STAT_CONFIG.map(() => ({ value: 0 }))
+const MOCK_STATS = [
+  { value: 128 },
+  { value: 74 },
+  { value: 38 },
+  { value: 5 },
+  { value: 12 },
+  { value: 9 },
+  { value: 20 },
+]
 
-type VolumeRange = '24h' | '7d' | '30d'
+const MOCK_TRENDS = [
+  { name: 'Mon', leads: 22, sales: 5, revenue: 48000 },
+  { name: 'Tue', leads: 28, sales: 8, revenue: 62000 },
+  { name: 'Wed', leads: 31, sales: 10, revenue: 75000 },
+  { name: 'Thu', leads: 24, sales: 6, revenue: 41000 },
+  { name: 'Fri', leads: 35, sales: 11, revenue: 92000 },
+  { name: 'Sat', leads: 29, sales: 7, revenue: 56000 },
+  { name: 'Sun', leads: 18, sales: 3, revenue: 23000 },
+]
 
-const VOLUME_SUBTITLES: Record<VolumeRange, string> = {
-  '24h': 'Last 24 hours activity',
-  '7d': 'Last 7 days activity',
-  '30d': 'Last 30 days activity',
-}
+const MOCK_VOLUME = [
+  { hour: '01:00', value: 82 },
+  { hour: '02:00', value: 68 },
+  { hour: '03:00', value: 46 },
+  { hour: '04:00', value: 58 },
+  { hour: '05:00', value: 30 },
+  { hour: '06:00', value: 44 },
+  { hour: '07:00', value: 64 },
+  { hour: '08:00', value: 72 },
+  { hour: '09:00', value: 98 },
+  { hour: '10:00', value: 106 },
+  { hour: '11:00', value: 120 },
+  { hour: '12:00', value: 118 },
+  { hour: '13:00', value: 136 },
+  { hour: '14:00', value: 128 },
+  { hour: '15:00', value: 132 },
+  { hour: '16:00', value: 126 },
+  { hour: '17:00', value: 130 },
+  { hour: '18:00', value: 116 },
+  { hour: '19:00', value: 84 },
+  { hour: '20:00', value: 58 },
+  { hour: '21:00', value: 92 },
+  { hour: '22:00', value: 76 },
+  { hour: '23:00', value: 36 },
+  { hour: '24:00', value: 44 },
+]
+
+const MOCK_ZONES = [
+  { zone: 'Nizamabad', total: 40, hot: 12, warm: 15, cold: 13 },
+  { zone: 'Karimnagar', total: 32, hot: 9, warm: 12, cold: 11 },
+  { zone: 'Warangal', total: 26, hot: 6, warm: 10, cold: 10 },
+]
+
+const MOCK_ALERTS = [
+  { level: 'warning', text: 'Follow-up pending for 7 hot leads today' },
+  { level: 'info', text: '3 trainings scheduled this week' },
+]
+
+// PIE_DATA will be computed from stats state
 
 type DashboardStats = {
   activeLeads: number
@@ -160,16 +272,13 @@ type ExecutiveWiseClosedLeadData = {
 }
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState(EMPTY_STATS)
-  const [trends, setTrends] = useState<TrendData[]>([])
-  const [zones, setZones] = useState<ZoneData[]>([])
-  const [alerts, setAlerts] = useState<AlertData[]>([])
-  const [volume, setVolume] = useState<VolumeData[]>([])
+  const [stats, setStats] = useState(MOCK_STATS)
+  const [trends, setTrends] = useState(MOCK_TRENDS)
+  const [zones, setZones] = useState(MOCK_ZONES)
+  const [alerts, setAlerts] = useState(MOCK_ALERTS)
+  const [volume, setVolume] = useState(MOCK_VOLUME)
   const [activities, setActivities] = useState<ActivityData[]>([])
   const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [volumeRange, setVolumeRange] = useState<VolumeRange>('24h')
-  const [volumeLoading, setVolumeLoading] = useState(false)
   
   // Leads analytics state
   const [fromDate, setFromDate] = useState('')
@@ -185,9 +294,6 @@ export default function DashboardPage() {
   const [executiveAnalytics, setExecutiveAnalytics] = useState<any>(null)
   const [executiveLoading, setExecutiveLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState<any>(null)
-  const { user: permUser } = usePermissions()
-  const [pendingLeaveCount, setPendingLeaveCount] = useState(0)
-  const [teamPendingLeaveCount, setTeamPendingLeaveCount] = useState(0)
 
   // compute KPIs for the teal chart
   const salesArr = trends && trends.length ? trends.map(t => t.revenue) : [0]
@@ -209,24 +315,19 @@ export default function DashboardPage() {
     setCurrentUser(user)
   }, [])
 
-  const leaveContextUser = permUser || currentUser
+  // Super Admin dashboard has no Leads section; other roles keep Leads UI/fetches.
+  const hideLeadsOnDashboard = currentUser?.role === 'Super Admin'
 
   useEffect(() => {
-    if (!currentUser?._id || !showDashboardLeaveSection(leaveContextUser)) return
-
-    const role = currentUser.role
-    if (canManageTeamLeaves(role)) {
-      apiRequest<{ status: string }[]>(`/leaves?status=Pending`)
-        .then((data) => setTeamPendingLeaveCount(Array.isArray(data) ? data.length : 0))
-        .catch(() => setTeamPendingLeaveCount(0))
-    } else {
-      setTeamPendingLeaveCount(0)
+    if (hideLeadsOnDashboard && activeTab === 'leads') {
+      setActiveTab('dashboard')
     }
+  }, [hideLeadsOnDashboard, activeTab])
 
-    apiRequest<{ status: string }[]>(`/leaves?employeeId=${currentUser._id}&status=Pending`)
-      .then((data) => setPendingLeaveCount(Array.isArray(data) ? data.length : 0))
-      .catch(() => setPendingLeaveCount(0))
-  }, [currentUser?._id, currentUser?.role, leaveContextUser])
+  // Stat cards for Super Admin exclude Active Leads (index 0) so the grid has no gaps.
+  const visibleStatEntries = STAT_CONFIG
+    .map((stat, index) => ({ stat, index }))
+    .filter(({ index }) => !(hideLeadsOnDashboard && index === 0))
 
   const fetchExecutiveAnalytics = async () => {
     setExecutiveLoading(true)
@@ -286,52 +387,24 @@ export default function DashboardPage() {
     }
   }
 
-  const fetchLeadsVolume = async (range: VolumeRange) => {
-    setVolumeLoading(true)
-    try {
-      const volumeData = await apiRequest<VolumeData[]>(
-        `/dashboard/leads-volume?range=${range}`
-      )
-      setVolume(volumeData || [])
-    } catch (error) {
-      console.error('Error fetching leads volume:', error)
-      setVolume([])
-      setLoadError('Could not load live dashboard data')
-    } finally {
-      setVolumeLoading(false)
-    }
-  }
-
   useEffect(() => {
+    if (!currentUser) return
+
     const fetchDashboardData = async () => {
       setLoading(true)
-      setLoadError(null)
-      let hadError = false
-
       try {
-        const [statsData, trendsData, zonesData, alertsData, activitiesData] = await Promise.all([
-          apiRequest<DashboardStats>('/dashboard/stats').catch(() => {
-            hadError = true
-            return null
-          }),
-          apiRequest<TrendData[]>('/dashboard/revenue-trends').catch(() => {
-            hadError = true
-            return null
-          }),
-          apiRequest<ZoneData[]>('/dashboard/leads-by-zone').catch(() => {
-            hadError = true
-            return null
-          }),
-          apiRequest<AlertData[]>('/dashboard/alerts').catch(() => {
-            hadError = true
-            return null
-          }),
-          apiRequest<ActivityData[]>('/dashboard/recent-activities').catch(() => {
-            hadError = true
-            return null
-          }),
+        const isSuperAdmin = currentUser.role === 'Super Admin'
+        // Skip Leads-only endpoints for Super Admin (widgets are hidden).
+        const [statsData, trendsData, volumeData, zonesData, alertsData, activitiesData] = await Promise.all([
+          apiRequest<DashboardStats>('/dashboard/stats').catch(() => null),
+          apiRequest<TrendData[]>('/dashboard/revenue-trends').catch(() => null),
+          isSuperAdmin ? Promise.resolve(null) : apiRequest<VolumeData[]>('/dashboard/leads-volume').catch(() => null),
+          isSuperAdmin ? Promise.resolve(null) : apiRequest<ZoneData[]>('/dashboard/leads-by-zone').catch(() => null),
+          apiRequest<AlertData[]>('/dashboard/alerts').catch(() => null),
+          apiRequest<ActivityData[]>('/dashboard/recent-activities').catch(() => null),
         ])
 
+        // Update stats
         if (statsData) {
           setStats([
             { value: statsData.activeLeads },
@@ -342,63 +415,59 @@ export default function DashboardPage() {
             { value: statsData.pendingServices },
             { value: statsData.completedServices },
           ])
-        } else {
-          setStats(EMPTY_STATS)
         }
 
+        // Update trends
         if (trendsData && trendsData.length > 0) {
           setTrends(trendsData)
-        } else {
-          setTrends([])
         }
 
-        if (zonesData) {
+        // Update volume
+        if (volumeData && volumeData.length > 0) {
+          setVolume(volumeData)
+        }
+
+        // Update zones
+        if (zonesData && zonesData.length > 0) {
           setZones(zonesData)
-        } else {
-          setZones([])
+        } else if (zonesData && zonesData.length === 0) {
+          setZones([]) // Empty array if no zones
         }
 
-        if (alertsData) {
+        // Update alerts
+        if (alertsData && alertsData.length > 0) {
           setAlerts(alertsData)
-        } else {
-          setAlerts([])
+        } else if (alertsData && alertsData.length === 0) {
+          setAlerts([]) // Empty array if no alerts
         }
 
+        // Update activities
         if (activitiesData && activitiesData.length > 0) {
           setActivities(activitiesData)
-        } else {
-          setActivities([])
-        }
-
-        if (hadError) {
-          setLoadError('Could not load live dashboard data')
         }
       } catch (error) {
         console.error('Error fetching dashboard data:', error)
-        setLoadError('Could not load live dashboard data')
+        // Keep using mock data on error
       } finally {
         setLoading(false)
       }
     }
 
     fetchDashboardData()
-    fetchLeadsAnalytics()
-    if (currentUser?.role === 'Executive') {
+    if (currentUser.role !== 'Super Admin') {
+      fetchLeadsAnalytics() // Initial load without date filter
+    }
+    if (currentUser.role === 'Executive') {
       fetchExecutiveAnalytics()
-    } else if (currentUser) {
+    } else {
       fetchComprehensiveAnalytics()
     }
   }, [currentUser])
 
-  useEffect(() => {
-    if (!currentUser) return
-    if (currentUser.role === 'Vendor' || currentUser.role === 'Partner') return
-    if (currentUser.role === 'Franchise') return
-    fetchLeadsVolume(volumeRange)
-  }, [volumeRange, currentUser])
-
   const handleSearch = () => {
-    fetchLeadsAnalytics()
+    if (currentUser?.role !== 'Super Admin') {
+      fetchLeadsAnalytics()
+    }
     if (currentUser?.role === 'Executive') {
       fetchExecutiveAnalytics()
     }
@@ -436,21 +505,13 @@ export default function DashboardPage() {
     }
   }
 
-  const role = currentUser?.role as string | undefined
-
   return (
     <div className="space-y-8">
-      {loadError && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          {loadError}
-        </div>
-      )}
-
       {/* Premium Stat Cards - Minimal, elegant design */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {STAT_CONFIG.map((stat, i) => {
+      <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 ${hideLeadsOnDashboard ? 'lg:grid-cols-3' : 'lg:grid-cols-4'}`}>
+        {visibleStatEntries.map(({ stat, index: i }) => {
           const colors = cardColorMap[stat.accent]
-          const href = getStatHref(role, i)
+          const href = getStatHref(currentUser?.role as string | undefined, i)
           const cardInner = (
             <Card
               className={`p-5 bg-gradient-to-br ${colors.bg} border-2 ${colors.border} shadow-lg ${
@@ -476,71 +537,6 @@ export default function DashboardPage() {
         })}
       </div>
 
-      {showDashboardLeaveSection(leaveContextUser) && (
-        <div className="space-y-3">
-          <h2 className="text-lg font-semibold text-neutral-900">Leave Management</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {getDashboardLeaveCards(leaveContextUser).map((card) => {
-              const styles =
-                card.variant === 'pending'
-                  ? {
-                      card: 'from-amber-50 to-orange-100 border-amber-200',
-                      iconBg: 'bg-amber-500',
-                      title: 'text-amber-900',
-                      subtitle: 'text-amber-700',
-                      Icon: Clock,
-                    }
-                  : card.variant === 'apply'
-                    ? {
-                        card: 'from-blue-50 to-blue-100 border-blue-200',
-                        iconBg: 'bg-blue-500',
-                        title: 'text-blue-900',
-                        subtitle: 'text-blue-700',
-                        Icon: PlusCircle,
-                      }
-                    : {
-                        card: 'from-teal-50 to-cyan-100 border-teal-200',
-                        iconBg: 'bg-teal-500',
-                        title: 'text-teal-900',
-                        subtitle: 'text-teal-700',
-                        Icon: CalendarCheck2,
-                      }
-
-              const subtitle =
-                card.variant === 'pending'
-                  ? teamPendingLeaveCount > 0
-                    ? `${teamPendingLeaveCount} awaiting approval`
-                    : card.subtitle
-                  : card.variant === 'myLeaves' && pendingLeaveCount > 0
-                    ? `${pendingLeaveCount} pending approval`
-                    : card.subtitle
-
-              const { Icon } = styles
-
-              return (
-                <Link key={card.href} href={card.href} className="block">
-                  <Card
-                    className={`p-5 bg-gradient-to-br ${styles.card} border-2 shadow-lg hover:shadow-xl transition-all cursor-pointer h-full`}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div
-                        className={`h-12 w-12 rounded-full ${styles.iconBg} flex items-center justify-center flex-shrink-0`}
-                      >
-                        <Icon className="w-6 h-6 text-white" />
-                      </div>
-                      <div>
-                        <div className={`font-semibold ${styles.title}`}>{card.title}</div>
-                        <div className={`text-sm mt-0.5 ${styles.subtitle}`}>{subtitle}</div>
-                      </div>
-                    </div>
-                  </Card>
-                </Link>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
       {/* Premium Tab Navigation */}
       <div className="flex items-center gap-1 border-b border-neutral-200/60">
         <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as 'dashboard' | 'leads' | 'analytics' | 'ai')} className="w-full">
@@ -558,6 +554,7 @@ export default function DashboardPage() {
                 <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full" />
               )}
             </TabsTrigger>
+            {!hideLeadsOnDashboard && (
             <TabsTrigger
               value="leads"
               className={`px-5 py-3 rounded-t-lg font-medium text-sm transition-all duration-200 relative ${
@@ -571,6 +568,7 @@ export default function DashboardPage() {
                 <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full" />
               )}
             </TabsTrigger>
+            )}
             <TabsTrigger
               value="analytics"
               className={`px-5 py-3 rounded-t-lg font-medium text-sm transition-all duration-200 relative ${
@@ -610,86 +608,72 @@ export default function DashboardPage() {
           {/* Executive Summary Stats - Only for Executives */}
           {currentUser?.role === 'Executive' && executiveAnalytics && (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
-              <Link href="/dashboard/leads/followup" className="block">
-                <Card className="p-5 bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-200 shadow-lg hover:shadow-xl transition-all cursor-pointer h-full">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-xs font-semibold text-blue-700 mb-1 uppercase tracking-wide">Total Leads</div>
-                      <div className="text-2xl font-bold text-blue-900">{executiveAnalytics.leads?.total || 0}</div>
-                      <div className="text-xs text-blue-600 mt-1">
-                        {executiveAnalytics.leads?.closed || 0} closed ({executiveAnalytics.leads?.total > 0 
-                          ? Math.round((executiveAnalytics.leads?.closed || 0) / executiveAnalytics.leads.total * 100)
-                          : 0}%)
-                      </div>
-                    </div>
-                    <div className="h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center">
-                      <TrendingUp className="w-5 h-5 text-white" />
+              <Card className="p-5 bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-200 shadow-lg hover:shadow-xl transition-all">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-xs font-semibold text-blue-700 mb-1 uppercase tracking-wide">Total Leads</div>
+                    <div className="text-2xl font-bold text-blue-900">{executiveAnalytics.leads?.total || 0}</div>
+                    <div className="text-xs text-blue-600 mt-1">
+                      {executiveAnalytics.leads?.closed || 0} closed ({executiveAnalytics.leads?.total > 0 
+                        ? Math.round((executiveAnalytics.leads?.closed || 0) / executiveAnalytics.leads.total * 100)
+                        : 0}%)
                     </div>
                   </div>
-                </Card>
-              </Link>
-              <Link href="/dashboard/payments" className="block">
-                <Card className="p-5 bg-gradient-to-br from-emerald-50 to-emerald-100 border-2 border-emerald-200 shadow-lg hover:shadow-xl transition-all cursor-pointer h-full">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-xs font-semibold text-emerald-700 mb-1 uppercase tracking-wide">Revenue</div>
-                      <div className="text-2xl font-bold text-emerald-900">{fmtINR(executiveAnalytics.payments?.totalAmount || 0)}</div>
-                      <div className="text-xs text-emerald-600 mt-1">{executiveAnalytics.payments?.total || 0} payments</div>
-                    </div>
-                    <div className="h-10 w-10 rounded-full bg-emerald-500 flex items-center justify-center">
-                      <DollarSign className="w-5 h-5 text-white" />
-                    </div>
+                  <div className="h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center">
+                    <TrendingUp className="w-5 h-5 text-white" />
                   </div>
-                </Card>
-              </Link>
-              <Link href="/dashboard/expenses" className="block">
-                <Card className="p-5 bg-gradient-to-br from-red-50 to-red-100 border-2 border-red-200 shadow-lg hover:shadow-xl transition-all cursor-pointer h-full">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-xs font-semibold text-red-700 mb-1 uppercase tracking-wide">Expenses</div>
-                      <div className="text-2xl font-bold text-red-900">{fmtINR(executiveAnalytics.expenses?.totalAmount || 0)}</div>
-                      <div className="text-xs text-red-600 mt-1">{executiveAnalytics.expenses?.total || 0} expenses</div>
-                    </div>
-                    <div className="h-10 w-10 rounded-full bg-red-500 flex items-center justify-center">
-                      <Calculator className="w-5 h-5 text-white" />
-                    </div>
+                </div>
+              </Card>
+              <Card className="p-5 bg-gradient-to-br from-emerald-50 to-emerald-100 border-2 border-emerald-200 shadow-lg hover:shadow-xl transition-all">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-xs font-semibold text-emerald-700 mb-1 uppercase tracking-wide">Revenue</div>
+                    <div className="text-2xl font-bold text-emerald-900">{fmtINR(executiveAnalytics.payments?.totalAmount || 0)}</div>
+                    <div className="text-xs text-emerald-600 mt-1">{executiveAnalytics.payments?.total || 0} payments</div>
                   </div>
-                </Card>
-              </Link>
-              <button
-                type="button"
-                onClick={() => setActiveTab('analytics')}
-                className="block text-left w-full"
-              >
-                <Card className="p-5 bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-200 shadow-lg hover:shadow-xl transition-all cursor-pointer h-full">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-xs font-semibold text-green-700 mb-1 uppercase tracking-wide">Net Profit</div>
-                      <div className="text-2xl font-bold text-green-900">
-                        {fmtINR((executiveAnalytics.payments?.totalAmount || 0) - (executiveAnalytics.expenses?.totalAmount || 0))}
-                      </div>
-                      <div className="text-xs text-green-600 mt-1">Revenue - Expenses</div>
-                    </div>
-                    <div className="h-10 w-10 rounded-full bg-green-500 flex items-center justify-center">
-                      <TrendingUp className="w-5 h-5 text-white" />
-                    </div>
+                  <div className="h-10 w-10 rounded-full bg-emerald-500 flex items-center justify-center">
+                    <DollarSign className="w-5 h-5 text-white" />
                   </div>
-                </Card>
-              </button>
-              <Link href="/dashboard/dc/client-dc" className="block">
-                <Card className="p-5 bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-200 shadow-lg hover:shadow-xl transition-all cursor-pointer h-full">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-xs font-semibold text-purple-700 mb-1 uppercase tracking-wide">Total Sales</div>
-                      <div className="text-2xl font-bold text-purple-900">{executiveAnalytics.sales?.total || 0}</div>
-                      <div className="text-xs text-purple-600 mt-1">{executiveAnalytics.sales?.completed || 0} completed</div>
-                    </div>
-                    <div className="h-10 w-10 rounded-full bg-purple-500 flex items-center justify-center">
-                      <ShoppingCart className="w-5 h-5 text-white" />
-                    </div>
+                </div>
+              </Card>
+              <Card className="p-5 bg-gradient-to-br from-red-50 to-red-100 border-2 border-red-200 shadow-lg hover:shadow-xl transition-all">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-xs font-semibold text-red-700 mb-1 uppercase tracking-wide">Expenses</div>
+                    <div className="text-2xl font-bold text-red-900">{fmtINR(executiveAnalytics.expenses?.totalAmount || 0)}</div>
+                    <div className="text-xs text-red-600 mt-1">{executiveAnalytics.expenses?.total || 0} expenses</div>
                   </div>
-                </Card>
-              </Link>
+                  <div className="h-10 w-10 rounded-full bg-red-500 flex items-center justify-center">
+                    <Calculator className="w-5 h-5 text-white" />
+                  </div>
+                </div>
+              </Card>
+              <Card className="p-5 bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-200 shadow-lg hover:shadow-xl transition-all">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-xs font-semibold text-green-700 mb-1 uppercase tracking-wide">Net Profit</div>
+                    <div className="text-2xl font-bold text-green-900">
+                      {fmtINR((executiveAnalytics.payments?.totalAmount || 0) - (executiveAnalytics.expenses?.totalAmount || 0))}
+                    </div>
+                    <div className="text-xs text-green-600 mt-1">Revenue - Expenses</div>
+                  </div>
+                  <div className="h-10 w-10 rounded-full bg-green-500 flex items-center justify-center">
+                    <TrendingUp className="w-5 h-5 text-white" />
+                  </div>
+                </div>
+              </Card>
+              <Card className="p-5 bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-200 shadow-lg hover:shadow-xl transition-all">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-xs font-semibold text-purple-700 mb-1 uppercase tracking-wide">Total Sales</div>
+                    <div className="text-2xl font-bold text-purple-900">{executiveAnalytics.sales?.total || 0}</div>
+                    <div className="text-xs text-purple-600 mt-1">{executiveAnalytics.sales?.completed || 0} completed</div>
+                  </div>
+                  <div className="h-10 w-10 rounded-full bg-purple-500 flex items-center justify-center">
+                    <ShoppingCart className="w-5 h-5 text-white" />
+                  </div>
+                </div>
+              </Card>
             </div>
           )}
 
@@ -750,41 +734,26 @@ export default function DashboardPage() {
           )}
 
           {/* Premium Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* BarChart: Premium styling */}
+      <div className={`grid grid-cols-1 gap-6 ${hideLeadsOnDashboard ? '' : 'lg:grid-cols-2'}`}>
+        {/* BarChart: Premium styling — hidden for Super Admin */}
+        {!hideLeadsOnDashboard && (
         <Card className="p-6">
           <div className="flex items-center justify-between mb-6">
             <div>
               <div className="font-semibold text-neutral-900 text-base mb-1">Leads Volume</div>
-              <div className="text-xs text-neutral-500">{VOLUME_SUBTITLES[volumeRange]}</div>
+              <div className="text-xs text-neutral-500">Last 24 hours activity</div>
             </div>
             <div className="flex items-center gap-1.5 text-xs">
-              {(['24h', '7d', '30d'] as VolumeRange[]).map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() => setVolumeRange(r)}
-                  className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
-                    volumeRange === r
-                      ? 'bg-blue-50 text-blue-700 border border-blue-100'
-                      : 'text-neutral-400 hover:bg-neutral-50 hover:text-neutral-600'
-                  }`}
-                >
-                  {r === '24h' ? '24H' : r === '7d' ? '7D' : '30D'}
-                </button>
-              ))}
+              <span className="px-2.5 py-1 rounded-md bg-blue-50 text-blue-700 font-medium border border-blue-100">24H</span>
+              <span className="px-2.5 py-1 rounded-md text-neutral-400 hover:bg-neutral-50 hover:text-neutral-600 cursor-pointer transition-colors">7D</span>
+              <span className="px-2.5 py-1 rounded-md text-neutral-400 hover:bg-neutral-50 hover:text-neutral-600 cursor-pointer transition-colors">30D</span>
             </div>
           </div>
           <div className="h-[300px]">
-            {volumeLoading ? (
-              <div className="h-full flex items-center justify-center text-neutral-400 text-sm">Loading chart…</div>
-            ) : volume.length > 0 ? (
-              <BarGradient labels={volume.map((v) => v.hour)} values={volume.map((v) => v.value)} />
-            ) : (
-              <div className="h-full flex items-center justify-center text-neutral-400 text-sm">No volume data</div>
-            )}
+            <BarGradient labels={volume.map(v=>v.hour)} values={volume.map(v=>v.value)} />
           </div>
         </Card>
+        )}
         {/* AreaChart with KPIs - Premium styling */}
         <Card className="min-h-[360px] p-6 flex flex-col gap-6">
           <div>
@@ -826,82 +795,55 @@ export default function DashboardPage() {
             {PIE_DATA.map((entry) => {
               const total = PIE_DATA.reduce((s,d)=>s + (d.value as number),0) || 1
               const pct = Math.round(((entry.value as number) / total) * 100)
-              const legendHref =
-                entry.label.includes('Service')
-                  ? getStatHref(role, 5)
-                  : getStatHref(role, 3)
-              const rowClass =
-                'flex items-center gap-3 text-sm font-medium text-neutral-700 rounded-lg px-1 py-1 -mx-1'
-              const rowContent = (
-                <>
-                  <span className="w-3.5 h-3.5 rounded-full block ring-2 ring-white shadow-sm" style={{ background: entry.color }} />
+              return (
+                <div key={entry.label} className="flex items-center gap-3 text-sm font-medium text-neutral-700 group">
+                  <span className="w-3.5 h-3.5 rounded-full block ring-2 ring-white shadow-sm" style={{background: entry.color}}></span>
                   <span className="truncate flex-1">{entry.label}</span>
                   <span className="text-neutral-400 text-xs font-normal">{pct}%</span>
                   <span className="font-bold text-neutral-900 w-8 text-right">{entry.value}</span>
-                </>
-              )
-              return legendHref ? (
-                <Link
-                  key={entry.label}
-                  href={legendHref}
-                  className={`${rowClass} hover:bg-neutral-50 transition-colors cursor-pointer`}
-                >
-                  {rowContent}
-                </Link>
-              ) : (
-                <div key={entry.label} className={rowClass}>
-                  {rowContent}
                 </div>
               )
             })}
           </div>
         </Card>
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className={`grid grid-cols-1 gap-6 ${hideLeadsOnDashboard ? '' : 'lg:grid-cols-3'}`}>
         {/* Premium Active Alerts */}
-        <Card className="p-6 lg:col-span-1">
+        <Card className={`p-6 ${hideLeadsOnDashboard ? '' : 'lg:col-span-1'}`}>
           <div className="flex items-center justify-between mb-4">
             <div className="font-semibold text-neutral-900 text-base">Active Alerts</div>
-            <Link
-              href={DASHBOARD_ALERTS_VIEW_ALL}
-              className="text-xs text-blue-600 hover:text-blue-700 font-medium transition-colors"
-            >
-              View all
-            </Link>
+            <button className="text-xs text-blue-600 hover:text-blue-700 font-medium transition-colors">View all</button>
           </div>
           <div className="space-y-2">
             {loading ? (
               <div className="text-neutral-400 text-sm">Loading alerts...</div>
-            ) : alerts.length > 0 ? (
-              alerts.map((a, idx) => {
-                const alertHref = getAlertHref(a.level)
-                const row = (
-                  <>
-                    <span className={`absolute left-0 top-0 bottom-0 w-1 ${a.level === 'warning' ? 'bg-orange-500' : 'bg-emerald-500'} rounded-l-lg`} />
-                    <AlertTriangle size={16} className={`mt-0.5 flex-shrink-0 ${a.level === 'warning' ? 'text-orange-600' : 'text-emerald-600'}`} />
-                    <span className="leading-relaxed">{a.text}</span>
-                  </>
-                )
-                return (
-                  <Link
-                    key={idx}
-                    href={alertHref}
-                    className={`relative flex items-start gap-3 rounded-lg p-3 text-sm transition-all duration-200 hover:shadow-sm cursor-pointer ${
-                      a.level === 'warning'
-                        ? 'bg-orange-50/80 text-orange-900 border border-orange-200/50'
-                        : 'bg-emerald-50/80 text-emerald-900 border border-emerald-200/50'
-                    }`}
-                  >
-                    {row}
-                  </Link>
-                )
-              })
+            ) : (() => {
+              const visibleAlerts = hideLeadsOnDashboard
+                ? alerts.filter((a) => !/lead/i.test(a.text || ''))
+                : alerts
+              return visibleAlerts.length > 0 ? (
+              visibleAlerts.map((a, idx) => (
+                <div
+                  key={idx}
+                  className={`relative flex items-start gap-3 rounded-lg p-3 text-sm transition-all duration-200 hover:shadow-sm ${
+                    a.level === 'warning'
+                      ? 'bg-orange-50/80 text-orange-900 border border-orange-200/50'
+                      : 'bg-emerald-50/80 text-emerald-900 border border-emerald-200/50'
+                  }`}
+                >
+                  <span className={`absolute left-0 top-0 bottom-0 w-1 ${a.level === 'warning' ? 'bg-orange-500' : 'bg-emerald-500'} rounded-l-lg`} />
+                  <AlertTriangle size={16} className={`mt-0.5 flex-shrink-0 ${a.level === 'warning' ? 'text-orange-600' : 'text-emerald-600'}`} />
+                  <span className="leading-relaxed">{a.text}</span>
+                </div>
+              ))
             ) : (
               <div className="text-neutral-400 text-sm py-4 text-center">No active alerts</div>
-            )}
+            )
+            })()}
           </div>
         </Card>
-        {/* Premium Leads by Zone table */}
+        {/* Premium Leads by Zone table — hidden for Super Admin */}
+        {!hideLeadsOnDashboard && (
         <Card className="p-6 lg:col-span-2">
           <div className="font-semibold text-neutral-900 mb-4 text-base">Leads by Zone</div>
           <div className="overflow-hidden rounded-lg border border-neutral-200/60">
@@ -939,26 +881,21 @@ export default function DashboardPage() {
             </table>
           </div>
         </Card>
+        )}
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Premium Recent Activity */}
         <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="font-semibold text-neutral-900 text-base">Recent Activity</div>
-            {canViewChangeLogs(role) && (
-              <Link
-                href="/dashboard/reports/change-logs"
-                className="text-xs text-blue-600 hover:text-blue-700 font-medium transition-colors"
-              >
-                View all
-              </Link>
-            )}
-          </div>
+          <div className="font-semibold text-neutral-900 mb-4 text-base">Recent Activity</div>
           <div className="flex flex-col gap-3 text-sm">
             {loading ? (
               <div className="text-neutral-400 py-4">Loading activities...</div>
-            ) : activities.length > 0 ? (
-              activities.slice(0, 5).map((activity) => {
+            ) : (() => {
+              const visibleActivities = hideLeadsOnDashboard
+                ? activities.filter((a) => a.type !== 'lead_created' && !/lead/i.test(a.message || ''))
+                : activities
+              return visibleActivities.length > 0 ? (
+              visibleActivities.slice(0, 5).map((activity) => {
                 const getColorClasses = () => {
                   if (activity.type === 'lead_created') return { text: 'text-orange-700', bg: 'bg-orange-500', ring: 'ring-orange-200' }
                   if (activity.type === 'sale_made') return { text: 'text-emerald-700', bg: 'bg-emerald-500', ring: 'ring-emerald-200' }
@@ -975,7 +912,8 @@ export default function DashboardPage() {
               })
             ) : (
               <div className="text-neutral-400 py-4">No recent activities</div>
-            )}
+            )
+            })()}
           </div>
         </Card>
 
@@ -1151,8 +1089,8 @@ export default function DashboardPage() {
         </>
       )}
 
-      {/* Premium Leads Dashboard Content */}
-      {activeTab === 'leads' && (
+      {/* Premium Leads Dashboard Content — not shown for Super Admin */}
+      {activeTab === 'leads' && !hideLeadsOnDashboard && (
       <div className="mt-6 space-y-6">
         {currentUser?.role === 'Executive' ? (
           /* Executive Leads Dashboard */
@@ -1235,7 +1173,9 @@ export default function DashboardPage() {
                       <div>
                         <div className="text-sm font-semibold text-red-700 mb-2 uppercase tracking-wide">Hot Leads</div>
                         <div className="text-3xl font-bold text-red-900">
-                          {executiveAnalytics.leads?.byPriority?.find((p: any) => p._id === 'Hot')?.count || 0}
+                          {(Array.isArray(executiveAnalytics.leads?.byPriority)
+                            ? executiveAnalytics.leads.byPriority.find((p: any) => p._id === 'Hot')
+                            : undefined)?.count || 0}
                         </div>
                         <div className="text-xs text-red-600 mt-1">High Priority</div>
                       </div>
@@ -1249,7 +1189,9 @@ export default function DashboardPage() {
                       <div>
                         <div className="text-sm font-semibold text-amber-700 mb-2 uppercase tracking-wide">Warm Leads</div>
                         <div className="text-3xl font-bold text-amber-900">
-                          {executiveAnalytics.leads?.byPriority?.find((p: any) => p._id === 'Warm')?.count || 0}
+                          {(Array.isArray(executiveAnalytics.leads?.byPriority)
+                            ? executiveAnalytics.leads.byPriority.find((p: any) => p._id === 'Warm')
+                            : undefined)?.count || 0}
                         </div>
                         <div className="text-xs text-amber-600 mt-1">Medium Priority</div>
                       </div>
@@ -1263,7 +1205,9 @@ export default function DashboardPage() {
                       <div>
                         <div className="text-sm font-semibold text-indigo-700 mb-2 uppercase tracking-wide">Cold Leads</div>
                         <div className="text-3xl font-bold text-indigo-900">
-                          {executiveAnalytics.leads?.byPriority?.find((p: any) => p._id === 'Cold')?.count || 0}
+                          {(Array.isArray(executiveAnalytics.leads?.byPriority)
+                            ? executiveAnalytics.leads.byPriority.find((p: any) => p._id === 'Cold')
+                            : undefined)?.count || 0}
                         </div>
                         <div className="text-xs text-indigo-600 mt-1">Low Priority</div>
                       </div>
@@ -2294,7 +2238,8 @@ export default function DashboardPage() {
               </div>
             ) : analyticsData ? (
               <>
-                {/* Leads Analytics */}
+                {/* Leads Analytics — omitted for Super Admin */}
+                {!hideLeadsOnDashboard && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <Card className="p-6">
                     <h3 className="font-semibold text-lg text-neutral-900 mb-6">Leads by Status</h3>
@@ -2319,6 +2264,7 @@ export default function DashboardPage() {
                     />
                   </Card>
                 </div>
+                )}
 
                 {/* Payments Analytics */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -2526,24 +2472,36 @@ export default function DashboardPage() {
               </Link>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {(
-                [
-                  { tool: AI_TEASER_TOOLS[0], icon: DollarSign, iconClass: 'text-rose-500', desc: 'Identify revenue likely to get stuck or lost' },
-                  { tool: AI_TEASER_TOOLS[1], icon: TrendingUp, iconClass: 'text-blue-500', desc: 'High-level view of revenue trends and issues' },
-                  { tool: AI_TEASER_TOOLS[2], icon: Sparkles, iconClass: 'text-amber-500', desc: 'Automatically rank actions by business impact' },
-                  { tool: AI_TEASER_TOOLS[3], icon: AlertTriangle, iconClass: 'text-red-500', desc: 'Identify deals at high risk of failing' },
-                  { tool: AI_TEASER_TOOLS[4], icon: Users, iconClass: 'text-purple-500', desc: 'Highlight managers showing performance drops' },
-                  { tool: AI_TEASER_TOOLS[5], icon: Shield, iconClass: 'text-orange-500', desc: 'Detect unusual patterns in transactions' },
-                ] as const
-              ).map(({ tool, icon: Icon, iconClass, desc }) => (
-                <Link key={tool.id} href={`/dashboard/ai?tool=${tool.id}`} className="block">
-                  <Card className="p-4 border-2 border-blue-200 hover:border-blue-400 transition-colors cursor-pointer h-full">
-                    <Icon className={`h-6 w-6 ${iconClass} mb-2`} />
-                    <h3 className="font-semibold mb-1">{tool.title}</h3>
-                    <p className="text-sm text-gray-600">{desc}</p>
-                  </Card>
-                </Link>
-              ))}
+              <Card className="p-4 border-2 border-blue-200 hover:border-blue-400 transition-colors">
+                <DollarSign className="h-6 w-6 text-rose-500 mb-2" />
+                <h3 className="font-semibold mb-1">Revenue at Risk</h3>
+                <p className="text-sm text-gray-600">Identify revenue likely to get stuck or lost</p>
+              </Card>
+              <Card className="p-4 border-2 border-blue-200 hover:border-blue-400 transition-colors">
+                <TrendingUp className="h-6 w-6 text-blue-500 mb-2" />
+                <h3 className="font-semibold mb-1">Executive Dashboard</h3>
+                <p className="text-sm text-gray-600">High-level view of revenue trends and issues</p>
+              </Card>
+              <Card className="p-4 border-2 border-blue-200 hover:border-blue-400 transition-colors">
+                <Sparkles className="h-6 w-6 text-amber-500 mb-2" />
+                <h3 className="font-semibold mb-1">Priority Engine</h3>
+                <p className="text-sm text-gray-600">Automatically rank actions by business impact</p>
+              </Card>
+              <Card className="p-4 border-2 border-blue-200 hover:border-blue-400 transition-colors">
+                <AlertTriangle className="h-6 w-6 text-red-500 mb-2" />
+                <h3 className="font-semibold mb-1">Deal Risk Scoring</h3>
+                <p className="text-sm text-gray-600">Identify deals at high risk of failing</p>
+              </Card>
+              <Card className="p-4 border-2 border-blue-200 hover:border-blue-400 transition-colors">
+                <Users className="h-6 w-6 text-purple-500 mb-2" />
+                <h3 className="font-semibold mb-1">Performance Risk</h3>
+                <p className="text-sm text-gray-600">Highlight managers showing performance drops</p>
+              </Card>
+              <Card className="p-4 border-2 border-blue-200 hover:border-blue-400 transition-colors">
+                <Shield className="h-6 w-6 text-orange-500 mb-2" />
+                <h3 className="font-semibold mb-1">Fraud Detection</h3>
+                <p className="text-sm text-gray-600">Detect unusual patterns in transactions</p>
+              </Card>
             </div>
           </Card>
       </div>

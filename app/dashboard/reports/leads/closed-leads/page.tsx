@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { Card } from '@/components/ui/card'
-import { apiRequest, LOCAL_API_BASE_URL } from '@/lib/api'
+import { apiRequest } from '@/lib/api'
+import { downloadReportFile } from '@/lib/reportDownload'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -24,6 +25,7 @@ type Lead = {
   location?: string
   strength?: number
   createdAt?: string
+  updatedAt?: string
   remarks?: string
   managed_by?: { name?: string; _id?: string }
   assigned_by?: { name?: string; _id?: string }
@@ -42,6 +44,8 @@ export default function ReportsClosedLeadsPage() {
   const [zone, setZone] = useState('')
   const [schoolName, setSchoolName] = useState('')
   const [contactMobile, setContactMobile] = useState('')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
 
   useEffect(() => {
     loadLeads()
@@ -49,74 +53,35 @@ export default function ReportsClosedLeadsPage() {
 
   useEffect(() => {
     applyFilters()
-  }, [allLeads, zone, schoolName, contactMobile])
+  }, [allLeads, zone, schoolName, contactMobile, fromDate, toDate])
+
+  const closedLeadsQuery = () => {
+    const qs = new URLSearchParams()
+    qs.set('status', 'Closed')
+    qs.set('limit', '200')
+    qs.set('page', '1')
+    if (zone && zone !== 'all') qs.set('zone', zone)
+    if (schoolName) qs.set('schoolName', schoolName)
+    if (contactMobile) qs.set('contactMobile', contactMobile)
+    if (fromDate) qs.set('fromDate', fromDate)
+    if (toDate) qs.set('toDate', toDate)
+    return qs
+  }
 
   const loadLeads = async () => {
     setLoading(true)
     try {
-      // Fetch closed leads from database with a high limit to get all results
-      // The API returns paginated results, so we'll fetch with a high limit
-      const response = await apiRequest<any>('/leads?status=Closed&limit=1000')
-      console.log('API Response:', response)
-      
-      // Handle both array and paginated response formats
-      let allData: Lead[] = []
-      
-      if (Array.isArray(response)) {
-        // Direct array response
-        allData = response
-      } else if (response?.data && Array.isArray(response.data)) {
-        // Paginated response with data array
-        allData = response.data
-        
-        // If there are more pages, fetch them
-        if (response.pagination && response.pagination.totalPages > 1) {
-          const totalPages = response.pagination.totalPages
-          for (let page = 2; page <= totalPages; page++) {
-            try {
-              const pageResponse = await apiRequest<any>(`/leads?status=Closed&limit=1000&page=${page}`)
-              const pageData = Array.isArray(pageResponse) 
-                ? pageResponse 
-                : (pageResponse?.data || [])
-              allData = [...allData, ...pageData]
-            } catch (err) {
-              console.warn(`Failed to fetch page ${page}:`, err)
-              break
-            }
-          }
-        }
-      }
-      
-      // Ensure we only have closed leads (double-check)
+      const response = await apiRequest<any>(`/leads?${closedLeadsQuery().toString()}`)
+      let allData: Lead[] = Array.isArray(response) ? response : (response?.data || [])
       allData = allData.filter((lead: Lead) => lead.status === 'Closed')
-      
-      console.log('Total closed leads found:', allData.length)
-      console.log('Sample lead:', allData[0])
-      
       setAllLeads(allData)
-      
-      // Extract unique zones
       const uniqueZones = Array.from(new Set(allData.map((l: Lead) => l.zone).filter(Boolean))) as string[]
-      setZones(uniqueZones.sort())
-      
-      if (allData.length === 0) {
-        toast.info('No closed leads found in the database. Leads need to have status="Closed" to appear here.')
-      } else {
-        toast.success(`Loaded ${allData.length} closed lead(s)`)
-      }
+      if (!zone) setZones(uniqueZones.sort())
     } catch (err: any) {
-      console.error('Error loading closed leads:', err)
-      console.error('Error details:', {
-        message: err?.message,
-        stack: err?.stack,
-        response: err?.response
-      })
-      
-      // Check if it's a connection error
       if (err?.message?.includes('Failed to fetch') || err?.message?.includes('ERR_CONNECTION_REFUSED')) {
         toast.error('Cannot connect to backend server. Please check your connection or contact support.')
       } else {
-        toast.error(err?.message || 'Failed to load closed leads. Check console for details.')
+        toast.error(err?.message || 'Failed to load closed leads.')
       }
     } finally {
       setLoading(false)
@@ -129,6 +94,20 @@ export default function ReportsClosedLeadsPage() {
     if (zone && zone !== 'all') filtered = filtered.filter(l => l.zone?.toLowerCase().includes(zone.toLowerCase()))
     if (contactMobile) filtered = filtered.filter(l => l.contact_mobile?.includes(contactMobile))
     if (schoolName) filtered = filtered.filter(l => l.school_name?.toLowerCase().includes(schoolName.toLowerCase()))
+    if (fromDate) {
+      const from = new Date(fromDate)
+      filtered = filtered.filter(l => {
+        const when = l.updatedAt || l.createdAt
+        return when && new Date(when) >= from
+      })
+    }
+    if (toDate) {
+      const to = new Date(toDate + 'T23:59:59')
+      filtered = filtered.filter(l => {
+        const when = l.updatedAt || l.createdAt
+        return when && new Date(when) <= to
+      })
+    }
 
     setLeads(filtered)
   }
@@ -188,11 +167,11 @@ export default function ReportsClosedLeadsPage() {
 
   // Calculate analytics data
   const analyticsData = useMemo(() => {
-    if (!allLeads.length) return null
+    if (!leads.length) return null
 
     // Leads by Zone
     const zoneData: Record<string, number> = {}
-    allLeads.forEach(lead => {
+    leads.forEach(lead => {
       const zone = lead.zone || 'Unassigned'
       zoneData[zone] = (zoneData[zone] || 0) + 1
     })
@@ -203,7 +182,7 @@ export default function ReportsClosedLeadsPage() {
 
     // Leads by Priority
     const priorityData: Record<string, number> = {}
-    allLeads.forEach(lead => {
+    leads.forEach(lead => {
       const priority = lead.priority || 'Hot'
       priorityData[priority] = (priorityData[priority] || 0) + 1
     })
@@ -216,7 +195,7 @@ export default function ReportsClosedLeadsPage() {
 
     // Leads by Employee
     const employeeData: Record<string, number> = {}
-    allLeads.forEach(lead => {
+    leads.forEach(lead => {
       const employee = getAssignedTo(lead)
       employeeData[employee] = (employeeData[employee] || 0) + 1
     })
@@ -233,9 +212,10 @@ export default function ReportsClosedLeadsPage() {
     })
     
     const leadsOverTime = last30Days.map(date => {
-      const count = allLeads.filter(lead => {
-        if (!lead.createdAt) return false
-        const leadDate = new Date(lead.createdAt).toISOString().split('T')[0]
+      const count = leads.filter(lead => {
+        const when = lead.updatedAt || lead.createdAt
+        if (!when) return false
+        const leadDate = new Date(when).toISOString().split('T')[0]
         return leadDate === date
       }).length
       return {
@@ -245,12 +225,12 @@ export default function ReportsClosedLeadsPage() {
     })
 
     // Summary metrics
-    const totalLeads = allLeads.length
-    const hotLeads = allLeads.filter(l => l.priority === 'Hot').length
-    const warmLeads = allLeads.filter(l => l.priority === 'Warm').length
-    const uniqueZones = new Set(allLeads.map(l => l.zone).filter(Boolean)).size
-    const uniqueEmployees = new Set(allLeads.map(l => getAssignedTo(l))).size
-    const totalStrength = allLeads.reduce((sum, l) => sum + (l.strength || 0), 0)
+    const totalLeads = leads.length
+    const hotLeads = leads.filter(l => l.priority === 'Hot').length
+    const warmLeads = leads.filter(l => l.priority === 'Warm').length
+    const uniqueZones = new Set(leads.map(l => l.zone).filter(Boolean)).size
+    const uniqueEmployees = new Set(leads.map(l => getAssignedTo(l))).size
+    const totalStrength = leads.reduce((sum, l) => sum + (l.strength || 0), 0)
 
     return {
       leadsByZone,
@@ -266,43 +246,21 @@ export default function ReportsClosedLeadsPage() {
         totalStrength
       }
     }
-  }, [allLeads])
+  }, [leads])
 
   const COLORS = ['#10b981', '#3b82f6', '#ef4444', '#f97316', '#8b5cf6', '#f59e0b', '#ec4899']
 
   const handleExport = async () => {
     try {
       const qs = new URLSearchParams()
-      qs.append('status', 'Closed')
-      if (zone && zone !== 'all') qs.append('zone', zone)
-      if (contactMobile) qs.append('contactMobile', contactMobile)
-      if (schoolName) qs.append('schoolName', schoolName)
-
-      const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null
-      const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || LOCAL_API_BASE_URL
-
-      const response = await fetch(`${API_BASE_URL}/api/leads/export?${qs.toString()}`, {
-        method: 'GET',
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      })
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ message: 'Export failed' }))
-        throw new Error(error.message || 'Export failed')
-      }
-
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `Closed_Leads_Report_${new Date().toISOString().split('T')[0]}.xlsx`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
-      toast.success('Excel file downloaded successfully')
+      qs.set('status', 'Closed')
+      if (zone && zone !== 'all') qs.set('zone', zone)
+      if (contactMobile) qs.set('contactMobile', contactMobile)
+      if (schoolName) qs.set('schoolName', schoolName)
+      if (fromDate) qs.set('fromDate', fromDate)
+      if (toDate) qs.set('toDate', toDate)
+      await downloadReportFile(`/leads/export?${qs.toString()}`, 'Closed_Leads_Report.xlsx')
+      toast.success('Excel file downloaded')
     } catch (err: any) {
       toast.error(err?.message || 'Failed to export to Excel')
     }
@@ -528,7 +486,7 @@ export default function ReportsClosedLeadsPage() {
 
       <Card className="p-4">
         {/* Filters */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6">
           <div>
             <label className="text-sm font-medium text-neutral-700 mb-1 block">Zone</label>
             <Select value={zone || undefined} onValueChange={(v) => setZone(v === 'all' ? '' : v)}>
@@ -561,9 +519,17 @@ export default function ReportsClosedLeadsPage() {
               onChange={(e) => setContactMobile(e.target.value)}
             />
           </div>
+          <div>
+            <label className="text-sm font-medium text-neutral-700 mb-1 block">From Date</label>
+            <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-sm font-medium text-neutral-700 mb-1 block">To Date</label>
+            <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+          </div>
           <div className="flex items-end">
             <Button variant="outline" onClick={loadLeads} className="w-full">
-              Refresh
+              Search
             </Button>
           </div>
         </div>
@@ -634,11 +600,11 @@ export default function ReportsClosedLeadsPage() {
                         {lead.priority || 'Hot'}
                       </span>
                     </div>
-                    {lead.createdAt && (
+                    {(lead.updatedAt || lead.createdAt) && (
                       <div>
                         <span className="text-neutral-600">Closed On:</span>
                         <span className="ml-2 font-medium text-neutral-900">
-                          {formatDateTime(lead.createdAt)}
+                          {formatDateTime(lead.updatedAt || lead.createdAt)}
                         </span>
                       </div>
                     )}

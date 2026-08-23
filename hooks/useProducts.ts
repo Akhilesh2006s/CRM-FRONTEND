@@ -41,15 +41,41 @@ export function useProducts() {
     }
   }
 
-  // Get product names array (for backward compatibility)
   const getProductNames = (): string[] => {
     return products.map(p => p.productName)
+  }
+
+  const findProduct = (productName: string): Product | undefined => {
+    const n = String(productName || '').trim().toLowerCase()
+    if (!n) return undefined
+    return products.find(p => String(p.productName || '').trim().toLowerCase() === n)
+  }
+
+  const catalogSpecsFromProduct = (product: Product | undefined): string[] => {
+    if (!product) return []
+    if (product.hasSpecs === false) return []
+    const raw = product.specs
+    if (Array.isArray(raw)) {
+      return raw.map((s) => String(s || '').trim()).filter(Boolean)
+    }
+    if (typeof raw === 'string' && raw.trim()) {
+      return [raw.trim()]
+    }
+    return []
   }
 
   // Get product levels for a specific product
   const getProductLevels = (productName: string): string[] => {
     const product = products.find(p => p.productName === productName)
-    return product?.productLevels || ['L1'] // Default to L1 if not found
+    if (!product) return ['L1']
+    return Array.isArray(product.productLevels)
+      ? product.productLevels.map((l) => String(l || '').trim()).filter(Boolean)
+      : []
+  }
+
+  const hasProductLevels = (productName: string): boolean => {
+    const product = products.find(p => p.productName === productName)
+    return Array.isArray(product?.productLevels) && product.productLevels.some((l) => String(l || '').trim())
   }
 
   // Get default level for a product
@@ -69,16 +95,16 @@ export function useProducts() {
     loading,
     error,
     getProductLevels,
+    hasProductLevels,
     getDefaultLevel,
     isProductActive,
     refetch: loadProducts,
     // Get product specs for a specific product
     getProductSpecs: (productName: string): string[] => {
-      const product = products.find(p => p.productName === productName)
-      if (product && product.hasSpecs && product.specs && Array.isArray(product.specs)) {
-        return product.specs
-      }
-      return ['Regular', 'Single Level only', 'Class WorkBooks Only'] // Default specs
+      return catalogSpecsFromProduct(findProduct(productName))
+    },
+    hasProductSpecs: (productName: string): boolean => {
+      return catalogSpecsFromProduct(findProduct(productName)).length > 0
     },
     // Get product subjects for a specific product
     getProductSubjects: (productName: string): string[] => {
@@ -108,7 +134,8 @@ export function useProducts() {
     },
     // Get product _id by name (for API calls that need productId)
     getProductId: (productName: string): string | undefined => {
-      const product = products.find(p => p.productName === productName)
+      const n = String(productName || '').trim().toLowerCase()
+      const product = products.find(p => String(p.productName || '').trim().toLowerCase() === n)
       return product?._id
     },
     getCalculationType: (productName: string): CalculationType => {

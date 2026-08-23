@@ -50,6 +50,16 @@ export default function NewProductPage() {
     }
   }
 
+  const addNamedTerm = (term: string) => {
+    const value = term.trim()
+    if (!value || form.productLevels.includes(value)) return
+    setForm({
+      ...form,
+      productLevels: [...form.productLevels, value],
+      newLevel: '',
+    })
+  }
+
   const removeLevel = (index: number) => {
     setForm({
       ...form,
@@ -276,9 +286,22 @@ export default function NewProductPage() {
                 onChange={(e) => setForm({ ...form, newLevel: e.target.value })}
                 onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addLevel())}
               />
-              <Button type="button" onClick={addLevel} variant="outline">
-                Add Term
-              </Button>
+            </div>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {(['Term 1', 'Term 2', 'Term 3'] as const).map((term) => {
+                const alreadyAdded = form.productLevels.includes(term)
+                return (
+                  <Button
+                    key={term}
+                    type="button"
+                    onClick={() => addNamedTerm(term)}
+                    variant="outline"
+                    disabled={alreadyAdded}
+                  >
+                    Add {term}
+                  </Button>
+                )
+              })}
             </div>
             {form.productLevels.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-2">

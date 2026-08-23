@@ -74,6 +74,19 @@ export default function AssignTrainingServicePage() {
     remarks: '',
     status: 'Scheduled' as 'Scheduled' | 'Completed' | 'Cancelled',
   })
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+
+  const clearFieldError = (field: string) => {
+    setFieldErrors((prev) => {
+      if (!prev[field]) return prev
+      const next = { ...prev }
+      delete next[field]
+      return next
+    })
+  }
+
+  const isBlank = (value: unknown) =>
+    value == null || (typeof value === 'string' && value.trim() === '')
   
   // Sorting
   const [sortBy, setSortBy] = useState<string | null>(null)
@@ -308,6 +321,7 @@ export default function AssignTrainingServicePage() {
       remarks: '',
       status: 'Scheduled',
     })
+    setFieldErrors({})
     setLastScheduleInfo(null)
     setAssignDialogOpen(true)
     loadLastCompletedSchedule(school, type)
@@ -328,23 +342,36 @@ export default function AssignTrainingServicePage() {
   const handleAssignSubmit = async () => {
     if (!selectedSchool) return
 
-    if (assignForm.date && assignForm.date < todayMin) {
-      toast.error('Cannot schedule on a past date')
+    const errors: Record<string, string> = {}
+
+    if (isBlank(assignForm.subject)) {
+      errors.subject = 'Product is required.'
+    }
+    if (isBlank(assignForm.trainerId)) {
+      errors.trainerId = 'Trainer is required.'
+    }
+    if (isBlank(assignForm.term)) {
+      errors.term = 'Term is required.'
+    }
+    if (isBlank(assignForm.date)) {
+      errors.date =
+        assignType === 'training'
+          ? 'Training Date is required.'
+          : 'Service Date is required.'
+    } else if (assignForm.date < todayMin) {
+      errors.date = 'Cannot schedule on a past date.'
+    }
+
+    if (assignType === 'training' && isBlank(assignForm.trainingLevel)) {
+      errors.trainingLevel = 'Training Level is required.'
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors)
       return
     }
 
-    if (assignType === 'training') {
-      if (!assignForm.subject || !assignForm.trainerId || !assignForm.date || !assignForm.term || !assignForm.trainingLevel) {
-        toast.error('Please fill all required fields')
-        return
-      }
-    } else {
-      if (!assignForm.subject || !assignForm.trainerId || !assignForm.date || !assignForm.term) {
-        toast.error('Please fill all required fields')
-        return
-      }
-    }
-
+    setFieldErrors({})
     setSubmitting(true)
     try {
       const endpoint = assignType === 'training' ? '/training/create' : '/services/create'
@@ -352,38 +379,32 @@ export default function AssignTrainingServicePage() {
         schoolName: selectedSchool.school_name || '',
         zone: selectedSchool.zone || '',
         town: selectedSchool.location || '',
-        subject: assignForm.subject,
+        subject: assignForm.subject.trim(),
         trainerId: assignForm.trainerId,
         [assignType === 'training' ? 'trainingDate' : 'serviceDate']: assignForm.date,
-        status: assignForm.status,
+        status: assignForm.status || 'Scheduled',
+        term: assignForm.term.trim(),
       }
-      
-      // Only include schoolCode if it exists and is not empty
+
       if (selectedSchool.school_code && selectedSchool.school_code.trim()) {
         payload.schoolCode = selectedSchool.school_code.trim()
       }
-      
-      // Only include employeeId if it exists
+
       if (assignForm.employeeId) {
         payload.employeeId = assignForm.employeeId
       }
-      
-      // For training, include term, trainingLevel, and remarks
+
       if (assignType === 'training') {
-        if (assignForm.term) payload.term = assignForm.term
-        if (assignForm.trainingLevel) payload.trainingLevel = assignForm.trainingLevel
-        if (assignForm.remarks) payload.remarks = assignForm.remarks
-      } else {
-        // For service, include term and remarks
-        if (assignForm.term) payload.term = assignForm.term
-        if (assignForm.remarks) payload.remarks = assignForm.remarks
+        payload.trainingLevel = assignForm.trainingLevel.trim()
+        if (assignForm.remarks?.trim()) payload.remarks = assignForm.remarks.trim()
+      } else if (assignForm.remarks?.trim()) {
+        payload.remarks = assignForm.remarks.trim()
       }
-      
+
       await apiRequest(endpoint, { method: 'POST', body: JSON.stringify(payload) })
       toast.success(`${assignType === 'training' ? 'Training' : 'Service'} assigned successfully`)
       setAssignDialogOpen(false)
       setSelectedSchool(null)
-      // Optionally reload data or navigate
       router.refresh()
     } catch (e: any) {
       toast.error(e?.message || 'Failed to assign')
@@ -446,37 +467,37 @@ export default function AssignTrainingServicePage() {
       <Card className="p-4">
         <form onSubmit={(e) => { e.preventDefault(); setCurrentPage(1) }} className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
-            <label className="text-sm font-medium text-neutral-700 mb-1 block">School Code</label>
+            <label className="text-sm font-medium text-neutral-700 mb-1 block">By School Code</label>
             <Input
               className="bg-white text-neutral-900"
-              placeholder="School Code"
+              placeholder="By School Code"
               value={filters.schoolCode}
               onChange={(e) => setFilters(f => ({ ...f, schoolCode: e.target.value }))}
             />
           </div>
           <div>
-            <label className="text-sm font-medium text-neutral-700 mb-1 block">School Name</label>
+            <label className="text-sm font-medium text-neutral-700 mb-1 block">By School Name</label>
             <Input
               className="bg-white text-neutral-900"
-              placeholder="School Name"
+              placeholder="By School Name"
               value={filters.schoolName}
               onChange={(e) => setFilters(f => ({ ...f, schoolName: e.target.value }))}
             />
           </div>
           <div>
-            <label className="text-sm font-medium text-neutral-700 mb-1 block">Mobile No</label>
+            <label className="text-sm font-medium text-neutral-700 mb-1 block">By Mobile No</label>
             <Input
               className="bg-white text-neutral-900"
-              placeholder="Mobile No"
+              placeholder="By Mobile No"
               value={filters.mobile}
               onChange={(e) => setFilters(f => ({ ...f, mobile: e.target.value }))}
             />
           </div>
           <div>
-            <label className="text-sm font-medium text-neutral-700 mb-1 block">Town</label>
+            <label className="text-sm font-medium text-neutral-700 mb-1 block">By Town</label>
             <Input
               className="bg-white text-neutral-900"
-              placeholder="Town"
+              placeholder="By Town"
               value={filters.town}
               onChange={(e) => setFilters(f => ({ ...f, town: e.target.value }))}
             />
@@ -709,8 +730,17 @@ export default function AssignTrainingServicePage() {
             )}
             <div>
               <Label>Product *</Label>
-              <Select value={assignForm.subject} onValueChange={(v) => setAssignForm(f => ({ ...f, subject: v }))}>
-                <SelectTrigger className="bg-white text-neutral-900">
+              <Select
+                value={assignForm.subject || undefined}
+                onValueChange={(v) => {
+                  setAssignForm((f) => ({ ...f, subject: v }))
+                  clearFieldError('subject')
+                }}
+              >
+                <SelectTrigger
+                  className={`bg-white text-neutral-900 ${fieldErrors.subject ? 'border-red-500' : ''}`}
+                  aria-invalid={!!fieldErrors.subject}
+                >
                   <SelectValue placeholder="Select Product" />
                 </SelectTrigger>
                 <SelectContent>
@@ -726,14 +756,23 @@ export default function AssignTrainingServicePage() {
                   <SelectItem value="Codechamp">Codechamp</SelectItem>
                 </SelectContent>
               </Select>
+              {fieldErrors.subject && (
+                <p className="mt-1.5 text-sm text-red-600">{fieldErrors.subject}</p>
+              )}
             </div>
             <div>
               <Label>Trainer *</Label>
               <Select
-                value={assignForm.trainerId}
-                onValueChange={(v) => setAssignForm(f => ({ ...f, trainerId: v }))}
+                value={assignForm.trainerId || undefined}
+                onValueChange={(v) => {
+                  setAssignForm((f) => ({ ...f, trainerId: v }))
+                  clearFieldError('trainerId')
+                }}
               >
-                <SelectTrigger className="bg-white text-neutral-900">
+                <SelectTrigger
+                  className={`bg-white text-neutral-900 ${fieldErrors.trainerId ? 'border-red-500' : ''}`}
+                  aria-invalid={!!fieldErrors.trainerId}
+                >
                   <SelectValue placeholder="Select Trainer" />
                 </SelectTrigger>
                 <SelectContent>
@@ -746,13 +785,25 @@ export default function AssignTrainingServicePage() {
                   )}
                 </SelectContent>
               </Select>
+              {fieldErrors.trainerId && (
+                <p className="mt-1.5 text-sm text-red-600">{fieldErrors.trainerId}</p>
+              )}
             </div>
             {assignType === 'training' && (
               <>
                 <div>
                   <Label>Term *</Label>
-                  <Select value={assignForm.term} onValueChange={(v) => setAssignForm(f => ({ ...f, term: v }))}>
-                    <SelectTrigger className="bg-white text-neutral-900">
+                  <Select
+                    value={assignForm.term || undefined}
+                    onValueChange={(v) => {
+                      setAssignForm((f) => ({ ...f, term: v }))
+                      clearFieldError('term')
+                    }}
+                  >
+                    <SelectTrigger
+                      className={`bg-white text-neutral-900 ${fieldErrors.term ? 'border-red-500' : ''}`}
+                      aria-invalid={!!fieldErrors.term}
+                    >
                       <SelectValue placeholder="Select Term" />
                     </SelectTrigger>
                     <SelectContent>
@@ -762,28 +813,43 @@ export default function AssignTrainingServicePage() {
                       <SelectItem value="Term 4">Term 4</SelectItem>
                     </SelectContent>
                   </Select>
+                  {fieldErrors.term && (
+                    <p className="mt-1.5 text-sm text-red-600">{fieldErrors.term}</p>
+                  )}
                 </div>
                 <div>
                   <Label>Training Date *</Label>
                   <Input
                     type="date"
-                    className="bg-white text-neutral-900"
+                    className={`bg-white text-neutral-900 ${fieldErrors.date ? 'border-red-500' : ''}`}
                     min={todayMin}
                     value={assignForm.date}
-                    onChange={(e) => setAssignForm(f => ({ ...f, date: e.target.value }))}
-                    required
+                    onChange={(e) => {
+                      setAssignForm((f) => ({ ...f, date: e.target.value }))
+                      clearFieldError('date')
+                    }}
+                    aria-invalid={!!fieldErrors.date}
                   />
+                  {fieldErrors.date && (
+                    <p className="mt-1.5 text-sm text-red-600">{fieldErrors.date}</p>
+                  )}
                 </div>
                 <div>
                   <Label>Training Level *</Label>
                   <Input
                     type="text"
-                    className="bg-white text-neutral-900"
+                    className={`bg-white text-neutral-900 ${fieldErrors.trainingLevel ? 'border-red-500' : ''}`}
                     value={assignForm.trainingLevel}
-                    onChange={(e) => setAssignForm(f => ({ ...f, trainingLevel: e.target.value }))}
+                    onChange={(e) => {
+                      setAssignForm((f) => ({ ...f, trainingLevel: e.target.value }))
+                      clearFieldError('trainingLevel')
+                    }}
                     placeholder="Enter training level"
-                    required
+                    aria-invalid={!!fieldErrors.trainingLevel}
                   />
+                  {fieldErrors.trainingLevel && (
+                    <p className="mt-1.5 text-sm text-red-600">{fieldErrors.trainingLevel}</p>
+                  )}
                 </div>
                 <div>
                   <Label>Remarks</Label>
@@ -801,8 +867,17 @@ export default function AssignTrainingServicePage() {
               <>
                 <div>
                   <Label>Term *</Label>
-                  <Select value={assignForm.term} onValueChange={(v) => setAssignForm(f => ({ ...f, term: v }))}>
-                    <SelectTrigger className="bg-white text-neutral-900">
+                  <Select
+                    value={assignForm.term || undefined}
+                    onValueChange={(v) => {
+                      setAssignForm((f) => ({ ...f, term: v }))
+                      clearFieldError('term')
+                    }}
+                  >
+                    <SelectTrigger
+                      className={`bg-white text-neutral-900 ${fieldErrors.term ? 'border-red-500' : ''}`}
+                      aria-invalid={!!fieldErrors.term}
+                    >
                       <SelectValue placeholder="Select Term" />
                     </SelectTrigger>
                     <SelectContent>
@@ -812,17 +887,26 @@ export default function AssignTrainingServicePage() {
                       <SelectItem value="Term 4">Term 4</SelectItem>
                     </SelectContent>
                   </Select>
+                  {fieldErrors.term && (
+                    <p className="mt-1.5 text-sm text-red-600">{fieldErrors.term}</p>
+                  )}
                 </div>
                 <div>
                   <Label>Service Date *</Label>
                   <Input
                     type="date"
-                    className="bg-white text-neutral-900"
+                    className={`bg-white text-neutral-900 ${fieldErrors.date ? 'border-red-500' : ''}`}
                     min={todayMin}
                     value={assignForm.date}
-                    onChange={(e) => setAssignForm(f => ({ ...f, date: e.target.value }))}
-                    required
+                    onChange={(e) => {
+                      setAssignForm((f) => ({ ...f, date: e.target.value }))
+                      clearFieldError('date')
+                    }}
+                    aria-invalid={!!fieldErrors.date}
                   />
+                  {fieldErrors.date && (
+                    <p className="mt-1.5 text-sm text-red-600">{fieldErrors.date}</p>
+                  )}
                 </div>
                 <div className="md:col-span-2">
                   <Label>Remarks</Label>

@@ -2,18 +2,20 @@
 
 import { useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
-import { apiRequest, API_BASE_URL } from '@/lib/api'
+import { apiRequest } from '@/lib/api'
+import { downloadReportFile } from '@/lib/reportDownload'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Download, ArrowUpDown } from 'lucide-react'
+import { Download } from 'lucide-react'
 import { toast } from 'sonner'
 
 type Lead = { 
   _id: string
   school_name?: string
   contact_person?: string
+  contact_person2?: string
   contact_mobile?: string
   zone?: string
   status?: string
@@ -35,7 +37,6 @@ type Employee = {
 
 export default function ReportsFollowUpLeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([])
-  const [allLeads, setAllLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
   const [employees, setEmployees] = useState<Employee[]>([])
   const [zones, setZones] = useState<string[]>([])
@@ -54,10 +55,6 @@ export default function ReportsFollowUpLeadsPage() {
     loadLeads()
   }, [])
 
-  useEffect(() => {
-    applyFilters()
-  }, [allLeads, zone, employee, priority, fromDate, toDate, contactMobile, schoolName])
-
   const loadEmployees = async () => {
     try {
       const data = await apiRequest<Employee[]>('/employees?isActive=true')
@@ -68,102 +65,49 @@ export default function ReportsFollowUpLeadsPage() {
   const loadLeads = async () => {
     setLoading(true)
     try {
-      // Follow up leads are those with status 'Saved' or have a follow_up_date set
-      const response = await apiRequest<any>('/leads')
-      
-      // Handle both array and paginated response formats
-      const allData = Array.isArray(response) ? response : (response?.data || [])
-      
-      // Filter leads that have follow_up_date or are Saved status
-      const followUpLeads = (allData || []).filter((lead: Lead) => 
-        lead.status === 'Saved' || (lead.follow_up_date && new Date(lead.follow_up_date) >= new Date())
-      )
-      
-      setAllLeads(followUpLeads)
-      
-      // Extract unique zones
-      const uniqueZones = Array.from(new Set(followUpLeads.map(l => l.zone).filter(Boolean))) as string[]
-      setZones(uniqueZones.sort())
+      const qs = new URLSearchParams()
+      qs.set('pipeline', 'followup')
+      qs.set('limit', '200')
+      if (zone) qs.set('zone', zone)
+      if (employee) qs.set('employee', employee)
+      if (priority) qs.set('priority', priority)
+      if (fromDate) qs.set('fromDate', fromDate)
+      if (toDate) qs.set('toDate', toDate)
+      if (contactMobile) qs.set('contactMobile', contactMobile)
+      if (schoolName) qs.set('schoolName', schoolName)
+      const response = await apiRequest<any>(`/leads?${qs.toString()}`)
+      const followUpLeads = Array.isArray(response) ? response : (response?.data || [])
+      followUpLeads.sort((a: Lead, b: Lead) => {
+        const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0
+        const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0
+        return bTime - aTime
+      })
+      setLeads(followUpLeads)
+      const uniqueZones = Array.from(new Set(followUpLeads.map((l: Lead) => l.zone).filter(Boolean))) as string[]
+      if (!zone) setZones(uniqueZones.sort())
     } catch (_) {
       toast.error('Failed to load leads')
     }
     setLoading(false)
   }
 
-  const applyFilters = () => {
-    let filtered = [...allLeads]
-
-    if (zone) filtered = filtered.filter(l => l.zone?.toLowerCase().includes(zone.toLowerCase()))
-    if (priority) filtered = filtered.filter(l => l.priority === priority)
-    if (contactMobile) filtered = filtered.filter(l => l.contact_mobile?.includes(contactMobile))
-    if (schoolName) filtered = filtered.filter(l => l.school_name?.toLowerCase().includes(schoolName.toLowerCase()))
-    if (employee) {
-      filtered = filtered.filter(l => 
-        l.managed_by?._id === employee || 
-        l.assigned_by?._id === employee ||
-        l.createdBy?._id === employee
-      )
-    }
-    if (fromDate) {
-      const from = new Date(fromDate)
-      filtered = filtered.filter(l => l.createdAt && new Date(l.createdAt) >= from)
-    }
-    if (toDate) {
-      const to = new Date(toDate + 'T23:59:59')
-      filtered = filtered.filter(l => l.createdAt && new Date(l.createdAt) <= to)
-    }
-
-    // Always show latest created leads at the top
-    filtered.sort((a, b) => {
-      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0
-      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0
-      return bTime - aTime
-    })
-
-    setLeads(filtered)
-  }
-
   const handleSearch = () => {
-    applyFilters()
+    loadLeads()
   }
 
   const handleExport = async () => {
     try {
       const qs = new URLSearchParams()
-      // For export, we'll send individual lead IDs or filter by Saved status
-      qs.append('status', 'Saved')
-      if (zone) qs.append('zone', zone)
-      if (employee) qs.append('employee', employee)
-      if (priority) qs.append('priority', priority)
-      if (fromDate) qs.append('fromDate', fromDate)
-      if (toDate) qs.append('toDate', toDate)
-      if (contactMobile) qs.append('contactMobile', contactMobile)
-      if (schoolName) qs.append('schoolName', schoolName)
-
-      const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null
-
-      const response = await fetch(`${API_BASE_URL}/api/leads/export?${qs.toString()}`, {
-        method: 'GET',
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      })
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ message: 'Export failed' }))
-        throw new Error(error.message || 'Export failed')
-      }
-
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `Follow_Up_Leads_Report_${new Date().toISOString().split('T')[0]}.xlsx`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
-      toast.success('Excel file downloaded successfully')
+      qs.set('pipeline', 'followup')
+      if (zone) qs.set('zone', zone)
+      if (employee) qs.set('employee', employee)
+      if (priority) qs.set('priority', priority)
+      if (fromDate) qs.set('fromDate', fromDate)
+      if (toDate) qs.set('toDate', toDate)
+      if (contactMobile) qs.set('contactMobile', contactMobile)
+      if (schoolName) qs.set('schoolName', schoolName)
+      await downloadReportFile(`/leads/export?${qs.toString()}`, 'Followup_Leads_Report.xlsx')
+      toast.success('Excel file downloaded')
     } catch (err: any) {
       toast.error(err?.message || 'Failed to export to Excel')
     }
@@ -314,19 +258,19 @@ export default function ReportsFollowUpLeadsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="cursor-pointer">
-                    S.No <ArrowUpDown className="inline h-3 w-3 ml-1" />
+                    S.No
                   </TableHead>
                   <TableHead className="cursor-pointer">
-                    Created On <ArrowUpDown className="inline h-3 w-3 ml-1" />
+                    Created On
                   </TableHead>
                   <TableHead className="cursor-pointer">
-                    Zone <ArrowUpDown className="inline h-3 w-3 ml-1" />
+                    Zone
                   </TableHead>
                   <TableHead className="cursor-pointer">
-                    Assigned To <ArrowUpDown className="inline h-3 w-3 ml-1" />
+                    Assigned To
                   </TableHead>
                   <TableHead className="cursor-pointer">
-                    Priority <ArrowUpDown className="inline h-3 w-3 ml-1" />
+                    Priority
                   </TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead>School Name</TableHead>
@@ -374,7 +318,7 @@ export default function ReportsFollowUpLeadsPage() {
                       <TableCell>{lead.location || '-'}</TableCell>
                       <TableCell className="font-medium">{lead.school_name || '-'}</TableCell>
                       <TableCell>{lead.contact_person || '-'}</TableCell>
-                      <TableCell>{lead.contact_person || '-'}</TableCell>
+                      <TableCell>{lead.contact_person2 || '-'}</TableCell>
                       <TableCell>{lead.contact_mobile || '-'}</TableCell>
                       <TableCell className={lead.follow_up_date && new Date(lead.follow_up_date) < new Date() ? 'text-red-600 font-medium' : ''}>
                         {lead.follow_up_date ? formatDate(lead.follow_up_date) : '-'}
@@ -387,7 +331,7 @@ export default function ReportsFollowUpLeadsPage() {
                       </TableCell>
                       <TableCell>
                         <span className="px-2 py-1 rounded text-xs bg-green-100 text-green-800">
-                          {lead.status || 'Saved'}
+                          {lead.status || 'Pending'}
                         </span>
                       </TableCell>
                     </TableRow>

@@ -41,9 +41,12 @@ export default function EditServicePage() {
   const [feedbackPdfUrl, setFeedbackPdfUrl] = useState<string | undefined>()
   const feedbackInputRef = useRef<HTMLInputElement>(null)
   const [form, setForm] = useState({
-    status: 'Scheduled' as 'Scheduled' | 'Completed' | 'Cancelled',
+    // Empty until user picks Completed/Cancelled (Scheduled is not a selectable update status)
+    status: '' as '' | 'Completed' | 'Cancelled',
     remarks: '',
   })
+  const [statusError, setStatusError] = useState('')
+  const [feedbackError, setFeedbackError] = useState('')
 
   const isPdfFile = (file: File) => {
     const name = file.name.toLowerCase()
@@ -63,9 +66,13 @@ export default function EditServicePage() {
       if (data) {
         setService(data)
         setForm({
-          status: data.status || 'Scheduled',
+          status:
+            data.status === 'Completed' || data.status === 'Cancelled'
+              ? data.status
+              : '',
           remarks: data.remarks || '',
         })
+        setStatusError('')
         setFeedbackPdfUrl(data.feedbackPdfUrl)
       } else {
         toast.error('Service not found')
@@ -100,6 +107,7 @@ export default function EditServicePage() {
       }
       const result = await response.json()
       setFeedbackPdfUrl(result.feedbackPdfUrl || result.service?.feedbackPdfUrl)
+      setFeedbackError('')
       toast.success('Feedback form uploaded')
     } catch (error: any) {
       toast.error(error?.message || 'Failed to upload feedback')
@@ -110,24 +118,26 @@ export default function EditServicePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    if (!form.status) {
-      toast.error('Service Status is required')
-      return
-    }
 
-    if (form.status === 'Completed' && !feedbackPdfUrl) {
-      toast.error('Please upload the feedback form (PDF) for completed service visit')
+    const status = typeof form.status === 'string' ? form.status.trim() : ''
+    if (!status) {
+      setStatusError('Service Status is required.')
       return
     }
+    setStatusError('')
+
+    if (status === 'Completed' && !feedbackPdfUrl) {
+      setFeedbackError('Please upload the feedback form (PDF) for completed service visit.')
+      return
+    }
+    setFeedbackError('')
 
     setSubmitting(true)
     try {
-      const payload: any = {
-        status: form.status,
+      const payload: Record<string, string> = {
+        status,
       }
-      
-      // Only include remarks if it's provided
+
       if (form.remarks) {
         payload.remarks = form.remarks
       }
@@ -162,7 +172,6 @@ export default function EditServicePage() {
     )
   }
 
-  // Format address from zone, town
   const address = [service.zone, service.town].filter(Boolean).join(', ')
 
   return (
@@ -245,13 +254,21 @@ export default function EditServicePage() {
               />
             </div>
             <div>
-              <Label>Service Status *</Label>
+              <Label htmlFor="service-status">Service Status *</Label>
               <Select
-                value={form.status}
-                onValueChange={(v: 'Scheduled' | 'Completed' | 'Cancelled') => setForm(f => ({ ...f, status: v }))}
-                required
+                value={form.status || undefined}
+                onValueChange={(v: 'Completed' | 'Cancelled') => {
+                  setForm((f) => ({ ...f, status: v }))
+                  setStatusError('')
+                  if (v !== 'Completed') setFeedbackError('')
+                }}
               >
-                <SelectTrigger className="bg-white text-neutral-900">
+                <SelectTrigger
+                  id="service-status"
+                  className={`bg-white text-neutral-900 ${statusError ? 'border-red-500 focus:ring-red-500' : ''}`}
+                  aria-invalid={!!statusError}
+                  aria-describedby={statusError ? 'service-status-error' : undefined}
+                >
                   <SelectValue placeholder="Select Service Status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -259,6 +276,11 @@ export default function EditServicePage() {
                   <SelectItem value="Cancelled">Cancelled</SelectItem>
                 </SelectContent>
               </Select>
+              {statusError && (
+                <p id="service-status-error" className="mt-1.5 text-sm text-red-600">
+                  {statusError}
+                </p>
+              )}
             </div>
             <div className="md:col-span-2">
               <Label>Remarks</Label>
@@ -306,6 +328,9 @@ export default function EditServicePage() {
                     </Button>
                   )}
                 </div>
+                {feedbackError && (
+                  <p className="text-sm text-red-600">{feedbackError}</p>
+                )}
               </div>
             )}
           </div>
@@ -322,4 +347,3 @@ export default function EditServicePage() {
     </div>
   )
 }
-

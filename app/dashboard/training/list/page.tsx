@@ -4,11 +4,10 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Pencil } from 'lucide-react'
-import { apiRequest, resolveUploadUrl } from '@/lib/api'
+import { apiRequest } from '@/lib/api'
 import { toast } from 'sonner'
 
 type Training = {
@@ -110,17 +109,6 @@ export default function TrainingsListPage() {
     }
   }
 
-  const markCompleted = async (id: string) => {
-    if (!confirm('Mark this training as completed?')) return
-    try {
-      await apiRequest(`/training/${id}`, { method: 'PUT', body: JSON.stringify({ status: 'Completed' }) })
-      toast.success('Training marked as completed')
-      load()
-    } catch (e: any) {
-      toast.error(e?.message || 'Failed to update')
-    }
-  }
-
   return (
     <div className="space-y-6">
       <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Trainings List</h1>
@@ -147,16 +135,10 @@ export default function TrainingsListPage() {
               {trainers.map(t => <SelectItem key={t._id} value={t._id}>{t.name}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Input className="bg-white text-neutral-900" placeholder="School Code" value={filters.schoolCode} onChange={(e) => setFilters(f => ({ ...f, schoolCode: e.target.value }))} />
-          <Input className="bg-white text-neutral-900" placeholder="School Name" value={filters.schoolName} onChange={(e) => setFilters(f => ({ ...f, schoolName: e.target.value }))} />
-          <div className="space-y-2">
-            <Label htmlFor="training-list-from">From Date</Label>
-            <Input id="training-list-from" className="bg-white text-neutral-900" type="date" value={filters.fromDate} onChange={(e) => setFilters(f => ({ ...f, fromDate: e.target.value }))} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="training-list-to">To Date</Label>
-            <Input id="training-list-to" className="bg-white text-neutral-900" type="date" value={filters.toDate} onChange={(e) => setFilters(f => ({ ...f, toDate: e.target.value }))} />
-          </div>
+          <Input className="bg-white text-neutral-900" placeholder="By School Code" value={filters.schoolCode} onChange={(e) => setFilters(f => ({ ...f, schoolCode: e.target.value }))} />
+          <Input className="bg-white text-neutral-900" placeholder="By School Name" value={filters.schoolName} onChange={(e) => setFilters(f => ({ ...f, schoolName: e.target.value }))} />
+          <Input className="bg-white text-neutral-900" type="date" placeholder="From Date" value={filters.fromDate} onChange={(e) => setFilters(f => ({ ...f, fromDate: e.target.value }))} />
+          <Input className="bg-white text-neutral-900" type="date" placeholder="To Date" value={filters.toDate} onChange={(e) => setFilters(f => ({ ...f, toDate: e.target.value }))} />
           <Button type="submit" className="md:col-span-4">Search</Button>
         </form>
       </Card>
@@ -205,7 +187,7 @@ export default function TrainingsListPage() {
                   </td>
                   <td className="py-2 px-3">
                     {t.poImageUrl ? (
-                      <a href={resolveUploadUrl(t.poImageUrl)} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">View</a>
+                      <a href={t.poImageUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">View</a>
                     ) : '-'}
                   </td>
                   <td className="py-2 px-3 text-center">

@@ -11,6 +11,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner'
 import { apiRequest } from '@/lib/api'
 import { INDIAN_STATES } from '@/lib/indianStatesCities'
+import {
+  sanitizeTrainerMobileInput,
+  validateTrainerMobile,
+  validateTrainerEmail,
+  validateTrainerZone,
+  validateTrainerContactFields,
+} from '@/lib/trainerFormValidation'
 
 const TRAINER_CATEGORIES = ['Abacus', 'Vedic Maths', 'ECC', 'IIT']
 
@@ -30,6 +37,8 @@ export default function AddTrainerPage() {
   })
   const [submitting, setSubmitting] = useState(false)
   const [mobileError, setMobileError] = useState<string | null>(null)
+  const [emailError, setEmailError] = useState<string | null>(null)
+  const [zoneError, setZoneError] = useState<string | null>(null)
   const [checkingMobile, setCheckingMobile] = useState(false)
   const debounceTimer = useRef<NodeJS.Timeout | null>(null)
   const [zones, setZones] = useState<string[]>([])
@@ -69,23 +78,22 @@ export default function AddTrainerPage() {
   }, [form.zone, clustersByZone])
 
   const checkMobileDuplicate = async (mobile: string) => {
-    if (!mobile || mobile.length < 10) {
-      setMobileError(null)
+    const formatCheck = validateTrainerMobile(mobile)
+    if (!formatCheck.ok) {
+      setMobileError(formatCheck.message)
       return
     }
     setCheckingMobile(true)
     try {
       const trainers = await apiRequest<any[]>('/trainers')
-      // Ensure trainers is an array before using array methods
       const trainersArray = Array.isArray(trainers) ? trainers : []
-      const exists = trainersArray.some(t => t.mobile === mobile.trim())
+      const exists = trainersArray.some((t) => t.mobile === formatCheck.value)
       if (exists) {
         setMobileError('Mobile number already exists. Please use a different mobile number.')
       } else {
         setMobileError(null)
       }
     } catch (e) {
-      // Silently fail - will check on submit
       setMobileError(null)
     } finally {
       setCheckingMobile(false)
@@ -102,17 +110,46 @@ export default function AddTrainerPage() {
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (mobileError) {
+    const contactCheck = validateTrainerContactFields({
+      mobile: form.mobile,
+      email: form.email,
+      zone: form.zone,
+    })
+    if (!contactCheck.ok) {
+      setMobileError(contactCheck.errors.mobile || null)
+      setEmailError(contactCheck.errors.email || null)
+      setZoneError(contactCheck.errors.zone || null)
+      toast.error(
+        contactCheck.errors.mobile ||
+          contactCheck.errors.email ||
+          contactCheck.errors.zone ||
+          'Please fix the highlighted fields.'
+      )
+      return
+    }
+    setEmailError(null)
+    setZoneError(null)
+
+    if (mobileError && mobileError.toLowerCase().includes('already exists')) {
       toast.error('Please fix the mobile number error before submitting')
       return
     }
+
     if (!form.trainerProducts || form.trainerProducts.length === 0) {
       toast.error('Please select at least one product')
       return
     }
     setSubmitting(true)
     try {
-      await apiRequest('/trainers/create', { method: 'POST', body: JSON.stringify(form) })
+      await apiRequest('/trainers/create', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...form,
+          mobile: contactCheck.values.mobile,
+          email: contactCheck.values.email,
+          zone: contactCheck.values.zone,
+        }),
+      })
       toast.success('Trainer created successfully!')
       router.push('/dashboard/training/trainers/active')
     } catch (e: any) {
@@ -148,24 +185,33 @@ export default function AddTrainerPage() {
             <Label>Mobile *</Label>
             <Input
               className={`bg-white text-neutral-900 ${mobileError ? 'border-red-500' : ''}`}
+              type="tel"
+              inputMode="numeric"
+              maxLength={15}
               value={form.mobile}
               onChange={(e) => {
-                const value = e.target.value
-                setForm(f => ({ ...f, mobile: value }))
-                setMobileError(null) // Clear error on change
-                if (debounceTimer.current) {
-                  clearTimeout(debounceTimer.current)
-                }
-                if (value.length >= 10) {
+                const value = sanitizeTrainerMobileInput(e.target.value)
+                setForm((f) => ({ ...f, mobile: value }))
+                const formatCheck = validateTrainerMobile(value)
+                if (!value) {
+                  setMobileError(null)
+                } else if (!formatCheck.ok) {
+                  setMobileError(formatCheck.message)
+                } else {
+                  setMobileError(null)
+                  if (debounceTimer.current) clearTimeout(debounceTimer.current)
                   debounceTimer.current = setTimeout(() => {
                     checkMobileDuplicate(value)
                   }, 500)
                 }
               }}
               onBlur={() => {
-                if (form.mobile && form.mobile.length >= 10) {
-                  checkMobileDuplicate(form.mobile)
+                const formatCheck = validateTrainerMobile(form.mobile)
+                if (!formatCheck.ok) {
+                  setMobileError(formatCheck.message)
+                  return
                 }
+                checkMobileDuplicate(form.mobile)
               }}
               required
             />
@@ -173,8 +219,28 @@ export default function AddTrainerPage() {
             {mobileError && <p className="text-xs text-red-600 mt-1">{mobileError}</p>}
           </div>
           <div>
-            <Label>Email</Label>
-            <Input className="bg-white text-neutral-900" type="email" value={form.email} onChange={(e)=>setForm(f=>({...f,email:e.target.value}))} />
+            <Label>Email *</Label>
+            <Input
+              className={`bg-white text-neutral-900 ${emailError ? 'border-red-500' : ''}`}
+              type="email"
+              value={form.email}
+              onChange={(e) => {
+                const value = e.target.value
+                setForm((f) => ({ ...f, email: value }))
+                if (!value.trim()) {
+                  setEmailError(null)
+                } else {
+                  const check = validateTrainerEmail(value)
+                  setEmailError(check.ok ? null : check.message)
+                }
+              }}
+              onBlur={() => {
+                const check = validateTrainerEmail(form.email)
+                setEmailError(check.ok ? null : check.message)
+              }}
+              required
+            />
+            {emailError && <p className="text-xs text-red-600 mt-1">{emailError}</p>}
           </div>
           <div>
             <Label>Employment Type *</Label>
@@ -202,12 +268,19 @@ export default function AddTrainerPage() {
             </Select>
           </div>
           <div>
-            <Label htmlFor="trainer-zone">Zone</Label>
+            <Label htmlFor="trainer-zone">Zone *</Label>
             <Select
               value={form.zone}
-              onValueChange={(v) => setForm((f) => ({ ...f, zone: v, cluster: '' }))}
+              onValueChange={(v) => {
+                setForm((f) => ({ ...f, zone: v, cluster: '' }))
+                const check = validateTrainerZone(v)
+                setZoneError(check.ok ? null : check.message)
+              }}
             >
-              <SelectTrigger id="trainer-zone" className="bg-white text-neutral-900">
+              <SelectTrigger
+                id="trainer-zone"
+                className={`bg-white text-neutral-900 ${zoneError ? 'border-red-500' : ''}`}
+              >
                 <SelectValue placeholder={zones.length === 0 ? 'Add zones under Users → Zones' : 'Select Zone'} />
               </SelectTrigger>
               <SelectContent>
@@ -218,6 +291,7 @@ export default function AddTrainerPage() {
                 ))}
               </SelectContent>
             </Select>
+            {zoneError && <p className="text-xs text-red-600 mt-1">{zoneError}</p>}
           </div>
           <div>
             <Label htmlFor="trainer-cluster">Cluster</Label>
@@ -300,5 +374,3 @@ export default function AddTrainerPage() {
     </div>
   )
 }
-
-

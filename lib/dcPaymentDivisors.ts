@@ -14,13 +14,21 @@ export type PaymentBreakdownLine = {
   [key: string]: unknown
 }
 
+const lineStrength = (line: PaymentBreakdownLine) =>
+  Number(line.strength) || Number(line.quantity) || 0
+
+/** One bucket per product + class + subject so P2 Physics and P2 Maths are not merged. */
 const bucketKey = (line: PaymentBreakdownLine) =>
-  `${String(line.product || '').trim()}::${String(line.class || '').trim()}`
+  [
+    String(line.product || '').trim(),
+    String(line.class || '').trim(),
+    String(line.subject || '').trim().toLowerCase(),
+  ].join('::')
 
 /**
- * Adjust per-line totals so each product+class bucket matches
+ * Adjust per-line totals so each product+class+subject bucket matches
  * (sum strength × unit price) ÷ divisor for level_based / subject_based.
- * Lines in the same bucket split the bucket total pro-rata by strength.
+ * Already-split subject rows (P2 Phy and P2 Maths) stay separate so both quantities count.
  */
 export function applyPaymentDivisorsToBreakdown(
   lines: PaymentBreakdownLine[],
@@ -50,13 +58,13 @@ export function applyPaymentDivisorsToBreakdown(
       ...bucketLines.map((l) => Number(l.unitPrice) || 0)
     )
     const sumStrength = bucketLines.reduce(
-      (s, l) => s + (Number(l.strength) || 0),
+      (s, l) => s + lineStrength(l),
       0
     )
     const bucketTotal = computeBucketAmount({
       calculationType: ct,
       rows: bucketLines.map((l) => ({
-        strength: Number(l.strength) || 0,
+        strength: lineStrength(l),
         level: l.level,
         subject: l.subject,
         price: Number(l.unitPrice) || 0,
@@ -72,7 +80,7 @@ export function applyPaymentDivisorsToBreakdown(
     const k = bucketKey(line)
     const bucketTotal = keyToBucketTotal.get(k) ?? 0
     const sumS = keyToSumStrength.get(k) ?? 0
-    const str = Number(line.strength) || 0
+    const str = lineStrength(line)
     const total =
       sumS > 0 ? roundToTwo((bucketTotal * str) / sumS) : 0
     return { ...line, total }

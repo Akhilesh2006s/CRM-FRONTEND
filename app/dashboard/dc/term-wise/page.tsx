@@ -155,10 +155,21 @@ export default function TermWiseDCPage() {
   const load = async () => {
     setLoading(true)
     try {
-      // Fetch DCs with status 'scheduled_for_later'
       const data = await apiRequest<DC[]>(`/dc?status=scheduled_for_later`)
       const dataArray = Array.isArray(data) ? data : []
-      setItems(dataArray)
+      setItems(
+        dataArray.map((dc) => {
+          const rows = Array.isArray(dc.productDetails) ? dc.productDetails : []
+          const productLabel = rows
+            .map((p: any) => p.product || p.productName || '')
+            .filter(Boolean)
+            .join(', ')
+          return {
+            ...dc,
+            ...(productLabel ? { product: productLabel } : {}),
+          }
+        })
+      )
     } catch (e: any) {
       console.error('Failed to load DCs:', e)
       toast.error(`Error loading DCs: ${e?.message || 'Unknown error'}`)
@@ -570,34 +581,9 @@ export default function TermWiseDCPage() {
     }
   }
 
-  // Group DCs by term
+  // Term-Wise list = DCs already routed at Close Lead (status scheduled_for_later).
   const groupedByTerm = useMemo(() => {
-    const term2DCs: DC[] = []
-    
-    items.forEach(dc => {
-      // Check productDetails first
-      if (dc.productDetails && Array.isArray(dc.productDetails) && dc.productDetails.length > 0) {
-        const terms = dc.productDetails.map((p: any) => p.term || 'Term 1')
-        const uniqueTerms = Array.from(new Set(terms))
-        
-        // Only include if it has Term 2 products
-        if (uniqueTerms.includes('Term 2')) {
-          term2DCs.push(dc)
-        }
-      } else if (dc.dcOrderId && typeof dc.dcOrderId === 'object' && dc.dcOrderId.products) {
-        // Check DcOrder products
-        const terms = dc.dcOrderId.products.map((p: any) => p.term || 'Term 1')
-        const uniqueTerms = Array.from(new Set(terms))
-        
-        // Only include if it has Term 2 products
-        if (uniqueTerms.includes('Term 2')) {
-          term2DCs.push(dc)
-        }
-      }
-      // Don't include DCs with no term information or only Term 1
-    })
-    
-    return { term1: [], term2: term2DCs }
+    return { term1: [] as DC[], term2: items }
   }, [items])
 
   // Filter items based on search query
@@ -675,16 +661,17 @@ export default function TermWiseDCPage() {
                 const customerName = d.customerName || d.saleId?.customerName || (typeof d.dcOrderId === 'object' && d.dcOrderId?.school_name) || 'Unknown Client'
                 const phone = d.customerPhone || (typeof d.dcOrderId === 'object' && d.dcOrderId?.contact_mobile) || '-'
                 
-                // Get products with quantities and unit prices - prioritize productDetails (Term 2 only), then dcOrderId products (Term 2 only), then fallback
+                // Show rows on this Term-Wise DC only (Close Lead classification).
                 let product = '-'
                 let productDetails: any[] = []
                 
                 if (d.productDetails && Array.isArray(d.productDetails) && d.productDetails.length > 0) {
-                  // Filter to only Term 2 products
-                  const term2Products = d.productDetails.filter((p: any) => (p.term || 'Term 1') === 'Term 2')
-                  if (term2Products.length > 0) {
-                    productDetails = term2Products
-                    product = term2Products.map((p: any) => {
+                  const routed = d.productDetails.some((p: any) => p.closeLeadDestination)
+                    ? d.productDetails.filter((p: any) => p.closeLeadDestination === 'TERM_WISE_DC')
+                    : d.productDetails
+                  if (routed.length > 0) {
+                    productDetails = routed
+                    product = routed.map((p: any) => {
                       const name = p.product || p.productName || ''
                       const qty = p.quantity || p.strength || 0
                       const price = p.unit_price || p.price || 0
@@ -693,21 +680,6 @@ export default function TermWiseDCPage() {
                   }
                 }
                 
-                if (product === '-' && d.dcOrderId && typeof d.dcOrderId === 'object' && d.dcOrderId.products && Array.isArray(d.dcOrderId.products)) {
-                  // Filter to only Term 2 products
-                  const term2Products = d.dcOrderId.products.filter((p: any) => (p.term || 'Term 1') === 'Term 2')
-                  if (term2Products.length > 0) {
-                    productDetails = term2Products
-                    product = term2Products.map((p: any) => {
-                      const name = p.product_name || p.product || ''
-                      const qty = p.quantity || 0
-                      const price = p.unit_price || 0
-                      return `${name}${qty ? ` (Qty: ${qty})` : ''}${price ? ` @ ₹${price}` : ''}`
-                    }).filter(Boolean).join(', ')
-                  }
-                }
-                
-                // Fallback to other product fields if no Term 2 products found
                 if (product === '-') {
                   product = d.product || d.saleId?.product || '-'
                 }

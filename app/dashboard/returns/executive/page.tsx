@@ -278,17 +278,38 @@ export default function ExecutiveStockReturnsPage() {
   }
 
   const loadDcOrders = async () => {
-    if (!user?._id) return
     try {
       const byId = new Map<string, DcOrder>()
 
-      const [dcsRaw, ordersRaw] = await Promise.all([
-        apiRequest<any>(`/dc/employee/my?status=completed&limit=100`).catch(() => []),
-        apiRequest<any>(`/dc-orders?assigned_to=${user._id}&status=completed&limit=100`).catch(() => null),
-      ])
+      // Same completed-DC source as Super Admin → Warehouse → Completed DC
+      // (`app/dashboard/warehouse/completed-dc/page.tsx` uses `/dc/completed`,
+      // with fallback `/dc?status=completed`). No employee filter / limit.
+      let dcModelData: any[] = []
+      try {
+        const response = await apiRequest<any>(`/dc/completed`)
+        if (Array.isArray(response)) {
+          dcModelData = response
+        } else if (response?.data && Array.isArray(response.data)) {
+          dcModelData = response.data
+        } else {
+          dcModelData = []
+        }
+      } catch {
+        try {
+          const fallbackResponse = await apiRequest<any>(`/dc?status=completed`)
+          if (Array.isArray(fallbackResponse)) {
+            dcModelData = fallbackResponse
+          } else if (fallbackResponse?.data && Array.isArray(fallbackResponse.data)) {
+            dcModelData = fallbackResponse.data
+          } else {
+            dcModelData = []
+          }
+        } catch {
+          dcModelData = []
+        }
+      }
 
-      const dcs = Array.isArray(dcsRaw) ? dcsRaw : (dcsRaw?.data || [])
-      for (const dc of dcs) {
+      for (const dc of dcModelData) {
         const orderRef = dc.dcOrderId
         const orderId =
           typeof orderRef === 'object' && orderRef?._id
@@ -298,50 +319,27 @@ export default function ExecutiveStockReturnsPage() {
               : ''
         if (!orderId) continue
         const populated = typeof orderRef === 'object' ? orderRef : null
+        const existing = byId.get(orderId)
         byId.set(orderId, {
           _id: orderId,
-          dc_code: populated?.dc_code || dc.saleId || '',
-          school_name: dc.customerName || populated?.school_name || '',
-          school_code: populated?.school_code,
-          school_type: populated?.school_type,
-          contact_person: populated?.contact_person,
-          contact_mobile: populated?.contact_mobile,
-          address: populated?.address,
-          zone: populated?.zone,
-          location: populated?.location,
-          city: populated?.city,
-          area: populated?.area,
-          cluster_code: populated?.cluster_code,
-          transport_name: populated?.transport_name,
-          products: productsFromEmployeeDc(dc),
-          status: 'completed',
-        })
-      }
-
-      const ordersPage = ordersRaw
-      const orders = Array.isArray(ordersPage) ? ordersPage : (ordersPage?.data || [])
-      for (const order of orders) {
-        if (!order?._id) continue
-        const existing = byId.get(order._id)
-        byId.set(order._id, {
-          _id: order._id,
-          dc_code: order.dc_code || existing?.dc_code || '',
-          school_name: order.school_name || existing?.school_name || '',
-          school_code: order.school_code || existing?.school_code,
-          school_type: order.school_type || existing?.school_type,
-          contact_person: order.contact_person || existing?.contact_person,
-          contact_mobile: order.contact_mobile || existing?.contact_mobile,
-          address: order.address || existing?.address,
-          zone: order.zone || existing?.zone,
-          location: order.location || existing?.location,
-          city: order.city || existing?.city,
-          area: order.area || existing?.area,
-          cluster_code: order.cluster_code || existing?.cluster_code,
-          transport_name: order.transport_name || existing?.transport_name,
-          products: mapDcOrderProducts(order.products).length
-            ? mapDcOrderProducts(order.products)
+          dc_code: populated?.dc_code || existing?.dc_code || dc.saleId || '',
+          school_name:
+            populated?.school_name || existing?.school_name || dc.customerName || '',
+          school_code: populated?.school_code || existing?.school_code,
+          school_type: populated?.school_type || existing?.school_type,
+          contact_person: populated?.contact_person || existing?.contact_person,
+          contact_mobile: populated?.contact_mobile || existing?.contact_mobile,
+          address: populated?.address || existing?.address,
+          zone: populated?.zone || existing?.zone,
+          location: populated?.location || existing?.location,
+          city: populated?.city || existing?.city,
+          area: populated?.area || existing?.area,
+          cluster_code: populated?.cluster_code || existing?.cluster_code,
+          transport_name: populated?.transport_name || existing?.transport_name,
+          products: productsFromEmployeeDc(dc).length
+            ? productsFromEmployeeDc(dc)
             : existing?.products || [],
-          status: order.status || 'completed',
+          status: 'completed',
         })
       }
 
@@ -570,17 +568,19 @@ export default function ExecutiveStockReturnsPage() {
       toast.error('Please add at least one product')
       return false
     }
-    for (const row of productRows) {
+    // Only products with Return Qty > 0 are being returned; ignore 0 / empty.
+    const returningRows = productRows.filter((row) => Number(row.returnQty) > 0)
+    if (forSubmit && returningRows.length === 0) {
+      toast.error('Please enter a return quantity for at least one product.')
+      return false
+    }
+    for (const row of returningRows) {
       if (!row.product) {
-        toast.error('Please select product for all rows')
-        return false
-      }
-      if (row.returnQty <= 0) {
-        toast.error('Return quantity must be greater than 0')
+        toast.error('Please select product for returned rows')
         return false
       }
       if (!row.reason) {
-        toast.error('Please provide reason for all products')
+        toast.error(`Please provide a reason for ${row.product}`)
         return false
       }
       if (row.returnQty > row.soldQty) {
@@ -597,6 +597,10 @@ export default function ExecutiveStockReturnsPage() {
         toast.error('Please enter LR No from the delivery partner')
         return false
       }
+      if (!lrDate || !String(lrDate).trim()) {
+        toast.error('Please select LR Date')
+        return false
+      }
       if (!finYear.trim()) {
         toast.error('Please enter Fin Year')
         return false
@@ -605,8 +609,9 @@ export default function ExecutiveStockReturnsPage() {
     return true
   }
 
-  const mapProductsForApi = (rows: ProductRow[]) =>
-    rows.map((row) => ({
+  const mapProductsForApi = (rows: ProductRow[], onlyReturning = true) => {
+    const source = onlyReturning ? rows.filter((row) => Number(row.returnQty) > 0) : rows
+    return source.map((row) => ({
       product: row.product,
       class: row.class,
       level: row.level,
@@ -617,10 +622,13 @@ export default function ExecutiveStockReturnsPage() {
       reason: row.reason,
       remarks: row.remarks,
     }))
+  }
 
   const buildReturnPayload = (status: 'Draft' | 'Submitted') => {
-    const totalItems = productRows.length
-    const totalQuantity = productRows.reduce((sum, r) => sum + r.returnQty, 0)
+    const onlyReturning = status === 'Submitted'
+    const mapped = mapProductsForApi(productRows, onlyReturning)
+    const totalItems = mapped.length
+    const totalQuantity = mapped.reduce((sum, r) => sum + r.returnQty, 0)
     return {
       returnId,
       executiveId: user?._id,
@@ -644,7 +652,7 @@ export default function ExecutiveStockReturnsPage() {
       contactPerson: contactPerson.trim(),
       contactMobile: contactMobile.trim(),
       remarks: returnRemarks.trim(),
-      products: mapProductsForApi(productRows),
+      products: mapped,
       evidencePhotos: evidencePhotoUrls,
       executiveRemarks,
       totalItems,
@@ -768,7 +776,16 @@ export default function ExecutiveStockReturnsPage() {
                     <td className="py-3 px-4">{returnItem.finYear || '-'}</td>
                     <td className="py-3 px-4">{returnItem.customerName || '-'}</td>
                     <td className="py-3 px-4">{returnItem.schoolCode || '-'}</td>
-                    <td className="py-3 px-4">{returnItem.saleId || returnItem.dcOrderId || '-'}</td>
+                    <td className="py-3 px-4">
+                      {typeof returnItem.saleId === 'string' && returnItem.saleId
+                        ? returnItem.saleId
+                        : returnItem.dcOrderId &&
+                            typeof returnItem.dcOrderId === 'object'
+                          ? (returnItem.dcOrderId as { dc_code?: string }).dc_code || '-'
+                          : typeof returnItem.dcOrderId === 'string'
+                            ? returnItem.dcOrderId
+                            : '-'}
+                    </td>
                     <td className="py-3 px-4">{returnItem.returnType}</td>
                     <td className="py-3 px-4">{returnItem.returnQty || returnItem.totalQuantity || 0}</td>
                     <td className="py-3 px-4">
@@ -912,7 +929,7 @@ export default function ExecutiveStockReturnsPage() {
                   />
                 </div>
                 <div>
-                  <Label>LR Date</Label>
+                  <Label>LR Date *</Label>
                   <Input type="date" value={lrDate} onChange={(e) => setLrDate(e.target.value)} />
                 </div>
                 <div>
@@ -1246,7 +1263,16 @@ export default function ExecutiveStockReturnsPage() {
                 </div>
                 <div>
                   <Label>Sale ID</Label>
-                  <Input value={selectedReturn.saleId || selectedReturn.dcOrderId || '-'} readOnly className="bg-neutral-50" />
+                  <Input value={
+                      typeof selectedReturn.saleId === 'string' && selectedReturn.saleId
+                        ? selectedReturn.saleId
+                        : selectedReturn.dcOrderId &&
+                            typeof selectedReturn.dcOrderId === 'object'
+                          ? (selectedReturn.dcOrderId as { dc_code?: string }).dc_code || '-'
+                          : typeof selectedReturn.dcOrderId === 'string'
+                            ? selectedReturn.dcOrderId
+                            : '-'
+                    } readOnly className="bg-neutral-50" />
                 </div>
                 <div>
                   <Label>Return Type</Label>

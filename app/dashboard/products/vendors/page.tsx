@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { apiRequest } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
-import { PlusCircle, Building2, Eye, RefreshCw, Pencil, X, DollarSign } from 'lucide-react'
+import { PlusCircle, Building2, Eye, RefreshCw, Pencil, X } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
@@ -238,16 +238,6 @@ export default function PartnersPage() {
                           <Pencil className="w-4 h-4 mr-2" />
                           Edit
                         </Button>
-                        <Link href={`/dashboard/products/vendors/${partner._id}/assign-cost`}>
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            className="border-green-200 text-green-700 hover:bg-green-50"
-                          >
-                            <DollarSign className="w-4 h-4 mr-2" />
-                            Assign Cost
-                          </Button>
-                        </Link>
                       </div>
                     </td>
                   </tr>
@@ -286,7 +276,6 @@ export default function PartnersPage() {
                         id={`product-${product._id}`}
                         checked={isSelected}
                         onCheckedChange={() => handleProductToggle(product._id)}
-                        className="border-neutral-400 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600 data-[state=checked]:text-white"
                       />
                       <Label
                         htmlFor={`product-${product._id}`}

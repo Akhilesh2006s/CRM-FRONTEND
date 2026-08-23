@@ -1,5 +1,6 @@
 import { apiRequest } from '@/lib/api'
 import { applyPaymentDivisorsToBreakdown } from '@/lib/dcPaymentDivisors'
+import { displayProductLevel, findPricedOrderProduct, collectPoUnitPriceSources, resolvePersistedUnitPrice } from '@/lib/clientDcProductRows'
 import type { CalculationType } from '@/lib/paymentDivisor'
 
 export type DcInvoicePaymentLine = {
@@ -115,28 +116,17 @@ async function loadPaymentBillTotals(
     const dcOrderId = dcOrder?._id
     if (dcOrderId) {
       try {
-        const returns = await apiRequest<any[]>(
-          `/stock-returns/executive/list?dcOrderId=${encodeURIComponent(String(dcOrderId))}`
-        ).catch(() => [])
+        const allReturns = await apiRequest<any[]>(`/stock-returns/executive/list`).catch(() => [])
+        const returns = allReturns.filter((r: any) => {
+          const returnDcOrderId = typeof r.dcOrderId === 'object' ? r.dcOrderId?._id : r.dcOrderId
+          return returnDcOrderId === dcOrderId
+        })
         const approvedReturns = returns.filter((r: any) =>
           ['Approved', 'Partially Approved', 'Stock Updated', 'Closed'].includes(r.status)
         )
         totalReturnValue = approvedReturns.reduce((sum: number, r: any) => {
-          const storedApproved = Number(r.approvedReturnValue)
-          if (storedApproved > 0) return sum + storedApproved
-          const storedRequested = Number(r.returnValue)
-          if (storedRequested > 0) return sum + storedRequested
           const returnValue =
             r.products?.reduce((productSum: number, product: any) => {
-              const lineTotal = Number(product.lineTotal)
-              if (lineTotal > 0) {
-                const approvedQty = Number(product.approvedQty) || 0
-                const requestedQty = Number(product.returnQty) || 0
-                if (approvedQty > 0 && requestedQty > 0) {
-                  return productSum + lineTotal * Math.min(1, approvedQty / requestedQty)
-                }
-                return productSum + lineTotal
-              }
               const approvedQty = Number(product.approvedQty) || 0
               const matchingProduct = paymentBreakdown.find((pb) => {
                 const pbName = (pb.product || '').toLowerCase().trim()
@@ -145,7 +135,7 @@ async function loadPaymentBillTotals(
                   pbName === returnName || pbName.includes(returnName) || returnName.includes(pbName)
                 )
               })
-              const unitPrice = Number(product.unitPrice) || matchingProduct?.unitPrice || 0
+              const unitPrice = matchingProduct?.unitPrice || 0
               return productSum + approvedQty * unitPrice
             }, 0) || 0
           return sum + returnValue
@@ -238,53 +228,33 @@ export async function fetchDcInvoiceData(dcId: string, opts: FetchOpts): Promise
   }
 
   if (fullDC.productDetails && Array.isArray(fullDC.productDetails) && fullDC.productDetails.length > 0) {
-    if (dcOrder?.products && Array.isArray(dcOrder.products) && dcOrder.products.length > 0) {
+    const priceSources = collectPoUnitPriceSources(dcOrder)
+    if (priceSources.length > 0) {
       const usedIndices = new Set<number>()
 
-      paymentBreakdown = fullDC.productDetails.map((pd: any, index: number) => {
-        let matchingProduct: any = null
+      paymentBreakdown = fullDC.productDetails.map((pd: any) => {
+        const matchingProduct = findPricedOrderProduct(priceSources, pd, usedIndices)
 
-        if (index < dcOrder.products.length && !usedIndices.has(index)) {
-          matchingProduct = dcOrder.products[index]
-          usedIndices.add(index)
-        } else {
-          const dcProductName = (pd.product || '').toLowerCase().trim()
-          for (let i = 0; i < dcOrder.products.length; i++) {
-            if (usedIndices.has(i)) continue
-            const p = dcOrder.products[i]
-            const orderProductName = (p.product_name || '').toLowerCase().trim()
-            if (
-              dcProductName === orderProductName ||
-              dcProductName.includes(orderProductName) ||
-              orderProductName.includes(dcProductName)
-            ) {
-              matchingProduct = p
-              usedIndices.add(i)
-              break
-            }
-          }
-        }
-
-        const unitPrice =
-          matchingProduct && matchingProduct.unit_price != null
-            ? Number(matchingProduct.unit_price)
-            : pd.price != null
-              ? Number(pd.price)
-              : 0
-        const quantity = Number(pd.quantity) || 0
-        const strength = Number(pd.strength) || 0
-        const total = strength * unitPrice
+        const unitPrice = resolvePersistedUnitPrice(
+          matchingProduct?.unit_price,
+          matchingProduct?.price,
+          pd.unit_price,
+          pd.price
+        )
+        const quantity = Number(pd.quantity) || Number(pd.strength) || 0
+        const strength = Number(pd.strength) || quantity
+        const total = quantity * unitPrice
         totalAmount += total
 
         return {
           product: pd.product || '',
           class: pd.class || '1',
           category: pd.category || 'New School',
-          specs: pd.specs || 'Regular',
+          specs: matchingProduct?.specs || pd.specs || '',
           subject: pd.subject || undefined,
           quantity,
           strength,
-          level: pd.level || 'L2',
+          level: displayProductLevel(pd.level),
           unitPrice,
           total,
           term: matchingProduct?.term || pd.term || 'Term 1',
@@ -292,20 +262,20 @@ export async function fetchDcInvoiceData(dcId: string, opts: FetchOpts): Promise
       })
     } else {
       paymentBreakdown = fullDC.productDetails.map((p: any) => {
-        const price = p.price != null ? Number(p.price) : 0
-        const quantity = Number(p.quantity) || 0
-        const strength = Number(p.strength) || 0
-        const total = strength * price
+        const price = resolvePersistedUnitPrice(p.unit_price, p.price)
+        const quantity = Number(p.quantity) || Number(p.strength) || 0
+        const strength = Number(p.strength) || quantity
+        const total = quantity * price
         totalAmount += total
         return {
           product: p.product || '',
           class: p.class || '1',
           category: p.category || 'New School',
-          specs: p.specs || 'Regular',
+          specs: p.specs || '',
           subject: p.subject || undefined,
           quantity,
           strength,
-          level: p.level || 'L2',
+          level: displayProductLevel(p.level),
           unitPrice: price,
           total,
           term: p.term || 'Term 1',
@@ -320,13 +290,13 @@ export async function fetchDcInvoiceData(dcId: string, opts: FetchOpts): Promise
         ...pb,
         product: pb.product || '',
         class: pb.class || '1',
-        strength: Number(pb.strength) || 0,
+        strength: Number(pb.strength) || Number(pb.quantity) || 0,
         unitPrice: Number(pb.unitPrice) || 0,
         level: pb.level,
         subject: pb.subject,
       })),
       opts.getCalculationType,
-      opts.getCatalogFallbackCount
+      () => 0
     )
     paymentBreakdown = adj.paymentBreakdown as DcInvoicePaymentLine[]
     totalAmount = adj.totalAmount

@@ -16,6 +16,8 @@ import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { useProducts } from '@/hooks/useProducts'
 import { applyPaymentDivisorsToBreakdown } from '@/lib/dcPaymentDivisors'
+import { displayProductLevel } from '@/lib/clientDcProductRows'
+import { persistProductTerm } from '@/lib/productTerm'
 
 type DC = {
   _id: string
@@ -49,14 +51,19 @@ type DC = {
   createdAt?: string
   productDetails?: Array<{
     product?: string
+    productName?: string
     term?: string
     class?: string
     category?: string
+    productCategory?: string
     specs?: string
     subject?: string
     quantity?: number
     strength?: number
     level?: string
+    price?: number
+    unit_price?: number
+    closeLeadDestination?: string
   }>
 }
 
@@ -123,6 +130,12 @@ export default function TermWiseDCPage() {
     quantity: number
     unit_price: number
     term: string
+    level?: string
+    class?: string
+    specs?: string
+    subject?: string
+    category?: string
+    productCategory?: string
   }>>([])
   const [editFormData, setEditFormData] = useState({
     school_name: '',
@@ -172,71 +185,36 @@ export default function TermWiseDCPage() {
     quantity: number
     unit_price: number
     term: string
+    level?: string
+    class?: string
+    specs?: string
+    subject?: string
+    category?: string
+    productCategory?: string
   }>>([])
   const [savingDC, setSavingDC] = useState(false)
 
   const load = async () => {
     setLoading(true)
     try {
-      // Fetch ALL DCs with status 'scheduled_for_later' (Term 2 DCs)
-      // These should be visible to all users, not just the employee who created them
+      // Backend persists per-product routing on GET (repairSaleCloseLeadRouting).
+      // Term-Wise DCs only contain paired Level 2 / Term 2 rows after repair.
       console.log('🔍 Fetching Term-Wise DCs...')
       const data = await apiRequest<DC[]>(`/dc?status=scheduled_for_later`)
       const dataArray = Array.isArray(data) ? data : []
-      console.log(`✅ Loaded ${dataArray.length} DCs with status 'scheduled_for_later'`)
-      
-      // Filter to only show Term 2 DCs (all products are Term 2)
-      const term2DCs = dataArray.filter(dc => {
-        // Check productDetails first
-        if (dc.productDetails && Array.isArray(dc.productDetails) && dc.productDetails.length > 0) {
-          const allTerm2 = dc.productDetails.every((p: any) => (p.term || 'Term 1') === 'Term 2')
-          const hasTerm1 = dc.productDetails.some((p: any) => {
-            const term = p.term || 'Term 1'
-            return term === 'Term 1' || term === 'Both'
-          })
-          // If all products are Term 2 and no Term 1, it's a Term 2 DC
-          if (allTerm2 && !hasTerm1) {
-            return true
-          }
+      const normalized = dataArray.map((dc) => {
+        const rows = Array.isArray(dc.productDetails) ? dc.productDetails : []
+        const productLabel = rows
+          .map((p: any) => p.product || p.productName || '')
+          .filter(Boolean)
+          .join(', ')
+        return {
+          ...dc,
+          ...(productLabel ? { product: productLabel } : {}),
         }
-        
-        // Check dcOrderId.products as fallback
-        if (dc.dcOrderId && typeof dc.dcOrderId === 'object' && dc.dcOrderId.products) {
-          const products = dc.dcOrderId.products
-          if (Array.isArray(products) && products.length > 0) {
-            const allTerm2 = products.every((p: any) => (p.term || 'Term 1') === 'Term 2')
-            const hasTerm1 = products.some((p: any) => {
-              const term = p.term || 'Term 1'
-              return term === 'Term 1' || term === 'Both'
-            })
-            if (allTerm2 && !hasTerm1) {
-              return true
-            }
-          }
-        }
-        
-        // If status is scheduled_for_later, include it (fallback for DCs created before term field was set)
-        return dc.status === 'scheduled_for_later'
       })
-      
-      console.log(`📊 Filtered to ${term2DCs.length} Term 2 DCs out of ${dataArray.length} total`)
-      
-      // Debug: Log DCs and their productDetails
-      if (term2DCs.length > 0) {
-        console.log('📦 Term 2 DCs found:', term2DCs.map(dc => ({
-          id: dc._id,
-          customerName: dc.customerName,
-          status: dc.status,
-          hasProductDetails: !!dc.productDetails,
-          productDetailsCount: dc.productDetails?.length || 0,
-          productDetails: dc.productDetails,
-          dcOrderProducts: dc.dcOrderId && typeof dc.dcOrderId === 'object' ? dc.dcOrderId.products : null
-        })))
-      } else {
-        console.warn('⚠️ No Term 2 DCs found with status "scheduled_for_later"')
-      }
-      
-      setItems(term2DCs)
+      console.log(`✅ Loaded ${normalized.length} Term-Wise DCs`)
+      setItems(normalized)
     } catch (e: any) {
       console.error('❌ Failed to load DCs:', e)
       console.error('Error details:', {
@@ -349,7 +327,7 @@ export default function TermWiseDCPage() {
             const total = unitPrice * strength
             totalAmount += total
             
-            const term = matchingProduct?.term || pd.term || 'Term 1'
+            const term = persistProductTerm({ term: pd.term, level: pd.level })
             
             return {
               product: pd.product || '',
@@ -359,7 +337,7 @@ export default function TermWiseDCPage() {
               subject: pd.subject || undefined,
               quantity: quantity,
               strength: strength,
-              level: pd.level || 'L2',
+              level: displayProductLevel(pd.level),
               unitPrice: unitPrice,
               total: total,
               term: term,
@@ -380,10 +358,10 @@ export default function TermWiseDCPage() {
               subject: p.subject || undefined,
               quantity: quantity,
               strength: strength,
-              level: p.level || 'L2',
+              level: displayProductLevel(p.level),
               unitPrice: price,
               total: total,
-              term: p.term || 'Term 1',
+              term: persistProductTerm(p),
             }
           })
         }
@@ -409,10 +387,10 @@ export default function TermWiseDCPage() {
               subject: pd.subject || undefined,
               quantity: quantity,
               strength: Number(pd.strength) || 0,
-              level: pd.level || 'L2',
+              level: displayProductLevel(pd.level),
               unitPrice: estimatedUnitPrice,
               total: total,
-              term: pd.term || 'Term 1',
+              term: persistProductTerm(pd),
             }
           })
         }
@@ -469,8 +447,11 @@ export default function TermWiseDCPage() {
     }
 
     try {
-      const dcOrder = await apiRequest<any>(`/dc-orders/${dcOrderId}`)
-      setSelectedDC(dc)
+      const [dcOrder, fullDC] = await Promise.all([
+        apiRequest<any>(`/dc-orders/${dcOrderId}`),
+        apiRequest<any>(`/dc/${dc._id}`).catch(() => dc),
+      ])
+      setSelectedDC(fullDC?._id ? fullDC : dc)
       setSelectedDcOrder(dcOrder)
       
       // Populate form with current data
@@ -497,35 +478,46 @@ export default function TermWiseDCPage() {
       
       setEditFormData(formData)
       
-      // Load products - prioritize DC's productDetails (has all details), then DcOrder products
+      // Load products from THIS Term-Wise DC only. Never fall back to the full DcOrder
+      // (that list still contains the Term 1 p3 allocation matched by product name).
+      const sourceDetails = Array.isArray(fullDC?.productDetails) && fullDC.productDetails.length > 0
+        ? fullDC.productDetails
+        : Array.isArray(dc.productDetails)
+          ? dc.productDetails
+          : []
       let productsToShow: any[] = []
       
-      // First try to get from DC's productDetails (most accurate - has all product details)
-      if (dc.productDetails && Array.isArray(dc.productDetails) && dc.productDetails.length > 0) {
-        // Get unit prices from DcOrder products if available
-        productsToShow = dc.productDetails.map((p: any) => {
-          // Try to match with DcOrder product to get unit_price
+      if (sourceDetails.length > 0) {
+        const routedRows = sourceDetails.some((p: any) => p.closeLeadDestination)
+          ? sourceDetails.filter((p: any) => p.closeLeadDestination === 'TERM_WISE_DC')
+          : sourceDetails
+        productsToShow = routedRows.map((p: any) => {
+          const dcProductName = (p.product || p.product_name || '').toLowerCase().trim()
+          const dcLevel = String(p.level || '').trim().toLowerCase()
+          const dcClass = String(p.class ?? '').trim().toLowerCase()
           const matchingDcOrderProduct = (dcOrder.products || []).find((op: any) => {
             const orderProductName = (op.product_name || '').toLowerCase().trim()
-            const dcProductName = (p.product || p.product_name || '').toLowerCase().trim()
-            return orderProductName === dcProductName
+            if (orderProductName !== dcProductName) return false
+            const orderLevel = String(op.level || '').trim().toLowerCase()
+            if (dcLevel && orderLevel && dcLevel !== orderLevel) return false
+            const orderClass = String(op.class ?? '').trim().toLowerCase()
+            if (dcClass && orderClass && dcClass !== orderClass) return false
+            return true
           })
           
           return {
             product_name: p.product || p.product_name || '',
-            quantity: p.quantity || p.strength || 0,
+            quantity: Number(p.quantity) || Number(p.strength) || 0,
             unit_price: matchingDcOrderProduct?.unit_price || p.unit_price || p.price || 0,
-            term: p.term || 'Term 1',
+            term: persistProductTerm(p),
+            level: p.level,
+            class: p.class,
+            specs: p.specs,
+            subject: p.subject,
+            category: p.category,
+            productCategory: p.productCategory,
           }
         })
-      } else if (dcOrder.products && Array.isArray(dcOrder.products) && dcOrder.products.length > 0) {
-        // Fallback to DcOrder products (initial values)
-        productsToShow = dcOrder.products.map((p: any) => ({
-          product_name: p.product_name || '',
-          quantity: p.quantity || 0,
-          unit_price: p.unit_price || 0,
-          term: p.term || 'Term 1',
-        }))
       }
       
       setEditProductRows(
@@ -534,7 +526,13 @@ export default function TermWiseDCPage() {
           product_name: p.product_name || '',
           quantity: p.quantity || 0,
           unit_price: p.unit_price || 0,
-          term: p.term || 'Term 1',
+          level: p.level,
+          class: p.class,
+          specs: p.specs,
+          subject: p.subject,
+          category: p.category,
+          productCategory: p.productCategory,
+          term: persistProductTerm(p),
         }))
       )
       
@@ -553,7 +551,13 @@ export default function TermWiseDCPage() {
         product_name: row.product_name,
         quantity: row.quantity,
         unit_price: row.unit_price,
-        term: row.term || 'Term 1',
+        level: row.level,
+        class: row.class,
+        specs: row.specs,
+        subject: row.subject,
+        category: row.category,
+        productCategory: row.productCategory,
+        term: persistProductTerm(row),
       }))
 
       const totalAmount = products.reduce((sum, p) => sum + (p.quantity * p.unit_price), 0)
@@ -567,12 +571,40 @@ export default function TermWiseDCPage() {
         transport_location: editFormData.transport_location || '',
         transportation_landmark: editFormData.transportation_landmark || '',
         pincode: editFormData.pincode || '',
+        originatingDcId: selectedDC?._id,
       }
 
       await apiRequest(`/dc-orders/${selectedDcOrder._id}`, {
         method: 'PUT',
         body: JSON.stringify(payload),
       })
+
+      if (selectedDC?._id) {
+        const existing = Array.isArray(selectedDC.productDetails) ? selectedDC.productDetails : []
+        const productDetails = editProductRows.map((row, idx) => {
+          const prev = existing[idx] || {}
+          return {
+            ...prev,
+            product: row.product_name || prev.product,
+            productName: row.product_name || prev.productName,
+            quantity: row.quantity,
+            strength: Number(prev.strength) || row.quantity,
+            price: row.unit_price ?? prev.price,
+            unit_price: row.unit_price,
+            level: row.level || prev.level,
+            class: row.class || prev.class,
+            specs: row.specs || prev.specs,
+            subject: row.subject ?? prev.subject,
+            category: row.category || prev.category,
+            productCategory: row.productCategory || prev.productCategory,
+            term: persistProductTerm({ ...prev, ...row }),
+          }
+        })
+        await apiRequest('/dc/' + selectedDC._id, {
+          method: 'PUT',
+          body: JSON.stringify({ productDetails }),
+        })
+      }
 
       toast.success('PO updated successfully!')
       setEditPODialogOpen(false)
@@ -641,56 +673,59 @@ export default function TermWiseDCPage() {
       
       setRequestDCFormData(formData)
       
-      // Load Term 2 products - prioritize DC's productDetails (has all details), then DcOrder products
-      let term2Products: any[] = []
-      
-      // First try to get from full DC's productDetails (most accurate - has all product details)
+      // Load products already on this Term-Wise DC (Close Lead classification).
+      // Do not pull Term 2 rows from the full DcOrder — that wrongly includes Term-2-only products.
+      let termWiseProducts: any[] = []
+
       if (fullDC.productDetails && Array.isArray(fullDC.productDetails) && fullDC.productDetails.length > 0) {
-        const dcTerm2Products = fullDC.productDetails.filter((p: any) => (p.term || 'Term 1') === 'Term 2')
-        if (dcTerm2Products.length > 0) {
-          // Get unit prices from DcOrder products if available
-          term2Products = dcTerm2Products.map((p: any) => {
-            // Try to match with DcOrder product to get unit_price
-            const matchingDcOrderProduct = (dcOrder.products || []).find((op: any) => {
-              const orderProductName = (op.product_name || '').toLowerCase().trim()
-              const dcProductName = (p.product || p.product_name || '').toLowerCase().trim()
-              return orderProductName === dcProductName && (op.term || 'Term 1') === 'Term 2'
-            })
-            
-            return {
-              product_name: p.product || p.product_name || '',
-              quantity: p.quantity || p.strength || 0,
-              unit_price: matchingDcOrderProduct?.unit_price || p.unit_price || p.price || 0,
-              term: p.term || 'Term 2',
-            }
+        const routedRows = fullDC.productDetails.some((p: any) => p.closeLeadDestination)
+          ? fullDC.productDetails.filter((p: any) => p.closeLeadDestination === 'TERM_WISE_DC')
+          : fullDC.productDetails
+        termWiseProducts = routedRows.map((p: any) => {
+          const matchingDcOrderProduct = (dcOrder.products || []).find((op: any) => {
+            const orderProductName = (op.product_name || '').toLowerCase().trim()
+            const dcProductName = (p.product || p.product_name || '').toLowerCase().trim()
+            if (orderProductName !== dcProductName) return false
+            const orderLevel = String(op.level || '').trim().toLowerCase()
+            const dcLevel = String(p.level || '').trim().toLowerCase()
+            if (dcLevel && orderLevel && dcLevel !== orderLevel) return false
+            return true
           })
-        }
+          return {
+            product_name: p.product || p.product_name || '',
+            quantity: Number(p.quantity) || Number(p.strength) || 0,
+            unit_price: matchingDcOrderProduct?.unit_price || p.unit_price || p.price || 0,
+            term: persistProductTerm(p),
+            level: p.level,
+            class: p.class,
+            specs: p.specs,
+            subject: p.subject,
+            category: p.category,
+            productCategory: p.productCategory,
+            closeLeadDestination: p.closeLeadDestination || 'TERM_WISE_DC',
+          }
+        })
       }
-      
-      // Fallback to DcOrder products if DC productDetails not available or no Term 2 products found
-      if (term2Products.length === 0) {
-        const dcOrderTerm2Products = (dcOrder.products || []).filter((p: any) => (p.term || 'Term 1') === 'Term 2')
-        term2Products = dcOrderTerm2Products.map((p: any) => ({
-          product_name: p.product_name || '',
-          quantity: p.quantity || 0,
-          unit_price: p.unit_price || 0,
-          term: p.term || 'Term 2',
-        }))
-      }
-      
-      console.log('📦 Loaded Term 2 products for Request DC:', {
+
+      console.log('📦 Loaded Term-Wise products for Request DC:', {
         fromDCProductDetails: fullDC.productDetails?.length || 0,
-        term2ProductsCount: term2Products.length,
-        products: term2Products
+        termWiseProductsCount: termWiseProducts.length,
+        products: termWiseProducts
       })
-      
+
       setRequestDCProductRows(
-        term2Products.map((p: any, idx: number) => ({
+        termWiseProducts.map((p: any, idx: number) => ({
           id: String(idx + 1),
           product_name: p.product_name || '',
           quantity: p.quantity || 0,
           unit_price: p.unit_price || 0,
-          term: p.term || 'Term 2',
+          level: p.level,
+          class: p.class,
+          specs: p.specs,
+          subject: p.subject,
+          category: p.category,
+          productCategory: p.productCategory,
+          term: persistProductTerm(p),
         }))
       )
       
@@ -718,22 +753,36 @@ export default function TermWiseDCPage() {
         return
       }
 
-      // Convert product rows to productDetails format (only Term 2 products)
-      // Include unit_price so it's preserved when DC goes to Closed Sales
+      // Convert product rows already on this Term-Wise DC (do not require term === Term 2)
+      const existingDetails = Array.isArray(selectedDC.productDetails) ? selectedDC.productDetails : []
       const productDetails = requestDCProductRows
-        .filter(row => (row.term || 'Term 1') === 'Term 2')
-        .map(row => ({
-          product: row.product_name,
-          class: '1',
-          category: requestDCFormData.school_type === 'Existing' ? 'Existing School' : 'New School',
-          specs: 'Regular',
-          subject: undefined,
-          quantity: row.quantity,
-          strength: row.quantity,
-          level: 'L2',
-          term: 'Term 2', // Ensure Term 2
-          unit_price: row.unit_price || 0, // Preserve unit price from Edit PO
-        }))
+        .map((row, idx) => {
+          const prev = existingDetails[idx] || existingDetails.find((p: any) => {
+            const name = String(p.product || p.product_name || '').toLowerCase().trim()
+            const rowName = String(row.product_name || '').toLowerCase().trim()
+            if (name !== rowName) return false
+            const pl = String(p.level || '').toLowerCase().trim()
+            const rl = String(row.level || '').toLowerCase().trim()
+            return !pl || !rl || pl === rl
+          }) || {}
+          return {
+            ...prev,
+            product: row.product_name,
+            class: row.class || prev.class || '1',
+            category: row.category || prev.category || (requestDCFormData.school_type === 'Existing' ? 'Existing School' : 'New School'),
+            specs: row.specs || prev.specs || 'Regular',
+            subject: row.subject ?? prev.subject,
+            productCategory: row.productCategory || prev.productCategory,
+            quantity: row.quantity,
+            strength: row.quantity,
+            price: row.unit_price,
+            total: (row.quantity || 0) * (row.unit_price || 0),
+            level: row.level || prev.level,
+            term: persistProductTerm({ ...prev, ...row }),
+            closeLeadDestination: 'TERM_WISE_DC',
+            unit_price: row.unit_price || 0,
+          }
+        })
 
       // Update DC - keep status as 'scheduled_for_later' so it still appears in Term-Wise DC
       const dcPayload = {
@@ -796,96 +845,10 @@ export default function TermWiseDCPage() {
     }
   }
 
-  // Group DCs by term - only show Term 2
+  // Term-Wise list = DCs already routed at Close Lead (status scheduled_for_later).
+  // Do not re-filter by product.term === Term 2.
   const groupedByTerm = useMemo(() => {
-    const term2DCs: DC[] = []
-    
-    console.log(`🔍 Filtering ${items.length} DCs for Term 2 products...`)
-    
-    items.forEach((dc, index) => {
-      let hasTerm2 = false
-      let termSource = 'none'
-      
-      // Check productDetails first (most reliable)
-      if (dc.productDetails && Array.isArray(dc.productDetails) && dc.productDetails.length > 0) {
-        const terms = dc.productDetails.map((p: any) => {
-          // Check multiple possible field names for term
-          return (p.term || p.term_name || 'Term 1').toString().trim()
-        })
-        const uniqueTerms = Array.from(new Set(terms))
-        
-        // Check for Term 2 (case-insensitive, handle variations)
-        hasTerm2 = uniqueTerms.some(term => 
-          term.toLowerCase().includes('term 2') || 
-          term.toLowerCase().includes('term2') ||
-          term === '2' ||
-          term.toLowerCase() === 'term 2'
-        )
-        termSource = 'productDetails'
-        
-        if (hasTerm2) {
-          console.log(`✅ DC ${index + 1} has Term 2 in productDetails:`, {
-            dcId: dc._id,
-            customerName: dc.customerName,
-            terms: uniqueTerms,
-            productDetails: dc.productDetails
-          })
-        }
-      } else if (dc.dcOrderId && typeof dc.dcOrderId === 'object' && dc.dcOrderId.products) {
-        // Check DcOrder products (fallback)
-        const terms = dc.dcOrderId.products.map((p: any) => {
-          return (p.term || p.term_name || 'Term 1').toString().trim()
-        })
-        const uniqueTerms = Array.from(new Set(terms))
-        
-        // Check for Term 2 (case-insensitive, handle variations)
-        hasTerm2 = uniqueTerms.some(term => 
-          term.toLowerCase().includes('term 2') || 
-          term.toLowerCase().includes('term2') ||
-          term === '2' ||
-          term.toLowerCase() === 'term 2'
-        )
-        termSource = 'dcOrderProducts'
-        
-        if (hasTerm2) {
-          console.log(`✅ DC ${index + 1} has Term 2 in dcOrder products:`, {
-            dcId: dc._id,
-            customerName: dc.customerName,
-            terms: uniqueTerms
-          })
-        }
-      }
-      
-      // If status is 'scheduled_for_later', it's likely a Term 2 DC even if term field is missing
-      // This handles cases where DCs were created before term field was properly set
-      if (!hasTerm2 && dc.status === 'scheduled_for_later') {
-        console.log(`⚠️ DC ${index + 1} has status 'scheduled_for_later' but no Term 2 in products. Including anyway.`, {
-          dcId: dc._id,
-          customerName: dc.customerName,
-          productDetails: dc.productDetails,
-          dcOrderProducts: dc.dcOrderId && typeof dc.dcOrderId === 'object' ? dc.dcOrderId.products : null
-        })
-        hasTerm2 = true
-        termSource = 'status_fallback'
-      }
-      
-      if (hasTerm2) {
-        term2DCs.push(dc)
-      } else {
-        console.log(`❌ DC ${index + 1} does NOT have Term 2:`, {
-          dcId: dc._id,
-          customerName: dc.customerName,
-          status: dc.status,
-          termSource,
-          productDetails: dc.productDetails,
-          dcOrderProducts: dc.dcOrderId && typeof dc.dcOrderId === 'object' ? dc.dcOrderId.products : null
-        })
-      }
-    })
-    
-    console.log(`📊 Filtered results: ${term2DCs.length} Term 2 DCs out of ${items.length} total`)
-    
-    return { term1: [], term2: term2DCs }
+    return { term1: [] as DC[], term2: items }
   }, [items])
 
   // Filter items based on search query
@@ -947,25 +910,18 @@ export default function TermWiseDCPage() {
                 const customerName = d.customerName || d.saleId?.customerName || d.dcOrderId?.school_name || 'Unknown Client'
                 const phone = d.customerPhone || d.dcOrderId?.contact_mobile || '-'
                 
-                // Get products - prioritize productDetails (Term 2 only), then dcOrderId products (Term 2 only), then fallback
+                // Show product-detail rows on this Term-Wise DC only (Close Lead classification).
+                // Do not fall back to DcOrder Term 2 products — that wrongly lists Term-2-only rows.
                 let product = '-'
                 if (d.productDetails && Array.isArray(d.productDetails) && d.productDetails.length > 0) {
-                  // Filter to only Term 2 products
-                  const term2Products = d.productDetails.filter((p: any) => (p.term || 'Term 1') === 'Term 2')
-                  if (term2Products.length > 0) {
-                    product = term2Products.map((p: any) => p.product || p.productName || '').filter(Boolean).join(', ')
-                  }
+                  const routed = d.productDetails.some((p: any) => p.closeLeadDestination)
+                    ? d.productDetails.filter((p: any) => p.closeLeadDestination === 'TERM_WISE_DC')
+                    : d.productDetails
+                  const names = routed.map((p: any) => p.product || p.productName || '').filter(Boolean)
+                  if (names.length > 0) product = names.join(', ')
                 }
                 
-                if (product === '-' && d.dcOrderId && typeof d.dcOrderId === 'object' && d.dcOrderId.products && Array.isArray(d.dcOrderId.products)) {
-                  // Filter to only Term 2 products
-                  const term2Products = d.dcOrderId.products.filter((p: any) => (p.term || 'Term 1') === 'Term 2')
-                  if (term2Products.length > 0) {
-                    product = term2Products.map((p: any) => p.product_name || p.product || '').filter(Boolean).join(', ')
-                  }
-                }
-                
-                // Fallback to other product fields if no Term 2 products found
+                // Fallback to other product fields if no productDetails
                 if (product === '-') {
                   product = d.product || d.saleId?.product || '-'
                 }
@@ -1037,7 +993,7 @@ export default function TermWiseDCPage() {
         <div>
           <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Term-Wise DC</h1>
           <p className="text-sm text-neutral-500 mt-1">
-            View your clients with Term 2 products
+            View clients with Term-Wise DC rows (paired Level 2 / Term 2 from Close Lead)
           </p>
         </div>
       </div>
@@ -1164,7 +1120,7 @@ export default function TermWiseDCPage() {
                       {invoiceData.paymentBreakdown.map((item, idx) => (
                         <tr key={idx} className="border-b hover:bg-neutral-50">
                           <td className="py-3 px-4 font-medium">{item.product}</td>
-                          <td className="py-3 px-4">{item.term || 'Term 1'}</td>
+                          <td className="py-3 px-4">{persistProductTerm(item)}</td>
                           <td className="py-3 px-4">{item.class}</td>
                           <td className="py-3 px-4">{item.category}</td>
                           <td className="py-3 px-4">{item.specs}</td>
@@ -1376,6 +1332,7 @@ export default function TermWiseDCPage() {
                     <TableRow>
                       <TableHead>Product Name</TableHead>
                       <TableHead>Term</TableHead>
+                      <TableHead>Level</TableHead>
                       <TableHead>Quantity</TableHead>
                       <TableHead>Unit Price</TableHead>
                       <TableHead>Total</TableHead>
@@ -1400,7 +1357,15 @@ export default function TermWiseDCPage() {
                           </TableCell>
                           <TableCell>
                             <Input
-                              value={row.term || 'Term 1'}
+                              value={persistProductTerm(row)}
+                              readOnly
+                              disabled
+                              className="h-9 bg-neutral-50"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              value={row.level || ''}
                               readOnly
                               disabled
                               className="h-9 bg-neutral-50"
@@ -1620,6 +1585,7 @@ export default function TermWiseDCPage() {
                     <TableRow>
                       <TableHead>Product Name</TableHead>
                       <TableHead>Term</TableHead>
+                      <TableHead>Level</TableHead>
                       <TableHead>Strength</TableHead>
                       <TableHead>Unit Price</TableHead>
                       <TableHead>Total</TableHead>
@@ -1639,7 +1605,15 @@ export default function TermWiseDCPage() {
                           </TableCell>
                           <TableCell>
                             <Input
-                              value={row.term || 'Term 1'}
+                              value={persistProductTerm(row)}
+                              readOnly
+                              disabled
+                              className="h-9 bg-neutral-50"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              value={row.level || ''}
                               readOnly
                               disabled
                               className="h-9 bg-neutral-50"

@@ -1,8 +1,7 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -11,12 +10,15 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { apiRequest } from '@/lib/api'
 import { toast } from 'sonner'
-import { ArrowLeft } from 'lucide-react'
 import {
-  filterTagOptions,
-  getTaggingSectionLabel,
-  supportsEmployeeTagging,
-} from '@/lib/employeeTagging'
+  validateEmployeeFirstName,
+  validateEmployeeLastName,
+  validateEmployeeCode,
+  validateEmployeeIdentityFields,
+  type EmployeeIdentityErrors,
+} from '@/lib/employeeFormValidation'
+
+const TAGGING_ROLES = ['Executive', 'Coordinator', 'Senior Coordinator', 'Finance Manager', 'Warehouse Manager']
 
 type EmployeeOption = { _id: string; name: string; role: string }
 
@@ -45,14 +47,10 @@ export default function EditEmployeePage() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [identityErrors, setIdentityErrors] = useState<EmployeeIdentityErrors>({})
   const [zones, setZones] = useState<string[]>([])
   const [clustersByZone, setClustersByZone] = useState<Record<string, string[]>>({})
   const [tagOptions, setTagOptions] = useState<EmployeeOption[]>([])
-
-  const filteredTagOptions = useMemo(
-    () => filterTagOptions(tagOptions, form.role),
-    [tagOptions, form.role]
-  )
 
   const loadZones = async () => {
     const [pairsRaw, zonesRaw] = await Promise.all([
@@ -112,9 +110,68 @@ export default function EditEmployeePage() {
     })()
   }, [id])
 
+  const clearIdentityError = (field: keyof EmployeeIdentityErrors) => {
+    setIdentityErrors((prev) => {
+      if (!prev[field]) return prev
+      const next = { ...prev }
+      delete next[field]
+      return next
+    })
+  }
+
   const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
     setForm((f) => ({ ...f, [name]: value }))
+    if (name === 'firstName') {
+      if (!value.trim()) {
+        clearIdentityError('firstName')
+      } else {
+        const check = validateEmployeeFirstName(value)
+        setIdentityErrors((prev) => ({
+          ...prev,
+          firstName: check.ok ? undefined : check.message,
+        }))
+      }
+    } else if (name === 'lastName') {
+      const check = validateEmployeeLastName(value)
+      setIdentityErrors((prev) => ({
+        ...prev,
+        lastName: check.ok ? undefined : check.message,
+      }))
+    } else if (name === 'empCode') {
+      if (!value.trim()) {
+        clearIdentityError('empCode')
+      } else {
+        const check = validateEmployeeCode(value)
+        setIdentityErrors((prev) => ({
+          ...prev,
+          empCode: check.ok ? undefined : check.message,
+        }))
+      }
+    }
+  }
+
+  const onIdentityBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const { name, value } = e.target
+    if (name === 'firstName') {
+      const check = validateEmployeeFirstName(value)
+      setIdentityErrors((prev) => ({
+        ...prev,
+        firstName: check.ok ? undefined : check.message,
+      }))
+    } else if (name === 'lastName') {
+      const check = validateEmployeeLastName(value)
+      setIdentityErrors((prev) => ({
+        ...prev,
+        lastName: check.ok ? undefined : check.message,
+      }))
+    } else if (name === 'empCode') {
+      const check = validateEmployeeCode(value)
+      setIdentityErrors((prev) => ({
+        ...prev,
+        empCode: check.ok ? undefined : check.message,
+      }))
+    }
   }
 
   const toggleTagged = (empId: string) => {
@@ -131,6 +188,24 @@ export default function EditEmployeePage() {
     setSubmitting(true)
     setError(null)
     try {
+      const identityCheck = validateEmployeeIdentityFields({
+        firstName: form.firstName,
+        lastName: form.lastName,
+        empCode: form.empCode,
+      })
+      if (!identityCheck.ok) {
+        setIdentityErrors(identityCheck.errors)
+        const firstMsg =
+          identityCheck.errors.firstName ||
+          identityCheck.errors.lastName ||
+          identityCheck.errors.empCode ||
+          'Please fix the highlighted fields.'
+        setError(firstMsg)
+        setSubmitting(false)
+        return
+      }
+      setIdentityErrors({})
+
       if (form.role === 'Executive' && !form.cluster?.trim()) {
         setError('Cluster is required for Executive role')
         setSubmitting(false)
@@ -138,12 +213,15 @@ export default function EditEmployeePage() {
       }
       const payload: Record<string, unknown> = {
         ...form,
-        name: `${form.firstName} ${form.lastName}`.trim(),
+        firstName: identityCheck.values.firstName,
+        lastName: identityCheck.values.lastName,
+        empCode: identityCheck.values.empCode,
+        name: `${identityCheck.values.firstName} ${identityCheck.values.lastName}`.trim(),
         phone: form.phone || form.mobile,
         mobile: form.mobile,
       }
       if (form.role !== 'Executive') delete payload.cluster
-      if (!supportsEmployeeTagging(form.role)) payload.taggedEmployeeIds = []
+      if (!TAGGING_ROLES.includes(form.role)) payload.taggedEmployeeIds = []
       await apiRequest(`/employees/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
       toast.success('Employee updated')
       router.push('/dashboard/employees/active')
@@ -158,31 +236,50 @@ export default function EditEmployeePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Link href="/dashboard/employees/active">
-          <Button variant="ghost" size="sm">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back
-          </Button>
-        </Link>
-        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">
-          Edit {form.role}
-        </h1>
-      </div>
+      <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Edit Employee</h1>
       <Card className="p-4 md:p-6 bg-neutral-50 border border-neutral-200">
         <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="md:col-span-2 text-lg font-semibold mb-2">Personal Data</div>
           <div>
             <Label>First Name *</Label>
-            <Input className="bg-white text-neutral-900" name="firstName" value={form.firstName} onChange={onChange} required />
+            <Input
+              className={`bg-white text-neutral-900 ${identityErrors.firstName ? 'border-red-500' : ''}`}
+              name="firstName"
+              value={form.firstName}
+              onChange={onChange}
+              onBlur={onIdentityBlur}
+              required
+            />
+            {identityErrors.firstName && (
+              <p className="text-xs text-red-600 mt-1">{identityErrors.firstName}</p>
+            )}
           </div>
           <div>
             <Label>Last Name</Label>
-            <Input className="bg-white text-neutral-900" name="lastName" value={form.lastName} onChange={onChange} />
+            <Input
+              className={`bg-white text-neutral-900 ${identityErrors.lastName ? 'border-red-500' : ''}`}
+              name="lastName"
+              value={form.lastName}
+              onChange={onChange}
+              onBlur={onIdentityBlur}
+            />
+            {identityErrors.lastName && (
+              <p className="text-xs text-red-600 mt-1">{identityErrors.lastName}</p>
+            )}
           </div>
           <div>
             <Label>Emp ID / Code</Label>
-            <Input className="bg-white text-neutral-900" name="empCode" value={form.empCode} onChange={onChange} />
+            <Input
+              className={`bg-white text-neutral-900 ${identityErrors.empCode ? 'border-red-500' : ''}`}
+              name="empCode"
+              value={form.empCode}
+              onChange={onChange}
+              onBlur={onIdentityBlur}
+              required
+            />
+            {identityErrors.empCode && (
+              <p className="text-xs text-red-600 mt-1">{identityErrors.empCode}</p>
+            )}
           </div>
           <div>
             <Label>Email Id *</Label>
@@ -240,22 +337,7 @@ export default function EditEmployeePage() {
           </div>
           <div>
             <Label>User Type *</Label>
-            <Select
-              value={form.role}
-              onValueChange={(v) =>
-                setForm((f) => {
-                  const allowed = new Set(filterTagOptions(tagOptions, v).map((e) => e._id))
-                  return {
-                    ...f,
-                    role: v,
-                    cluster: v === 'Executive' ? f.cluster : '',
-                    taggedEmployeeIds: supportsEmployeeTagging(v)
-                      ? f.taggedEmployeeIds.filter((id) => allowed.has(id))
-                      : [],
-                  }
-                })
-              }
-            >
+            <Select value={form.role} onValueChange={(v) => setForm((f) => ({ ...f, role: v, cluster: v === 'Executive' ? f.cluster : '' }))}>
               <SelectTrigger className="bg-white text-neutral-900"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {['Executive', 'Trainer', 'Finance Manager', 'Coordinator', 'Senior Coordinator', 'Manager', 'Executive Manager', 'Warehouse Executive', 'Warehouse Manager', 'Admin', 'Super Admin'].map((r) => (
@@ -265,23 +347,14 @@ export default function EditEmployeePage() {
             </Select>
           </div>
 
-          {supportsEmployeeTagging(form.role) && (
+          {TAGGING_ROLES.includes(form.role) && (
             <div className="md:col-span-2">
-              <Label className="mb-2 block">{getTaggingSectionLabel(form.role)}</Label>
-              <p className="text-xs text-neutral-500 mb-2">
-                {form.role === 'Executive Manager' || form.role === 'Manager'
-                  ? 'Select executives assigned to this role.'
-                  : 'Select employees to tag under this role.'}
-              </p>
+              <Label className="mb-2 block">Employee tagging</Label>
               <div className="max-h-48 overflow-y-auto border rounded p-3 bg-white space-y-2">
-                {filteredTagOptions.length === 0 ? (
-                  <p className="text-sm text-neutral-500">
-                    {form.role === 'Executive Manager' || form.role === 'Manager'
-                      ? 'No active executives available to tag'
-                      : 'No employees available to tag'}
-                  </p>
+                {tagOptions.length === 0 ? (
+                  <p className="text-sm text-neutral-500">No employees available to tag</p>
                 ) : (
-                  filteredTagOptions.map((e) => (
+                  tagOptions.map((e) => (
                     <label key={e._id} className="flex items-center gap-2 text-sm">
                       <input
                         type="checkbox"

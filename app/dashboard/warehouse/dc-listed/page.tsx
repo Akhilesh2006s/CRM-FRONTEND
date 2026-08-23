@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { apiRequest } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
+import { sortDcsNewestFirst } from '@/lib/dcListSort'
 
 type DC = {
   _id: string
@@ -105,7 +106,7 @@ export default function DCListedPage() {
         )
       }
 
-      setRows(filtered)
+      setRows(sortDcsNewestFirst(filtered))
     } catch (err: any) {
       console.error('Failed to load listed DCs:', err)
       alert(err?.message || 'Failed to load DC listed')

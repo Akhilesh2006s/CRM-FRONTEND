@@ -12,6 +12,10 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useProducts } from '@/hooks/useProducts'
+import { toast } from 'sonner'
+import { keepMyClientsOwnedProductRows } from '@/lib/clientDcProductRows'
+import { resolveExistingProductTerm } from '@/lib/productTerm'
+import { sortDcsNewestFirst } from '@/lib/dcListSort'
 
 type DcOrderData = {
   _id?: string
@@ -44,6 +48,13 @@ type DcOrderData = {
   transport_location?: string
   transportation_landmark?: string
   pincode?: string
+  dcRequestData?: {
+    productDetails?: any[]
+    dcDate?: string
+    dcCategory?: string
+    dcRemarks?: string
+    dcNotes?: string
+  }
   pendingEdit?: {
     transport_name?: string
     transport_location?: string
@@ -119,6 +130,13 @@ type ProductRow = {
   term: string
 }
 
+function pendingRowQty(row: { quantity?: number; strength?: number }) {
+  const q = Number(row.quantity)
+  if (Number.isFinite(q) && q > 0) return q
+  const s = Number(row.strength)
+  return Number.isFinite(s) && s > 0 ? s : 0
+}
+
 export default function PendingDCPage() {
   const router = useRouter()
   const [items, setItems] = useState<DC[]>([])
@@ -141,6 +159,14 @@ export default function PendingDCPage() {
   const [dcCategory, setDcCategory] = useState('')
   const [dcNotes, setDcNotes] = useState('')
   const [smeRemarks, setSmeRemarks] = useState('')
+  const [dcDetailsErrors, setDcDetailsErrors] = useState<{
+    dcDate?: string
+    dcCategory?: string
+    financeRemarks?: string
+    splApproval?: string
+    dcRemarks?: string
+    dcNotes?: string
+  }>({})
   
   // Product rows
   const [productRows, setProductRows] = useState<ProductRow[]>([])
@@ -157,7 +183,7 @@ export default function PendingDCPage() {
     'Excess-OldStudents',
     'Excess NewStudents',
   ]
-  const { productNames: availableProducts, getProductLevels, getDefaultLevel, getProductSpecs, getProductSubjects, getProductCategories, hasProductCategories } = useProducts()
+  const { productNames: availableProducts, getProductLevels, getDefaultLevel, getProductSpecs, getProductSubjects, getProductCategories, hasProductCategories, hasProductSpecs } = useProducts()
   const availableDCCategories = ['Term 1', 'Term 2', 'Term 3', 'Full Year']
 
   const load = async () => {
@@ -188,7 +214,7 @@ export default function PendingDCPage() {
         
         return true
       })
-      setItems(filteredDCs)
+      setItems(sortDcsNewestFirst(filteredDCs))
     } catch (e: any) {
       console.error('Failed to load DCs:', e)
       alert(`Error loading DCs: ${e?.message || 'Unknown error'}`)
@@ -249,25 +275,35 @@ export default function PendingDCPage() {
       setDcCategory(mergedDC.dcCategory || '')
       setDcNotes(mergedDC.dcNotes || '')
       setSmeRemarks(mergedDC.smeRemarks || '')
-      
-      const isShortageDc = fullDC.dcType === 'shortage'
+      setDcDetailsErrors({})
 
-      // Populate product rows - prioritize DC.productDetails, then DcOrder.products
-      // Filter out empty or invalid productDetails entries
-      const validProductDetails = mergedDC.productDetails && Array.isArray(mergedDC.productDetails) 
-        ? mergedDC.productDetails.filter((p: any) => p && (p.product || p.productName) && (p.quantity > 0 || p.strength > 0))
-        : []
+      const isShortageDc = fullDC.dcType === 'shortage'
       
-      console.log('📦 Loading products for Pending DC:', {
+      // Open must display THIS DC's requested products. Never reconstruct from the
+      // original lead / unsplit DcOrder.products / a longer dcRequestData snapshot.
+      const dcProductDetails = Array.isArray(mergedDC.productDetails) ? mergedDC.productDetails : []
+      const requestProductDetails = Array.isArray(dcOrderData?.dcRequestData?.productDetails)
+        ? dcOrderData.dcRequestData.productDetails
+        : []
+      const sourceDetails = dcProductDetails.length > 0 ? dcProductDetails : requestProductDetails
+      const ownedDetails = keepMyClientsOwnedProductRows(sourceDetails)
+      const validProductDetails = ownedDetails.filter((p: any) => p && (p.product || p.productName) && (p.quantity > 0 || p.strength > 0))
+      
+      console.log('[DC-ASSOC] Pending DC Open products', {
         dcId: mergedDC._id,
-        dcType: fullDC.dcType,
-        hasProductDetails: !!mergedDC.productDetails,
-        productDetailsLength: mergedDC.productDetails?.length || 0,
-        validProductDetailsLength: validProductDetails.length,
-        hasDcOrderData: !!dcOrderData,
-        dcOrderProductsLength: dcOrderData?.products?.length || 0,
-        fullDC: fullDC,
-        mergedDC: mergedDC
+        dcCount: dcProductDetails.length,
+        requestCount: requestProductDetails.length,
+        ownedCount: validProductDetails.length,
+        total: validProductDetails.reduce(
+          (s: number, p: any) => s + (Number(p.quantity) || Number(p.strength) || 0),
+          0
+        ),
+        lines: validProductDetails.map((p: any) => ({
+          product: p.product || p.productName,
+          level: p.level,
+          term: p.term,
+          quantity: Number(p.quantity) || Number(p.strength) || 0,
+        })),
       })
       
       if (validProductDetails.length > 0) {
@@ -344,29 +380,20 @@ export default function PendingDCPage() {
             level: p.level || getDefaultLevel(matchedProduct),
             specs: p.specs || 'Regular',
             subject: p.subject || undefined,
-            price: Number(p.price) || 0,
+            price: Number(p.unit_price) || Number(p.price) || 0,
             total: Number(p.total) || 0,
-            term: p.term || 'Term 1',
+            term: resolveExistingProductTerm(p),
           }
         })
-
+        
         setProductRows(mappedProductRows)
       } else if (dcOrderData?.products && Array.isArray(dcOrderData.products) && dcOrderData.products.length > 0) {
-        // Import from DcOrder.products (like closed sales page)
-        // Filter to only Term 1 products (since this is Pending DC, which should only have Term 1)
-        const term1DcOrderProducts = dcOrderData.products.filter((p: any) => {
-          const term = p.term || 'Term 1'
-          return term === 'Term 1' || term === 'Both'
-        })
+        const ownedOrderProducts = keepMyClientsOwnedProductRows(dcOrderData.products)
+        const productsToUse = ownedOrderProducts.length > 0 ? ownedOrderProducts : []
         
-        // If no Term 1 products found, use all products (fallback)
-        const productsToUse = term1DcOrderProducts.length > 0 ? term1DcOrderProducts : dcOrderData.products
-        
-        console.log('✅ Using DcOrder.products as fallback:', {
+        console.log('[DC-ASSOC] Pending DC Open fallback to DcOrder.products', {
           allProducts: dcOrderData.products.length,
-          term1Products: term1DcOrderProducts.length,
-          using: productsToUse.length,
-          products: productsToUse
+          owned: productsToUse.length,
         })
         
         if (productsToUse.length === 0) {
@@ -411,8 +438,7 @@ export default function PendingDCPage() {
                   : undefined
 
               // Prefer matched SKU option string; otherwise show stored candidate to avoid empty UI.
-              const finalProductCategory =
-                matchedSkuFromProductCategory || matchedSkuFromCategory || productCategoryCandidate
+              const finalProductCategory = rawProductCategory
 
               return {
                 id: String(idx + 1),
@@ -420,10 +446,9 @@ export default function PendingDCPage() {
                 class: p.class || '1',
                 category: isShortageDc
                   ? 'Shortage'
-                  : p.category ||
-                    (mergedDC.school_type === 'Existing'
-                      ? 'Existing Students'
-                      : 'New Students'),
+                  : mergedDC.school_type === 'Existing'
+                    ? 'Old Students'
+                    : 'new Students',
                 productCategory: finalProductCategory || undefined,
                 productName: matchedProduct, // Use matched product
                 quantity: Number(p.quantity) || 0,
@@ -435,7 +460,7 @@ export default function PendingDCPage() {
                 total:
                   Number(p.total) ||
                   (Number(p.unit_price) || 0) * (Number(p.quantity) || 0),
-                term: p.term || 'Term 1',
+                term: resolveExistingProductTerm(p),
               }
             })
           )
@@ -473,7 +498,7 @@ export default function PendingDCPage() {
           quantity: fallbackQuantity,
           strength: fallbackQuantity,
           level: getDefaultLevel(matchedProduct),
-          specs: 'Regular',
+          specs: getProductSpecs(matchedProduct)[0] || '',
           subject: undefined,
           price: 0,
           total: 0,
@@ -488,8 +513,53 @@ export default function PendingDCPage() {
     }
   }
 
+  const clearDcDetailsError = (key: keyof typeof dcDetailsErrors) => {
+    setDcDetailsErrors((prev) => {
+      if (!prev[key]) return prev
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
+  }
+
+  const validatePendingDcDetailsFields = (): boolean => {
+    const next: typeof dcDetailsErrors = {}
+    const dateVal = String(dcDate || '').trim()
+    if (!dateVal || Number.isNaN(new Date(dateVal).getTime())) {
+      next.dcDate = 'DC Date is required.'
+    }
+    if (!String(dcCategory || '').trim()) {
+      next.dcCategory = 'Please select a DC Category.'
+    }
+    if (!String(financeRemarks || '').trim()) {
+      next.financeRemarks = 'Finance Remarks is required.'
+    }
+    if (!String(splApproval || '').trim()) {
+      next.splApproval = 'SPL Approval is required.'
+    }
+    if (!String(dcRemarks || '').trim()) {
+      next.dcRemarks = 'DC Remarks is required.'
+    }
+    if (!String(dcNotes || '').trim()) {
+      next.dcNotes = 'DC Notes is required.'
+    }
+    setDcDetailsErrors(next)
+    if (Object.keys(next).length > 0) {
+      toast.error(Object.values(next)[0] || 'Please fill required DC Details before submitting.')
+      if (typeof document !== 'undefined') {
+        document.getElementById('dc-details-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+      return false
+    }
+    return true
+  }
+
   const handleSave = async () => {
     if (!selectedDC) return
+
+    if (!validatePendingDcDetailsFields()) {
+      return
+    }
     
     setSaving(true)
     try {
@@ -531,12 +601,17 @@ export default function PendingDCPage() {
             category: selectedDC.dcType === 'shortage' ? 'Shortage' : row.category,
             productCategory: row.productCategory || undefined,
             productName: row.productName,
-            quantity: row.quantity,
-            strength: row.strength || 0,
+            quantity: pendingRowQty(row),
+            strength: pendingRowQty(row),
             level: row.level,
-            specs: row.specs || 'Regular',
+            specs: row.specs || '',
             subject: row.subject || undefined,
             term: row.term || 'Term 1',
+            unit_price: Number(row.price) || Number(row.unit_price) || 0,
+            price: Number(row.price) || Number(row.unit_price) || 0,
+            total:
+              pendingRowQty(row) *
+              (Number(row.price) || Number(row.unit_price) || 0),
           })),
         }),
       })
@@ -556,10 +631,14 @@ export default function PendingDCPage() {
 
   const handleSubmitToWarehouse = async () => {
     if (!selectedDC) return
+
+    if (!validatePendingDcDetailsFields()) {
+      return
+    }
     
-    const totalQuantity = productRows.reduce((sum, row) => sum + (row.quantity || 0), 0)
+    const totalQuantity = productRows.reduce((sum, row) => sum + pendingRowQty(row), 0)
     if (totalQuantity <= 0) {
-      alert('Please add at least one product with quantity > 0')
+      toast.error('Please add at least one product with quantity > 0')
       return
     }
     
@@ -579,16 +658,6 @@ export default function PendingDCPage() {
     
     setSubmitting(true)
     try {
-      // Determine status: if all products are Term 2, keep as scheduled_for_later
-      // Otherwise, use pending_dc
-      let statusToUse = selectedDC.status || 'pending_dc'
-      if (allProductsAreTerm2 && !hasTerm1) {
-        statusToUse = 'scheduled_for_later'
-      } else if (hasTerm1 || productRows.some(row => (row.term || 'Term 1') === 'Both')) {
-        statusToUse = 'pending_dc'
-      }
-      
-      // First save the changes
       await apiRequest(`/dc/${selectedDC._id}`, {
         method: 'PUT',
         body: JSON.stringify({
@@ -599,24 +668,28 @@ export default function PendingDCPage() {
           dcCategory,
           dcNotes,
           smeRemarks,
-          status: statusToUse, // Preserve Term 2 status
           productDetails: productRows.map(row => ({
             product: row.product,
             class: row.class || '1',
             category: selectedDC.dcType === 'shortage' ? 'Shortage' : row.category,
             productCategory: row.productCategory || undefined,
             productName: row.productName,
-            quantity: row.quantity,
-            strength: row.strength || 0,
+            quantity: pendingRowQty(row),
+            strength: pendingRowQty(row),
             level: row.level,
-            specs: row.specs || 'Regular',
+            specs: row.specs || '',
             subject: row.subject || undefined,
             term: row.term || 'Term 1',
+            unit_price: Number(row.price) || Number(row.unit_price) || 0,
+            price: Number(row.price) || Number(row.unit_price) || 0,
+            total:
+              pendingRowQty(row) *
+              (Number(row.price) || Number(row.unit_price) || 0),
           })),
+          requestedQuantity: totalQuantity,
         }),
       })
       
-      // Then submit to warehouse - all DCs go directly to warehouse regardless of terms
       await apiRequest(`/dc/${selectedDC._id}/manager-request`, {
         method: 'POST',
         body: JSON.stringify({
@@ -625,11 +698,11 @@ export default function PendingDCPage() {
         }),
       })
       
-      alert('DC submitted to Warehouse successfully!')
-      load()
+      toast.success('DC submitted to Warehouse')
       setSelectedDC(null)
+      router.push('/dashboard/warehouse/dc-at-warehouse')
     } catch (e: any) {
-      alert(e?.message || 'Failed to submit to Warehouse')
+      toast.error(e?.message || 'Failed to submit to Warehouse')
     } finally {
       setSubmitting(false)
     }
@@ -669,17 +742,11 @@ export default function PendingDCPage() {
 
   if (selectedDC) {
     const isShortageDcDetail = selectedDC.dcType === 'shortage'
-    const defaultNewRowCategory =
-      typeof selectedDC.dcOrderId === 'object' &&
-      selectedDC.dcOrderId !== null &&
-      selectedDC.dcOrderId.school_type === 'Existing'
-        ? 'Old Students'
-        : 'new Students'
 
     // Show detailed form view
     return (
       <div className="space-y-6">
-        <div className="no-print flex items-center justify-between">
+        <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl md:text-3xl font-semibold text-gray-900">Viswam Edutech - Raise DC</h1>
             <div className="flex items-center gap-4 mt-2 text-sm">
@@ -704,30 +771,7 @@ export default function PendingDCPage() {
           </Button>
         </div>
 
-        <Card id="dc-print-root" className="p-6 bg-white">
-          <div className="hidden print:block mb-6 border-b border-gray-300 pb-4">
-            <h1 className="text-xl font-bold text-black">Viswam Edutech — Delivery Challan</h1>
-            <p className="text-sm mt-2 text-black">
-              DC No: <strong>{getDCNumber(selectedDC)}</strong>
-              {' · '}
-              Products: <strong>{getProductsSummary(selectedDC)}</strong>
-              {' · '}
-              Due: <strong>
-                {typeof selectedDC.dcOrderId === 'object' && selectedDC.dcOrderId !== null
-                  ? `${selectedDC.dcOrderId.due_amount || 0} (${selectedDC.dcOrderId.due_percentage || 0}%)`
-                  : '0 (0%)'}
-              </strong>
-            </p>
-            {typeof selectedDC.dcOrderId === 'object' && selectedDC.dcOrderId !== null && (
-              <p className="text-sm mt-1 text-black">
-                School: <strong>{selectedDC.dcOrderId.school_name || selectedDC.customerName || '-'}</strong>
-                {' · '}
-                Code: <strong>{selectedDC.dcOrderId.dc_code || '-'}</strong>
-              </p>
-            )}
-            {dcDate && <p className="text-sm mt-1 text-black">DC Date: {dcDate}</p>}
-            {smeRemarks && <p className="text-sm mt-1 text-black">SME Remarks: {smeRemarks}</p>}
-          </div>
+        <Card className="p-6 bg-white">
           {/* Lead Information and More Information */}
           {selectedDC.dcOrderId && typeof selectedDC.dcOrderId === 'object' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
@@ -896,49 +940,79 @@ export default function PendingDCPage() {
           )}
 
           {/* DC Details Section */}
-          <div className="space-y-4 mb-6 border-t pt-6">
+          <div id="dc-details-section" className="space-y-4 mb-6 border-t pt-6">
             <h3 className="font-semibold text-gray-900 text-lg">DC Details</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <Label>Finance Remarks</Label>
+                <Label>Finance Remarks *</Label>
                 <Input
                   value={financeRemarks}
-                  onChange={(e) => setFinanceRemarks(e.target.value)}
+                  onChange={(e) => {
+                    setFinanceRemarks(e.target.value)
+                    clearDcDetailsError('financeRemarks')
+                  }}
                   placeholder="Finance Remarks"
-                  className="bg-white text-gray-900"
+                  className={`bg-white text-gray-900 ${dcDetailsErrors.financeRemarks ? 'border-red-500' : ''}`}
                 />
+                {dcDetailsErrors.financeRemarks && (
+                  <p className="text-xs text-red-600 mt-1">{dcDetailsErrors.financeRemarks}</p>
+                )}
               </div>
               <div>
-                <Label>SPL Approval</Label>
+                <Label>SPL Approval *</Label>
                 <Input
                   value={splApproval}
-                  onChange={(e) => setSplApproval(e.target.value)}
+                  onChange={(e) => {
+                    setSplApproval(e.target.value)
+                    clearDcDetailsError('splApproval')
+                  }}
                   placeholder="Special Approval"
-                  className="bg-white text-gray-900"
+                  className={`bg-white text-gray-900 ${dcDetailsErrors.splApproval ? 'border-red-500' : ''}`}
                 />
+                {dcDetailsErrors.splApproval && (
+                  <p className="text-xs text-red-600 mt-1">{dcDetailsErrors.splApproval}</p>
+                )}
               </div>
               <div>
-                <Label>DC Date</Label>
+                <Label>DC Date *</Label>
                 <Input
                   type="date"
                   value={dcDate}
-                  onChange={(e) => setDcDate(e.target.value)}
-                  className="bg-white text-gray-900"
+                  onChange={(e) => {
+                    setDcDate(e.target.value)
+                    clearDcDetailsError('dcDate')
+                  }}
+                  className={`bg-white text-gray-900 ${dcDetailsErrors.dcDate ? 'border-red-500' : ''}`}
                 />
+                {dcDetailsErrors.dcDate && (
+                  <p className="text-xs text-red-600 mt-1">{dcDetailsErrors.dcDate}</p>
+                )}
               </div>
               <div>
-                <Label>DC Remarks</Label>
+                <Label>DC Remarks *</Label>
                 <Input
                   value={dcRemarks}
-                  onChange={(e) => setDcRemarks(e.target.value)}
+                  onChange={(e) => {
+                    setDcRemarks(e.target.value)
+                    clearDcDetailsError('dcRemarks')
+                  }}
                   placeholder="DC Remarks"
-                  className="bg-white text-gray-900"
+                  className={`bg-white text-gray-900 ${dcDetailsErrors.dcRemarks ? 'border-red-500' : ''}`}
                 />
+                {dcDetailsErrors.dcRemarks && (
+                  <p className="text-xs text-red-600 mt-1">{dcDetailsErrors.dcRemarks}</p>
+                )}
               </div>
               <div>
-                <Label>DC Category</Label>
-                <Select value={dcCategory} onValueChange={setDcCategory}>
-                  <SelectTrigger className="bg-white text-gray-900">
+                <Label>DC Category *</Label>
+                <Select
+                  value={dcCategory}
+                  onValueChange={(v) => {
+                    setDcCategory(v)
+                    clearDcDetailsError('dcCategory')
+                  }}
+                >
+                  <SelectTrigger className={`bg-white text-gray-900 ${dcDetailsErrors.dcCategory ? 'border-red-500' : ''}`}>
                     <SelectValue placeholder="Select DC Category" />
                   </SelectTrigger>
                   <SelectContent>
@@ -947,98 +1021,32 @@ export default function PendingDCPage() {
                     ))}
                   </SelectContent>
                 </Select>
+                {dcDetailsErrors.dcCategory && (
+                  <p className="text-xs text-red-600 mt-1">{dcDetailsErrors.dcCategory}</p>
+                )}
               </div>
               <div>
-                <Label>DC Notes</Label>
+                <Label>DC Notes *</Label>
                 <Input
                   value={dcNotes}
-                  onChange={(e) => setDcNotes(e.target.value)}
+                  onChange={(e) => {
+                    setDcNotes(e.target.value)
+                    clearDcDetailsError('dcNotes')
+                  }}
                   placeholder="Notes"
-                  className="bg-white text-gray-900"
+                  className={`bg-white text-gray-900 ${dcDetailsErrors.dcNotes ? 'border-red-500' : ''}`}
                 />
+                {dcDetailsErrors.dcNotes && (
+                  <p className="text-xs text-red-600 mt-1">{dcDetailsErrors.dcNotes}</p>
+                )}
               </div>
             </div>
           </div>
 
-          {/* Print-only products table */}
-          <div className="hidden print:block border-t pt-4 mb-4 dc-print-section">
-            <h3 className="font-semibold text-black mb-2">Products</h3>
-            <table className="w-full text-sm border-collapse dc-print-table">
-              <thead>
-                <tr className="border-b border-gray-400">
-                  <th className="py-2 px-2 text-left border border-gray-300">Product</th>
-                  <th className="py-2 px-2 text-left border border-gray-300">Class</th>
-                  <th className="py-2 px-2 text-left border border-gray-300">Product Category</th>
-                  <th className="py-2 px-2 text-left border border-gray-300">Category</th>
-                  <th className="py-2 px-2 text-left border border-gray-300">Specs</th>
-                  <th className="py-2 px-2 text-left border border-gray-300">Subject</th>
-                  <th className="py-2 px-2 text-left border border-gray-300">Strength</th>
-                  <th className="py-2 px-2 text-left border border-gray-300">Level</th>
-                </tr>
-              </thead>
-              <tbody>
-                {productRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="py-4 px-2 text-center border border-gray-300 text-black">
-                      No products
-                    </td>
-                  </tr>
-                ) : (
-                  <>
-                {productRows.map((row) => (
-                  <tr key={`print-${row.id}`} className="border-b border-gray-200">
-                    <td className="py-2 px-2 border border-gray-300">{row.product}</td>
-                    <td className="py-2 px-2 border border-gray-300">{row.class}</td>
-                    <td className="py-2 px-2 border border-gray-300">{row.productCategory || '-'}</td>
-                    <td className="py-2 px-2 border border-gray-300">{row.category || '-'}</td>
-                    <td className="py-2 px-2 border border-gray-300">{row.specs || '-'}</td>
-                    <td className="py-2 px-2 border border-gray-300">{row.subject || '-'}</td>
-                    <td className="py-2 px-2 border border-gray-300">{row.strength ?? 0}</td>
-                    <td className="py-2 px-2 border border-gray-300">{row.level || '-'}</td>
-                  </tr>
-                ))}
-                <tr className="font-semibold bg-gray-50">
-                  <td colSpan={6} className="py-2 px-2 text-right border border-gray-300">Total Strength:</td>
-                  <td className="py-2 px-2 border border-gray-300">
-                    {productRows.reduce((sum, row) => sum + (Number(row.strength) || 0), 0)}
-                  </td>
-                  <td className="py-2 px-2 border border-gray-300" />
-                </tr>
-                  </>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Products Table (screen) */}
-          <div className="border-t pt-6 mb-6 print:hidden">
-            <div className="flex items-center justify-between mb-3">
+          {/* Products Table */}
+          <div className="border-t pt-6 mb-6">
+            <div className="mb-3">
               <Label className="text-lg font-semibold text-gray-900">Products</Label>
-              {!isShortageDcDetail && (
-              <Button
-                type="button"
-                size="sm"
-                className="bg-green-600 hover:bg-green-700 text-white"
-                onClick={() => {
-                  setProductRows([...productRows, {
-                    id: Date.now().toString(),
-                    product: 'ABACUS',
-                    class: '1',
-                    category: defaultNewRowCategory,
-                    specs: 'Regular',
-                    level: getDefaultLevel('ABACUS'),
-                    productName: 'ABACUS',
-                    quantity: 0,
-                    strength: 0,
-                    term: 'Term 1',
-                    price: 0,
-                    total: 0,
-                  }])
-                }}
-              >
-                (+) Add
-              </Button>
-              )}
             </div>
             
             <div className="overflow-x-auto">
@@ -1074,7 +1082,7 @@ export default function PendingDCPage() {
                           }
                           // Default specs
                           const specs = getProductSpecs(v)
-                          updated[idx].specs = specs[0] || 'Regular'
+                          updated[idx].specs = specs[0] || ''
                           // Default subject if product has subjects
                           const subjects = getProductSubjects(v)
                           updated[idx].subject = subjects.length > 0 ? subjects[0] : undefined
@@ -1120,15 +1128,15 @@ export default function PendingDCPage() {
                               <SelectValue placeholder="Prod Category" />
                             </SelectTrigger>
                             <SelectContent>
-                              {(() => {
-                                const opts = getProductCategories(row.product)
-                                const current = (row.productCategory || '').trim()
-                                const selectOpts =
+                            {(() => {
+                              const opts = getProductCategories(row.product)
+                              const current = (row.productCategory || '').trim()
+                              const selectOpts =
                                 current && !opts.includes(current) ? [...opts, current] : opts
-                                return selectOpts.map(cat => (
-                                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                                ))
-                              })()}
+                              return selectOpts.map(cat => (
+                                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                              ))
+                            })()}
                             </SelectContent>
                           </Select>
                         ) : (
@@ -1148,13 +1156,14 @@ export default function PendingDCPage() {
                         )}
                       </td>
                       <td className="py-2 px-3 border-r">
-                        <Select value={row.specs || 'Regular'} onValueChange={(v) => {
+                        {hasProductSpecs(row.product) ? (
+                        <Select value={row.specs || undefined} onValueChange={(v) => {
                           const updated = [...productRows]
                           updated[idx].specs = v
                           setProductRows(updated)
                         }}>
                           <SelectTrigger className="h-8 text-xs bg-white">
-                            <SelectValue />
+                            <SelectValue placeholder="Select Specs" />
                           </SelectTrigger>
                           <SelectContent>
                             {getProductSpecs(row.product).map(spec => (
@@ -1162,6 +1171,9 @@ export default function PendingDCPage() {
                             ))}
                           </SelectContent>
                         </Select>
+                        ) : (
+                          <span className="text-neutral-400 text-xs">-</span>
+                        )}
                       </td>
                       <td className="py-2 px-3 border-r">
                         {getProductSubjects(row.product).length > 0 ? (
@@ -1190,7 +1202,9 @@ export default function PendingDCPage() {
                           value={row.strength || ''}
                           onChange={(e) => {
                             const updated = [...productRows]
-                            updated[idx].strength = Number(e.target.value) || 0
+                            const next = Number(e.target.value) || 0
+                            updated[idx].strength = next
+                            updated[idx].quantity = next
                             setProductRows(updated)
                           }}
                           placeholder="0"
@@ -1246,21 +1260,13 @@ export default function PendingDCPage() {
           </div>
 
           {/* Action Buttons */}
-          <div className="no-print flex justify-between items-center border-t pt-4">
+          <div className="flex justify-between items-center border-t pt-4">
             <div className="flex gap-2">
               <Button 
                 type="button"
                 variant="outline" 
                 className="bg-red-600 text-white hover:bg-red-700"
-                disabled={productRows.length === 0}
-                title={productRows.length === 0 ? 'Add at least one product before printing' : undefined}
-                onClick={() => {
-                  if (productRows.length === 0) {
-                    alert('Add at least one product before printing.')
-                    return
-                  }
-                  window.print()
-                }}
+                onClick={() => window.print()}
               >
                 Print
               </Button>

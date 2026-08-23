@@ -1,45 +1,40 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Card } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import Link from 'next/link'
+import { Card } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { apiRequest } from '@/lib/api'
-import { toast } from 'sonner'
+import { consolidateStockRows, isInventoryListRow, type ConsolidatedStockRow, type StockSourceItem } from '@/lib/warehouseStockList'
 
-type StockItem = {
-  _id: string
-  productName: string
-  category?: string
-  level?: string
-  itemType?: string
-  currentStock?: number
+function stockAddHref(row: ConsolidatedStockRow): string {
+  const q = new URLSearchParams()
+  if (row.productName) q.set('productName', row.productName)
+  if (row.category) q.set('category', row.category)
+  if (row.level) q.set('level', row.level)
+  if (row.specs) q.set('specs', row.specs)
+  if (row.subject) q.set('subject', row.subject)
+  const qs = q.toString()
+  return qs ? `/dashboard/warehouse/stock/add?${qs}` : '/dashboard/warehouse/stock/add'
 }
 
 export default function WarehouseStock() {
-  const [items, setItems] = useState<StockItem[]>([])
+  const [items, setItems] = useState<ConsolidatedStockRow[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-
-  // Add Qty modal state
-  const [open, setOpen] = useState(false)
-  const [selected, setSelected] = useState<StockItem | null>(null)
-  const [qty, setQty] = useState('')
-  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     ;(async () => {
       try {
-        const data = await apiRequest<StockItem[]>('/warehouse')
-        setItems(data)
-      } catch (err: any) {
-        toast.error(err?.message || 'Failed to load stock')
-      } finally {
-        setLoading(false)
+        const inventoryList = await apiRequest<StockSourceItem[]>('/warehouse')
+        const visible = (Array.isArray(inventoryList) ? inventoryList : []).filter(isInventoryListRow)
+        setItems(consolidateStockRows(visible))
+      } catch (_) {
+        setItems([])
       }
+      setLoading(false)
     })()
   }, [])
 
@@ -47,105 +42,76 @@ export default function WarehouseStock() {
     const q = search.trim().toLowerCase()
     if (!q) return items
     return items.filter((i) =>
-      [i.productName, i.category, i.level, i.itemType]
+      [i.productName, i.category, i.level, i.specs, i.subject]
         .filter(Boolean)
-        .some((v) => v!.toString().toLowerCase().includes(q))
+        .some((v) => String(v).toLowerCase().includes(q))
     )
   }, [items, search])
 
-  function openAddQty(item: StockItem) {
-    setSelected(item)
-    setQty('')
-    setOpen(true)
-  }
-
-  async function submitAddQty() {
-    if (!selected) return
-    const amount = parseFloat(qty)
-    if (!amount || amount <= 0) {
-      toast.error('Enter a valid quantity')
-      return
-    }
-    setSaving(true)
-    try {
-      await apiRequest('/warehouse/stock', {
-        method: 'POST',
-        body: JSON.stringify({
-          productId: selected._id,
-          quantity: amount,
-          movementType: 'In',
-          reason: 'Manual add',
-        }),
-      })
-      toast.success('Quantity added')
-      // refresh list
-      const data = await apiRequest<StockItem[]>('/warehouse')
-      setItems(data)
-      setOpen(false)
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to add quantity')
-    } finally {
-      setSaving(false)
-    }
-  }
-
   return (
-    <div className="space-y-6 w-full -mx-6 md:-mx-8">
-      <div className="flex items-center justify-between px-6 md:px-8">
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Inventory Qty List</h1>
           <p className="text-neutral-500">Warehouse • Current stock</p>
         </div>
         <Link href="/dashboard/warehouse/stock/add">
-          <Button>Add Item Qty</Button>
+          <Button className="bg-blue-600 hover:bg-blue-700">Add Item Qty</Button>
         </Link>
       </div>
 
-      <Card className="p-4 mx-6 md:mx-8">
+      <Card className="p-4 md:p-6 rounded-xl border border-neutral-200">
         <div className="flex items-center justify-between gap-3 mb-4">
           <div className="text-sm text-neutral-600">Search</div>
-          <Input className="max-w-xs" placeholder="Search by product, category, level" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Input
+            className="max-w-xs"
+            placeholder="Search by product, category, level, specs, subject"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
 
-        <div className="overflow-x-auto w-full">
-          <Table className="w-full table-fixed">
-            <colgroup>
-              <col className="w-[10%]" />
-              <col className="w-[18%]" />
-              <col className="w-[14%]" />
-              <col className="w-[10%]" />
-              <col className="w-[12%]" />
-              <col className="w-[18%]" />
-              <col className="w-[18%]" />
-            </colgroup>
+        <div className="overflow-x-auto">
+          <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>S.No</TableHead>
+                <TableHead className="w-16">S.No</TableHead>
                 <TableHead>Product</TableHead>
-                <TableHead>Category</TableHead>
+                <TableHead>Product Category</TableHead>
                 <TableHead>Level</TableHead>
-                <TableHead className="whitespace-nowrap">Item Type</TableHead>
-                <TableHead className="text-right whitespace-nowrap">Available Qty</TableHead>
+                <TableHead>Specs</TableHead>
+                <TableHead>Subject</TableHead>
+                <TableHead className="text-right">Available Qty</TableHead>
                 <TableHead className="text-right">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
+              {loading && (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center text-neutral-500">Loading...</TableCell>
+                </TableRow>
+              )}
               {!loading && filtered.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-neutral-500">No items found.</TableCell>
+                  <TableCell colSpan={8} className="text-center text-neutral-500">No items found.</TableCell>
                 </TableRow>
               )}
               {filtered.map((row, idx) => (
                 <TableRow key={row._id}>
                   <TableCell>{idx + 1}</TableCell>
-                  <TableCell className="text-blue-600 hover:underline cursor-default truncate">{row.productName}</TableCell>
-                  <TableCell className="truncate">{row.category || '-'}</TableCell>
+                  <TableCell className="font-medium text-neutral-900">{row.productName}</TableCell>
+                  <TableCell>{row.category || '-'}</TableCell>
                   <TableCell>{row.level || '-'}</TableCell>
-                  <TableCell className="whitespace-nowrap">{row.itemType || '-'}</TableCell>
-                  <TableCell className="text-right font-medium whitespace-nowrap">{row.currentStock ?? 0}</TableCell>
+                  <TableCell>{row.specs || '-'}</TableCell>
+                  <TableCell>{row.subject || '-'}</TableCell>
+                  <TableCell className="text-right font-medium">
+                    {row.currentStock !== undefined && row.currentStock !== null ? row.currentStock : 0}
+                  </TableCell>
                   <TableCell className="text-right">
-                    <Link href={`/dashboard/warehouse/stock/add?productId=${row._id}`}>
-                      <Button variant="destructive" size="sm">Add Item Qty</Button>
+                    <Link href={stockAddHref(row)}>
+                      <Button variant="destructive" size="sm" className="bg-red-600 hover:bg-red-700">
+                        Add Item Qty
+                      </Button>
                     </Link>
                   </TableCell>
                 </TableRow>
@@ -157,4 +123,3 @@ export default function WarehouseStock() {
     </div>
   )
 }
-

@@ -12,22 +12,21 @@ type InventoryRow = {
   product: string
   category: string
   level: string
-  itemType: string
 }
 
 const DEFAULT_INVENTORY_DATA: InventoryRow[] = [
-  { id: '1', product: 'Abacus', category: 'STAR JUNIOR', level: 'LEVEL-1', itemType: 'Books' },
-  { id: '2', product: 'Abacus', category: 'STAR JUNIOR', level: 'LEVEL-2', itemType: 'Books' },
-  { id: '3', product: 'Abacus', category: 'STAR JUNIOR', level: 'LEVEL-3', itemType: 'Books' },
-  { id: '4', product: 'Abacus', category: 'STAR JUNIOR', level: 'LEVEL-4', itemType: 'Books' },
-  { id: '5', product: 'Abacus', category: 'JUNIOR', level: 'LEVEL-1', itemType: 'Books' },
-  { id: '6', product: 'Abacus', category: 'JUNIOR', level: 'LEVEL-2', itemType: 'Books' },
-  { id: '7', product: 'Abacus', category: 'JUNIOR', level: 'LEVEL-3', itemType: 'Books' },
-  { id: '8', product: 'Abacus', category: 'JUNIOR', level: 'LEVEL-4', itemType: 'Books' },
-  { id: '9', product: 'Abacus', category: 'SENIOR', level: 'LEVEL-1', itemType: 'Books' },
-  { id: '10', product: 'Abacus', category: 'SENIOR', level: 'LEVEL-2', itemType: 'Books' },
-  { id: '11', product: 'Abacus', category: 'SENIOR', level: 'LEVEL-3', itemType: 'Books' },
-  { id: '12', product: 'Abacus', category: 'SENIOR', level: 'LEVEL-4', itemType: 'Books' },
+  { id: '1', product: 'Abacus', category: 'STAR JUNIOR', level: 'LEVEL-1' },
+  { id: '2', product: 'Abacus', category: 'STAR JUNIOR', level: 'LEVEL-2' },
+  { id: '3', product: 'Abacus', category: 'STAR JUNIOR', level: 'LEVEL-3' },
+  { id: '4', product: 'Abacus', category: 'STAR JUNIOR', level: 'LEVEL-4' },
+  { id: '5', product: 'Abacus', category: 'JUNIOR', level: 'LEVEL-1' },
+  { id: '6', product: 'Abacus', category: 'JUNIOR', level: 'LEVEL-2' },
+  { id: '7', product: 'Abacus', category: 'JUNIOR', level: 'LEVEL-3' },
+  { id: '8', product: 'Abacus', category: 'JUNIOR', level: 'LEVEL-4' },
+  { id: '9', product: 'Abacus', category: 'SENIOR', level: 'LEVEL-1' },
+  { id: '10', product: 'Abacus', category: 'SENIOR', level: 'LEVEL-2' },
+  { id: '11', product: 'Abacus', category: 'SENIOR', level: 'LEVEL-3' },
+  { id: '12', product: 'Abacus', category: 'SENIOR', level: 'LEVEL-4' },
 ]
 
 export default function WarehousePage() {
@@ -90,7 +89,6 @@ export default function WarehousePage() {
                 <TableHead>PRODUCT</TableHead>
                 <TableHead>CATEGORY</TableHead>
                 <TableHead>LEVEL</TableHead>
-                <TableHead>ITEM TYPE</TableHead>
                 <TableHead className="w-16"></TableHead>
               </TableRow>
             </TableHeader>
@@ -101,7 +99,6 @@ export default function WarehousePage() {
                   <TableCell className="text-neutral-900">{item.product}</TableCell>
                   <TableCell className="text-neutral-900">{item.category}</TableCell>
                   <TableCell className="text-neutral-900">{item.level}</TableCell>
-                  <TableCell className="text-neutral-900">{item.itemType}</TableCell>
                   <TableCell className="text-right">
                     {/* Placeholder for edit icon */}
                     <span className="text-amber-500">✎</span>

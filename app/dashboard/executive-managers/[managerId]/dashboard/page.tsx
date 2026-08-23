@@ -92,8 +92,10 @@ export default function ExecutiveManagerDashboardPage() {
       router.push('/auth/login')
       return
     }
-    loadDashboard()
-  }, [fromDate, toDate])
+    if (managerId) {
+      loadDashboard()
+    }
+  }, [managerId, fromDate, toDate])
 
   const loadDashboard = async () => {
     setLoading(true)
@@ -198,10 +200,12 @@ export default function ExecutiveManagerDashboardPage() {
     return Math.round(total / dashboardData.employeeDetails.length)
   }, [dashboardData])
 
-  // Lead conversion rate
+  // Lead conversion rate = (Closed + Saved) / total leads
   const leadConversionRate = useMemo(() => {
     if (!dashboardData?.totalLeads || dashboardData.totalLeads === 0) return 0
-    const closedLeads = dashboardData.leadsByStatus?.['Closed'] || dashboardData.leadsByStatus?.['Saved'] || 0
+    const closedLeads =
+      (dashboardData.leadsByStatus?.['Closed'] || 0) +
+      (dashboardData.leadsByStatus?.['Saved'] || 0)
     return Math.round((closedLeads / dashboardData.totalLeads) * 100)
   }, [dashboardData])
 
@@ -328,10 +332,10 @@ export default function ExecutiveManagerDashboardPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-4">
-          <Link href="/dashboard/employees/active">
+          <Link href="/dashboard/executive-managers">
             <Button variant="outline" size="sm">
               <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Employees
+              Back to Managers
             </Button>
           </Link>
           <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Executive Manager Dashboard</h1>
@@ -377,6 +381,7 @@ export default function ExecutiveManagerDashboardPage() {
               value={fromDate}
               onChange={(e) => setFromDate(e.target.value)}
               className="bg-white"
+              allowPastDates
             />
           </div>
           <div>
@@ -386,10 +391,21 @@ export default function ExecutiveManagerDashboardPage() {
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}
               className="bg-white"
+              allowPastDates
             />
           </div>
           <div className="flex items-end">
-            <Button variant="outline" onClick={() => { setFromDate(''); setToDate(''); }}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setFromDate('')
+                setToDate('')
+                // If dates were already empty, still force a full reload
+                if (!fromDate && !toDate) {
+                  loadDashboard()
+                }
+              }}
+            >
               Clear Filters
             </Button>
           </div>
@@ -1010,7 +1026,7 @@ export default function ExecutiveManagerDashboardPage() {
                     />
                   </div>
                   <div className="text-xs text-neutral-500 mt-1">
-                    {dashboardData.leadsByStatus?.['Closed'] || dashboardData.leadsByStatus?.['Saved'] || 0} closed out of {dashboardData.totalLeads}
+                    {(dashboardData.leadsByStatus?.['Closed'] || 0) + (dashboardData.leadsByStatus?.['Saved'] || 0)} closed out of {dashboardData.totalLeads}
                   </div>
                 </div>
               </div>

@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { apiRequest } from '@/lib/api'
-import { getCurrentUser } from '@/lib/auth'
+import { canAccessPath } from '@/lib/access'
+import { usePermissions } from '@/components/permissions/PermissionsProvider'
 import { toast } from 'sonner'
 import { MapPin, Building2 } from 'lucide-react'
 import {
@@ -37,9 +38,11 @@ type Employee = {
   role: string
 }
 
+const ASSIGN_AREAS_PATH = '/dashboard/executives/assign-areas'
+
 export default function AssignAreasPage() {
   const router = useRouter()
-  const currentUser = getCurrentUser()
+  const { user, permissionsReady, isSuperAdmin } = usePermissions()
   const [employees, setEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -48,26 +51,14 @@ export default function AssignAreasPage() {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
   const [area, setArea] = useState('')
   const [assigning, setAssigning] = useState(false)
-
-  useEffect(() => {
-    if (!currentUser) {
-      router.push('/auth/login')
-      return
-    }
-    if (currentUser.role !== 'Executive') {
-      toast.error('Access denied. Executive role required.')
-      router.push('/dashboard')
-      return
-    }
-    loadEmployees()
-  }, [])
+  const [accessChecked, setAccessChecked] = useState(false)
 
   const loadEmployees = async () => {
     setLoading(true)
     try {
-      const data = await apiRequest<Employee[]>('/employees?isActive=true')
-      // Filter to show only employees with assigned cities
-      const employeesWithCities = (data || []).filter(emp => emp.assignedCity)
+      const response = await apiRequest<any>('/employees?isActive=true')
+      const list = Array.isArray(response) ? response : (response?.data || [])
+      const employeesWithCities = list.filter((emp: Employee) => emp.assignedCity)
       setEmployees(employeesWithCities)
     } catch (err: any) {
       toast.error('Failed to load employees')
@@ -76,6 +67,32 @@ export default function AssignAreasPage() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (!permissionsReady) return
+
+    if (!user) {
+      router.push('/auth/login')
+      return
+    }
+
+    const role = String(user.role || '').trim()
+    // Align with RouteGuard: Super Admin, Executive, or anyone with assign_areas page permission
+    const canAccess =
+      isSuperAdmin ||
+      role === 'Executive' ||
+      role === 'Super Admin' ||
+      canAccessPath(user, ASSIGN_AREAS_PATH)
+
+    if (!canAccess) {
+      toast.error('Access denied. You do not have permission to Assign Areas.')
+      router.push('/dashboard')
+      return
+    }
+
+    setAccessChecked(true)
+    loadEmployees()
+  }, [permissionsReady, user, isSuperAdmin, router])
 
   const openAssignAreaDialog = (employee: Employee) => {
     setSelectedEmployee(employee)
@@ -113,6 +130,14 @@ export default function AssignAreasPage() {
     const matchesCity = !cityFilter || emp.assignedCity === cityFilter
     return matchesSearch && matchesCity
   })
+
+  if (!permissionsReady || !accessChecked) {
+    return (
+      <div className="flex items-center justify-center min-h-[200px] text-neutral-500 text-sm">
+        Loading…
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -227,6 +252,3 @@ export default function AssignAreasPage() {
     </div>
   )
 }
-
-
-
