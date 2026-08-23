@@ -53,10 +53,6 @@ export const RBAC_NAV_MODULES: RbacNavModule[] = [
       { label: 'Saved DC', href: '/dashboard/dc/saved' },
       { label: 'Pending DC', href: '/dashboard/dc/pending' },
       { label: 'EMP DC', href: '/dashboard/dc/emp' },
-      { label: 'Term-Wise DC', href: '/dashboard/dc/term-wise' },
-      { label: 'My Clients', href: '/dashboard/dc/client-dc' },
-      { label: 'Term-Wise My Clients', href: '/dashboard/dc/client-dc/term-wise' },
-      { label: 'PO Edit Request', href: '/dashboard/clients/closed-sales' },
     ],
   },
   {
