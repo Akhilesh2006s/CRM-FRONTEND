@@ -260,17 +260,17 @@ const getMyTrainings = async (req, res) => {
   }
 };
 
-// @desc    Get completed trainings for logged-in trainer
+// @desc    Get completed trainings for logged-in trainer (trainers: own only; admins/coordinators: all)
 // @route   GET /api/training/trainer/completed
-// @access  Private (Trainer only)
+// @access  Private
 const getMyCompletedTrainings = async (req, res) => {
   try {
-    const trainerId = req.user._id;
-    
-    const trainings = await Training.find({
-      trainerId,
-      status: 'Completed',
-    })
+    const filter = { status: 'Completed' };
+    if (req.user?.role === 'Trainer') {
+      filter.trainerId = req.user._id;
+    }
+
+    const trainings = await Training.find(filter)
       .populate('trainerId', 'name mobile')
       .populate('employeeId', 'name email')
       .populate('createdBy', 'name email')

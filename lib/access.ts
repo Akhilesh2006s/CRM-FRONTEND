@@ -77,9 +77,11 @@ export function canAccessPath(
     return canAccessExecutiveManagerOwnRoute(user, pathname)
   }
 
-  // Role-based workspace for Executive Managers (Executives list, pending expenses, PO edits)
-  if (canAccessExecutiveManagerWorkspace(user, pathname)) {
-    return true
+  const isEmWorkspace = EXECUTIVE_MANAGER_WORKSPACE_ROUTES.some(
+    (route) => pathname === route || pathname.startsWith(route + '/')
+  )
+  if (isEmWorkspace) {
+    return canAccessExecutiveManagerWorkspace(user, pathname)
   }
 
   const key = permissionForPath(pathname)

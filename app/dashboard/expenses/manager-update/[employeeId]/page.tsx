@@ -289,6 +289,10 @@ export default function ManagerExpenseUpdatePage() {
 
   return (
     <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Manager Expense Update</h1>
+      </div>
+
       {/* Date Filters */}
       <Card className="p-4 shadow-sm">
         <div className="flex flex-wrap items-center gap-4">

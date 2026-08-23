@@ -663,22 +663,6 @@ export default function DashboardScreen({ navigation }: any) {
         <TouchableOpacity
           style={styles.card}
           activeOpacity={0.8}
-          onPress={() => navigation.navigate('TrainingTrainerMy')}
-        >
-          <LinearGradient colors={['#8B5CF6', '#7C3AED']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.cardGradient}>
-            <View style={styles.cardContent}>
-              <View style={styles.cardIconContainer}><Text style={styles.cardIcon}>📅</Text></View>
-              <View style={styles.cardTextContainer}>
-                <Text style={styles.cardTitle}>Active / Upcoming</Text>
-                <Text style={styles.cardSubtitle}>My trainings and services</Text>
-              </View>
-              <View style={styles.cardArrowContainer}><Text style={styles.cardArrow}>›</Text></View>
-            </View>
-          </LinearGradient>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.card}
-          activeOpacity={0.8}
           onPress={() => navigation.navigate('TrainingTrainerCompleted')}
         >
           <View style={[styles.cardContent, styles.cardContentWhite]}>
@@ -2144,7 +2128,7 @@ export default function DashboardScreen({ navigation }: any) {
               <Text style={styles.cardIconWhite}>💰</Text>
             </View>
             <View style={styles.cardTextContainer}>
-              <Text style={styles.cardTitleWhite}>Finance Pending</Text>
+              <Text style={styles.cardTitleWhite}>Finance Approved</Text>
               <Text style={styles.cardSubtitleWhite}>Finance pending expenses</Text>
             </View>
             <View style={styles.cardArrowContainer}>

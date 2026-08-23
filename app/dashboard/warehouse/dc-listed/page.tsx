@@ -5,10 +5,42 @@ import { Card } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { apiRequest } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
 import { sortDcsNewestFirst } from '@/lib/dcListSort'
+import {
+  mapInventoryIdentityOntoDcRow,
+  requiredQtyFromDcRow,
+} from '@/lib/warehouseInventoryMatch'
+import { consolidateStockRows } from '@/lib/warehouseStockList'
+
+type WarehouseItem = {
+  _id: string
+  productName: string
+  category?: string
+  level?: string
+  specs?: string
+  subject?: string
+  currentStock: number
+}
+
+type ProductDetail = {
+  product?: string
+  productName?: string
+  class?: string
+  category?: string
+  productCategory?: string
+  specs?: string
+  subject?: string
+  level?: string
+  term?: string
+  quantity?: number
+  strength?: number
+  availableQuantity?: number
+  deliverableQuantity?: number
+}
 
 type DC = {
   _id: string
@@ -34,6 +66,7 @@ type DC = {
   requestedQuantity?: number
   availableQuantity?: number
   deliverableQuantity?: number
+  productDetails?: ProductDetail[]
   managerId?: {
     _id: string
     name?: string
@@ -44,6 +77,83 @@ type DC = {
   }
   listedAt?: string
   createdAt?: string
+}
+
+function toStockRow(p: Record<string, any>) {
+  return {
+    product: p.product || p.productName || '',
+    productName: p.productName || p.product || '',
+    class: p.class,
+    category: p.category,
+    productCategory: p.productCategory,
+    specs: p.specs,
+    subject: p.subject,
+    level: p.level,
+    term: p.term,
+    quantity: p.quantity,
+    strength: p.strength,
+    availableQuantity: p.availableQuantity,
+  }
+}
+
+async function loadStockRecords(): Promise<WarehouseItem[]> {
+  const stockList = await apiRequest<WarehouseItem[]>('/warehouse/stock-list').catch(() => [])
+  if (Array.isArray(stockList) && stockList.length > 0) {
+    return stockList.map((row) => ({
+      ...row,
+      currentStock: Number(row.currentStock) || 0,
+    }))
+  }
+  const inventory = await apiRequest<WarehouseItem[]>('/warehouse').catch(() => [])
+  return consolidateStockRows(Array.isArray(inventory) ? inventory : []).map((row) => ({
+    _id: row._id,
+    productName: row.productName,
+    category: row.category,
+    level: row.level,
+    specs: row.specs,
+    subject: row.subject,
+    currentStock: row.currentStock,
+  }))
+}
+
+function computeDcQuantities(dc: DC, inventory: WarehouseItem[]) {
+  const rows =
+    Array.isArray(dc.productDetails) && dc.productDetails.length > 0
+      ? dc.productDetails
+      : [
+          {
+            product: dc.product,
+            productName: dc.product,
+            quantity: dc.requestedQuantity || 0,
+            deliverableQuantity: dc.deliverableQuantity,
+            availableQuantity: dc.availableQuantity,
+          },
+        ]
+
+  let totalAvailable = 0
+  let totalDeliverable = 0
+
+  for (const p of rows) {
+    const stockRow = toStockRow(p)
+    const mapped = mapInventoryIdentityOntoDcRow(stockRow, inventory)
+    const availableQty = Number(p.availableQuantity ?? mapped.availableQuantity ?? 0)
+    const requestedQty = requiredQtyFromDcRow(stockRow)
+    const deliverableQty =
+      p.deliverableQuantity !== undefined && p.deliverableQuantity !== null
+        ? Number(p.deliverableQuantity)
+        : requestedQty
+    totalAvailable += availableQty
+    totalDeliverable += deliverableQty
+  }
+
+  return { totalAvailable, totalDeliverable }
+}
+
+function isListedDc(dc: DC, inventory: WarehouseItem[]) {
+  const { totalAvailable, totalDeliverable } = computeDcQuantities(dc, inventory)
+  const hasListedAt = dc.listedAt !== undefined && dc.listedAt !== null
+  // Partial delivery (stock left over) or shortage (cannot fulfill full deliverable qty)
+  return hasListedAt || totalAvailable > totalDeliverable || totalAvailable < totalDeliverable
 }
 
 export default function DCListedPage() {
@@ -68,42 +178,47 @@ export default function DCListedPage() {
   async function load() {
     setLoading(true)
     try {
-      // Get all DCs with warehouse_processing status
-      const allDCs = await apiRequest<DC[]>(`/dc?status=warehouse_processing`)
-      
-      console.log('All warehouse processing DCs:', allDCs.length)
-      
-      // Filter DCs where availableQuantity > deliverableQuantity and have listedAt timestamp
-      const listedDCs = allDCs.filter(dc => {
-        const availQty = Number(dc.availableQuantity || 0)
-        const delivQty = Number(dc.deliverableQuantity || 0)
-        const hasListedAt = dc.listedAt !== undefined && dc.listedAt !== null
-        const hasValidQuantities = availQty > delivQty
-        
-        console.log(`DC ${dc._id}: avail=${availQty}, deliv=${delivQty}, listedAt=${hasListedAt}, valid=${hasValidQuantities}`)
-        
-        // Include if either has listedAt OR has valid quantities (in case listedAt wasn't set but quantities are valid)
-        return (hasListedAt || hasValidQuantities) && hasValidQuantities
-      })
-      
-      console.log('Filtered listed DCs:', listedDCs.length)
+      const [pendingDCs, inventory] = await Promise.all([
+        apiRequest<DC[]>('/dc/pending-warehouse'),
+        loadStockRecords(),
+      ])
 
-      // Apply additional filters
+      const listedDCs = (Array.isArray(pendingDCs) ? pendingDCs : [])
+        .filter((dc) => isListedDc(dc, inventory))
+        .map((dc) => {
+          const { totalAvailable, totalDeliverable } = computeDcQuantities(dc, inventory)
+          return {
+            ...dc,
+            availableQuantity: totalAvailable,
+            deliverableQuantity: totalDeliverable,
+          }
+        })
+
       let filtered = listedDCs
       if (filters.zone) {
-        filtered = filtered.filter(dc => 
+        filtered = filtered.filter(dc =>
           (dc.dcOrderId?.zone || '').toLowerCase().includes(filters.zone.toLowerCase())
         )
       }
       if (filters.schoolName) {
-        filtered = filtered.filter(dc => 
+        filtered = filtered.filter(dc =>
           (dc.dcOrderId?.school_name || dc.customerName || '').toLowerCase().includes(filters.schoolName.toLowerCase())
         )
       }
       if (filters.schoolCode) {
-        filtered = filtered.filter(dc => 
+        filtered = filtered.filter(dc =>
           (dc.dcOrderId?.dc_code || '').toLowerCase().includes(filters.schoolCode.toLowerCase())
         )
+      }
+      if (filters.fromDate || filters.toDate) {
+        filtered = filtered.filter((dc) => {
+          const dateValue = dc.listedAt || dc.createdAt
+          if (!dateValue) return false
+          const date = new Date(dateValue)
+          if (filters.fromDate && date < new Date(filters.fromDate)) return false
+          if (filters.toDate && date > new Date(`${filters.toDate}T23:59:59.999`)) return false
+          return true
+        })
       }
 
       setRows(sortDcsNewestFirst(filtered))
@@ -188,7 +303,9 @@ export default function DCListedPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">DC Listed</h1>
-          <p className="text-sm text-neutral-600 mt-1">DCs with available quantity greater than deliverable quantity</p>
+          <p className="text-sm text-neutral-600 mt-1">
+            DCs at warehouse where available stock differs from deliverable quantity
+          </p>
         </div>
       </div>
 
@@ -210,18 +327,26 @@ export default function DCListedPage() {
             value={filters.schoolCode}
             onChange={(e) => setFilters({ ...filters, schoolCode: e.target.value })}
           />
-          <Input
-            type="date"
-            placeholder="From Date"
-            value={filters.fromDate}
-            onChange={(e) => setFilters({ ...filters, fromDate: e.target.value })}
-          />
-          <Input
-            type="date"
-            placeholder="To Date"
-            value={filters.toDate}
-            onChange={(e) => setFilters({ ...filters, toDate: e.target.value })}
-          />
+          <div>
+            <Label htmlFor="dc-listed-start-date">Start Date</Label>
+            <Input
+              type="date"
+              id="dc-listed-start-date"
+              value={filters.fromDate}
+              onChange={(e) => setFilters({ ...filters, fromDate: e.target.value })}
+              className="mt-1.5"
+            />
+          </div>
+          <div>
+            <Label htmlFor="dc-listed-end-date">End Date</Label>
+            <Input
+              type="date"
+              id="dc-listed-end-date"
+              value={filters.toDate}
+              onChange={(e) => setFilters({ ...filters, toDate: e.target.value })}
+              className="mt-1.5"
+            />
+          </div>
         </div>
       </Card>
 

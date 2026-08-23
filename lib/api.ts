@@ -213,7 +213,7 @@ export async function apiRequest<T>(
   } catch (error: any) {
     if (error instanceof TypeError && error.message.includes("fetch")) {
       throw new Error(
-        `Cannot connect to backend (${url}). Start API: cd navbar-landing/backend && npm run dev — then restart Next (rm -rf .next && npm run dev).`
+        `Cannot connect to backend (${url}). Start API: cd backend && set PORT=5001 && npm start — then ensure Next is running on port 3001.`
       );
     }
     throw error;

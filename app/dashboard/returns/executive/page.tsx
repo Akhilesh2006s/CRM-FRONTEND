@@ -11,6 +11,11 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useProducts } from '@/hooks/useProducts'
+import {
+  findMatchingOrderProduct,
+  pickRicherProductRows,
+  resolvePersistedUnitPrice,
+} from '@/lib/clientDcProductRows'
 import { toast } from 'sonner'
 import { PlusCircle, X, Upload, Eye } from 'lucide-react'
 
@@ -87,10 +92,77 @@ function mergeDcOrderDetail(base: DcOrder, full: DcOrder): DcOrder {
     cluster_code: full.cluster_code || base.cluster_code,
     transport_name: full.transport_name || base.transport_name,
     year: (full as DcOrder & { year?: string }).year,
-    products: mapDcOrderProducts(full.products as DcOrder['products']).length
-      ? mapDcOrderProducts(full.products as DcOrder['products'])
-      : base.products,
+    productDetails: base.productDetails,
+    products: (() => {
+      const merged = mergeDcProductLines(base.productDetails, full.products as DcOrder['products'])
+      return merged.length ? merged : base.products
+    })(),
   }
+}
+
+type DcOrderProductSource = {
+  product_name?: string
+  product?: string
+  productName?: string
+  name?: string
+  class?: string
+  level?: string
+  subject?: string
+  quantity?: number
+  requestedQuantity?: number
+  strength?: number
+  unit_price?: number
+  price?: number
+  unitPrice?: number
+}
+
+/** Per-line prices from DC productDetails + matched DcOrder row (no cross-product fallback). */
+function mergeDcProductLines(
+  productDetails: DcOrderProductSource[] | undefined,
+  orderProducts: DcOrderProductSource[] | undefined
+): DcOrder['products'] {
+  const details = Array.isArray(productDetails) ? productDetails : []
+  const orders = Array.isArray(orderProducts) ? orderProducts : []
+
+  const toRow = (raw: DcOrderProductSource, matchedOrder: DcOrderProductSource | null) => ({
+    product_name: (
+      raw.product_name ||
+      raw.product ||
+      raw.productName ||
+      raw.name ||
+      matchedOrder?.product_name ||
+      matchedOrder?.product ||
+      ''
+    ).trim(),
+    class: String(raw.class ?? matchedOrder?.class ?? '').trim(),
+    level: String(raw.level ?? matchedOrder?.level ?? '').trim(),
+    subject: String(raw.subject ?? matchedOrder?.subject ?? '').trim(),
+    quantity:
+      Number(
+        raw.quantity ??
+          raw.requestedQuantity ??
+          raw.strength ??
+          matchedOrder?.quantity ??
+          matchedOrder?.strength
+      ) || 0,
+    unit_price: resolvePersistedUnitPrice(
+      raw.price,
+      raw.unit_price,
+      raw.unitPrice,
+      matchedOrder?.unit_price,
+      matchedOrder?.price
+    ),
+  })
+
+  if (details.length > 0) {
+    const used = new Set<number>()
+    return details.map((p, idx) => {
+      const order = findMatchingOrderProduct(orders, p, idx, used)
+      return toRow(p, order)
+    })
+  }
+
+  return orders.map((p) => toRow(p, p))
 }
 
 type DcOrder = {
@@ -109,6 +181,7 @@ type DcOrder = {
   cluster_code?: string
   transport_name?: string
   year?: string
+  productDetails?: DcOrderProductSource[]
   products?: Array<{
     product_name: string
     class?: string
@@ -141,54 +214,14 @@ function selectValueOrUndefined(value: string | undefined | null): string | unde
 
 const SELECT_IN_DIALOG_CLASS = 'z-[200]'
 
-function mapDcOrderProducts(
-  products: Array<{
-    product_name?: string
-    name?: string
-    class?: string
-    level?: string
-    subject?: string
-    quantity?: number
-    unit_price?: number
-  }> | undefined
-): DcOrder['products'] {
-  if (!Array.isArray(products)) return []
-  return products.map((p) => ({
-    product_name: (p.product_name || p.name || '').trim(),
-    class: String(p.class || '').trim(),
-    level: String(p.level || '').trim(),
-    subject: String(p.subject || '').trim(),
-    quantity: Number(p.quantity) || 0,
-    unit_price: p.unit_price,
-  }))
-}
-
 function productsFromEmployeeDc(dc: {
-  productDetails?: Array<{
-    product?: string
-    product_name?: string
-    class?: string
-    level?: string
-    subject?: string
-    requestedQuantity?: number
-    quantity?: number
-    price?: number
-  }>
+  productDetails?: DcOrderProductSource[]
   dcOrderId?: { products?: DcOrder['products']; school_name?: string; dc_code?: string } | string
 }): DcOrder['products'] {
   const order =
     dc.dcOrderId && typeof dc.dcOrderId === 'object' ? dc.dcOrderId : null
-  const fromOrder = mapDcOrderProducts(order?.products as DcOrder['products'])
-  if (fromOrder.length > 0) return fromOrder
   const details = Array.isArray(dc.productDetails) ? dc.productDetails : []
-  return details.map((p) => ({
-    product_name: (p.product || p.product_name || '').trim(),
-    class: String(p.class || '').trim(),
-    level: String(p.level || '').trim(),
-    subject: String(p.subject || '').trim(),
-    quantity: Number(p.requestedQuantity ?? p.quantity) || 0,
-    unit_price: Number(p.price) || 0,
-  }))
+  return mergeDcProductLines(details, order?.products as DcOrderProductSource[] | undefined)
 }
 
 export default function ExecutiveStockReturnsPage() {
@@ -320,6 +353,15 @@ export default function ExecutiveStockReturnsPage() {
         if (!orderId) continue
         const populated = typeof orderRef === 'object' ? orderRef : null
         const existing = byId.get(orderId)
+        const productDetails = pickRicherProductRows(
+          Array.isArray(dc.productDetails) ? dc.productDetails : [],
+          existing?.productDetails || []
+        )
+        const orderProducts =
+          (populated?.products as DcOrderProductSource[] | undefined) ||
+          (existing?.products as DcOrderProductSource[] | undefined) ||
+          []
+        const products = mergeDcProductLines(productDetails, orderProducts)
         byId.set(orderId, {
           _id: orderId,
           dc_code: populated?.dc_code || existing?.dc_code || dc.saleId || '',
@@ -336,9 +378,8 @@ export default function ExecutiveStockReturnsPage() {
           area: populated?.area || existing?.area,
           cluster_code: populated?.cluster_code || existing?.cluster_code,
           transport_name: populated?.transport_name || existing?.transport_name,
-          products: productsFromEmployeeDc(dc).length
-            ? productsFromEmployeeDc(dc)
-            : existing?.products || [],
+          productDetails,
+          products: products.length ? products : existing?.products || [],
           status: 'completed',
         })
       }
@@ -415,7 +456,7 @@ export default function ExecutiveStockReturnsPage() {
           subject: p.subject || '',
           soldQty: p.quantity || 0,
           returnQty: 0,
-          unitPrice: Number(p.unit_price) || 0,
+          unitPrice: resolvePersistedUnitPrice(p.unit_price),
           reason: '',
           remarks: '',
         }))
@@ -464,20 +505,33 @@ export default function ExecutiveStockReturnsPage() {
   const fillLineFromDcProduct = (rowId: string, productName: string) => {
     if (!dcOrderId || !productName.trim()) return
     const order = dcOrders.find((o) => o._id === dcOrderId)
-    const orderProduct = order?.products?.find(
-      (p) => (p.product_name || '').trim() === productName.trim()
+    const row = productRows.find((r) => r.id === rowId)
+    if (!order || !row) return
+    const orderProducts = order.products || []
+    const used = new Set<number>()
+    const orderProduct = findMatchingOrderProduct(
+      orderProducts,
+      {
+        product_name: productName.trim(),
+        product: productName.trim(),
+        class: row.class,
+        level: row.level,
+        subject: row.subject,
+      },
+      0,
+      used
     )
     if (!orderProduct) return
     setProductRows((rows) =>
-      rows.map((row) => {
-        if (row.id !== rowId) return row
+      rows.map((r) => {
+        if (r.id !== rowId) return r
         const soldQty = orderProduct.quantity || 0
-        const returnQty = row.returnQty > soldQty ? soldQty : row.returnQty
+        const returnQty = r.returnQty > soldQty ? soldQty : r.returnQty
         return {
-          ...row,
+          ...r,
           soldQty,
           returnQty,
-          unitPrice: Number(orderProduct.unit_price) || 0,
+          unitPrice: resolvePersistedUnitPrice(orderProduct.unit_price),
           class: String(orderProduct.class || ''),
           level: String(orderProduct.level || ''),
           subject: String(orderProduct.subject || ''),

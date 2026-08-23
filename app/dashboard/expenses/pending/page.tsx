@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { apiRequest } from '@/lib/api'
+import { getCurrentUser } from '@/lib/auth'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -102,16 +103,25 @@ export default function ManagerPendingExpensesPage() {
     }
   }
 
-  const handleApprove = async (expenseId: string) => {
+  const handleApprove = async (expenseId: string, currentStatus: string) => {
     setApproving(expenseId)
     try {
+      const user = getCurrentUser()
+      const oversightRoles = new Set(['Admin', 'Super Admin', 'Coordinator', 'Finance Manager'])
+      const nextStatus =
+        currentStatus === 'Pending' && oversightRoles.has(user?.role || '')
+          ? 'Executive Manager Approved'
+          : 'Approved'
+
       await apiRequest(`/expenses/${expenseId}/approve`, {
         method: 'PUT',
-        body: JSON.stringify({
-          status: 'Approved',
-        }),
+        body: JSON.stringify({ status: nextStatus }),
       })
-      toast.success('Expense approved successfully')
+      toast.success(
+        nextStatus === 'Executive Manager Approved'
+          ? 'Expense forwarded for manager approval'
+          : 'Expense approved successfully'
+      )
       loadExpenses()
     } catch (error: any) {
       toast.error(error?.message || 'Failed to approve expense')
@@ -172,6 +182,10 @@ export default function ManagerPendingExpensesPage() {
 
   return (
     <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Pending Expenses List</h1>
+      </div>
+
       {/* Filter Section */}
       <Card className="p-4 shadow-sm">
         <div className="flex flex-wrap items-center gap-4">
@@ -243,7 +257,10 @@ export default function ManagerPendingExpensesPage() {
               ) : expenses.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center py-8 text-neutral-500">
-                    No pending expenses found
+                    No pending expenses found.
+                    <span className="block text-sm text-neutral-400 mt-1">
+                      New submissions appear here while awaiting Executive Manager or Manager approval.
+                    </span>
                   </TableCell>
                 </TableRow>
               ) : (
@@ -276,7 +293,7 @@ export default function ManagerPendingExpensesPage() {
                           <Pencil className="h-4 w-4" />
                         </button>
                         <Button
-                          onClick={() => handleApprove(expense._id)}
+                          onClick={() => handleApprove(expense._id, expense.status)}
                           disabled={approving === expense._id}
                           size="sm"
                           className="bg-green-600 hover:bg-green-700 text-white h-7 px-2 text-xs"

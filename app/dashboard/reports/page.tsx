@@ -30,16 +30,16 @@ type SalesReportData = {
 }
 
 const REPORT_LINKS = [
-  { href: '/dashboard/reports/leads', label: 'Leads', description: 'Open, closed, and follow-up leads', icon: FileText },
-  { href: '/dashboard/reports/sales-visit', label: 'Sales Visit', description: 'School visits from DC records', icon: MapPin },
-  { href: '/dashboard/reports/employee-track', label: 'Employee Track', description: 'Login and location activity', icon: Users },
-  { href: '/dashboard/reports/contact-queries', label: 'Contact Enquiries', description: 'School contact enquiry log', icon: MessageSquare },
-  { href: '/dashboard/reports/change-logs', label: 'Change Logs', description: 'Creates, updates, and deletes', icon: History },
-  { href: '/dashboard/reports/stock', label: 'Stock', description: 'Warehouse inventory snapshot', icon: Package },
-  { href: '/dashboard/reports/dc', label: 'DC', description: 'Delivery challan pipeline', icon: Truck },
-  { href: '/dashboard/reports/returns', label: 'Returns', description: 'Executive and warehouse returns', icon: RefreshCw },
-  { href: '/dashboard/reports/expenses', label: 'All Expenses', description: 'Approved and pending expenses', icon: Receipt },
-  { href: '/dashboard/reports/training-service', label: 'Training & Service', description: 'Assigned trainings and services', icon: GraduationCap },
+  { href: '/dashboard/reports/leads', label: 'Leads Report', description: 'Open, closed, and follow-up leads', icon: FileText },
+  { href: '/dashboard/reports/sales-visit', label: 'Sales Visit Report', description: 'School visits from DC records', icon: MapPin },
+  { href: '/dashboard/reports/employee-track', label: 'Employee Track Report', description: 'Login and location activity', icon: Users },
+  { href: '/dashboard/reports/contact-queries', label: 'Contact Enquiries Report', description: 'School contact enquiry log', icon: MessageSquare },
+  { href: '/dashboard/reports/change-logs', label: 'Change Logs Report', description: 'Creates, updates, and deletes', icon: History },
+  { href: '/dashboard/reports/stock', label: 'Stock Report', description: 'Warehouse inventory snapshot', icon: Package },
+  { href: '/dashboard/reports/dc', label: 'DC Report', description: 'Delivery challan pipeline', icon: Truck },
+  { href: '/dashboard/reports/returns', label: 'Returns Report', description: 'Executive and warehouse returns', icon: RefreshCw },
+  { href: '/dashboard/reports/expenses', label: 'All Expenses Report', description: 'Approved and pending expenses', icon: Receipt },
+  { href: '/dashboard/reports/training-service', label: 'Training & Service Report', description: 'Assigned trainings and services', icon: GraduationCap },
 ]
 
 function formatInr(value: number) {

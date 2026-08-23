@@ -100,7 +100,7 @@ export default function ExpenseFinancePendingScreen({ navigation }: any) {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <Text style={styles.backIcon}>←</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Finance Pending Expenses</Text>
+          <Text style={styles.headerTitle}>Finance Approved Exp List</Text>
           <LogoutButton />
         </View>
       </LinearGradient>

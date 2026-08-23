@@ -32,7 +32,6 @@ export const HREF_PERMISSION_MAP: Record<string, string> = {
   '/dashboard/training/list': 'training.list.page.view',
   '/dashboard/training/services': 'training.services.page.view',
   '/dashboard/training/trainers/inactive': 'training.trainers_inactive.page.view',
-  '/dashboard/training/trainer/my': 'training.trainer_my.page.view',
   '/dashboard/training/trainer/completed': 'training.trainer_completed.page.view',
   '/dashboard/warehouse/inventory-items': 'warehouse.inventory_items.page.view',
   '/dashboard/warehouse/stock': 'warehouse.stock.page.view',

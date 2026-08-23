@@ -9,6 +9,8 @@ const {
   calculateRouteDistance,
   getExpensePolicySettings,
   resubmitExpense,
+  executiveApproveExpense,
+  executiveSendBackExpense,
   approveExpense,
   getManagerPendingExpenses,
   getExecutiveManagerPendingExpenses,
@@ -68,7 +70,11 @@ router.post('/create', authMiddleware, (req, res, next) => {
 router.post(
   '/approve-multiple',
   authMiddleware,
-  requirePermission('expenses.pending.page.view', 'expenses.finance_pending.page.view'),
+  requirePermission(
+    'expenses.pending.page.view',
+    'expenses.finance_pending.page.view',
+    'expenses.executive_manager_pending.page.view'
+  ),
   approveMultipleExpenses
 );
 router.put('/:id/resubmit', authMiddleware, (req, res, next) => {
@@ -82,12 +88,9 @@ router.put('/:id/resubmit', authMiddleware, (req, res, next) => {
     next();
   });
 }, resubmitExpense);
-router.put(
-  '/:id/approve',
-  authMiddleware,
-  requirePermission('expenses.pending.page.view', 'expenses.finance_pending.page.view'),
-  approveExpense
-);
+router.put('/:id/executive-approve', authMiddleware, executiveApproveExpense);
+router.put('/:id/executive-send-back', authMiddleware, executiveSendBackExpense);
+router.put('/:id/approve', authMiddleware, approveExpense);
 // Parameterized routes must come last
 router.get('/:id', authMiddleware, getExpense);
 router.put('/:id', authMiddleware, updateExpense);

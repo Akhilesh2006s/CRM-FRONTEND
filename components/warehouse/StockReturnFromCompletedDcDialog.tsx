@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { apiRequest } from '@/lib/api'
+import { resolvePersistedUnitPrice } from '@/lib/clientDcProductRows'
 import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
 import { Loader2, Plus, Trash2 } from 'lucide-react'
@@ -219,7 +220,8 @@ export default function StockReturnFromCompletedDcDialog({
                 subject: p.subject,
                 quantity: p.quantity,
                 strength: p.quantity,
-                unit_price: p.unit_price,
+                price: p.price ?? p.unit_price,
+                unit_price: p.unit_price ?? p.price,
               }))
             }
           } catch {
@@ -246,7 +248,7 @@ export default function StockReturnFromCompletedDcDialog({
             subject: String(p.subject || ''),
             soldQty: Number(p.quantity || p.strength || p.deliverableQuantity || p.soldQty || 0),
             returnQty: 0,
-            unitPrice: Number(p.unit_price || p.unitPrice || 0),
+            unitPrice: resolvePersistedUnitPrice(p.price, p.unit_price, p.unitPrice),
             reason: '',
             remarks: '',
           }))

@@ -334,23 +334,24 @@ const uploadExpenseBill = async (req, res) => {
 };
 
 // @desc    Get manager pending expenses
-// Shows: Only Executive Manager Approved expenses (expenses that have been approved by Executive Manager)
-// Managers and Super Admins only see expenses after Executive Manager approval
+// Manager: only Executive Manager Approved (awaiting manager sign-off)
+// Admin / Coordinator / Finance: Pending + Executive Manager Approved (full pre-finance queue)
 // @route   GET /api/expenses/manager-pending
 // @access  Private
 const getManagerPendingExpenses = async (req, res) => {
   try {
     const { employeeId, trainerId } = req.query;
-    
-    // Only show expenses that have been approved by Executive Manager
-    const filter = {
-      status: 'Executive Manager Approved',
-    };
+    const role = req.user.role;
+    const oversightRoles = new Set(['Admin', 'Super Admin', 'Coordinator', 'Finance Manager']);
+
+    const filter = oversightRoles.has(role)
+      ? { status: { $in: ['Pending', 'Executive Manager Approved'] } }
+      : { status: 'Executive Manager Approved' };
 
     if (employeeId && employeeId !== 'all') {
       filter.employeeId = employeeId;
     }
-    
+
     if (trainerId && trainerId !== 'all') {
       filter.trainerId = trainerId;
     }
@@ -644,6 +645,120 @@ const getFinancePendingExpenses = async (req, res) => {
   }
 };
 
+function isExecutiveManagerUser(user) {
+  return String(user?.role || '').trim().toLowerCase() === 'executive manager';
+}
+
+async function loadExecutiveManagerEmployeeIds(executiveManagerId) {
+  const User = require('../models/User');
+  const employees = await User.find({
+    executiveManagerId,
+    isActive: true,
+  }).select('_id');
+  return employees.map((emp) => emp._id);
+}
+
+async function assertExecutiveManagerCanActOnExpense(req, res, expense) {
+  if (!isExecutiveManagerUser(req.user)) {
+    res.status(403).json({ message: 'Only Executive Managers can perform this action.' });
+    return false;
+  }
+  if (expense.status !== 'Pending') {
+    res.status(400).json({ message: 'This expense is no longer pending Executive Manager review.' });
+    return false;
+  }
+  const employeeIds = await loadExecutiveManagerEmployeeIds(req.user._id);
+  if (employeeIds.length === 0) return true;
+
+  const employeeId = expense.employeeId?.toString?.() || String(expense.employeeId || '');
+  const createdBy = expense.createdBy?.toString?.() || String(expense.createdBy || '');
+  const trainerId = expense.trainerId?.toString?.() || String(expense.trainerId || '');
+  const allowed = employeeIds.some(
+    (id) =>
+      id.toString() === employeeId ||
+      id.toString() === createdBy ||
+      id.toString() === trainerId
+  );
+  if (!allowed) {
+    res.status(403).json({ message: 'This expense is not from an employee assigned to you.' });
+    return false;
+  }
+  return true;
+}
+
+// @desc    Executive Manager approve expense
+// @route   PUT /api/expenses/:id/executive-approve
+// @access  Private (Executive Manager)
+const executiveApproveExpense = async (req, res) => {
+  try {
+    const expense = await Expense.findById(req.params.id);
+    if (!expense) {
+      return res.status(404).json({ message: 'Expense not found' });
+    }
+    if (!(await assertExecutiveManagerCanActOnExpense(req, res, expense))) return;
+
+    const { approvedAmount } = req.body || {};
+    const updateData = {
+      status: 'Executive Manager Approved',
+      executiveManagerApprovedBy: req.user._id,
+      executiveManagerApprovedAt: new Date(),
+    };
+    if (approvedAmount !== undefined) {
+      updateData.approvedAmount = approvedAmount;
+    }
+    if (!expense.employeeAmount) {
+      updateData.employeeAmount = expense.amount;
+    }
+
+    const updatedExpense = await Expense.findByIdAndUpdate(req.params.id, updateData, { new: true })
+      .populate('employeeId', 'name email')
+      .populate('trainerId', 'name email')
+      .populate('executiveManagerApprovedBy', 'name email')
+      .populate('createdBy', 'name email');
+
+    res.json(updatedExpense);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Executive Manager send expense back for correction
+// @route   PUT /api/expenses/:id/executive-send-back
+// @access  Private (Executive Manager)
+const executiveSendBackExpense = async (req, res) => {
+  try {
+    const expense = await Expense.findById(req.params.id);
+    if (!expense) {
+      return res.status(404).json({ message: 'Expense not found' });
+    }
+    if (!(await assertExecutiveManagerCanActOnExpense(req, res, expense))) return;
+
+    const remarks = String(req.body?.managerRemarks || req.body?.rejectionReason || '').trim();
+    if (!remarks) {
+      return res.status(400).json({ message: 'Remarks are required to send back' });
+    }
+
+    const updatedExpense = await Expense.findByIdAndUpdate(
+      req.params.id,
+      {
+        status: 'Needs Correction',
+        managerRemarks: remarks,
+        rejectionReason: remarks,
+        returnedBy: req.user._id,
+        returnedAt: new Date(),
+      },
+      { new: true }
+    )
+      .populate('employeeId', 'name email')
+      .populate('trainerId', 'name email')
+      .populate('createdBy', 'name email');
+
+    res.json(updatedExpense);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // @desc    Approve expense
 // @route   PUT /api/expenses/:id/approve
 // @access  Private
@@ -651,25 +766,50 @@ const approveExpense = async (req, res) => {
   try {
     const { status, rejectionReason, approvedAmount } = req.body;
 
+    const expense = await Expense.findById(req.params.id);
+    if (!expense) {
+      return res.status(404).json({ message: 'Expense not found' });
+    }
+
+    const executiveManagerActions = new Set([
+      'Executive Manager Approved',
+      'Rejected',
+      'Needs Correction',
+    ]);
+
+    if (isExecutiveManagerUser(req.user)) {
+      if (!executiveManagerActions.has(status)) {
+        return res.status(403).json({
+          message: 'Executive Managers can only approve, reject, or send back at the Executive Manager stage.',
+        });
+      }
+      if (expense.status !== 'Pending') {
+        return res.status(400).json({
+          message: 'This expense is no longer pending Executive Manager review.',
+        });
+      }
+    }
+
     const updateData = {
       status,
     };
 
     if (status === 'Executive Manager Approved') {
-      // Executive Manager approval
       updateData.executiveManagerApprovedBy = req.user._id;
       updateData.executiveManagerApprovedAt = new Date();
       if (approvedAmount !== undefined) {
         updateData.approvedAmount = approvedAmount;
       }
-      // Set employeeAmount if not already set
-      const expense = await Expense.findById(req.params.id);
-      if (expense && !expense.employeeAmount) {
+      if (!expense.employeeAmount) {
         updateData.employeeAmount = expense.amount;
       }
     } else if (status === 'Approved') {
       // Check if this is Manager approval or Finance approval
-      const isManager = req.user.role === 'Manager' || req.user.role === 'Super Admin';
+      const isManager =
+        req.user.role === 'Manager' ||
+        req.user.role === 'Super Admin' ||
+        req.user.role === 'Admin' ||
+        req.user.role === 'Coordinator';
       if (isManager) {
         // Manager/Super Admin approval
         updateData.managerApprovedBy = req.user._id;
@@ -677,9 +817,7 @@ const approveExpense = async (req, res) => {
         if (approvedAmount !== undefined) {
           updateData.approvedAmount = approvedAmount;
         }
-        // Set employeeAmount if not already set
-        const expense = await Expense.findById(req.params.id);
-        if (expense && !expense.employeeAmount) {
+        if (!expense.employeeAmount) {
           updateData.employeeAmount = expense.amount;
         }
       } else {
@@ -919,6 +1057,8 @@ module.exports = {
   calculateRouteDistance,
   getExpensePolicySettings,
   resubmitExpense,
+  executiveApproveExpense,
+  executiveSendBackExpense,
   approveExpense,
   getManagerPendingExpenses,
   getExecutiveManagerPendingExpenses,

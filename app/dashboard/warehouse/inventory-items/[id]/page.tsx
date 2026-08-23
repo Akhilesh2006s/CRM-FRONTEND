@@ -26,7 +26,6 @@ type Item = {
   specs?: string
   subject?: string
   supplier?: string
-  unitPrice: number
   currentStock?: number
 }
 
@@ -59,7 +58,6 @@ export default function InventoryEditItemPage() {
   const [specs, setSpecs] = useState('')
   const [subject, setSubject] = useState('')
   const [vendor, setVendor] = useState('')
-  const [unitPrice, setUnitPrice] = useState('')
   const [updateQty, setUpdateQty] = useState('')
 
   const showCategory = Boolean(productName && hasProductCategories(productName))
@@ -127,7 +125,6 @@ export default function InventoryEditItemPage() {
         setSpecs(item.specs || '')
         setSubject(item.subject || '')
         setVendor(item.supplier || '')
-        setUnitPrice(String(item.unitPrice ?? ''))
         setUpdateQty(String(item.currentStock ?? 0))
       } catch (err: any) {
         toast.error(err?.message || 'Failed to load item')
@@ -163,7 +160,6 @@ export default function InventoryEditItemPage() {
 
     setSaving(true)
     try {
-      const price = parseFloat(unitPrice)
       const qty = parseFloat(updateQty)
       if (isNaN(qty) || qty < 0) {
         toast.error('Please enter a valid quantity (0 or greater)')
@@ -180,7 +176,6 @@ export default function InventoryEditItemPage() {
           specs: showSpecs ? specs : '',
           subject: showSubject ? subject : '',
           vendor: vendor || mappedVendorName(productName, vendorMap, '') || undefined,
-          unitPrice: price,
           currentStock: qty,
         }),
       })
@@ -304,17 +299,6 @@ export default function InventoryEditItemPage() {
               vendorMap={vendorMap}
               fallbackVendors={vendors}
             />
-
-            <div className="space-y-2">
-              <div className="text-sm font-medium">Price</div>
-              <Input
-                type="number"
-                step="0.01"
-                placeholder="Item Price"
-                value={unitPrice}
-                onChange={(e) => setUnitPrice(e.target.value)}
-              />
-            </div>
 
             <div className="space-y-2">
               <div className="text-sm font-medium">Quantity *</div>

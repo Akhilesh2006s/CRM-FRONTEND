@@ -47,15 +47,13 @@ export default function ExecutiveManagerPendingExpensesPage() {
   })
 
   useEffect(() => {
-    // Load employees assigned to this Executive Manager
     ;(async () => {
       try {
-        // Get current user to find their assigned employees
         const currentUser = getCurrentUser()
-        if (currentUser?._id) {
-          const empData = await apiRequest<Employee[]>(`/executive-managers/${currentUser._id}/employees`).catch(() => [])
-          setEmployees(empData || [])
-        }
+        if (currentUser?.role !== 'Executive Manager') return
+
+        const empData = await apiRequest<Employee[]>('/executive-managers/my/executives').catch(() => [])
+        setEmployees(empData || [])
       } catch (error) {
         console.error('Failed to load employees:', error)
       }
@@ -181,7 +179,7 @@ export default function ExecutiveManagerPendingExpensesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Pending Expenses List</h1>
+        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Executive Manager Pending</h1>
       </div>
 
       {/* Filter Section */}

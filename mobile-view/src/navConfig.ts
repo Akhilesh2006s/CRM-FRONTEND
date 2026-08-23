@@ -71,10 +71,6 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
         title: 'Training & Services',
         items: [
           {
-            label: 'Training & Services (Active / Upcoming)',
-            screen: 'TrainingTrainerMy',
-          },
-          {
             label: 'Completed Training & Services',
             screen: 'TrainingTrainerCompleted',
           },
@@ -184,10 +180,10 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
       {
         title: 'Reports',
         items: [
-          { label: 'Leads', screen: 'ReportsLeads' },
-          { label: 'Sales Visit', screen: 'ReportsSalesVisit' },
-          { label: 'Employee Track', screen: 'ReportsEmployeeTrack' },
-          { label: 'All Expenses', screen: 'ReportsExpenses' },
+          { label: 'Leads Report', screen: 'ReportsLeads' },
+          { label: 'Sales Visit Report', screen: 'ReportsSalesVisit' },
+          { label: 'Employee Track Report', screen: 'ReportsEmployeeTrack' },
+          { label: 'All Expenses Report', screen: 'ReportsExpenses' },
         ],
       },
       {
@@ -225,7 +221,7 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
       {
         title: 'Finance',
         items: [
-          { label: 'Finance Pending Expenses', screen: 'ExpenseFinancePending' },
+          { label: 'Finance Approved Exp List', screen: 'ExpenseFinancePending' },
           { label: 'Payments', screen: 'PaymentList' },
         ],
       },
@@ -330,7 +326,7 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
       icon: I.expenses,
       items: [
         { label: 'Pending Expenses', screen: 'ExpensePending', icon: '⏳' },
-        { label: 'Finance Pending', screen: 'ExpenseFinancePending', icon: '🏦' },
+        { label: 'Finance Approved', screen: 'ExpenseFinancePending', icon: '🏦' },
         { label: 'Create Expense', screen: 'ExpenseCreate', icon: '➕' },
       ],
     },
@@ -338,13 +334,13 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
       title: 'Reports',
       icon: I.reports,
       items: [
-        { label: 'Leads Reports', screen: 'ReportsLeads', icon: '📋' },
-        { label: 'Sales Visit', screen: 'ReportsSalesVisit', icon: '🚗' },
-        { label: 'Employee Track', screen: 'ReportsEmployeeTrack', icon: '📍' },
+        { label: 'Leads Report', screen: 'ReportsLeads', icon: '📋' },
+        { label: 'Sales Visit Report', screen: 'ReportsSalesVisit', icon: '🚗' },
+        { label: 'Employee Track Report', screen: 'ReportsEmployeeTrack', icon: '📍' },
         { label: 'DC Report', screen: 'ReportsDC', icon: '📦' },
         { label: 'Stock Report', screen: 'ReportsStock', icon: '📊' },
         { label: 'Returns Report', screen: 'ReportsReturns', icon: '🔄' },
-        { label: 'All Expenses', screen: 'ReportsExpenses', icon: '💸' },
+        { label: 'All Expenses Report', screen: 'ReportsExpenses', icon: '💸' },
       ],
     },
   ];

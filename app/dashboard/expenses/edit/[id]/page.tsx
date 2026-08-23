@@ -156,6 +156,10 @@ function EditExpensePageContent() {
 
   return (
     <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Edit Expense</h1>
+      </div>
+
       <Card className="p-6 shadow-sm">
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>

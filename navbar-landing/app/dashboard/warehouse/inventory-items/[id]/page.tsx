@@ -17,7 +17,6 @@ type Item = {
   level?: string
   specs?: string
   subject?: string
-  unitPrice: number
   currentStock?: number
 }
 
@@ -34,7 +33,6 @@ export default function InventoryEditItemPage() {
   const [level, setLevel] = useState('')
   const [specs, setSpecs] = useState('Regular')
   const [subject, setSubject] = useState('')
-  const [unitPrice, setUnitPrice] = useState('')
   const [updateQty, setUpdateQty] = useState('')
   
   // Update level, specs, and subject options when product changes
@@ -65,7 +63,6 @@ export default function InventoryEditItemPage() {
         setLevel(item.level || '')
         setSpecs(item.specs || 'Regular')
         setSubject(item.subject || '')
-        setUnitPrice(String(item.unitPrice ?? ''))
         setUpdateQty(String(item.currentStock ?? 0))
       } catch (err: any) {
         toast.error(err?.message || 'Failed to load item')
@@ -86,7 +83,6 @@ export default function InventoryEditItemPage() {
     
     setSaving(true)
     try {
-      const price = parseFloat(unitPrice)
       const qty = parseFloat(updateQty)
       if (isNaN(qty) || qty < 0) {
         toast.error('Please enter a valid quantity (0 or greater)')
@@ -101,7 +97,6 @@ export default function InventoryEditItemPage() {
           level,
           specs: specs || 'Regular',
           subject: subject || undefined,
-          unitPrice: price,
           currentStock: qty 
         }),
       })
@@ -202,17 +197,12 @@ export default function InventoryEditItemPage() {
             )}
 
             <div className="space-y-2">
-              <div className="text-sm font-medium">Price *</div>
-              <Input type="number" step="0.01" placeholder="Item Price" value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)} />
-            </div>
-
-            <div className="space-y-2">
               <div className="text-sm font-medium">Update qty *</div>
               <Input type="number" step="1" min="0" placeholder="Quantity" value={updateQty} onChange={(e) => setUpdateQty(e.target.value)} />
             </div>
 
             <div className="md:col-span-2">
-              <Button type="submit" disabled={saving || !productName || !category || !unitPrice || !updateQty || (hasProductSubjects(productName) && !subject)}>
+              <Button type="submit" disabled={saving || !productName || !category || !updateQty || (hasProductSubjects(productName) && !subject)}>
                 {saving ? 'Saving…' : 'Save Changes'}
               </Button>
             </div>

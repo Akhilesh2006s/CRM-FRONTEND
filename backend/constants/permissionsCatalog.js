@@ -51,7 +51,6 @@ const PAGE_ENTRIES = [
   { href: '/dashboard/training/list', module: 'training', resource: 'list', label: 'Trainings List' },
   { href: '/dashboard/training/services', module: 'training', resource: 'services', label: 'Services List' },
   { href: '/dashboard/training/trainers/inactive', module: 'training', resource: 'trainers_inactive', label: 'Inactive Trainers' },
-  { href: '/dashboard/training/trainer/my', module: 'training', resource: 'trainer_my', label: 'My Training & Services' },
   { href: '/dashboard/training/trainer/completed', module: 'training', resource: 'trainer_completed', label: 'Completed Training & Services' },
   // Warehouse
   { href: '/dashboard/warehouse/inventory-items', module: 'warehouse', resource: 'inventory_items', label: 'Inventory Items' },
@@ -78,16 +77,16 @@ const PAGE_ENTRIES = [
   { href: '/dashboard/payments/hold-payments', module: 'payments', resource: 'hold', label: 'HOLD Payments' },
   // Expenses
   { href: '/dashboard/expenses/pending', module: 'expenses', resource: 'pending', label: 'Pending Expenses List' },
-  { href: '/dashboard/expenses/finance-pending', module: 'expenses', resource: 'finance_pending', label: 'Finance Pending Exp List' },
+  { href: '/dashboard/expenses/finance-pending', module: 'expenses', resource: 'finance_pending', label: 'Finance Approved Exp List' },
   { href: '/dashboard/expenses/create', module: 'expenses', resource: 'create', label: 'Create Expense' },
   { href: '/dashboard/expenses/my', module: 'expenses', resource: 'my', label: 'My Expenses' },
   { href: '/dashboard/expenses/executive-manager-pending', module: 'expenses', resource: 'executive_manager_pending', label: 'Executive Manager Pending' },
   // Reports
   { href: '/dashboard/reports/leads', module: 'reports', resource: 'leads', label: 'Leads Report' },
-  { href: '/dashboard/reports/sales-visit', module: 'reports', resource: 'sales_visit', label: 'Sales Visit' },
-  { href: '/dashboard/reports/employee-track', module: 'reports', resource: 'employee_track', label: 'Employee Track' },
-  { href: '/dashboard/reports/contact-queries', module: 'reports', resource: 'contact_queries', label: 'Contact Queries' },
-  { href: '/dashboard/reports/change-logs', module: 'reports', resource: 'change_logs', label: 'Change Logs' },
+  { href: '/dashboard/reports/sales-visit', module: 'reports', resource: 'sales_visit', label: 'Sales Visit Report' },
+  { href: '/dashboard/reports/employee-track', module: 'reports', resource: 'employee_track', label: 'Employee Track Report' },
+  { href: '/dashboard/reports/contact-queries', module: 'reports', resource: 'contact_queries', label: 'Contact Enquiries Report' },
+  { href: '/dashboard/reports/change-logs', module: 'reports', resource: 'change_logs', label: 'Change Logs Report' },
   { href: '/dashboard/reports/stock', module: 'reports', resource: 'stock', label: 'Stock Report' },
   { href: '/dashboard/reports/dc', module: 'reports', resource: 'dc', label: 'DC Report' },
   { href: '/dashboard/reports/returns', module: 'reports', resource: 'returns', label: 'Returns Report' },
@@ -165,7 +164,12 @@ const HREF_TO_PERMISSION = Object.fromEntries(
 /** System role templates: slug -> permission keys */
 const ROLE_TEMPLATE_KEYS = {
   'super-admin': ALL_PERMISSION_KEYS,
-  admin: ALL_PERMISSION_KEYS.filter((k) => !k.startsWith('leads.') && !k.includes('my_clients')),
+  admin: ALL_PERMISSION_KEYS.filter(
+    (k) =>
+      !k.startsWith('leads.') &&
+      !k.includes('my_clients') &&
+      k !== pageKey('expenses', 'executive_manager_pending')
+  ),
   'finance-manager': [
     moduleKey('dashboard'),
     pageKey('dashboard', 'home'),
@@ -331,7 +335,6 @@ const ROLE_TEMPLATE_KEYS = {
     moduleKey('dashboard'),
     pageKey('dashboard', 'home'),
     moduleKey('training'),
-    pageKey('training', 'trainer_my'),
     pageKey('training', 'trainer_completed'),
     moduleKey('expenses'),
     pageKey('expenses', 'create'),
@@ -339,6 +342,20 @@ const ROLE_TEMPLATE_KEYS = {
     moduleKey('leaves'),
     pageKey('leaves', 'request'),
     pageKey('leaves', 'approved'),
+    moduleKey('settings'),
+    pageKey('settings', 'password'),
+  ],
+  // Executive Manager workspace — own executives, PO edits, pending expenses, leaves
+  'executive-manager': [
+    moduleKey('dashboard'),
+    pageKey('dashboard', 'home'),
+    moduleKey('executive_managers'),
+    pageKey('executive_managers', 'executives'),
+    moduleKey('clients'),
+    pageKey('clients', 'po_edit_request'),
+    moduleKey('expenses'),
+    pageKey('expenses', 'executive_manager_pending'),
+    moduleKey('leaves'),
     moduleKey('settings'),
     pageKey('settings', 'password'),
   ],

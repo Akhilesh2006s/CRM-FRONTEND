@@ -254,23 +254,23 @@ const NAV: NavItem[] = [
     icon: Calculator,
     children: [
       { label: 'Pending Expenses List', href: '/dashboard/expenses/pending' },
-      { label: 'Finance Pending Exp List', href: '/dashboard/expenses/finance-pending' },
+      { label: 'Finance Approved Exp List', href: '/dashboard/expenses/finance-pending' },
     ],
   },
   {
     label: 'Reports',
     icon: BarChart3,
     children: [
-      { label: 'Leads', href: '/dashboard/reports/leads' },
-      { label: 'Sales Visit', href: '/dashboard/reports/sales-visit' },
-      { label: 'Employee Track', href: '/dashboard/reports/employee-track' },
-      { label: 'Contact Enquiries', href: '/dashboard/reports/contact-queries' },
-      { label: 'Change Logs', href: '/dashboard/reports/change-logs' },
-      { label: 'Stock', href: '/dashboard/reports/stock' },
-      { label: 'DC', href: '/dashboard/reports/dc' },
-      { label: 'Returns', href: '/dashboard/reports/returns' },
-      { label: 'All Expenses', href: '/dashboard/reports/expenses' },
-      { label: 'Training & Service', href: '/dashboard/reports/training-service' },
+      { label: 'Leads Report', href: '/dashboard/reports/leads' },
+      { label: 'Sales Visit Report', href: '/dashboard/reports/sales-visit' },
+      { label: 'Employee Track Report', href: '/dashboard/reports/employee-track' },
+      { label: 'Contact Enquiries Report', href: '/dashboard/reports/contact-queries' },
+      { label: 'Change Logs Report', href: '/dashboard/reports/change-logs' },
+      { label: 'Stock Report', href: '/dashboard/reports/stock' },
+      { label: 'DC Report', href: '/dashboard/reports/dc' },
+      { label: 'Returns Report', href: '/dashboard/reports/returns' },
+      { label: 'All Expenses Report', href: '/dashboard/reports/expenses' },
+      { label: 'Training & Service Report', href: '/dashboard/reports/training-service' },
     ],
   },
   {
@@ -768,7 +768,7 @@ export function Sidebar() {
         }
         // Filter Reports menu items to only show: Leads, Sales Visit, Employee Track, All Expenses for Manager
         if (item.label === 'Reports' && item.children) {
-          const allowedReportItems = ['Leads', 'Sales Visit', 'Employee Track', 'All Expenses']
+          const allowedReportItems = ['Leads Report', 'Sales Visit Report', 'Employee Track Report', 'All Expenses Report']
           return {
             ...item,
             children: item.children.filter(child => 
@@ -828,7 +828,7 @@ export function Sidebar() {
         }
         // Filter Reports menu items to only show: Leads, DC, Returns, All Expenses for Coordinator
         if (item.label === 'Reports' && item.children) {
-          const allowedReportItems = ['Leads', 'DC', 'Returns', 'All Expenses']
+          const allowedReportItems = ['Leads Report', 'DC Report', 'Returns Report', 'All Expenses Report']
           return {
             ...item,
             children: item.children.filter(child => 
@@ -891,11 +891,6 @@ export function Sidebar() {
     finalNav = [
       { label: 'My Dashboard', icon: LayoutDashboard, href: '/dashboard' },
       {
-        label: 'Training & Services (Active / Upcoming)',
-        icon: GraduationCap,
-        href: '/dashboard/training/trainer/my',
-      },
-      {
         label: 'Completed Training & Services',
         icon: CheckCircle2,
         href: '/dashboard/training/trainer/completed',
@@ -920,8 +915,8 @@ export function Sidebar() {
         label: 'Reports',
         icon: BarChart3,
         children: [
-          { label: 'Leads', href: '/dashboard/reports/leads', icon: FileText },
-          { label: 'All Expenses', href: '/dashboard/reports/expenses', icon: Receipt },
+          { label: 'Leads Report', href: '/dashboard/reports/leads', icon: FileText },
+          { label: 'All Expenses Report', href: '/dashboard/reports/expenses', icon: Receipt },
         ],
       },
       {

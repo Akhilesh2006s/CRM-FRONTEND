@@ -59,7 +59,7 @@ export function getStatHref(role: string | undefined, index: number): string | n
 
   if (index === 1) {
     if (r === 'Executive') return '/dashboard/dc/client-dc'
-    if (r === 'Trainer') return '/dashboard/training/trainer/my'
+    if (r === 'Trainer') return '/dashboard/training/trainer/completed'
     if (r === 'Warehouse Executive' || r === 'Warehouse Manager') {
       return '/dashboard/returns/warehouse-executive'
     }
