@@ -100,6 +100,7 @@ export default function AllCreatedDCsPage() {
     currentUser?.role === 'Coordinator' || currentUser?.role === 'Senior Coordinator'
   // Super Admin / Admin / Coordinator — Create Sale auto-DCs list here.
   const canAccess = isSuperAdminUser || isAdmin || isCoordinator
+  const showRowActions = !isSuperAdminUser
 
   const load = async () => {
     setLoading(true)
@@ -310,7 +311,7 @@ export default function AllCreatedDCsPage() {
           </div>
         )}
         {!loading && items.length > 0 && (
-          <table className="w-full text-sm min-w-[1200px]">
+          <table className={`w-full text-sm ${showRowActions ? 'min-w-[1200px]' : 'min-w-[900px]'}`}>
             <thead className="sticky top-0 z-10">
               <tr className="bg-sky-50/95 border-b text-neutral-700">
                 <th className="py-2 px-3 text-left whitespace-nowrap">Created On</th>
@@ -321,8 +322,12 @@ export default function AllCreatedDCsPage() {
                 <th className="py-2 px-3 text-left whitespace-nowrap">Customer Phone</th>
                 <th className="py-2 px-3 text-left whitespace-nowrap">Products</th>
                 <th className="py-2 px-3 text-left whitespace-nowrap">DC Status</th>
-                <th className="py-2 px-3 text-left whitespace-nowrap">Action</th>
-                <th className="py-2 px-3 text-right whitespace-nowrap">Raise DC</th>
+                {showRowActions && (
+                  <>
+                    <th className="py-2 px-3 text-left whitespace-nowrap">Action</th>
+                    <th className="py-2 px-3 text-right whitespace-nowrap">Raise DC</th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -356,21 +361,25 @@ export default function AllCreatedDCsPage() {
                       {d.status || 'created'}
                     </span>
                   </td>
-                  <td className="py-2 px-3 whitespace-nowrap">
-                    <div className="flex flex-wrap gap-2">
-                      <Button size="sm" variant="outline" onClick={() => openViewDialog(d)}>
-                        View
-                      </Button>
-                      <Button size="sm" onClick={() => openSubmitDialog(d)}>
-                        {d.poPhotoUrl ? 'Update Photo' : 'Add Photo'}
-                      </Button>
-                    </div>
-                  </td>
-                  <td className="py-2 px-3 text-right whitespace-nowrap">
-                    <Button size="sm" variant="default" onClick={() => openRaiseDialog(d)}>
-                      Raise DC
-                    </Button>
-                  </td>
+                  {showRowActions && (
+                    <>
+                      <td className="py-2 px-3 whitespace-nowrap">
+                        <div className="flex flex-wrap gap-2">
+                          <Button size="sm" variant="outline" onClick={() => openViewDialog(d)}>
+                            View
+                          </Button>
+                          <Button size="sm" onClick={() => openSubmitDialog(d)}>
+                            {d.poPhotoUrl ? 'Update Photo' : 'Add Photo'}
+                          </Button>
+                        </div>
+                      </td>
+                      <td className="py-2 px-3 text-right whitespace-nowrap">
+                        <Button size="sm" variant="default" onClick={() => openRaiseDialog(d)}>
+                          Raise DC
+                        </Button>
+                      </td>
+                    </>
+                  )}
                 </tr>
               ))}
             </tbody>

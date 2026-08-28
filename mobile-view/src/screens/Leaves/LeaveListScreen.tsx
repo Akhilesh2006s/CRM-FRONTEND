@@ -15,6 +15,7 @@ import { apiService } from '../../services/api';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, DataTable } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
+import { LEAVE_TYPE_OPTIONS, leaveTypeLabel } from '../../lib/leaveTypes';
 
 export default function LeaveListScreen({ navigation }: any) {
   const { user } = useAuth();
@@ -100,7 +101,7 @@ export default function LeaveListScreen({ navigation }: any) {
     setReason('');
   };
 
-  const leaveTypes = ['Sick Leave', 'Casual Leave', 'Earned Leave', 'Other'];
+  const leaveTypes = LEAVE_TYPE_OPTIONS;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -146,7 +147,7 @@ export default function LeaveListScreen({ navigation }: any) {
             leaves.map((leave) => (
               <View key={leave._id} style={styles.card}>
                 <View style={styles.cardHeader}>
-                  <Text style={styles.cardTitle}>{leave.leaveType || 'N/A'}</Text>
+                  <Text style={styles.cardTitle}>{leaveTypeLabel(leave.leaveType)}</Text>
                   <Text style={[styles.status, { color: getStatusColor(leave.status) }]}>
                     {leave.status || 'Pending'}
                   </Text>
@@ -189,20 +190,20 @@ export default function LeaveListScreen({ navigation }: any) {
               <View style={styles.typeGrid}>
                 {leaveTypes.map((type) => (
                   <TouchableOpacity
-                    key={type}
+                    key={type.value}
                     style={[
                       styles.typeButton,
-                      leaveType === type && styles.typeButtonSelected,
+                      leaveType === type.value && styles.typeButtonSelected,
                     ]}
-                    onPress={() => setLeaveType(type)}
+                    onPress={() => setLeaveType(type.value)}
                   >
                     <Text
                       style={[
                         styles.typeButtonText,
-                        leaveType === type && styles.typeButtonTextSelected,
+                        leaveType === type.value && styles.typeButtonTextSelected,
                       ]}
                     >
-                      {type}
+                      {type.label}
                     </Text>
                   </TouchableOpacity>
                 ))}

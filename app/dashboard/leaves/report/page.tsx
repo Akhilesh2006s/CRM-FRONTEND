@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { leaveTypeLabel } from '@/lib/leaveTypes'
 
 type Leave = {
   _id: string
@@ -229,7 +230,7 @@ export default function LeavesReportPage() {
                     <td className="py-2 px-3">{employeeName(l)}</td>
                     <td className="py-2 px-3 text-sm text-neutral-600">{managerName(l)}</td>
                     <td className="py-2 px-3 text-center">{l.status}</td>
-                    <td className="py-2 px-3">{l.leaveType || '-'}</td>
+                    <td className="py-2 px-3">{leaveTypeLabel(l.leaveType)}</td>
                     <td className="py-2 px-3 text-center">
                       {new Date(l.startDate).toLocaleDateString()}
                     </td>

@@ -408,6 +408,15 @@ const warehouseVerifyReturn = async (req, res) => {
       status: bodyStatus,
     } = req.body;
 
+    if (Array.isArray(products)) {
+      const missingCondition = products.find((product) => !String(product.condition || '').trim());
+      if (missingCondition) {
+        return res.status(400).json({
+          message: `Product condition is required for ${missingCondition.product || 'every product'}`,
+        });
+      }
+    }
+
     const returnDoc = await StockReturn.findById(id);
     if (!returnDoc) {
       return res.status(404).json({ message: 'Return not found' });
@@ -455,14 +464,6 @@ const warehouseVerifyReturn = async (req, res) => {
     returnDoc.submittedToManagerAt = new Date();
 
     const hasMismatch = updatedProducts.some((p) => p.quantityMismatch);
-    if (hasMismatch) {
-      const missingRemark = updatedProducts.find((p) => p.quantityMismatch && !(p.mismatchRemark && String(p.mismatchRemark).trim()));
-      if (missingRemark) {
-        return res.status(400).json({
-          message: `Mismatch remark is required for ${missingRemark.product} when received quantity does not match requested quantity`,
-        });
-      }
-    }
     returnDoc.status = hasMismatch ? 'Pending Manager Approval' : 'Received';
 
     await returnDoc.save();
@@ -507,13 +508,28 @@ const managerAction = async (req, res) => {
         if (decision) {
           return {
             ...p.toObject ? p.toObject() : p,
-            managerDecision: decision.managerDecision,
+            managerDecision: action === 'reject' ? 'Reject' : (decision.managerDecision || undefined),
             approvedQty: decision.approvedQty || 0,
-            stockBucket: decision.stockBucket || '',
+            // Rejected/sent-back lines do not belong to a stock bucket.
+            // Use undefined so Mongoose omits the optional enum field instead of validating "".
+            stockBucket:
+              action === 'reject' || decision.managerDecision === 'Reject' || decision.managerDecision === 'Send Back'
+                ? undefined
+                : (decision.stockBucket || undefined),
             managerRemark: decision.managerRemark || '',
+            mismatchRemark: decision.mismatchRemark || p.mismatchRemark || '',
           };
         }
         return p.toObject ? p.toObject() : p;
+      });
+    }
+
+    const missingMismatchRemark = returnDoc.products.find(
+      (p) => p.quantityMismatch && !(p.mismatchRemark && String(p.mismatchRemark).trim())
+    );
+    if (missingMismatchRemark) {
+      return res.status(400).json({
+        message: `Mismatch remark is required for ${missingMismatchRemark.product}`,
       });
     }
 

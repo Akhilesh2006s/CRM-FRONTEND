@@ -190,7 +190,17 @@ export default function WarehouseDcAtWarehouse() {
   const [insufficientStockMessage, setInsufficientStockMessage] = useState('')
   const [warehouseInventory, setWarehouseInventory] = useState<WarehouseItem[]>([])
   
-  const { productNames: availableProducts } = useProducts()
+  const { productNames: availableProducts, getProductSpecs } = useProducts()
+  const resolveProductMasterSpec = (productName: string, currentSpec: unknown): string => {
+    const masterSpecs = getProductSpecs(productName)
+    if (!Array.isArray(masterSpecs) || masterSpecs.length === 0) return ''
+
+    const normalizedCurrent = String(currentSpec || '').trim().toLowerCase()
+    const matchedSpec = masterSpecs.find(
+      (spec) => String(spec || '').trim().toLowerCase() === normalizedCurrent
+    )
+    return matchedSpec || masterSpecs[0] || ''
+  }
   const availableClasses = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'NA']
   const availableCategories = ['New Students', 'Existing Students', 'Both', 'Training-Material']
 
@@ -292,7 +302,7 @@ export default function WarehouseDcAtWarehouse() {
             productCategory: mapped.productCategory,
             class: p.class || 'NA',
             category: p.category || 'Training-Material',
-            specs: mapped.specs,
+            specs: resolveProductMasterSpec(productName, p.specs),
             subject: mapped.subject || undefined,
             quantity: requestedQty,
             availableQuantity: availableQty,
@@ -328,7 +338,7 @@ export default function WarehouseDcAtWarehouse() {
           productCategory: mapped.productCategory,
           class: 'NA',
           category: 'Training-Material',
-          specs: mapped.specs,
+          specs: resolveProductMasterSpec(productName, undefined),
           subject: mapped.subject || undefined,
           quantity: requestedQty,
           availableQuantity: availableQty,
@@ -459,7 +469,7 @@ export default function WarehouseDcAtWarehouse() {
             productCategory: p.productCategory,
             class: p.class,
             category: p.category,
-            specs: p.specs || 'Regular',
+            specs: p.specs || '',
             subject: p.subject || undefined,
             quantity: p.quantity,
             availableQuantity: p.availableQuantity,
@@ -606,7 +616,7 @@ export default function WarehouseDcAtWarehouse() {
             class: p.class,
             category: p.category,
             productCategory: p.productCategory,
-            specs: p.specs || 'Regular',
+            specs: p.specs || '',
             subject: p.subject || undefined,
             quantity: p.quantity,
             availableQuantity: p.availableQuantity,
@@ -1031,7 +1041,7 @@ export default function WarehouseDcAtWarehouse() {
                               <TableCell className="font-medium text-neutral-900">{row.product}</TableCell>
                               <TableCell>{row.class || '-'}</TableCell>
                               <TableCell>{row.productCategory || '-'}</TableCell>
-                              <TableCell>{row.specs || '-'}</TableCell>
+                              <TableCell>{resolveProductMasterSpec(row.product, row.specs) || '-'}</TableCell>
                               <TableCell>{row.subject || '-'}</TableCell>
                               <TableCell>{row.quantity || 0}</TableCell>
                               <TableCell>{row.level || '-'}</TableCell>

@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { todayDateString, isBeforeToday } from '@/lib/todayDate'
+import { LEAVE_TYPE_OPTIONS } from '@/lib/leaveTypes'
 
 const LEAVE_REQUEST_PATH = '/dashboard/leaves/request'
 
@@ -86,10 +87,11 @@ export default function LeaveRequestPage() {
                 <SelectValue placeholder="Select leave type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Casual Leave">Casual Leave</SelectItem>
-                <SelectItem value="Sick Leave">Sick Leave</SelectItem>
-                <SelectItem value="Earned Leave">Earned Leave</SelectItem>
-                <SelectItem value="Other">Other</SelectItem>
+                {LEAVE_TYPE_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

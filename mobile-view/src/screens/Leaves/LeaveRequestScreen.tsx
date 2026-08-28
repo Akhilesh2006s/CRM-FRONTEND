@@ -28,9 +28,9 @@ const todayDateString = () => {
 const isBeforeToday = (dateStr: string) => dateStr && dateStr < todayDateString();
 
 const LEAVE_TYPE_OPTIONS = [
-  { label: 'Sick Leave', value: 'Sick Leave' },
-  { label: 'Annual Leave', value: 'Annual Leave' },
   { label: 'Casual Leave', value: 'Casual Leave' },
+  { label: 'Sick Leave', value: 'Sick Leave' },
+  { label: 'Earned Leave', value: 'Annual Leave' },
   { label: 'Emergency Leave', value: 'Emergency Leave' },
   { label: 'Other', value: 'Other' },
 ];

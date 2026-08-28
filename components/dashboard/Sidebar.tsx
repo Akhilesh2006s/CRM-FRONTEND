@@ -300,7 +300,6 @@ const NAV: NavItem[] = [
       { label: 'SMS', href: '/dashboard/settings/sms' },
       { label: 'DB Backup', href: '/dashboard/settings/backup' },
       { label: 'Expense policy', href: '/dashboard/settings/expenses', adminOnly: true },
-      { label: 'Roles & Permissions', href: '/dashboard/settings/roles' },
     ],
   },
   { label: 'Sign out', icon: LogOut, href: '/auth/login' },
@@ -1048,6 +1047,13 @@ export function Sidebar() {
     finalNav = applySuperAdminExecutiveManagersNav(finalNav)
     finalNav = applyVendorSectionNav(finalNav)
     finalNav = applySuperAdminNavOrder(finalNav)
+    finalNav = finalNav.map((item) => {
+      if (item.label !== 'Settings' || !item.children) return item
+      return {
+        ...item,
+        children: item.children.filter((c) => (c.href || '') !== '/dashboard/settings/roles'),
+      }
+    })
   } else if (user?.role === 'Admin' || permUser?.role === 'Admin') {
     finalNav = applyVendorSectionNav(finalNav)
   }

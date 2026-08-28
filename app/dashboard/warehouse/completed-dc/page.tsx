@@ -88,6 +88,7 @@ export default function CompletedDCPage() {
     remarks: '',
     poRemarks: '',
   })
+  const [boxesError, setBoxesError] = useState('')
   const [pdfViewerSrc, setPdfViewerSrc] = useState<string | null>(null)
   const [pdfLoading, setPdfLoading] = useState(false)
   const pdfBlobRef = useRef<string | null>(null)
@@ -675,6 +676,7 @@ export default function CompletedDCPage() {
         remarks: (fullDC?.deliveryNotes ?? '').trim() || (row.remarks ?? '').trim() || '',
         poRemarks: poStageRemarks(fullDC || row),
       })
+      setBoxesError('')
     } catch (err: any) {
       console.error('Error opening edit dialog:', err)
       toast.error(err?.message || 'Failed to load DC details')
@@ -1064,6 +1066,15 @@ export default function CompletedDCPage() {
     }
     if (!editForm.boxes || !editForm.boxes.trim()) {
       toast.error('Boxes is required')
+      return
+    }
+    if (boxesError) {
+      toast.error('Boxes must contain only numbers')
+      return
+    }
+    if (!/^\d+$/.test(editForm.boxes)) {
+      setBoxesError('Boxes must contain only numbers')
+      toast.error('Boxes must contain only numbers')
       return
     }
     if (!editForm.dcCategory) {
@@ -1671,6 +1682,7 @@ export default function CompletedDCPage() {
       <Dialog open={!!editingDC} onOpenChange={(open) => {
         if (!open) {
           setEditingDC(null)
+          setBoxesError('')
         }
       }}>
         <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
@@ -1708,12 +1720,26 @@ export default function CompletedDCPage() {
               <div>
                 <Label>Boxes <span className="text-red-500">*</span></Label>
                 <Input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   value={editForm.boxes}
-                  onChange={(e) => setEditForm({ ...editForm, boxes: e.target.value })}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    if (/^\d*$/.test(value)) {
+                      setEditForm({ ...editForm, boxes: value })
+                      setBoxesError('')
+                    } else {
+                      setBoxesError('Boxes must contain only numbers')
+                    }
+                  }}
                   placeholder="Boxes"
-                  className={`mt-1 ${!editForm.boxes || !editForm.boxes.trim() ? 'border-red-500' : ''}`}
+                  className={`mt-1 ${!editForm.boxes || !editForm.boxes.trim() || boxesError ? 'border-red-500' : ''}`}
                   required
                 />
+                {boxesError && (
+                  <p className="mt-1 text-xs text-red-600">{boxesError}</p>
+                )}
               </div>
               <div>
                 <Label>DC Category <span className="text-red-500">*</span></Label>

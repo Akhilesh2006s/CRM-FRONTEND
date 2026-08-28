@@ -55,14 +55,18 @@ export type ExpenseStatus =
 export function expenseStatusLabel(status: string): string {
   switch (status) {
     case 'Pending':
+    case 'PENDING_EXECUTIVE_MANAGER':
       return 'Pending (Executive Manager)'
     case 'Executive Manager Approved':
-      return 'Pending (Manager)'
+    case 'PENDING_FINANCE_MANAGER':
+      return 'Pending (Finance Manager)'
     case 'Needs Correction':
       return 'Needs correction'
     case 'Approved':
+    case 'APPROVED':
       return 'Approved'
     case 'Rejected':
+    case 'REJECTED':
       return 'Rejected'
     default:
       return status

@@ -41,21 +41,35 @@ export default function NewProductPage() {
   })
 
   const addLevel = () => {
-    if (form.newLevel.trim() && !form.productLevels.includes(form.newLevel.trim())) {
-      setForm({
-        ...form,
-        productLevels: [...form.productLevels, form.newLevel.trim()],
-        newLevel: '',
-      })
+    const name = form.newLevel.trim()
+    if (!name) {
+      toast.error('Enter a level name')
+      return
     }
+    if (form.productLevels.includes(name)) {
+      toast.error('This level is already added')
+      return
+    }
+    setForm({
+      ...form,
+      productLevels: [...form.productLevels, name],
+      newLevel: '',
+    })
   }
 
   const addNamedTerm = (term: string) => {
-    const value = term.trim()
-    if (!value || form.productLevels.includes(value)) return
+    const levelName = form.newLevel.trim()
+    if (!levelName) {
+      toast.error(`Type a level name first, then add it under ${term}`)
+      return
+    }
+    if (form.productLevels.includes(levelName)) {
+      toast.error('This level is already added')
+      return
+    }
     setForm({
       ...form,
-      productLevels: [...form.productLevels, value],
+      productLevels: [...form.productLevels, levelName],
       newLevel: '',
     })
   }
@@ -276,32 +290,34 @@ export default function NewProductPage() {
           </Dialog>
 
           <div>
-            <Label>Term</Label>
-            <p className="text-xs text-neutral-500 mb-2">Add terms like Term 1, Term 2</p>
+            <Label>Term / Level</Label>
+            <p className="text-xs text-neutral-500 mb-2">
+              Type the level name (e.g. pen), then add it under Term 1 / Term 2 / Term 3.
+              The saved level is the name you type, not the term label.
+            </p>
             <div className="flex gap-2 mb-2">
               <Input
                 className="bg-white text-neutral-900"
-                placeholder="Enter term (e.g., Term 1, Term 2)"
+                placeholder="Enter level name (e.g. pen)"
                 value={form.newLevel}
                 onChange={(e) => setForm({ ...form, newLevel: e.target.value })}
                 onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addLevel())}
               />
+              <Button type="button" onClick={addLevel} variant="outline">
+                Add Level
+              </Button>
             </div>
             <div className="flex flex-wrap gap-2 mb-2">
-              {(['Term 1', 'Term 2', 'Term 3'] as const).map((term) => {
-                const alreadyAdded = form.productLevels.includes(term)
-                return (
-                  <Button
-                    key={term}
-                    type="button"
-                    onClick={() => addNamedTerm(term)}
-                    variant="outline"
-                    disabled={alreadyAdded}
-                  >
-                    Add {term}
-                  </Button>
-                )
-              })}
+              {(['Term 1', 'Term 2', 'Term 3'] as const).map((term) => (
+                <Button
+                  key={term}
+                  type="button"
+                  onClick={() => addNamedTerm(term)}
+                  variant="outline"
+                >
+                  Add under {term}
+                </Button>
+              ))}
             </div>
             {form.productLevels.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-2">

@@ -58,8 +58,7 @@ export default function AssignAreasPage() {
     try {
       const response = await apiRequest<any>('/employees?isActive=true')
       const list = Array.isArray(response) ? response : (response?.data || [])
-      const employeesWithCities = list.filter((emp: Employee) => emp.assignedCity)
-      setEmployees(employeesWithCities)
+      setEmployees(list)
     } catch (err: any) {
       toast.error('Failed to load employees')
       console.error(err)
@@ -178,7 +177,7 @@ export default function AssignAreasPage() {
       <Card className="p-4 bg-white border border-neutral-200">
         <h3 className="font-semibold mb-4 flex items-center">
           <MapPin className="w-4 h-4 mr-2" />
-          Employees with Assigned Cities
+          Employees
         </h3>
         {loading ? (
           <div className="text-center py-8">Loading...</div>
@@ -227,7 +226,8 @@ export default function AssignAreasPage() {
           <DialogHeader>
             <DialogTitle>Assign Area to {selectedEmployee?.name}</DialogTitle>
             <DialogDescription>
-              Assign or update the area for this employee in {selectedEmployee?.assignedCity}
+              Assign or update the area for this employee
+              {selectedEmployee?.assignedCity ? ` in ${selectedEmployee.assignedCity}` : ''}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">

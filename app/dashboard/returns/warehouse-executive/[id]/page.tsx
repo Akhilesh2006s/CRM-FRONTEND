@@ -7,6 +7,7 @@ import { apiRequest } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Card } from '@/components/ui/card'
 import { toast } from 'sonner'
@@ -55,6 +56,7 @@ type StockReturnDetail = {
     returnQty: number
     receivedQty?: number
     reason?: string
+    condition?: string
   }>
 }
 
@@ -65,7 +67,10 @@ type ProductLine = {
   qty: number
   returnQty: number
   reason: string
+  condition: string
 }
+
+const CONDITION_OPTIONS = ['Sellable', 'Damaged', 'Expired', 'Missing', 'Short received']
 
 function formatReturnProductLabel(p: { product?: string }): string {
   return (p.product || '').trim() || '—'
@@ -159,6 +164,7 @@ export default function WarehouseExecutiveReturnUpdatePage() {
         qty: Number(p.receivedQty) || 0,
         returnQty: Number(p.returnQty) || 0,
         reason: p.reason || 'Excess',
+        condition: p.condition || '',
       }))
       setLines(rows)
     } catch (e: any) {
@@ -193,7 +199,7 @@ export default function WarehouseExecutiveReturnUpdatePage() {
       receivedQty: l.qty,
       qty: l.qty,
       reason: l.reason || 'Excess',
-      condition: l.qty > 0 ? 'Sellable' : '',
+      condition: l.condition,
     })),
   })
 
@@ -232,11 +238,9 @@ export default function WarehouseExecutiveReturnUpdatePage() {
       toast.error('No products on this return')
       return
     }
-    const missingQty = lines.find((l) => l.qty <= 0)
-    if (missingQty) {
-      toast.error(
-        `Enter received quantity for ${missingQty.productLabel || missingQty.productRaw || 'each product'}`
-      )
+    const lineWithoutCondition = lines.find((line) => !line.condition)
+    if (lineWithoutCondition) {
+      toast.error(`Select product condition for ${lineWithoutCondition.productLabel}`)
       return
     }
     setSubmitting(true)
@@ -245,7 +249,7 @@ export default function WarehouseExecutiveReturnUpdatePage() {
         method: 'PUT',
         body: JSON.stringify(buildPayload()),
       })
-      toast.success('Submitted to Warehouse Manager')
+      toast.success('Stock return submitted to Warehouse Manager.')
       router.push('/dashboard/returns/warehouse-executive')
     } catch (e: any) {
       toast.error(e.message || 'Failed to submit')
@@ -461,7 +465,7 @@ export default function WarehouseExecutiveReturnUpdatePage() {
         </div>
 
         <p className="text-sm text-neutral-600 mb-3">
-          Enter <strong>Received Qty</strong> — the actual quantity counted when stock arrives at the warehouse.
+          Enter <strong>Received Qty</strong> and select the actual <strong>Product Condition</strong> when stock arrives at the warehouse.
         </p>
         <div className="overflow-x-auto border rounded-lg">
           {lines.length === 0 ? (
@@ -472,6 +476,7 @@ export default function WarehouseExecutiveReturnUpdatePage() {
                 <tr className="bg-neutral-100 border-b">
                   <th className="py-2 px-3 text-left font-semibold">Product</th>
                   <th className="py-2 px-3 text-left font-semibold w-32">Received Qty *</th>
+                  <th className="py-2 px-3 text-left font-semibold w-48">Product Condition *</th>
                 </tr>
               </thead>
               <tbody>
@@ -507,6 +512,24 @@ export default function WarehouseExecutiveReturnUpdatePage() {
                         />
                       </div>
                     </td>
+                    <td className="py-2 px-3">
+                      <Select
+                        value={line.condition || undefined}
+                        onValueChange={(value) => updateLine(line.id, { condition: value })}
+                        disabled={readOnly}
+                      >
+                        <SelectTrigger className="min-w-[170px]">
+                          <SelectValue placeholder="Select condition" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CONDITION_OPTIONS.map((condition) => (
+                            <SelectItem key={condition} value={condition}>
+                              {condition}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -526,7 +549,7 @@ export default function WarehouseExecutiveReturnUpdatePage() {
                 {saving ? 'Saving…' : 'Save'}
               </Button>
               <Button type="button" onClick={handleSubmitToAdmin} disabled={saving || submitting}>
-                {submitting ? 'Submitting…' : 'Submit to Admin'}
+                {submitting ? 'Submitting…' : 'Submit to Warehouse Manager'}
               </Button>
             </>
           )}

@@ -41,8 +41,7 @@ export default function ExecutivesAssignAreasScreen({ navigation }: any) {
     try {
       setLoading(true);
       const data = await apiService.get('/employees?isActive=true');
-      const employeesWithCities = (Array.isArray(data) ? data : []).filter((emp: any) => emp.assignedCity);
-      setEmployees(employeesWithCities);
+      setEmployees(Array.isArray(data) ? data : []);
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to load employees');
     } finally {

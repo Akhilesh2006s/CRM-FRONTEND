@@ -14,6 +14,7 @@ import {
 } from '@/lib/leaveAccess'
 import { toast } from 'sonner'
 import { PlusCircle } from 'lucide-react'
+import { leaveTypeLabel } from '@/lib/leaveTypes'
 
 type Leave = {
   _id: string
@@ -132,7 +133,7 @@ export default function EmployeeApprovedLeavesPage() {
               )}
               {items.map((l) => (
                 <tr key={l._id} className="border-b last:border-0">
-                  <td className="py-2 px-3">{l.leaveType || '-'}</td>
+                  <td className="py-2 px-3">{leaveTypeLabel(l.leaveType)}</td>
                   <td className="py-2 px-3 text-center">{new Date(l.startDate).toLocaleDateString()}</td>
                   <td className="py-2 px-3 text-center">{new Date(l.endDate).toLocaleDateString()}</td>
                   <td className="py-2 px-3">{l.reason || '-'}</td>

@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
+import { leaveTypeLabel } from '@/lib/leaveTypes'
 
 type Leave = {
   _id: string
@@ -178,7 +179,7 @@ export default function AdminPendingLeavesPage() {
                   {!isExecutiveManager && (
                     <td className="py-2 px-3 text-sm text-neutral-600">{getManagerName(l)}</td>
                   )}
-                  <td className="py-2 px-3">{l.leaveType || '-'}</td>
+                  <td className="py-2 px-3">{leaveTypeLabel(l.leaveType)}</td>
                   <td className="py-2 px-3 text-center">
                     {new Date(l.startDate).toLocaleDateString()}
                   </td>

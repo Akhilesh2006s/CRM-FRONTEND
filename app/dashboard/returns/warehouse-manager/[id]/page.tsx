@@ -76,7 +76,7 @@ const DECISION_OPTIONS = ['Approve', 'Partial Approve', 'Reject', 'Send Back']
 const STOCK_BUCKETS = ['Sellable', 'Damaged', 'Expired', 'QC / Hold']
 
 function canDecide(status: string) {
-  return status === 'Received' || status === 'Pending Manager Approval'
+  return status === 'WAREHOUSE_MANAGER_PENDING' || status === 'Received' || status === 'Pending Manager Approval'
 }
 
 function selectValue(v: string) {
@@ -165,6 +165,16 @@ export default function WarehouseManagerReturnReviewPage() {
   }
 
   const validateLines = (): boolean => {
+    const mismatchWithoutRemark = lines.find(
+      (l) =>
+        qtyDiff(l.fieldExecQty, l.warehouseExecQty) !== null &&
+        !l.mismatchRemark.trim()
+    )
+    if (mismatchWithoutRemark) {
+      toast.error(`Mismatch remark is required for ${mismatchWithoutRemark.product}`)
+      return false
+    }
+
     const withDecision = lines.filter((l) => l.managerDecision)
     if (withDecision.length === 0) {
       toast.error('Set a decision for at least one product line')
@@ -206,6 +216,7 @@ export default function WarehouseManagerReturnReviewPage() {
       approvedQty: l.approvedQty,
       stockBucket: l.stockBucket,
       managerRemark: l.managerRemark,
+      mismatchRemark: l.mismatchRemark,
     }))
 
   const runAction = async (action: string, extra: Record<string, unknown> = {}) => {
@@ -242,6 +253,15 @@ export default function WarehouseManagerReturnReviewPage() {
   }
 
   const handleRejectAll = () => {
+    const mismatchWithoutRemark = lines.find(
+      (l) =>
+        qtyDiff(l.fieldExecQty, l.warehouseExecQty) !== null &&
+        !l.mismatchRemark.trim()
+    )
+    if (mismatchWithoutRemark) {
+      toast.error(`Mismatch remark is required for ${mismatchWithoutRemark.product}`)
+      return
+    }
     if (!rejectionReason.trim()) {
       toast.error('Enter rejection reason')
       return
@@ -403,7 +423,7 @@ export default function WarehouseManagerReturnReviewPage() {
                 <th className="py-2 px-2 text-center border-l bg-blue-50" colSpan={3}>
                   Field Executive
                 </th>
-                <th className="py-2 px-2 text-center border-l bg-orange-50" colSpan={3}>
+                <th className="py-2 px-2 text-center border-l bg-orange-50" colSpan={4}>
                   Warehouse Executive
                 </th>
                 <th className="py-2 px-2 text-center border-l bg-emerald-50" colSpan={4}>
@@ -420,6 +440,7 @@ export default function WarehouseManagerReturnReviewPage() {
                 <th className="py-2 px-2 text-right border-l bg-orange-50/80">Received Qty</th>
                 <th className="py-2 px-2 text-left bg-orange-50/80">Condition</th>
                 <th className="py-2 px-2 text-center bg-orange-50/80">Diff</th>
+                <th className="py-2 px-2 text-left bg-orange-50/80">Mismatch Remark</th>
                 <th className="py-2 px-2 text-left border-l bg-emerald-50/80">Decision</th>
                 <th className="py-2 px-2 text-right bg-emerald-50/80">Approved Qty</th>
                 <th className="py-2 px-2 text-left bg-emerald-50/80">Bucket</th>
@@ -429,7 +450,7 @@ export default function WarehouseManagerReturnReviewPage() {
             <tbody>
               {lines.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="py-6 text-center text-neutral-500">
+                  <td colSpan={14} className="py-6 text-center text-neutral-500">
                     No product lines
                   </td>
                 </tr>
@@ -462,6 +483,21 @@ export default function WarehouseManagerReturnReviewPage() {
                         }`}
                       >
                         {diff === null ? '—' : diff > 0 ? `+${diff}` : String(diff)}
+                      </td>
+                      <td className="py-2 px-2 bg-orange-50/30">
+                        {mismatch ? (
+                          <Input
+                            value={line.mismatchRemark}
+                            onChange={(e) =>
+                              updateLine(line.id, { mismatchRemark: e.target.value })
+                            }
+                            placeholder="Required"
+                            disabled={readOnly}
+                            className="h-8 min-w-[140px]"
+                          />
+                        ) : (
+                          <span className="text-neutral-400">—</span>
+                        )}
                       </td>
                       <td className="py-2 px-2 border-l bg-emerald-50/30">
                         <Select

@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { apiRequest } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
-import { PlusCircle, Edit, Search, Package, SlidersHorizontal } from 'lucide-react'
+import { PlusCircle, Edit, Search, Package, SlidersHorizontal, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
@@ -65,6 +65,7 @@ export default function ProductsPage() {
     calculationType: 'normal' as 'normal' | 'level_based' | 'subject_based',
   })
   const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [paymentLogicOpen, setPaymentLogicOpen] = useState(false)
 
   useEffect(() => {
@@ -107,6 +108,20 @@ export default function ProductsPage() {
       console.error(err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleDeleteProduct = async (product: Product) => {
+    if (!confirm(`Delete product "${product.productName}"? This cannot be undone.`)) return
+    setDeletingId(product._id)
+    try {
+      await apiRequest(`/products/${product._id}`, { method: 'DELETE' })
+      toast.success(`Deleted ${product.productName}`)
+      setProducts((prev) => prev.filter((p) => p._id !== product._id))
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to delete product')
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -420,14 +435,26 @@ export default function ProductsPage() {
                       {product.createdAt ? new Date(product.createdAt).toLocaleDateString() : '-'}
                     </td>
                     <td className="py-3 px-4">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openEditModal(product)}
-                      >
-                        <Edit className="w-4 h-4 mr-2" />
-                        Edit
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openEditModal(product)}
+                        >
+                          <Edit className="w-4 h-4 mr-2" />
+                          Edit
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                          disabled={deletingId === product._id}
+                          onClick={() => handleDeleteProduct(product)}
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          {deletingId === product._id ? 'Deleting…' : 'Delete'}
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}

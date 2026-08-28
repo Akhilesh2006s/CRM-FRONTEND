@@ -6,6 +6,7 @@ import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { leaveTypeLabel } from '../../lib/leaveTypes';
 
 export default function LeavesApprovedScreen({ navigation }: any) {
   const { user } = useAuth();
@@ -67,7 +68,7 @@ export default function LeavesApprovedScreen({ navigation }: any) {
           leaves.map((leave) => (
             <View key={leave._id} style={styles.card}>
               <View style={styles.cardHeader}>
-                <Text style={styles.employeeName}>{leave.leaveType || 'Leave'}</Text>
+                <Text style={styles.employeeName}>{leaveTypeLabel(leave.leaveType)}</Text>
                 <View
                   style={[
                     styles.statusBadge,

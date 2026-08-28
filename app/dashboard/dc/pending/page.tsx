@@ -183,7 +183,7 @@ export default function PendingDCPage() {
     'Excess-OldStudents',
     'Excess NewStudents',
   ]
-  const { productNames: availableProducts, getProductLevels, getDefaultLevel, getProductSpecs, getProductSubjects, getProductCategories, hasProductCategories, hasProductSpecs } = useProducts()
+  const { productNames: availableProducts, getProductLevels, hasProductLevels, getDefaultLevel, getProductSpecs, getProductSubjects, getProductCategories, hasProductCategories, hasProductSpecs } = useProducts()
   const availableDCCategories = ['Term 1', 'Term 2', 'Term 3', 'Full Year']
 
   const load = async () => {
@@ -377,7 +377,7 @@ export default function PendingDCPage() {
             productName: p.productName || p.product || matchedProduct, // Use productName or product or matched product
             quantity: Number(p.quantity) || Number(p.strength) || 0,
             strength: Number(p.strength) || Number(p.quantity) || 0,
-            level: p.level || getDefaultLevel(matchedProduct),
+            level: p.level && String(p.level).trim() !== '-' ? String(p.level).trim() : '',
             specs: p.specs || 'Regular',
             subject: p.subject || undefined,
             price: Number(p.unit_price) || Number(p.price) || 0,
@@ -453,7 +453,7 @@ export default function PendingDCPage() {
                 productName: matchedProduct, // Use matched product
                 quantity: Number(p.quantity) || 0,
                 strength: Number(p.strength) || Number(p.quantity) || 0,
-                level: p.level || getDefaultLevel(matchedProduct),
+                level: p.level && String(p.level).trim() !== '-' ? String(p.level).trim() : '',
                 specs: p.specs || 'Regular',
                 subject: p.subject || undefined,
                 price: Number(p.unit_price) || Number(p.price) || 0,
@@ -497,7 +497,7 @@ export default function PendingDCPage() {
           productName: matchedProduct, // Use matched product
           quantity: fallbackQuantity,
           strength: fallbackQuantity,
-          level: getDefaultLevel(matchedProduct),
+          level: '',
           specs: getProductSpecs(matchedProduct)[0] || '',
           subject: undefined,
           price: 0,
@@ -1072,7 +1072,7 @@ export default function PendingDCPage() {
                           const updated = [...productRows]
                           updated[idx].product = v
                           // Default level
-                          updated[idx].level = getDefaultLevel(v)
+                          updated[idx].level = hasProductLevels(v) ? getDefaultLevel(v) : ''
                           // Default product category if configured
                           if (hasProductCategories(v)) {
                             const cats = getProductCategories(v)
@@ -1212,20 +1212,24 @@ export default function PendingDCPage() {
                         />
                       </td>
                       <td className="py-2 px-3 border-r">
-                        <Select value={row.level || getDefaultLevel(row.product)} onValueChange={(v) => {
-                          const updated = [...productRows]
-                          updated[idx].level = v
-                          setProductRows(updated)
-                        }}>
-                          <SelectTrigger className="h-8 text-xs bg-white">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {getProductLevels(row.product).map(level => (
-                              <SelectItem key={level} value={level}>{level}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        {hasProductLevels(row.product) && row.level && String(row.level).trim() !== '-' ? (
+                          <Select value={String(row.level).trim()} onValueChange={(v) => {
+                            const updated = [...productRows]
+                            updated[idx].level = v
+                            setProductRows(updated)
+                          }}>
+                            <SelectTrigger className="h-8 text-xs bg-white">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {getProductLevels(row.product).map(level => (
+                                <SelectItem key={level} value={level}>{level}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <span className="text-sm text-gray-700">-</span>
+                        )}
                       </td>
                       <td className="py-2 px-3 text-center">
                         {productRows.length > 1 && (

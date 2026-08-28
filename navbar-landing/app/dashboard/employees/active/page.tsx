@@ -21,7 +21,6 @@ type Employee = {
   phone?: string
   mobile?: string
   role: string
-  roleId?: string | null
   department?: string
   cluster?: string
   inactiveReason?: string
@@ -39,17 +38,14 @@ export default function ActiveEmployeesPage() {
     phone: '',
     mobile: '',
     role: '',
-    roleId: '' as string,
     department: '',
     cluster: '',
   })
   const [saving, setSaving] = useState(false)
-  const [rbacRoles, setRbacRoles] = useState<Array<{ _id: string; name: string }>>([])
   
   // Get current user to check role
   const currentUser = getCurrentUser()
   const { rbacActive, hasPermission } = usePermissions()
-  const isSuperAdmin = currentUser?.isSuperAdmin || currentUser?.role === 'Super Admin'
   const isCoordinator = currentUser?.role === 'Coordinator'
   const isSeniorCoordinator = currentUser?.role === 'Senior Coordinator'
   const shouldHideAction = rbacActive
@@ -69,12 +65,6 @@ export default function ActiveEmployeesPage() {
   }
 
   useEffect(() => { load() }, [])
-  useEffect(() => {
-    if (!isSuperAdmin) return
-    apiRequest<Array<{ _id: string; name: string }>>('/roles')
-      .then(setRbacRoles)
-      .catch(() => {})
-  }, [isSuperAdmin])
 
   const resetPassword = async (id: string, name: string) => {
     if (!confirm(`Reset password for ${name} to "Password123"?`)) return
@@ -95,7 +85,6 @@ export default function ActiveEmployeesPage() {
       phone: employee.phone || '',
       mobile: employee.mobile || '',
       role: employee.role || '',
-      roleId: employee.roleId || '',
       department: employee.department || '',
       cluster: employee.cluster || '',
     })
@@ -132,19 +121,7 @@ export default function ActiveEmployeesPage() {
           cluster: editForm.cluster || undefined,
         }),
       })
-      if (isSuperAdmin) {
-        const body = { roleId: editForm.roleId ? editForm.roleId : null }
-        await apiRequest(`/users/${editingEmployee._id}/role`, {
-          method: 'PUT',
-          body: JSON.stringify(body),
-        })
-      }
       toast.success('Employee updated successfully')
-      if (isSuperAdmin) {
-        toast.message('RBAC note', {
-          description: 'User should log out and log back in to refresh permissions.',
-        })
-      }
       setEditDialogOpen(false)
       setEditingEmployee(null)
       load()
@@ -306,33 +283,6 @@ export default function ActiveEmployeesPage() {
               </Select>
             </div>
 
-            {isSuperAdmin && (
-              <div>
-                <Label>Permission Role (RBAC)</Label>
-                <Select
-                  value={editForm.roleId || '__none__'}
-                  onValueChange={(v) =>
-                    setEditForm({
-                      ...editForm,
-                      roleId: v === '__none__' ? '' : v,
-                    })
-                  }
-                >
-                  <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Default from legacy role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">— Default from legacy role —</SelectItem>
-                    {rbacRoles.map((r) => (
-                      <SelectItem key={r._id} value={r._id}>
-                        {r.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            
             <div>
               <Label htmlFor="edit-department">Department</Label>
               <Input

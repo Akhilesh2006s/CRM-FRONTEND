@@ -5,6 +5,7 @@ import { typography } from '../../theme/typography';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
+import { leaveTypeLabel } from '../../lib/leaveTypes';
 
 export default function LeavesPendingScreen({ navigation }: any) {
   const [leaves, setLeaves] = useState<any[]>([]);
@@ -70,7 +71,7 @@ export default function LeavesPendingScreen({ navigation }: any) {
             <View key={leave._id} style={styles.card}>
               <View style={styles.cardHeader}>
                 <Text style={styles.employeeName}>{typeof leave.employeeId === 'string' ? leave.employeeId : leave.employeeId?.name || 'Unknown'}</Text>
-                <Text style={styles.leaveType}>{leave.leaveType || '-'}</Text>
+                <Text style={styles.leaveType}>{leaveTypeLabel(leave.leaveType)}</Text>
               </View>
               <View style={styles.cardBody}>
                 <View style={styles.infoRow}>

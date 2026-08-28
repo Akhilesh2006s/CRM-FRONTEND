@@ -282,7 +282,6 @@ const NAV: NavItem[] = [
       { label: 'SMS', href: '/dashboard/settings/sms' },
       { label: 'DB Backup', href: '/dashboard/settings/backup' },
       { label: 'Expense policy', href: '/dashboard/settings/expenses', adminOnly: true },
-      { label: 'Roles & Permissions', href: '/dashboard/settings/roles' },
     ],
   },
   { label: 'Sign out', icon: LogOut, href: '/auth/login' },

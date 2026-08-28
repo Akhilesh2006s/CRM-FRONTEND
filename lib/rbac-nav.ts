@@ -191,7 +191,6 @@ export const RBAC_NAV_MODULES: RbacNavModule[] = [
       { label: 'SMS', href: '/dashboard/settings/sms' },
       { label: 'DB Backup', href: '/dashboard/settings/backup' },
       { label: 'Expense policy', href: '/dashboard/settings/expenses' },
-      { label: 'Roles & Permissions', href: '/dashboard/settings/roles' },
     ],
   },
   {

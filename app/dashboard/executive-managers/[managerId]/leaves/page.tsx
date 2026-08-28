@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { apiRequest } from '@/lib/api'
+import { leaveTypeLabel } from '@/lib/leaveTypes'
 import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
 import { Calendar, CheckCircle, XCircle, Clock, ArrowLeft } from 'lucide-react'
@@ -255,7 +256,7 @@ export default function ExecutiveManagerLeavesPage() {
                         <p className="text-xs text-neutral-500">{leave.employeeId.email}</p>
                       </div>
                     </TableCell>
-                    <TableCell>{leave.leaveType}</TableCell>
+                    <TableCell>{leaveTypeLabel(leave.leaveType)}</TableCell>
                     <TableCell>{new Date(leave.startDate).toLocaleDateString()}</TableCell>
                     <TableCell>{new Date(leave.endDate).toLocaleDateString()}</TableCell>
                     <TableCell>{leave.days}</TableCell>

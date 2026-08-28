@@ -87,13 +87,24 @@ function quantityOfProduct(p: any) {
   return Number(p?.quantity) || Number(p?.strength) || 0
 }
 
-function mapToSavedProductRow(p: any, idx: number) {
+function studentCategoryForSchoolType(schoolType: unknown): 'New Students' | 'Existing Students' | null {
+  const normalized = String(schoolType || '').trim().toLowerCase()
+  if (normalized.includes('existing')) return 'Existing Students'
+  if (normalized.includes('new')) return 'New Students'
+  return null
+}
+
+function mapToSavedProductRow(
+  p: any,
+  idx: number,
+  schoolCategory: 'New Students' | 'Existing Students' | null
+) {
   const name = p.product || p.productName || p.product_name || 'Abacus'
   return {
     id: String(idx + 1),
     product: name,
     class: p.class && String(p.class).trim() !== '' ? String(p.class) : '1',
-    category: p.category || 'New Students',
+    category: schoolCategory || p.category || 'New Students',
     productName: p.productName || name,
     quantity: quantityOfProduct(p),
     strength: Number(p.strength) || quantityOfProduct(p),
@@ -295,6 +306,7 @@ export default function SavedDCPage() {
         setSelectedEmployeeId('')
       }
       const dcRequestData = (fullDeal as any).dcRequestData || (normalizedDeal as any).dcRequestData || {}
+      const schoolCategory = studentCategoryForSchoolType(normalizedDeal.school_type)
       const applyProductRows = (fullDC?: DC | null) => {
         const richest = resolveSavedDcProductLines(
           fullDC?.productDetails,
@@ -303,9 +315,17 @@ export default function SavedDCPage() {
           normalizedDeal.products
         )
         if (richest.length > 0) {
-          setProductRows(richest.map((p, idx) => mapToSavedProductRow(p, idx)))
+          setProductRows(richest.map((p, idx) => mapToSavedProductRow(p, idx, schoolCategory)))
         } else {
-          setProductRows([{ id: '1', product: 'Abacus', class: '1', category: 'New Students', productName: '', quantity: 0, strength: 0 }])
+          setProductRows([{
+            id: '1',
+            product: 'Abacus',
+            class: '1',
+            category: schoolCategory || 'New Students',
+            productName: '',
+            quantity: 0,
+            strength: 0,
+          }])
         }
       }
       // If DC exists, load its data; otherwise start fresh
