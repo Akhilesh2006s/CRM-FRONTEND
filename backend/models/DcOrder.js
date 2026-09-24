@@ -36,6 +36,8 @@ const productSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    /** Required when status is Not Interested */
+    not_interested_reason: { type: String, trim: true, default: '' },
     deliverables: { type: [String], default: [] }, // Transaction-level: deliverables selected when closing lead
     // Snapshot of enrollment shape for payment divisor / reporting (optional)
     level: { type: String, trim: true },
@@ -58,6 +60,8 @@ const followUpProductSchema = new mongoose.Schema(
     },
     strength: { type: Number, default: 0, min: 0 },
     chance: { type: Number, default: 0, min: 0, max: 100 },
+    unit_price: { type: Number, default: 0, min: 0 },
+    not_interested_reason: { type: String, trim: true, default: '' },
   },
   { _id: false }
 );
@@ -68,8 +72,10 @@ const dcOrderSchema = new mongoose.Schema(
     school_name: { type: String, required: true },
     contact_person: { type: String },
     contact_mobile: { type: String },
+    contact_designation: { type: String, trim: true, default: '' },
     contact_person2: { type: String },
     contact_mobile2: { type: String },
+    financial_contact_designation: { type: String, trim: true, default: '' },
     email: { type: String },
     address: { type: String },
     school_type: { type: String },
@@ -81,6 +87,8 @@ const dcOrderSchema = new mongoose.Schema(
     city: { type: String },
     region: { type: String },
     area: { type: String },
+    mandal: { type: String },
+    cluster: { type: String, trim: true },
     // Old Delivery and Address fields (kept for backwards compatibility)
     property_number: { type: String },
     floor: { type: String },

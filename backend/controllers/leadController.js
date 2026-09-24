@@ -335,6 +335,8 @@ const createLead = async (req, res) => {
     if (!leadData.school_code) {
       try {
         const schoolCode = await generateSchoolCode({
+          state: leadData.state || '',
+          district: leadData.city || '',
           region: leadData.region || '',
           city: leadData.city || '',
         });
@@ -479,19 +481,34 @@ const updateLead = async (req, res) => {
           strength: Number(row.strength) || 0,
           chance: Math.max(0, Math.min(100, Number(row.chance) || 0)),
           important: Boolean(row.important),
-          quantity: Number(row.strength) || 0,
-          unit_price: 0,
+          quantity: Number(row.strength) || Number(row.quantity) || 1,
+          unit_price: Number(row.unit_price) || 0,
+          not_interested_reason:
+            row.status === 'Not Interested'
+              ? String(row.not_interested_reason || '').trim()
+              : '',
         }));
     const normalizedProductsInterested = hasProductsInterested
       ? normalizeProductsInterested(req.body.productsInterested)
       : [];
     const validateFollowUpProducts = (rows) => {
       if (rows.length === 0) {
-        return 'At least one product with Strength and Chance % is required';
+        return 'At least one product is required';
       }
       for (const row of rows) {
-        if (row.strength <= 0 || row.chance <= 0) {
-          return 'Each product must have Strength greater than 0 and Chance % greater than 0';
+        if (row.status === 'Not Interested') {
+          if (!String(row.not_interested_reason || '').trim()) {
+            return 'Not Interested products require a reason';
+          }
+          continue;
+        }
+        if (!(Number(row.unit_price) > 0)) {
+          return 'Each product must have Unit Price greater than 0';
+        }
+        if (row.status === 'Hot' || row.status === 'Warm') {
+          if (row.strength <= 0 || row.chance <= 0) {
+            return 'Hot/Warm products must have Strength greater than 0 and Chance % greater than 0';
+          }
         }
         if (row.status === 'Hot' && row.chance < 80) {
           return 'Hot products require Chance % at least 80';

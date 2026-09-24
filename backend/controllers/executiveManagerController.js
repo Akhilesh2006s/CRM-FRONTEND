@@ -131,10 +131,10 @@ const updateManagerState = async (req, res) => {
 // @access  Private (Executive Manager only)
 const assignZoneToEmployee = async (req, res) => {
   try {
-    const { employeeId, zone } = req.body;
+    const { employeeId, zone, zoneId } = req.body;
 
-    if (!employeeId || !zone) {
-      return res.status(400).json({ message: 'employeeId and zone (city) are required' });
+    if (!employeeId || (!zone && !zoneId)) {
+      return res.status(400).json({ message: 'employeeId and zone (or zoneId) are required' });
     }
 
     // Get manager's assigned state (for Executive Managers) or allow Admins
@@ -164,10 +164,31 @@ const assignZoneToEmployee = async (req, res) => {
       }
     }
 
+    // Resolve CRM Zone document when possible so we can attach the zone manager
+    const Zone = require('../models/Zone');
+    let zoneDoc = null;
+    if (zoneId) {
+      zoneDoc = await Zone.findById(zoneId);
+    } else if (zone) {
+      zoneDoc = await Zone.findOne({
+        $or: [
+          { name: zone },
+          { nameLower: String(zone).trim().toLowerCase() },
+        ],
+      });
+    }
+
+    const zoneName = zoneDoc?.name || zone;
+
     // Update employee zone (city)
     // Zone is stored in assignedCity field, and also in zone field for clarity
-    employee.assignedCity = zone;
-    employee.zone = zone;
+    employee.assignedCity = zoneName;
+    employee.zone = zoneName;
+
+    // Assigning a zone also assigns that zone's manager by default
+    if (zoneDoc?.managerId) {
+      employee.executiveManagerId = zoneDoc.managerId;
+    }
     
     // Fix old 'Employee' role to 'Executive' if needed
     if (employee.role === 'Employee') {
@@ -176,40 +197,77 @@ const assignZoneToEmployee = async (req, res) => {
     
     await employee.save();
 
-    const employeeData = await User.findById(employee._id).select('-password');
+    const employeeData = await User.findById(employee._id)
+      .select('-password')
+      .populate('executiveManagerId', 'name email role');
     res.json(employeeData);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-// @desc    Assign area to employee (by Executive)
+// @desc    Assign area/cluster to employee
 // @route   PUT /api/executive-managers/assign-area
-// @access  Private (Executive only)
+// @access  Private
 const assignAreaToEmployee = async (req, res) => {
   try {
-    const { employeeId, area } = req.body;
+    const { employeeId, area, cluster, zone } = req.body;
 
-    if (!employeeId || !area) {
-      return res.status(400).json({ message: 'employeeId and area are required' });
+    if (!employeeId || (!area && !cluster)) {
+      return res.status(400).json({ message: 'employeeId and cluster (or area) are required' });
     }
 
-    // Get employee first to check role
     const employee = await User.findById(employeeId);
     if (!employee) {
       return res.status(404).json({ message: 'Employee not found' });
     }
 
-    // Fix old 'Employee' role to 'Executive' if needed
     if (employee.role === 'Employee') {
       employee.role = 'Executive';
     }
 
-    // Update employee area
-    employee.assignedArea = area;
+    const clusterName = (cluster || area || '').trim();
+    employee.assignedArea = clusterName;
+    if (clusterName) {
+      employee.cluster = clusterName;
+    }
+    if (zone) {
+      employee.zone = zone;
+      employee.assignedCity = zone;
+
+      // Assigning zone also assigns that zone's manager by default
+      const Zone = require('../models/Zone');
+      const zoneDoc = await Zone.findOne({
+        $or: [
+          { name: zone },
+          { nameLower: String(zone).trim().toLowerCase() },
+        ],
+      });
+      if (zoneDoc?.managerId) {
+        employee.executiveManagerId = zoneDoc.managerId;
+      }
+    }
+
+    // Enforce one Executive per cluster
+    if (employee.role === 'Executive' && clusterName) {
+      const existing = await User.findOne({
+        role: 'Executive',
+        cluster: clusterName,
+        _id: { $ne: employee._id },
+        isActive: true,
+      });
+      if (existing) {
+        return res.status(400).json({
+          message: 'This cluster is already assigned to another executive.',
+        });
+      }
+    }
+
     await employee.save();
 
-    const employeeData = await User.findById(employee._id).select('-password');
+    const employeeData = await User.findById(employee._id)
+      .select('-password')
+      .populate('executiveManagerId', 'name email role');
     res.json(employeeData);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -591,14 +649,33 @@ const approveManagerEmployeeLeave = async (req, res) => {
     const { leaveId } = req.params;
     const { status, rejectionReason } = req.body;
 
+    if (!['Approved', 'Rejected'].includes(status)) {
+      return res.status(400).json({ message: 'status must be Approved or Rejected' });
+    }
+    if (status === 'Rejected' && !String(rejectionReason || '').trim()) {
+      return res.status(400).json({ message: 'Rejection reason is required' });
+    }
+
     const leave = await Leave.findById(leaveId).populate('employeeId');
     if (!leave) {
       return res.status(404).json({ message: 'Leave not found' });
     }
 
-    // Verify employee is assigned to this manager
-    if (leave.employeeId.executiveManagerId?.toString() !== req.user._id.toString()) {
+    const isOrgWide =
+      req.user.role === 'Admin' ||
+      req.user.role === 'Super Admin' ||
+      req.user.role === 'HR Manager';
+
+    // Verify employee is assigned to this manager (org-wide roles may use this route too)
+    if (
+      !isOrgWide &&
+      leave.employeeId.executiveManagerId?.toString() !== req.user._id.toString()
+    ) {
       return res.status(403).json({ message: 'You can only approve leaves for your assigned employees' });
+    }
+
+    if (leave.status !== 'Pending') {
+      return res.status(400).json({ message: `Leave is already ${leave.status}` });
     }
 
     const updateData = {
@@ -607,8 +684,8 @@ const approveManagerEmployeeLeave = async (req, res) => {
       approvedAt: new Date(),
     };
 
-    if (status === 'Rejected' && rejectionReason) {
-      updateData.rejectionReason = rejectionReason;
+    if (status === 'Rejected') {
+      updateData.rejectionReason = String(rejectionReason).trim();
     }
 
     const updatedLeave = await Leave.findByIdAndUpdate(leaveId, updateData, { new: true })

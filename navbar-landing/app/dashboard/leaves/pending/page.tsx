@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
 import { apiRequest } from '@/lib/api'
 import { usePermissions } from '@/components/permissions/PermissionsProvider'
 import { Card } from '@/components/ui/card'
@@ -107,14 +106,19 @@ export default function AdminPendingLeavesPage() {
 
   const confirmReject = async () => {
     if (!rejectingId) return
+    const reason = rejectionReason.trim()
+    if (!reason) {
+      toast.error('Rejection reason is required')
+      return
+    }
     setActing(true)
     try {
-      const body = { status: 'Rejected', rejectionReason: rejectionReason.trim() || undefined }
+      const body = { status: 'Rejected', rejectionReason: reason }
       const url = isExecutiveManager
         ? `/executive-managers/leaves/${rejectingId}/approve`
         : `/leaves/${rejectingId}/approve`
       await apiRequest(url, { method: 'PUT', body: JSON.stringify(body) })
-      toast.success('Leave rejected')
+      toast.success('Leave rejected — employee will see the reason in My Leaves')
       setRejectDialogOpen(false)
       setRejectingId(null)
       load()
@@ -135,15 +139,6 @@ export default function AdminPendingLeavesPage() {
         <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Pending Leaves</h1>
         <div className="text-sm text-neutral-600">Total: {items.length}</div>
       </div>
-      {!isExecutiveManager && (
-        <p className="text-sm text-neutral-600">
-          Assign employees to managers in{' '}
-          <Link href="/dashboard/employees/active" className="text-blue-600 underline">
-            Active Employees
-          </Link>{' '}
-          (Executive Manager role) so managers can approve leaves for their team.
-        </p>
-      )}
       {loadError && (
         <Card className="p-4 border-red-200 bg-red-50 text-red-800 text-sm">{loadError}</Card>
       )}
@@ -213,23 +208,30 @@ export default function AdminPendingLeavesPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Reject leave request</DialogTitle>
-            <DialogDescription>Optional: provide a reason for rejection.</DialogDescription>
+            <DialogDescription>
+              A rejection reason is required. The employee will see it in My Leaves.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <Label htmlFor="rejection-reason">Rejection reason</Label>
+            <Label htmlFor="rejection-reason">Rejection reason *</Label>
             <Textarea
               id="rejection-reason"
               value={rejectionReason}
               onChange={(e) => setRejectionReason(e.target.value)}
-              placeholder="Reason (optional)"
+              placeholder="Enter reason for rejection"
               rows={3}
+              required
             />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRejectDialogOpen(false)} disabled={acting}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={confirmReject} disabled={acting}>
+            <Button
+              variant="destructive"
+              onClick={confirmReject}
+              disabled={acting || !rejectionReason.trim()}
+            >
               {acting ? 'Rejecting…' : 'Reject leave'}
             </Button>
           </DialogFooter>

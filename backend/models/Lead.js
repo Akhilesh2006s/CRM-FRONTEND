@@ -6,7 +6,7 @@ const productSchema = new mongoose.Schema(
     quantity: { type: Number, default: 1, min: 0 },
     unit_price: { type: Number, default: 0, min: 0 },
     expiry_date: { type: Date },
-    deliverables: { type: [String], default: [] }, // Transaction-level: deliverables selected when closing lead
+    deliverables: { type: [String], default: [] },
     term: {
       type: String,
       enum: ['Term 1', 'Term 2', 'Both'],
@@ -16,6 +16,14 @@ const productSchema = new mongoose.Schema(
     subject: { type: String, trim: true },
     selected_subjects: { type: [String], default: [] },
     levels_snapshot: { type: [String], default: [] },
+    status: {
+      type: String,
+      enum: ['Hot', 'Warm', 'Visit Again', 'Not Met Management', 'Not Interested', 'Management Not Met'],
+    },
+    strength: { type: Number, default: 0, min: 0 },
+    chance: { type: Number, default: 0, min: 0, max: 100 },
+    /** Required when status is Not Interested */
+    not_interested_reason: { type: String, trim: true, default: '' },
   },
   { _id: false }
 );
@@ -31,6 +39,8 @@ const followUpProductSchema = new mongoose.Schema(
     },
     strength: { type: Number, default: 0, min: 0 },
     chance: { type: Number, default: 0, min: 0, max: 100 },
+    unit_price: { type: Number, default: 0, min: 0 },
+    not_interested_reason: { type: String, trim: true, default: '' },
     important: { type: Boolean, default: false },
   },
   { _id: false }
@@ -74,10 +84,17 @@ const leadSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    /** School contact designation */
+    contact_designation: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     email: {
       type: String,
       trim: true,
     },
+    /** Financial contact person (also mirrored as contact_person2) */
     contact_person2: {
       type: String,
       trim: true,
@@ -85,6 +102,11 @@ const leadSchema = new mongoose.Schema(
     contact_mobile2: {
       type: String,
       trim: true,
+    },
+    financial_contact_designation: {
+      type: String,
+      trim: true,
+      default: '',
     },
     products: {
       type: [productSchema],

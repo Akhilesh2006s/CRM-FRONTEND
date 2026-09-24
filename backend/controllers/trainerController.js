@@ -27,7 +27,21 @@ const listTrainers = async (req, res) => {
 // Create trainer (as a User with role Trainer)
 const createTrainer = async (req, res) => {
   try {
-    const { name, email, mobile, trainerProducts, trainerLevels, trainerAbacusLevels, trainerVedicLevels, trainerType, state, zone, cluster, address1 } = req.body;
+    const {
+      name,
+      email,
+      mobile,
+      trainerProducts,
+      trainerLevels,
+      trainerAbacusLevels,
+      trainerVedicLevels,
+      trainerType,
+      state,
+      zone,
+      cluster,
+      address1,
+      verticalManagerId,
+    } = req.body;
     if (!mobile) {
       return res.status(400).json({ message: 'Mobile number is required' });
     }
@@ -35,6 +49,22 @@ const createTrainer = async (req, res) => {
     if (exists) {
       return res.status(400).json({ message: 'Mobile number already exists. Please use a different mobile number.' });
     }
+
+    // Zonal manager from zone; optional vertical manager for trainers
+    let executiveManagerId = null;
+    if (zone) {
+      const Zone = require('../models/Zone');
+      const zoneDoc = await Zone.findOne({
+        $or: [
+          { name: zone },
+          { nameLower: String(zone).trim().toLowerCase() },
+        ],
+      });
+      if (zoneDoc?.managerId) {
+        executiveManagerId = zoneDoc.managerId;
+      }
+    }
+
     const trainer = await User.create({
       name,
       email,
@@ -50,8 +80,22 @@ const createTrainer = async (req, res) => {
       zone,
       cluster,
       address1,
+      executiveManagerId,
+      verticalManagerId: verticalManagerId || null,
+      verificationStatus: 'pending',
+      approvals: [
+        { roleKey: 'hr_manager', status: 'pending' },
+        { roleKey: 'zonal_manager', status: 'pending', userId: executiveManagerId },
+        { roleKey: 'training_head', status: 'pending', userId: verticalManagerId || null },
+        ...(verticalManagerId
+          ? [{ roleKey: 'vertical_manager', status: 'pending', userId: verticalManagerId }]
+          : []),
+      ],
     });
-    const data = await User.findById(trainer._id).select('-password');
+    const data = await User.findById(trainer._id)
+      .select('-password')
+      .populate('executiveManagerId', 'name email role')
+      .populate('verticalManagerId', 'name email role');
     res.status(201).json(data);
   } catch (e) {
     res.status(500).json({ message: e.message });

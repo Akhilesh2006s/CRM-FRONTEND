@@ -20,7 +20,9 @@ export type LeadProductInterestedRow = {
   term: string
   status: string
   strength: string
+  unit_price: string
   chance: string
+  not_interested_reason: string
 }
 
 export function leadProductsToInterestedRows(
@@ -35,6 +37,8 @@ export function leadProductsToInterestedRows(
       strength?: number
       chance?: number
       quantity?: number
+      unit_price?: number
+      not_interested_reason?: string
     }> | string
   },
   fallbackSchoolStatus?: string
@@ -54,7 +58,10 @@ export function leadProductsToInterestedRows(
             Number(p.strength ?? p.quantity ?? 0) > 0
               ? String(Number(p.strength ?? p.quantity ?? 0))
               : '',
+          unit_price:
+            Number(p.unit_price ?? 0) > 0 ? String(Number(p.unit_price ?? 0)) : '',
           chance: Number(p.chance ?? 0) > 0 ? String(Number(p.chance ?? 0)) : '',
+          not_interested_reason: String(p.not_interested_reason || '').trim(),
         }
       })
   }
@@ -69,7 +76,9 @@ export function leadProductsToInterestedRows(
         term: 'Term 1',
         status: schoolFallback || 'Warm',
         strength: '',
+        unit_price: '',
         chance: '',
+        not_interested_reason: '',
       }))
   }
 
@@ -78,10 +87,20 @@ export function leadProductsToInterestedRows(
 
 export function isFollowUpProductLineComplete(row: LeadProductInterestedRow): boolean {
   if (!row.product_name?.trim()) return false
+
+  if (row.status === 'Not Interested') {
+    return Boolean(String(row.not_interested_reason || '').trim())
+  }
+
+  const unitPrice = Number(row.unit_price) || 0
+  if (unitPrice <= 0) return false
+
   const strength = Number(row.strength) || 0
   const chance = Number(row.chance) || 0
-  if (strength <= 0 || chance <= 0) return false
-  if (row.status === 'Hot' && chance < 80) return false
-  if (row.status === 'Warm' && chance < 20) return false
+  if (row.status === 'Hot' || row.status === 'Warm') {
+    if (strength <= 0 || chance <= 0) return false
+    if (row.status === 'Hot' && chance < 80) return false
+    if (row.status === 'Warm' && chance < 20) return false
+  }
   return true
 }

@@ -17,6 +17,7 @@ const SYSTEM_ROLES = [
   { name: 'Super Admin', slug: 'super-admin', isSystem: true },
   { name: 'Admin', slug: 'admin', isSystem: true },
   { name: 'Finance Manager', slug: 'finance-manager', isSystem: true },
+  { name: 'HR Manager', slug: 'hr-manager', isSystem: true },
   { name: 'Executive', slug: 'executive', isSystem: true },
   { name: 'Manager', slug: 'manager', isSystem: true },
   { name: 'Coordinator', slug: 'coordinator', isSystem: true },

@@ -4,7 +4,9 @@ const DC = require('../models/DC');
 const Lead = require('../models/Lead');
 const Attendance = require('../models/Attendance');
 const ExcelJS = require('exceljs');
+const Role = require('../models/Role');
 const { syncEmployeesAfterLeave } = require('../utils/leaveStatusSync');
+const { validateStrictIndianMobile } = require('../utils/indianMobileValidation');
 
 // @desc    Get all employees
 // @route   GET /api/employees
@@ -51,9 +53,6 @@ const getEmployee = async (req, res) => {
 // @desc    Create employee
 // @route   POST /api/employees/create
 // @access  Private
-const Role = require('../models/Role');
-const { validateStrictIndianMobile } = require('../utils/indianMobileValidation');
-
 const createEmployee = async (req, res) => {
   try {
     const body = { ...req.body };
@@ -86,6 +85,49 @@ const createEmployee = async (req, res) => {
         return res.status(400).json({ message: 'Cluster value must be unique. This cluster is already assigned to another executive.' });
       }
     }
+
+    // Module 1 KYC — mandatory fields
+    const ALLOWED_RELATIONS = ['Wife', 'Brother', 'Sister', 'Father', 'Mother'];
+    const refs = Array.isArray(body.references) ? body.references : [];
+    if (refs.length !== 2) {
+      return res.status(400).json({ message: 'Two references with relationship and mobile are required.' });
+    }
+    for (let i = 0; i < 2; i++) {
+      const r = refs[i] || {};
+      if (!ALLOWED_RELATIONS.includes(r.relation)) {
+        return res.status(400).json({
+          message: `Reference ${i + 1}: relationship must be one of ${ALLOWED_RELATIONS.join(', ')}.`,
+        });
+      }
+      const refMobile = validateStrictIndianMobile(r.mobile);
+      if (!refMobile.ok) {
+        return res.status(400).json({ message: `Reference ${i + 1}: ${refMobile.message}` });
+      }
+      refs[i] = {
+        relation: r.relation,
+        name: (r.name || '').trim(),
+        mobile: refMobile.digits,
+      };
+    }
+    body.references = refs;
+
+    if (!(body.temporaryAddress || '').trim()) {
+      return res.status(400).json({ message: 'Temporary address is required.' });
+    }
+    if (!(body.permanentAddress || '').trim()) {
+      return res.status(400).json({ message: 'Permanent address is required.' });
+    }
+    if (!(body.aadhaarUrl || '').trim()) {
+      return res.status(400).json({ message: 'Aadhaar upload is required.' });
+    }
+    if (!(body.locationPhotoUrl || '').trim()) {
+      return res.status(400).json({ message: 'Location upload is required.' });
+    }
+
+    // Keep address1 in sync for older screens
+    if (!body.address1) {
+      body.address1 = body.temporaryAddress;
+    }
     
     if (body.mobile && (!body.phone || body.phone === '0')) {
       body.phone = body.mobile;
@@ -94,8 +136,47 @@ const createEmployee = async (req, res) => {
       body.phone = body.mobile || '';
     }
 
+    // Assigning a zone also assigns that zone's manager by default
+    if (body.zone && !body.executiveManagerId) {
+      const Zone = require('../models/Zone');
+      const zoneDoc = await Zone.findOne({
+        $or: [
+          { name: body.zone },
+          { nameLower: String(body.zone).trim().toLowerCase() },
+        ],
+      });
+      if (zoneDoc?.managerId) {
+        body.executiveManagerId = zoneDoc.managerId;
+      }
+    }
+
+    // Seed multi-approver verification (HR + Zonal manager; trainers also get training_head)
+    body.verificationStatus = 'pending';
+    const approvals = [
+      { roleKey: 'hr_manager', status: 'pending' },
+      { roleKey: 'zonal_manager', status: 'pending', userId: body.executiveManagerId || null },
+    ];
+    if (body.role === 'Trainer') {
+      approvals.push({
+        roleKey: 'training_head',
+        status: 'pending',
+        userId: body.verticalManagerId || null,
+      });
+      if (body.verticalManagerId) {
+        approvals.push({
+          roleKey: 'vertical_manager',
+          status: 'pending',
+          userId: body.verticalManagerId,
+        });
+      }
+    }
+    body.approvals = approvals;
+
     const employee = await User.create(body);
-    const employeeData = await User.findById(employee._id).select('-password');
+    const employeeData = await User.findById(employee._id)
+      .select('-password')
+      .populate('executiveManagerId', 'name email role')
+      .populate('verticalManagerId', 'name email role');
     res.status(201).json(employeeData);
   } catch (error) {
     // Duplicate email (MongoDB E11000)
@@ -415,6 +496,138 @@ const exportEmployeeTracking = async (req, res) => {
   }
 };
 
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
+
+const employeeUploadDir = path.join(__dirname, '../uploads/employees');
+if (!fs.existsSync(employeeUploadDir)) {
+  fs.mkdirSync(employeeUploadDir, { recursive: true });
+}
+
+const employeeUploadStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, employeeUploadDir),
+  filename: (_req, file, cb) => {
+    const safe = String(file.originalname || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
+    cb(null, `${Date.now()}-${safe}`);
+  },
+});
+
+const uploadEmployeeFileMiddleware = multer({
+  storage: employeeUploadStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+}).single('file');
+
+// @desc    Upload employee KYC file (aadhaar / location)
+// @route   POST /api/employees/upload
+const uploadEmployeeFile = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+    const kind = (req.body?.kind || 'document').trim();
+    const fileUrl = `/uploads/employees/${req.file.filename}`;
+    res.status(201).json({ url: fileUrl, kind, message: 'Uploaded successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Upload failed' });
+  }
+};
+
+function actorCanApproveRole(user, roleKey, approval) {
+  if (!user) return false;
+  if (user.role === 'Admin' || user.role === 'Super Admin') return true;
+  if (roleKey === 'hr_manager') return user.role === 'HR Manager';
+  if (roleKey === 'zonal_manager') {
+    if (user.role === 'Executive Manager' || user.role === 'Manager') {
+      if (!approval?.userId) return true;
+      return String(approval.userId) === String(user._id);
+    }
+    return false;
+  }
+  if (roleKey === 'training_head' || roleKey === 'vertical_manager') {
+    return user.role === 'Manager' || user.role === 'Executive Manager' || user.role === 'Trainer';
+  }
+  return false;
+}
+
+// @desc    Submit / record an approval decision for employee onboarding
+// @route   POST /api/employees/:id/approvals
+const submitEmployeeApproval = async (req, res) => {
+  try {
+    const { roleKey, decision, note } = req.body;
+    if (!roleKey || !['approve', 'reject'].includes(decision)) {
+      return res.status(400).json({ message: 'roleKey and decision (approve|reject) are required' });
+    }
+
+    const employee = await User.findById(req.params.id);
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+
+    const approval = (employee.approvals || []).find((a) => a.roleKey === roleKey);
+    if (!approval) {
+      return res.status(400).json({ message: `No approval slot for ${roleKey}` });
+    }
+
+    if (!actorCanApproveRole(req.user, roleKey, approval)) {
+      return res.status(403).json({ message: 'You are not allowed to approve as this role' });
+    }
+
+    approval.status = decision === 'approve' ? 'approved' : 'rejected';
+    approval.userId = req.user._id;
+    approval.note = note || '';
+    approval.at = new Date();
+
+    if (decision === 'reject') {
+      employee.verificationStatus = 'rejected';
+    } else {
+      const allApproved = (employee.approvals || []).every((a) => a.status === 'approved');
+      employee.verificationStatus = allApproved ? 'approved' : 'pending';
+    }
+
+    await employee.save();
+    const data = await User.findById(employee._id)
+      .select('-password')
+      .populate('executiveManagerId', 'name email role')
+      .populate('verticalManagerId', 'name email role')
+      .populate('approvals.userId', 'name email role');
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    List employees pending verification for current approver
+// @route   GET /api/employees/verification/pending
+const getPendingVerifications = async (req, res) => {
+  try {
+    const filter = { verificationStatus: 'pending', isActive: true };
+
+    // HR Manager: only applications waiting for HR approval
+    if (req.user?.role === 'HR Manager') {
+      filter.approvals = {
+        $elemMatch: { roleKey: 'hr_manager', status: 'pending' },
+      };
+    } else if (
+      req.user?.role === 'Executive Manager' ||
+      req.user?.role === 'Manager'
+    ) {
+      filter.approvals = {
+        $elemMatch: { roleKey: 'zonal_manager', status: 'pending' },
+      };
+    }
+
+    const employees = await User.find(filter)
+      .select('-password')
+      .populate('executiveManagerId', 'name email role')
+      .populate('verticalManagerId', 'name email role')
+      .sort({ createdAt: -1 });
+    res.json(employees);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getEmployees,
   getEmployee,
@@ -425,5 +638,9 @@ module.exports = {
   resetEmployeeDevice,
   getEmployeeTracking,
   exportEmployeeTracking,
+  uploadEmployeeFile,
+  uploadEmployeeFileMiddleware,
+  submitEmployeeApproval,
+  getPendingVerifications,
 };
 

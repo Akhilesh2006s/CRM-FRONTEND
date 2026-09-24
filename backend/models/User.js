@@ -25,7 +25,7 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['Super Admin', 'Admin', 'Finance Manager', 'Trainer', 'Coordinator', 'Senior Coordinator', 'Manager', 'Executive', 'Sales BDE', 'Executive Manager', 'Warehouse Executive', 'Warehouse Manager', 'Vendor', 'Partner', 'Franchise'],
+    enum: ['Super Admin', 'Admin', 'Finance Manager', 'HR Manager', 'Trainer', 'Coordinator', 'Senior Coordinator', 'Manager', 'Executive', 'Sales BDE', 'Executive Manager', 'Warehouse Executive', 'Warehouse Manager', 'Vendor', 'Partner', 'Franchise'],
     default: 'Executive',
   },
   roleId: {
@@ -48,6 +48,55 @@ const userSchema = new mongoose.Schema({
   phone: { type: String, default: '0' },
   mobile: { type: String },
   address1: { type: String },
+  /** Temporary / current address (Module 1 KYC). */
+  temporaryAddress: { type: String, default: '' },
+  /** Permanent address (Module 1 KYC). */
+  permanentAddress: { type: String, default: '' },
+  /** Two emergency / character references. */
+  references: [
+    {
+      relation: {
+        type: String,
+        enum: ['Wife', 'Brother', 'Sister', 'Father', 'Mother'],
+      },
+      name: { type: String, trim: true },
+      mobile: { type: String, trim: true },
+    },
+  ],
+  /** Uploaded Aadhaar document URL. */
+  aadhaarUrl: { type: String, default: '' },
+  /** Location / geo photo upload URL. */
+  locationPhotoUrl: { type: String, default: '' },
+  /**
+   * Onboarding verification: pending until HR + Zonal (etc.) all approve.
+   */
+  verificationStatus: {
+    type: String,
+    enum: ['draft', 'pending', 'approved', 'rejected'],
+    default: 'pending',
+  },
+  approvals: [
+    {
+      roleKey: {
+        type: String,
+        enum: ['hr_manager', 'zonal_manager', 'training_head', 'vertical_manager'],
+      },
+      userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+      status: {
+        type: String,
+        enum: ['pending', 'approved', 'rejected'],
+        default: 'pending',
+      },
+      note: { type: String, default: '' },
+      at: { type: Date, default: null },
+    },
+  ],
+  /** For trainers: second vertical manager (zone manager is executiveManagerId / zone). */
+  verticalManagerId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null,
+  },
   state: { type: String },
   zone: { type: String },
   cluster: { type: String },

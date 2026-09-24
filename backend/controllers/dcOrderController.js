@@ -741,6 +741,8 @@ const create = async (req, res) => {
       // Auto-generate school code only when not provided
       try {
         const schoolCode = await generateSchoolCode({
+          state: payload.state || '',
+          district: payload.city || '',
           region: payload.region || '',
           city: payload.city || '',
         });
@@ -784,6 +786,12 @@ const create = async (req, res) => {
 
     const creationProductSnapshot = dealProductsToFollowUpSnapshot(payload.products || []);
     const creationLeadStatus = schoolLeadStatus || resolveSchoolLeadStatus(payload.priority) || 'Warm';
+    // Keep cluster and cluster_code aligned (Module 2 zone/cluster)
+    if (payload.cluster && !payload.cluster_code) {
+      payload.cluster_code = String(payload.cluster).trim();
+    } else if (payload.cluster_code && !payload.cluster) {
+      payload.cluster = String(payload.cluster_code).trim();
+    }
     // Initialize history with creation entry (includes per-product lead status from create form)
     if (
       payload.follow_up_date ||
@@ -909,8 +917,12 @@ const update = async (req, res) => {
             : 'Warm',
           strength: Number(row.strength) || 0,
           chance: Math.max(0, Math.min(100, Number(row.chance) || 0)),
-          quantity: Number(row.strength) || 0,
-          unit_price: 0,
+          quantity: Number(row.strength) || Number(row.quantity) || 1,
+          unit_price: Number(row.unit_price) || 0,
+          not_interested_reason:
+            row.status === 'Not Interested'
+              ? String(row.not_interested_reason || '').trim()
+              : '',
         }));
     const normalizedProductsInterested = hasProductsInterested
       ? normalizeProductsInterested(req.body.productsInterested)
@@ -918,11 +930,22 @@ const update = async (req, res) => {
     const isFollowUpSubmission = hasFollowUpDate && hasRemarks;
     const validateFollowUpProducts = (rows) => {
       if (rows.length === 0) {
-        return 'At least one product with Strength and Chance % is required';
+        return 'At least one product is required';
       }
       for (const row of rows) {
-        if (row.strength <= 0 || row.chance <= 0) {
-          return 'Each product must have Strength greater than 0 and Chance % greater than 0';
+        if (row.status === 'Not Interested') {
+          if (!String(row.not_interested_reason || '').trim()) {
+            return 'Not Interested products require a reason';
+          }
+          continue;
+        }
+        if (!(Number(row.unit_price) > 0)) {
+          return 'Each product must have Unit Price greater than 0';
+        }
+        if (row.status === 'Hot' || row.status === 'Warm') {
+          if (row.strength <= 0 || row.chance <= 0) {
+            return 'Hot/Warm products must have Strength greater than 0 and Chance % greater than 0';
+          }
         }
         if (row.status === 'Hot' && row.chance < 80) {
           return 'Hot products require Chance % at least 80';
@@ -983,6 +1006,20 @@ const update = async (req, res) => {
         if (status === 'Not Met Management') status = 'Management Not Met';
         if (!DC_PRODUCT_STATUSES.includes(status)) {
           return res.status(400).json({ message: `Invalid product status: ${row.status}` });
+        }
+        if (status === 'Not Interested') {
+          if (!String(row.not_interested_reason || '').trim()) {
+            return res.status(400).json({
+              message: 'Not Interested products require a reason',
+            });
+          }
+          continue;
+        }
+        const unitPrice = Number(row.unit_price) || 0;
+        if (unitPrice <= 0) {
+          return res.status(400).json({
+            message: 'Each product must have unit price greater than 0',
+          });
         }
         const strength = Number(row.strength) || Number(row.quantity) || 0;
         const chance = Math.max(0, Math.min(100, Number(row.chance) || 0));
@@ -1061,9 +1098,11 @@ const update = async (req, res) => {
 
     const fieldsToUpdate = [
       'status', 'zone', 'location', 'contact_person', 'contact_mobile', 'school_name', 'school_code',
-      'contact_person2', 'contact_mobile2', 'email', 'address', 'school_type',
-      'pincode', 'state', 'city', 'region', 'area',
-      'average_fee', 'branches', 'strength', 'remarks',
+      'contact_designation', 'contact_person2', 'contact_mobile2', 'financial_contact_designation',
+      'email', 'address', 'school_type',
+      'pincode', 'state', 'city', 'region', 'area', 'mandal', 'cluster', 'cluster_code',
+      'latitude', 'longitude',
+      'average_fee', 'branches', 'strength', 'remarks', 'follow_up_date',
       'estimated_delivery_date', 'products', 'dcRequestData', 'total_amount',
       // Delivery address fields (old)
       'property_number', 'floor', 'tower_block', 'nearby_landmark', 'pod_proof_url',

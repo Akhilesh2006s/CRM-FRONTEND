@@ -19,6 +19,11 @@ function dealProductsToFollowUpSnapshot(rows = []) {
         status,
         strength: Number(row.strength) || 0,
         chance: Math.max(0, Math.min(100, Number(row.chance) || 0)),
+        unit_price: Number(row.unit_price) || 0,
+        not_interested_reason:
+          status === 'Not Interested'
+            ? String(row.not_interested_reason || '').trim()
+            : '',
       };
     });
 }

@@ -23,7 +23,9 @@ type ProductSelection = {
   term: string
   status: 'Hot' | 'Warm' | 'Not Interested' | 'Management Not Met' | 'Visit Again'
   strength: string
+  unit_price: string
   chance: string
+  not_interested_reason: string
 }
 
 type SavedProductRow = {
@@ -34,6 +36,8 @@ type SavedProductRow = {
   strength?: number
   chance?: number
   quantity?: number
+  unit_price?: number
+  not_interested_reason?: string
 }
 
 function apiStatusToUi(status?: string): ProductSelection['status'] {
@@ -99,16 +103,21 @@ function defaultProductRow(name: string, saved?: SavedProductRow): ProductSelect
       term: saved.term || 'Term 1',
       status: apiStatusToUi(saved.status),
       strength: numericFieldToString(saved.strength ?? saved.quantity),
+      unit_price: numericFieldToString(saved.unit_price),
       chance: numericFieldToString(saved.chance),
+      not_interested_reason: saved.not_interested_reason || '',
     }
   }
+  // Module 2: all products pre-selected / locked
   return {
     name,
-    checked: false,
+    checked: true,
     term: 'Term 1',
     status: 'Warm',
     strength: '',
+    unit_price: '',
     chance: '',
+    not_interested_reason: '',
   }
 }
 
@@ -382,10 +391,8 @@ export default function EditLeadPage() {
     setForm((f) => ({ ...f, [name]: value }))
   }
 
-  const handleProductCheck = (index: number, checked: boolean) => {
-    const updated = [...products]
-    updated[index].checked = checked
-    setProducts(updated)
+  const handleProductCheck = (_index: number, _checked: boolean) => {
+    // Products cannot be deselected (Module 2)
   }
 
   const handleProductTermChange = (index: number, term: string) => {
@@ -404,6 +411,9 @@ export default function EditLeadPage() {
       updated[index].strength = ''
       updated[index].chance = ''
     }
+    if (status !== 'Not Interested') {
+      updated[index].not_interested_reason = ''
+    }
     setProducts(updated)
   }
 
@@ -413,9 +423,27 @@ export default function EditLeadPage() {
     setProducts(updated)
   }
 
+  const handleProductUnitPriceChange = (index: number, raw: string) => {
+    let value = String(raw || '').replace(/[^\d.]/g, '')
+    const parts = value.split('.')
+    if (parts.length > 2) {
+      value = `${parts[0]}.${parts.slice(1).join('')}`
+    }
+    if (value.startsWith('.')) value = `0${value}`
+    const updated = [...products]
+    updated[index].unit_price = value
+    setProducts(updated)
+  }
+
   const handleProductChanceChange = (index: number, raw: string) => {
     const updated = [...products]
     updated[index].chance = normalizeIntegerInput(raw, 100)
+    setProducts(updated)
+  }
+
+  const handleNotInterestedReasonChange = (index: number, reason: string) => {
+    const updated = [...products]
+    updated[index].not_interested_reason = reason
     setProducts(updated)
   }
 
@@ -442,7 +470,7 @@ export default function EditLeadPage() {
       const selectedProducts = products.filter((p) => p.checked)
 
       if (selectedProducts.length === 0) {
-        setError('Please select at least one product.')
+        setError('All products must be included.')
         setSubmitting(false)
         return
       }
@@ -450,6 +478,26 @@ export default function EditLeadPage() {
       for (const p of selectedProducts) {
         const strengthNum = Number(p.strength)
         const chanceNum = p.chance === '' ? 0 : Number(p.chance)
+        const unitPriceNum = Number(p.unit_price)
+
+        if (p.status === 'Not Interested') {
+          if (!String(p.not_interested_reason || '').trim()) {
+            setError(`Please enter a reason why the school is not interested in "${p.name}".`)
+            setSubmitting(false)
+            return
+          }
+          continue
+        }
+
+        if (
+          !String(p.unit_price || '').trim() ||
+          !Number.isFinite(unitPriceNum) ||
+          unitPriceNum <= 0
+        ) {
+          setError(`Please enter a Unit Price greater than 0 for product "${p.name}".`)
+          setSubmitting(false)
+          return
+        }
 
         if ((p.status === 'Hot' || p.status === 'Warm') && (!p.strength.trim() || strengthNum <= 0)) {
           setError(`Please enter strength for product "${p.name}" when status is ${p.status}.`)
@@ -473,14 +521,17 @@ export default function EditLeadPage() {
         const strengthNum = Number(p.strength) || 0
         const chanceNum =
           p.status === 'Hot' || p.status === 'Warm' ? Number(p.chance) || 0 : 0
+        const unitPriceNum = Number(p.unit_price) || 0
         return {
           product_name: p.name,
-          quantity: 1,
-          unit_price: 0,
+          quantity: strengthNum > 0 ? strengthNum : 1,
+          unit_price: unitPriceNum,
           term: p.term || 'Term 1',
           status: p.status,
           strength: strengthNum,
           chance: chanceNum,
+          not_interested_reason:
+            p.status === 'Not Interested' ? p.not_interested_reason.trim() : '',
         }
       })
       
@@ -692,7 +743,7 @@ export default function EditLeadPage() {
           
           {/* Products Interested Section */}
           <div className="md:col-span-2">
-            <Label>Products Interested *</Label>
+            <Label>Products * (all required — cannot deselect)</Label>
             <div className="mt-2 p-4 bg-white rounded border border-neutral-200">
               {productsLoading ? (
                 <p className="text-sm text-neutral-500">Loading products…</p>
@@ -710,22 +761,19 @@ export default function EditLeadPage() {
                           <div className="flex items-center gap-2 min-w-0">
                             <Checkbox
                               id={`product-${index}`}
-                              checked={product.checked}
-                              onCheckedChange={(checked) =>
-                                handleProductCheck(index, checked as boolean)
-                              }
-                              className="size-5 shrink-0 border-2 border-neutral-500 bg-white data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 data-[state=checked]:text-white shadow-sm"
+                              checked={true}
+                              disabled
+                              className="size-5 shrink-0 border-2 border-neutral-500 bg-white data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 data-[state=checked]:text-white shadow-sm opacity-100"
                             />
                             <Label
                               htmlFor={`product-${index}`}
-                              className="font-medium cursor-pointer text-neutral-900 leading-tight"
+                              className="font-medium text-neutral-900 leading-tight"
                             >
                               {product.name}
                             </Label>
                           </div>
 
-                          {product.checked && (
-                            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                               {showProductTerm && (
                                 <div className="space-y-1.5">
                                   <Label className="text-sm text-neutral-600">Term</Label>
@@ -780,6 +828,18 @@ export default function EditLeadPage() {
                                 />
                               </div>
                               <div className="space-y-1.5">
+                                <Label className="text-sm text-neutral-600">Unit Price</Label>
+                                <Input
+                                  type="text"
+                                  inputMode="decimal"
+                                  disabled={product.status === 'Not Interested'}
+                                  className="h-11 bg-white text-neutral-900 border-neutral-300"
+                                  placeholder="₹"
+                                  value={product.unit_price}
+                                  onChange={(e) => handleProductUnitPriceChange(index, e.target.value)}
+                                />
+                              </div>
+                              <div className="space-y-1.5">
                                 <Label className="text-sm text-neutral-600">Chance %</Label>
                               <Input
                                 type="text"
@@ -791,8 +851,23 @@ export default function EditLeadPage() {
                                 onChange={(e) => handleProductChanceChange(index, e.target.value)}
                               />
                               </div>
+                              {product.status === 'Not Interested' && (
+                                <div className="space-y-1.5 sm:col-span-2 lg:col-span-3">
+                                  <Label className="text-sm text-neutral-600">
+                                    Reason not interested *
+                                  </Label>
+                                  <Input
+                                    className="h-11 bg-white text-neutral-900 border-neutral-300"
+                                    placeholder="Why is the school not interested?"
+                                    value={product.not_interested_reason}
+                                    onChange={(e) =>
+                                      handleNotInterestedReasonChange(index, e.target.value)
+                                    }
+                                    required
+                                  />
+                                </div>
+                              )}
                             </div>
-                          )}
                         </div>
                       )
                     })}
@@ -800,8 +875,7 @@ export default function EditLeadPage() {
               )}
             </div>
             <p className="text-xs text-neutral-500 mt-2">
-              Select products, then set Term, Status, Strength, and Chance % for each.
-              Strength and Chance % are required when status is Hot or Warm.
+              All products stay selected. Edit Unit Price on follow-up. Not Interested requires a reason.
             </p>
           </div>
 

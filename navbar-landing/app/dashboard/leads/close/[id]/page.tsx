@@ -233,13 +233,58 @@ export default function CloseLeadPage() {
         
         // Only set products if we have valid matches
         if (validProducts.length > 0) {
-          const parentRows: ProductDetailRow[] = validProducts.map((product, productIdx) => {
-            const productData = leadData.products?.find((p: any) => 
-              (p.product_name || p.product || p) === product
-            )
-            // Load saved quantity and unit_price if available
-            const savedQuantity = productData?.quantity || 0
-            const savedUnitPrice = productData?.unit_price || 0
+          const normalizeName = (raw: string) => {
+            const normalized = String(raw || '').trim()
+            const lower = normalized.toLowerCase()
+            if (lower === 'mathlab' || lower === 'math lab' || lower === 'maths lab') {
+              return 'Maths lab'
+            }
+            if (lower === 'codechamp' || lower === 'code champ') {
+              return 'Codechamp'
+            }
+            if (lower === 'vedicmath' || lower === 'vedic math') {
+              return 'Vedic Maths'
+            }
+            if (lower === 'financial literacy' || lower === 'financialliteracy') {
+              return 'Financial literacy'
+            }
+            if (lower === 'brain bytes' || lower === 'brainbytes') {
+              return 'Brain bytes'
+            }
+            if (lower === 'spelling bee' || lower === 'spellingbee') {
+              return 'Spelling bee'
+            }
+            if (lower === 'skill pro' || lower === 'skillpro') {
+              return 'Skill pro'
+            }
+            if (lower === 'abacus') {
+              return 'Abacus'
+            }
+            if (lower === 'eel' || lower === 'eell') {
+              return 'EEL'
+            }
+            if (lower === 'iit') {
+              return 'IIT'
+            }
+            return normalized
+          }
+
+          const parentRows: ProductDetailRow[] = validProducts
+            .map((product, productIdx) => {
+            const productData = Array.isArray(leadData.products)
+              ? leadData.products.find((p: any) => {
+                  const raw = p?.product_name || p?.product || p
+                  return normalizeName(String(raw || '')) === product
+                })
+              : undefined
+            // Skip Not Interested products when closing (no sale line)
+            if (productData?.status === 'Not Interested') {
+              return null
+            }
+            // Load saved quantity/strength and unit_price from follow-up
+            const savedStrength =
+              Number(productData?.strength) || Number(productData?.quantity) || 0
+            const savedUnitPrice = Number(productData?.unit_price) || 0
             
             return {
               id: Date.now().toString() + productIdx,
@@ -250,10 +295,10 @@ export default function CloseLeadPage() {
               category: hasProductCategories(product)
                 ? (getProductCategories(product)[0] || '')
                 : (leadData.school_type === 'Existing' ? 'Existing Students' : 'New Students'),
-              quantity: savedQuantity || 1,
-              strength: savedQuantity || 0, // Use saved quantity as default strength
-              price: savedUnitPrice || 0, // Use saved unit_price as default price
-              total: (savedQuantity || 0) * (savedUnitPrice || 0),
+              quantity: savedStrength || 1,
+              strength: savedStrength || 0,
+              price: savedUnitPrice || 0,
+              total: (savedStrength || 0) * (savedUnitPrice || 0),
               level: productData?.level || getDefaultLevel(product),
               specs: getProductSpecs(product)[0] || '',
               isParentRow: true,
@@ -267,6 +312,7 @@ export default function CloseLeadPage() {
               term: normalizeProductTerm(productData?.term),
             }
           })
+            .filter((row): row is ProductDetailRow => row !== null)
           setProductSections(productDetailsToSections(parentRows))
         } else {
           setProductSections([])

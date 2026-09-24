@@ -52,7 +52,7 @@ export default function ActiveEmployeesPage() {
     ? !hasPermission('employees.active.edit') && !hasPermission('employees.active.delete')
     : isCoordinator || isSeniorCoordinator
   
-  const availableRoles = ['Executive', 'Trainer', 'Finance Manager', 'Coordinator', 'Senior Coordinator', 'Manager', 'Admin', 'Super Admin', 'Executive Manager']
+  const availableRoles = ['Executive', 'Trainer', 'Finance Manager', 'HR Manager', 'Coordinator', 'Senior Coordinator', 'Manager', 'Admin', 'Super Admin', 'Executive Manager']
 
   const load = async () => {
     setLoading(true)

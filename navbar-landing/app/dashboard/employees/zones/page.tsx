@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -10,9 +10,13 @@ import { apiRequest } from '@/lib/api'
 import { isDuplicateName, normalizeName } from '@/lib/normalizeName'
 import { toast } from 'sonner'
 
-type Zone = { _id?: string; name: string }
-type Cluster = { _id?: string; name: string }
-type ZoneCluster = { _id?: string; zone: string; cluster: string; zoneId?: string; clusterId?: string }
+type Manager = { _id: string; name: string; email?: string; role?: string }
+type Zone = {
+  _id?: string
+  name: string
+  managerId?: Manager | string | null
+}
+type Cluster = { _id?: string; name: string; zoneId?: string | Zone | null }
 type PincodeMapping = {
   _id?: string
   pincode: string
@@ -25,18 +29,31 @@ type PincodeMapping = {
   clusterId?: string
 }
 
+function managerLabel(manager?: Manager | string | null) {
+  if (!manager) return '—'
+  if (typeof manager === 'string') return manager
+  return manager.name || '—'
+}
+
+function managerIdOf(zone: Zone) {
+  if (!zone.managerId) return ''
+  return typeof zone.managerId === 'string' ? zone.managerId : zone.managerId._id
+}
+
 export default function ZonesPage() {
   const [zones, setZones] = useState<Zone[]>([])
-  const [clusters, setClusters] = useState<Cluster[]>([])
-  const [pairs, setPairs] = useState<ZoneCluster[]>([])
+  const [managers, setManagers] = useState<Manager[]>([])
+  const [selectedZoneId, setSelectedZoneId] = useState('')
+  const [zoneClusters, setZoneClusters] = useState<Cluster[]>([])
   const [mappings, setMappings] = useState<PincodeMapping[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingClusters, setLoadingClusters] = useState(false)
   const [savingZone, setSavingZone] = useState(false)
-  const [savingPair, setSavingPair] = useState(false)
+  const [savingCluster, setSavingCluster] = useState(false)
   const [savingPincode, setSavingPincode] = useState(false)
   const [zoneName, setZoneName] = useState('')
-  const [pairZoneId, setPairZoneId] = useState('')
-  const [pairClusterId, setPairClusterId] = useState('')
+  const [zoneManagerId, setZoneManagerId] = useState('')
+  const [clusterName, setClusterName] = useState('')
   const [pincodeForm, setPincodeForm] = useState({
     pincode: '',
     zoneId: '',
@@ -47,19 +64,28 @@ export default function ZonesPage() {
   })
   const [loadingPincode, setLoadingPincode] = useState(false)
 
-  const loadAll = async () => {
+  const selectedZone = useMemo(
+    () => zones.find((z) => z._id === selectedZoneId) || null,
+    [zones, selectedZoneId]
+  )
+
+  const loadZonesAndManagers = async () => {
     setLoading(true)
     try {
-      const [zonesRaw, clustersRaw, pairsRaw, mappingsRaw] = await Promise.all([
+      const [zonesRaw, managersRaw, mappingsRaw] = await Promise.all([
         apiRequest<Zone[]>('/zones'),
-        apiRequest<Cluster[]>('/clusters'),
-        apiRequest<ZoneCluster[]>('/zones-clusters'),
-        apiRequest<PincodeMapping[]>('/zones/pincode-mappings'),
+        apiRequest<Manager[]>('/executive-managers').catch(() => []),
+        apiRequest<PincodeMapping[]>('/zones/pincode-mappings').catch(() => []),
       ])
-      setZones(Array.isArray(zonesRaw) ? zonesRaw : [])
-      setClusters(Array.isArray(clustersRaw) ? clustersRaw : [])
-      setPairs(Array.isArray(pairsRaw) ? pairsRaw : [])
+      const zoneList = Array.isArray(zonesRaw) ? zonesRaw : []
+      setZones(zoneList)
+      setManagers(Array.isArray(managersRaw) ? managersRaw : [])
       setMappings(Array.isArray(mappingsRaw) ? mappingsRaw : [])
+      if (!selectedZoneId && zoneList[0]?._id) {
+        setSelectedZoneId(zoneList[0]._id)
+      } else if (selectedZoneId && !zoneList.some((z) => z._id === selectedZoneId)) {
+        setSelectedZoneId(zoneList[0]?._id || '')
+      }
     } catch (e: any) {
       toast.error(e?.message || 'Failed to load zones data')
     } finally {
@@ -67,9 +93,35 @@ export default function ZonesPage() {
     }
   }
 
+  const loadClustersForZone = async (zoneId: string) => {
+    if (!zoneId) {
+      setZoneClusters([])
+      return
+    }
+    setLoadingClusters(true)
+    try {
+      const data = await apiRequest<Cluster[]>(`/zones/${zoneId}/clusters`)
+      setZoneClusters(Array.isArray(data) ? data : [])
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to load clusters')
+      setZoneClusters([])
+    } finally {
+      setLoadingClusters(false)
+    }
+  }
+
   useEffect(() => {
-    loadAll()
+    loadZonesAndManagers()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (selectedZoneId) {
+      loadClustersForZone(selectedZoneId)
+    } else {
+      setZoneClusters([])
+    }
+  }, [selectedZoneId])
 
   const onAddZone = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -82,12 +134,21 @@ export default function ZonesPage() {
       toast.error('Zone already exists')
       return
     }
+    if (!zoneManagerId) {
+      toast.error('Select a zone manager')
+      return
+    }
     setSavingZone(true)
     try {
-      await apiRequest('/zones', { method: 'POST', body: JSON.stringify({ name: trimmed }) })
+      const created = await apiRequest<Zone>('/zones', {
+        method: 'POST',
+        body: JSON.stringify({ name: trimmed, managerId: zoneManagerId }),
+      })
       setZoneName('')
+      setZoneManagerId('')
       toast.success('Zone added')
-      loadAll()
+      await loadZonesAndManagers()
+      if (created?._id) setSelectedZoneId(created._id)
     } catch (e: any) {
       toast.error(e?.message || 'Failed to save zone')
     } finally {
@@ -95,49 +156,72 @@ export default function ZonesPage() {
     }
   }
 
+  const onUpdateZoneManager = async (zoneId: string, managerId: string) => {
+    try {
+      await apiRequest('/zones', {
+        method: 'POST',
+        body: JSON.stringify({ id: zoneId, name: zones.find((z) => z._id === zoneId)?.name, managerId }),
+      })
+      toast.success('Zone manager updated')
+      loadZonesAndManagers()
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to update manager')
+    }
+  }
+
   const onDeleteZone = async (id?: string) => {
     if (!id) return
-    if (!confirm('Delete this zone?')) return
+    if (!confirm('Delete this zone? Clusters under it will be unassigned.')) return
     try {
       await apiRequest(`/zones/${id}`, { method: 'DELETE' })
       toast.success('Zone deleted')
-      loadAll()
+      if (selectedZoneId === id) setSelectedZoneId('')
+      loadZonesAndManagers()
     } catch (e: any) {
       toast.error(e?.message || 'Failed to delete zone')
     }
   }
 
-  const onAddPair = async (e: React.FormEvent) => {
+  const onAddCluster = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!pairZoneId || !pairClusterId) {
-      toast.error('Select zone and cluster')
+    if (!selectedZoneId) {
+      toast.error('Select a zone first')
       return
     }
-    setSavingPair(true)
+    const trimmed = normalizeName(clusterName)
+    if (!trimmed) {
+      toast.error('Cluster is required')
+      return
+    }
+    if (isDuplicateName(trimmed, zoneClusters)) {
+      toast.error('Cluster already exists in this zone')
+      return
+    }
+    setSavingCluster(true)
     try {
-      await apiRequest('/zones-clusters', {
+      await apiRequest('/clusters', {
         method: 'POST',
-        body: JSON.stringify({ zoneId: pairZoneId, clusterId: pairClusterId }),
+        body: JSON.stringify({ name: trimmed, zoneId: selectedZoneId }),
       })
-      setPairZoneId('')
-      setPairClusterId('')
-      toast.success('Zone–cluster link added')
-      loadAll()
+      setClusterName('')
+      toast.success('Cluster added to zone')
+      loadClustersForZone(selectedZoneId)
     } catch (e: any) {
-      toast.error(e?.message || 'Failed to link zone and cluster')
+      toast.error(e?.message || 'Failed to save cluster')
     } finally {
-      setSavingPair(false)
+      setSavingCluster(false)
     }
   }
 
-  const onDeletePair = async (id?: string) => {
+  const onDeleteCluster = async (id?: string) => {
     if (!id) return
-    if (!confirm('Remove this zone–cluster link?')) return
+    if (!confirm('Delete this cluster?')) return
     try {
-      await apiRequest(`/zones-clusters/${id}`, { method: 'DELETE' })
-      loadAll()
+      await apiRequest(`/clusters/${id}`, { method: 'DELETE' })
+      toast.success('Cluster deleted')
+      if (selectedZoneId) loadClustersForZone(selectedZoneId)
     } catch (e: any) {
-      toast.error(e?.message || 'Failed to remove link')
+      toast.error(e?.message || 'Failed to delete cluster')
     }
   }
 
@@ -155,11 +239,14 @@ export default function ZonesPage() {
         state?: string
         zone?: string
         cluster?: string
-        success?: boolean
       }>(`/location/resolve?pincode=${digits}`)
 
       const zoneMatch = zones.find((z) => z.name === res.zone)
-      const clusterMatch = clusters.find((c) => c.name === res.cluster)
+      let clusterMatch: Cluster | undefined
+      if (zoneMatch?._id) {
+        const clusters = await apiRequest<Cluster[]>(`/zones/${zoneMatch._id}/clusters`).catch(() => [])
+        clusterMatch = (Array.isArray(clusters) ? clusters : []).find((c) => c.name === res.cluster)
+      }
 
       setPincodeForm((f) => ({
         ...f,
@@ -167,7 +254,7 @@ export default function ZonesPage() {
         district: res.district || f.district,
         state: res.state || f.state,
         zoneId: zoneMatch?._id || f.zoneId,
-        clusterId: clusterMatch?._id || f.clusterId,
+        clusterId: clusterMatch?._id || '',
       }))
     } catch {
       // allow manual entry
@@ -176,12 +263,26 @@ export default function ZonesPage() {
     }
   }
 
-  const clustersForPincodeZone = clusters.filter((c) => {
-    if (!pincodeForm.zoneId) return true
-    const zone = zones.find((z) => z._id === pincodeForm.zoneId)
-    if (!zone) return true
-    return pairs.some((p) => p.zone === zone.name && p.cluster === c.name)
-  })
+  const [pincodeClusters, setPincodeClusters] = useState<Cluster[]>([])
+  useEffect(() => {
+    const load = async () => {
+      if (!pincodeForm.zoneId) {
+        setPincodeClusters([])
+        return
+      }
+      if (pincodeForm.zoneId === selectedZoneId) {
+        setPincodeClusters(zoneClusters)
+        return
+      }
+      try {
+        const data = await apiRequest<Cluster[]>(`/zones/${pincodeForm.zoneId}/clusters`)
+        setPincodeClusters(Array.isArray(data) ? data : [])
+      } catch {
+        setPincodeClusters([])
+      }
+    }
+    load()
+  }, [pincodeForm.zoneId, selectedZoneId, zoneClusters])
 
   const onAddPincodeMapping = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -214,7 +315,8 @@ export default function ZonesPage() {
       })
       setPincodeForm({ pincode: '', zoneId: '', clusterId: '', city: '', district: '', state: '' })
       toast.success('Pincode mapping saved')
-      loadAll()
+      const mappingsRaw = await apiRequest<PincodeMapping[]>('/zones/pincode-mappings')
+      setMappings(Array.isArray(mappingsRaw) ? mappingsRaw : [])
     } catch (e: any) {
       toast.error(e?.message || 'Failed to save pincode mapping')
     } finally {
@@ -227,7 +329,7 @@ export default function ZonesPage() {
     if (!confirm('Delete this pincode mapping?')) return
     try {
       await apiRequest(`/zones/pincode-mappings/${id}`, { method: 'DELETE' })
-      loadAll()
+      setMappings((prev) => prev.filter((m) => m._id !== id))
     } catch (e: any) {
       toast.error(e?.message || 'Failed to delete mapping')
     }
@@ -235,11 +337,17 @@ export default function ZonesPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Zones</h1>
+      <div>
+        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Zones & Clusters</h1>
+        <p className="text-sm text-neutral-600 mt-1">
+          Step 1: create a zone and assign its manager. Step 2: select the zone and add clusters under it.
+        </p>
+      </div>
 
+      {/* Step 1 — Zones */}
       <Card className="p-4 md:p-6 bg-neutral-50 border border-neutral-200 space-y-4">
-        <h2 className="text-lg font-semibold text-neutral-900">Add Zone</h2>
-        <form onSubmit={onAddZone} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+        <h2 className="text-lg font-semibold text-neutral-900">Step 1 — Zones</h2>
+        <form onSubmit={onAddZone} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
           <div className="space-y-2">
             <Label>Zone name *</Label>
             <Input
@@ -250,11 +358,30 @@ export default function ZonesPage() {
               required
             />
           </div>
-          <Button type="submit" disabled={savingZone}>
+          <div className="space-y-2 md:col-span-2">
+            <Label>Zone manager *</Label>
+            <Select value={zoneManagerId} onValueChange={setZoneManagerId}>
+              <SelectTrigger className="bg-white">
+                <SelectValue placeholder="Select from managers list" />
+              </SelectTrigger>
+              <SelectContent>
+                {managers.length === 0 ? (
+                  <SelectItem value="__none" disabled>
+                    No managers found — create via Assign Managers
+                  </SelectItem>
+                ) : (
+                  managers.map((m) => (
+                    <SelectItem key={m._id} value={m._id}>
+                      {m.name}
+                      {m.email ? ` (${m.email})` : ''}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button type="submit" disabled={savingZone || managers.length === 0}>
             {savingZone ? 'Saving…' : 'Add Zone'}
-          </Button>
-          <Button type="button" variant="outline" onClick={loadAll} disabled={loading}>
-            Refresh
           </Button>
         </form>
 
@@ -267,14 +394,38 @@ export default function ZonesPage() {
             <thead>
               <tr className="bg-neutral-100 border-b">
                 <th className="py-2 px-3 text-left">Zone</th>
+                <th className="py-2 px-3 text-left">Manager</th>
                 <th className="py-2 px-3 text-right">Action</th>
               </tr>
             </thead>
             <tbody>
               {zones.map((z) => (
-                <tr key={z._id || z.name} className="border-b last:border-0">
-                  <td className="py-2 px-3">{z.name}</td>
-                  <td className="py-2 px-3 text-right">
+                <tr
+                  key={z._id || z.name}
+                  className={`border-b last:border-0 cursor-pointer ${
+                    selectedZoneId === z._id ? 'bg-blue-50' : 'hover:bg-neutral-50'
+                  }`}
+                  onClick={() => z._id && setSelectedZoneId(z._id)}
+                >
+                  <td className="py-2 px-3 font-medium">{z.name}</td>
+                  <td className="py-2 px-3" onClick={(e) => e.stopPropagation()}>
+                    <Select
+                      value={managerIdOf(z) || undefined}
+                      onValueChange={(v) => z._id && onUpdateZoneManager(z._id, v)}
+                    >
+                      <SelectTrigger className="bg-white h-8 max-w-[220px]">
+                        <SelectValue placeholder="Assign manager" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {managers.map((m) => (
+                          <SelectItem key={m._id} value={m._id}>
+                            {m.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </td>
+                  <td className="py-2 px-3 text-right" onClick={(e) => e.stopPropagation()}>
                     {z._id && (
                       <Button
                         type="button"
@@ -294,56 +445,69 @@ export default function ZonesPage() {
         )}
       </Card>
 
+      {/* Step 2 — Clusters under selected zone */}
       <Card className="p-4 md:p-6 bg-neutral-50 border border-neutral-200 space-y-4">
-        <h2 className="text-lg font-semibold text-neutral-900">Zone → Cluster links</h2>
+        <h2 className="text-lg font-semibold text-neutral-900">Step 2 — Clusters</h2>
         <p className="text-sm text-neutral-600">
-          Link clusters to zones so Add Employee shows the correct cluster list per zone.
+          {selectedZone
+            ? `Selected zone: ${selectedZone.name} (manager: ${managerLabel(selectedZone.managerId)})`
+            : 'Select a zone above to view and add its clusters.'}
         </p>
-        <form onSubmit={onAddPair} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+
+        <form onSubmit={onAddCluster} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
           <div className="space-y-2">
-            <Label>Zone</Label>
-            <Select value={pairZoneId} onValueChange={setPairZoneId}>
-              <SelectTrigger className="bg-white"><SelectValue placeholder="Select zone" /></SelectTrigger>
-              <SelectContent>
-                {zones.map((z) => (
-                  <SelectItem key={z._id} value={z._id!}>{z.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label>Cluster name *</Label>
+            <Input
+              className="bg-white text-neutral-900"
+              value={clusterName}
+              onChange={(e) => setClusterName(e.target.value)}
+              placeholder="Enter cluster"
+              required
+              disabled={!selectedZoneId}
+            />
           </div>
-          <div className="space-y-2">
-            <Label>Cluster</Label>
-            <Select value={pairClusterId} onValueChange={setPairClusterId}>
-              <SelectTrigger className="bg-white"><SelectValue placeholder="Select cluster" /></SelectTrigger>
-              <SelectContent>
-                {clusters.map((c) => (
-                  <SelectItem key={c._id} value={c._id!}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <Button type="submit" disabled={savingPair || clusters.length === 0}>
-            {savingPair ? 'Linking…' : 'Link cluster to zone'}
+          <Button type="submit" disabled={savingCluster || !selectedZoneId}>
+            {savingCluster ? 'Saving…' : 'Add Cluster to Zone'}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={!selectedZoneId || loadingClusters}
+            onClick={() => selectedZoneId && loadClustersForZone(selectedZoneId)}
+          >
+            Refresh clusters
           </Button>
         </form>
-        {pairs.length > 0 && (
+
+        {!selectedZoneId ? (
+          <div className="text-sm text-neutral-600">No zone selected.</div>
+        ) : loadingClusters ? (
+          <div className="text-sm text-neutral-600">Loading clusters…</div>
+        ) : zoneClusters.length === 0 ? (
+          <div className="text-sm text-neutral-600">No clusters under this zone yet.</div>
+        ) : (
           <table className="w-full text-sm bg-white border border-neutral-200 rounded">
             <thead>
               <tr className="bg-neutral-100 border-b">
-                <th className="py-2 px-3 text-left">Zone</th>
                 <th className="py-2 px-3 text-left">Cluster</th>
                 <th className="py-2 px-3 text-right">Action</th>
               </tr>
             </thead>
             <tbody>
-              {pairs.map((p) => (
-                <tr key={p._id} className="border-b last:border-0">
-                  <td className="py-2 px-3">{p.zone}</td>
-                  <td className="py-2 px-3">{p.cluster}</td>
+              {zoneClusters.map((c) => (
+                <tr key={c._id || c.name} className="border-b last:border-0">
+                  <td className="py-2 px-3">{c.name}</td>
                   <td className="py-2 px-3 text-right">
-                    <Button size="sm" variant="outline" className="text-red-600" onClick={() => onDeletePair(p._id)}>
-                      Remove
-                    </Button>
+                    {c._id && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-red-600"
+                        onClick={() => onDeleteCluster(c._id)}
+                      >
+                        Delete
+                      </Button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -352,6 +516,7 @@ export default function ZonesPage() {
         )}
       </Card>
 
+      {/* Pincode mappings */}
       <Card className="p-4 md:p-6 bg-neutral-50 border border-neutral-200 space-y-4">
         <h2 className="text-lg font-semibold text-neutral-900">Pincode mappings</h2>
         <p className="text-sm text-neutral-600">
@@ -375,10 +540,14 @@ export default function ZonesPage() {
               value={pincodeForm.zoneId}
               onValueChange={(v) => setPincodeForm((f) => ({ ...f, zoneId: v, clusterId: '' }))}
             >
-              <SelectTrigger className="bg-white"><SelectValue placeholder="Select zone" /></SelectTrigger>
+              <SelectTrigger className="bg-white">
+                <SelectValue placeholder="Select zone" />
+              </SelectTrigger>
               <SelectContent>
                 {zones.map((z) => (
-                  <SelectItem key={z._id} value={z._id!}>{z.name}</SelectItem>
+                  <SelectItem key={z._id} value={z._id!}>
+                    {z.name}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -389,25 +558,41 @@ export default function ZonesPage() {
               value={pincodeForm.clusterId}
               onValueChange={(v) => setPincodeForm((f) => ({ ...f, clusterId: v }))}
             >
-              <SelectTrigger className="bg-white"><SelectValue placeholder="Select cluster" /></SelectTrigger>
+              <SelectTrigger className="bg-white">
+                <SelectValue placeholder="Select cluster" />
+              </SelectTrigger>
               <SelectContent>
-                {clustersForPincodeZone.map((c) => (
-                  <SelectItem key={c._id} value={c._id!}>{c.name}</SelectItem>
+                {pincodeClusters.map((c) => (
+                  <SelectItem key={c._id} value={c._id!}>
+                    {c.name}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-2">
             <Label>City</Label>
-            <Input className="bg-white" value={pincodeForm.city} onChange={(e) => setPincodeForm((f) => ({ ...f, city: e.target.value }))} />
+            <Input
+              className="bg-white"
+              value={pincodeForm.city}
+              onChange={(e) => setPincodeForm((f) => ({ ...f, city: e.target.value }))}
+            />
           </div>
           <div className="space-y-2">
             <Label>District</Label>
-            <Input className="bg-white" value={pincodeForm.district} onChange={(e) => setPincodeForm((f) => ({ ...f, district: e.target.value }))} />
+            <Input
+              className="bg-white"
+              value={pincodeForm.district}
+              onChange={(e) => setPincodeForm((f) => ({ ...f, district: e.target.value }))}
+            />
           </div>
           <div className="space-y-2">
             <Label>State</Label>
-            <Input className="bg-white" value={pincodeForm.state} onChange={(e) => setPincodeForm((f) => ({ ...f, state: e.target.value }))} />
+            <Input
+              className="bg-white"
+              value={pincodeForm.state}
+              onChange={(e) => setPincodeForm((f) => ({ ...f, state: e.target.value }))}
+            />
           </div>
           <div className="md:col-span-2 lg:col-span-3">
             <Button type="submit" disabled={savingPincode}>
@@ -439,7 +624,12 @@ export default function ZonesPage() {
                   <td className="py-2 px-3">{m.zone}</td>
                   <td className="py-2 px-3">{m.cluster}</td>
                   <td className="py-2 px-3 text-right">
-                    <Button size="sm" variant="outline" className="text-red-600" onClick={() => onDeleteMapping(m._id)}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-red-600"
+                      onClick={() => onDeleteMapping(m._id)}
+                    >
                       Delete
                     </Button>
                   </td>

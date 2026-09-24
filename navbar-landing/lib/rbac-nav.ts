@@ -73,10 +73,14 @@ export const RBAC_NAV_MODULES: RbacNavModule[] = [
     module: 'employees',
     label: MODULE_LABELS.employees,
     pages: [
+      { label: 'Assign Managers', href: '/dashboard/executive-managers' },
       { label: 'New Employee', href: '/dashboard/employees/new' },
       { label: 'Active Employees', href: '/dashboard/employees/active' },
       { label: 'Inactive Employees', href: '/dashboard/employees/inactive' },
+      { label: 'Employee Verification', href: '/dashboard/employees/verification' },
       { label: 'Assign Areas', href: '/dashboard/executives/assign-areas' },
+      { label: 'Zones & Clusters', href: '/dashboard/employees/zones' },
+      { label: 'Move Schools', href: '/dashboard/employees/move-schools' },
     ],
   },
   {
@@ -247,12 +251,7 @@ export function buildRbacSidebarNav(
     if (isSa && mod.module === 'samples') continue
 
     let pages = mod.pages
-    if (isSa && mod.module === 'employees') {
-      pages = [
-        { label: 'Assign Managers', href: '/dashboard/executive-managers' },
-        ...mod.pages,
-      ]
-    }
+    // Assign Managers is already under employees module for all RBAC users with permission
 
     const allowed = pagesForUser(user, pages)
     if (allowed.length === 0) continue

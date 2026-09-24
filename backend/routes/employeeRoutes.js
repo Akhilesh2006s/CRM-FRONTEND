@@ -10,6 +10,10 @@ const {
   resetEmployeeDevice,
   getEmployeeTracking,
   exportEmployeeTracking,
+  uploadEmployeeFile,
+  uploadEmployeeFileMiddleware,
+  submitEmployeeApproval,
+  getPendingVerifications,
 } = require('../controllers/employeeController');
 const { authMiddleware, roleMiddleware } = require('../middleware/authMiddleware');
 const { requirePermission, requirePermissionWhen } = require('../middleware/permissionMiddleware');
@@ -17,9 +21,17 @@ const { requirePermission, requirePermissionWhen } = require('../middleware/perm
 router.get('/', authMiddleware, getEmployees);
 router.get('/tracking', authMiddleware, getEmployeeTracking);
 router.get('/tracking/export', authMiddleware, exportEmployeeTracking);
+router.get('/verification/pending', authMiddleware, getPendingVerifications);
+router.post(
+  '/upload',
+  authMiddleware,
+  uploadEmployeeFileMiddleware,
+  uploadEmployeeFile
+);
+router.post('/create', authMiddleware, requirePermission('employees.active.add'), createEmployee);
+router.post('/:id/approvals', authMiddleware, submitEmployeeApproval);
 router.get('/:id', authMiddleware, getEmployee);
 router.get('/:id/leaves', authMiddleware, getEmployeeLeaves);
-router.post('/create', authMiddleware, requirePermission('employees.active.add'), createEmployee);
 router.put(
   '/:id',
   authMiddleware,
@@ -42,4 +54,3 @@ router.put(
 );
 
 module.exports = router;
-

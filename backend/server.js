@@ -99,6 +99,12 @@ const startServer = async () => {
     dbConnected = true;
     console.log('✅ Database connection established. Starting server...');
     try {
+      const Cluster = require('./models/Cluster');
+      await Cluster.syncIndexes();
+    } catch (idxErr) {
+      console.warn('Cluster index sync skipped:', idxErr?.message || idxErr);
+    }
+    try {
       const { ensureWarehouseInventoryIntegrity } = require('./utils/warehouseProductMaster');
       const cleanup = await ensureWarehouseInventoryIntegrity();
       if (cleanup && !cleanup.skipped) {

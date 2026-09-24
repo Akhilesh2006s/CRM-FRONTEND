@@ -74,6 +74,7 @@ function validateSaleProducts(products) {
   for (let i = 0; i < products.length; i++) {
     const row = products[i] || {};
     const name = String(row.product_name || row.product || row.name || `Product ${i + 1}`).trim();
+    const status = String(row.status || '').trim();
     const price = Number(row.unit_price ?? row.price);
     const quantity = Number(row.quantity);
     // Close Lead class-wise rows often store class strength on `quantity` and may omit `strength`.
@@ -81,6 +82,17 @@ function validateSaleProducts(products) {
     const hasExplicitStrength =
       row.strength !== undefined && row.strength !== null && row.strength !== '';
     const strength = Number(hasExplicitStrength ? row.strength : row.quantity);
+
+    // Module 2: Not Interested — reason required; skip price/strength rules
+    if (status === 'Not Interested') {
+      if (!String(row.not_interested_reason || '').trim()) {
+        return {
+          ok: false,
+          message: `${name}: Please enter a reason why the school is not interested.`,
+        };
+      }
+      continue;
+    }
 
     if (!Number.isFinite(price) || price <= 0) {
       return {
@@ -94,11 +106,14 @@ function validateSaleProducts(products) {
         message: `${name}: Quantity must be greater than 0.`,
       };
     }
-    if (!Number.isFinite(strength) || !Number.isInteger(strength) || strength <= 0) {
-      return {
-        ok: false,
-        message: `${name}: Strength must be greater than 0.`,
-      };
+    // Strength required only for Hot / Warm (Module 2)
+    if (status === 'Hot' || status === 'Warm') {
+      if (!Number.isFinite(strength) || !Number.isInteger(strength) || strength <= 0) {
+        return {
+          ok: false,
+          message: `${name}: Strength must be greater than 0.`,
+        };
+      }
     }
   }
 
