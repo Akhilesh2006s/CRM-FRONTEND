@@ -123,14 +123,16 @@ export default function CloseLeadPage() {
         // Pre-fill form with lead data
         // Prefill delivery only from a real estimated_delivery_date.
         // Never use follow_up_date — and ignore estimated when it was wrongly cloned from follow-up.
+        // If nothing valid is set, default to today so Turn Lead to Client is not blocked empty.
         const followUpYmd = leadData.follow_up_date
           ? new Date(leadData.follow_up_date).toISOString().split('T')[0]
           : ''
         const estimatedYmd = leadData.estimated_delivery_date
           ? new Date(leadData.estimated_delivery_date).toISOString().split('T')[0]
           : ''
+        const todayYmd = new Date().toISOString().split('T')[0]
         const deliveryDate =
-          estimatedYmd && estimatedYmd !== followUpYmd ? estimatedYmd : ''
+          estimatedYmd && estimatedYmd !== followUpYmd ? estimatedYmd : todayYmd
         setForm({
           contact_person2: leadData.decision_maker || leadData.contact_person2 || leadData.contact_person || '',
           contact_mobile2: leadData.contact_mobile2 || '',
@@ -231,13 +233,58 @@ export default function CloseLeadPage() {
         
         // Only set products if we have valid matches
         if (validProducts.length > 0) {
-          const parentRows: ProductDetailRow[] = validProducts.map((product, productIdx) => {
-            const productData = leadData.products?.find((p: any) => 
-              (p.product_name || p.product || p) === product
-            )
-            // Load saved quantity and unit_price if available
-            const savedQuantity = productData?.quantity || 0
-            const savedUnitPrice = productData?.unit_price || 0
+          const normalizeName = (raw: string) => {
+            const normalized = String(raw || '').trim()
+            const lower = normalized.toLowerCase()
+            if (lower === 'mathlab' || lower === 'math lab' || lower === 'maths lab') {
+              return 'Maths lab'
+            }
+            if (lower === 'codechamp' || lower === 'code champ') {
+              return 'Codechamp'
+            }
+            if (lower === 'vedicmath' || lower === 'vedic math') {
+              return 'Vedic Maths'
+            }
+            if (lower === 'financial literacy' || lower === 'financialliteracy') {
+              return 'Financial literacy'
+            }
+            if (lower === 'brain bytes' || lower === 'brainbytes') {
+              return 'Brain bytes'
+            }
+            if (lower === 'spelling bee' || lower === 'spellingbee') {
+              return 'Spelling bee'
+            }
+            if (lower === 'skill pro' || lower === 'skillpro') {
+              return 'Skill pro'
+            }
+            if (lower === 'abacus') {
+              return 'Abacus'
+            }
+            if (lower === 'eel' || lower === 'eell') {
+              return 'EEL'
+            }
+            if (lower === 'iit') {
+              return 'IIT'
+            }
+            return normalized
+          }
+
+          const parentRows: ProductDetailRow[] = validProducts
+            .map((product, productIdx) => {
+            const productData = Array.isArray(leadData.products)
+              ? leadData.products.find((p: any) => {
+                  const raw = p?.product_name || p?.product || p
+                  return normalizeName(String(raw || '')) === product
+                })
+              : undefined
+            // Skip Not Interested products when closing (no sale line)
+            if (productData?.status === 'Not Interested') {
+              return null
+            }
+            // Load saved quantity/strength and unit_price from follow-up
+            const savedStrength =
+              Number(productData?.strength) || Number(productData?.quantity) || 0
+            const savedUnitPrice = Number(productData?.unit_price) || 0
             
             return {
               id: Date.now().toString() + productIdx,
@@ -248,10 +295,10 @@ export default function CloseLeadPage() {
               category: hasProductCategories(product)
                 ? (getProductCategories(product)[0] || '')
                 : (leadData.school_type === 'Existing' ? 'Existing Students' : 'New Students'),
-              quantity: savedQuantity || 1,
-              strength: savedQuantity || 0, // Use saved quantity as default strength
-              price: savedUnitPrice || 0, // Use saved unit_price as default price
-              total: (savedQuantity || 0) * (savedUnitPrice || 0),
+              quantity: savedStrength || 1,
+              strength: savedStrength || 0,
+              price: savedUnitPrice || 0,
+              total: (savedStrength || 0) * (savedUnitPrice || 0),
               level: productData?.level || getDefaultLevel(product),
               specs: getProductSpecs(product)[0] || '',
               isParentRow: true,
@@ -265,6 +312,7 @@ export default function CloseLeadPage() {
               term: normalizeProductTerm(productData?.term),
             }
           })
+            .filter((row): row is ProductDetailRow => row !== null)
           setProductSections(productDetailsToSections(parentRows))
         } else {
           setProductSections([])
@@ -394,104 +442,198 @@ export default function CloseLeadPage() {
     }
   }
 
-  const proceedWithSubmission = async (dcProductDetails: any[], totalQuantity: number) => {
-    try {
-      // Create DC with all details
-      const assignedEmployeeId = currentUser?._id
-
-      const dcPayload: any = {
-        dcOrderId: leadId,
-        dcDate: form.delivery_date || new Date().toISOString(),
-        dcRemarks: `Lead converted to client - ${lead?.school_name}`,
-        dcCategory: lead?.school_type === 'Existing' ? 'Existing School' : 'New School',
-        requestedQuantity: totalQuantity,
-        employeeId: assignedEmployeeId,
-        productDetails: dcProductDetails,
-        status: 'created', // Set to 'created' so it appears in "My Clients" page immediately
-      }
-      
-      // Add PO photo if uploaded
-      if (poPhotoUrl) {
-        dcPayload.poPhotoUrl = poPhotoUrl
-        dcPayload.poDocument = poPhotoUrl
-      }
-      
-      console.log('🔄 Creating DC with payload:', {
-        dcOrderId: dcPayload.dcOrderId,
-        employeeId: dcPayload.employeeId,
-        status: dcPayload.status,
-        productDetailsCount: dcPayload.productDetails?.length
-      });
-      
-      const leadIdForDc = leadId
-
-      const dc = await apiRequest('/dc/raise', {
-        method: 'POST',
-        body: JSON.stringify({
-          ...dcPayload,
-          dcOrderId: leadIdForDc,
+  const buildDcProductDetails = () => {
+    const actualProductDetails = childProductRows
+    return actualProductDetails.map((p) => {
+      const parentRow = productDetails.find(
+        (parent) => parent.isParentRow && p.id.startsWith(parent.id + '_')
+      )
+      const deliverables = parentRow?.selectedDeliverables || []
+      const levelValue = p.level || getDefaultLevel(p.product)
+      const skuCats = hasProductCategories(p.product) ? getProductCategories(p.product) : []
+      const catStr = typeof p.category === 'string' ? p.category.trim() : ''
+      const isSkuCategory = skuCats.some((c) => c.toLowerCase() === catStr.toLowerCase())
+      const enrollmentCategory =
+        lead?.school_type === 'Existing' ? 'Existing Students' : 'New Students'
+      return {
+        product: p.product,
+        class: p.class || '1',
+        category: isSkuCategory
+          ? enrollmentCategory
+          : p.category ||
+            (hasProductCategories(p.product)
+              ? getProductCategories(p.product)[0] || enrollmentCategory
+              : enrollmentCategory),
+        productCategory: isSkuCategory
+          ? catStr
+          : (p as any).productCategory || undefined,
+        quantity: Number(p.quantity) || 0,
+        strength: Number(p.strength) || 0,
+        price: Number(p.price) || 0,
+        total: Number(p.total) || (Number(p.strength) || 0) * (Number(p.price) || 0),
+        level: levelValue,
+        specs: p.specs || '',
+        subject: p.subject || undefined,
+        deliverables,
+        term: persistProductTerm({
+          term: (p as any).term || (parentRow as any)?.term,
+          level: levelValue,
         }),
+      }
+    })
+  }
+
+  /** Mark lead/order closed, then raise DC. Only call after user confirms any split dialog. */
+  const closeRecordAndRaiseDc = async (dcProductDetails: any[], totalQuantity: number) => {
+    if (!currentUser?._id) {
+      throw new Error('User not found. Please login again.')
+    }
+
+    const assignedEmployeeId = currentUser._id
+    const isDcOrder = isDcOrderRecord
+
+    const updatePayload: any = {
+      school_name: lead?.school_name || undefined,
+      contact_person: lead?.contact_person || undefined,
+      contact_mobile: lead?.contact_mobile || undefined,
+      email: lead?.email || undefined,
+      contact_person2: form.contact_person2 || undefined,
+      contact_mobile2: form.contact_mobile2 || undefined,
+      decision_maker: form.contact_person2 || undefined,
+      estimated_delivery_date: form.delivery_date
+        ? new Date(form.delivery_date).toISOString()
+        : undefined,
+      year: currentAcademicYear,
+      assigned_to: assignedEmployeeId,
+      products: buildDcOrderProducts(),
+    }
+
+    if (isDcOrder) {
+      updatePayload.status = 'saved'
+      const updated = await apiRequest(`/dc-orders/${leadId}`, {
+        method: 'PUT',
+        body: JSON.stringify(updatePayload),
       })
-      
-      console.log('✅ DC created:', {
-        dcId: dc._id,
-        status: dc.status,
-        customerName: dc.customerName
-      });
-      
-      // If PO photo is provided, also submit PO
-      if (poPhotoUrl && dc._id) {
-        try {
-          await apiRequest(`/dc/${dc._id}/submit-po`, {
-            method: 'POST',
-            body: JSON.stringify({ 
-              poPhotoUrl: poPhotoUrl,
+
+      try {
+        const searchResponse = await apiRequest<any>(
+          `/leads?schoolName=${encodeURIComponent(lead?.school_name || '')}&contactMobile=${lead?.contact_mobile || ''}`
+        )
+        const allLeads = Array.isArray(searchResponse)
+          ? searchResponse
+          : searchResponse?.data || []
+        const existingLead = allLeads.find(
+          (l: any) =>
+            l.school_name === lead?.school_name &&
+            l.contact_mobile === lead?.contact_mobile
+        )
+        const clientSchoolCode = updated.school_code || lead?.school_code || ''
+        if (existingLead) {
+          await apiRequest(`/leads/${existingLead._id}`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              status: 'Closed',
+              year: currentAcademicYear,
+              ...(clientSchoolCode ? { school_code: clientSchoolCode } : {}),
+              school_id: updated._id,
             }),
           })
-        } catch (poErr) {
-          console.error('Failed to submit PO:', poErr)
-          // Don't fail the whole operation if PO submission fails
+        } else {
+          await apiRequest('/leads/create', {
+            method: 'POST',
+            body: JSON.stringify({
+              school_name: lead?.school_name || updated.school_name,
+              school_code: clientSchoolCode || undefined,
+              school_id: updated._id,
+              contact_person: lead?.contact_person || updated.contact_person,
+              contact_mobile: lead?.contact_mobile || updated.contact_mobile,
+              email: lead?.email || updated.email || undefined,
+              zone: lead?.zone || updated.zone,
+              location: lead?.location || updated.location,
+              priority: lead?.priority || updated.priority || 'Hot',
+              year: currentAcademicYear,
+              status: 'Closed',
+              createdBy: assignedEmployeeId,
+            }),
+          })
         }
+      } catch (leadUpdateErr: any) {
+        console.warn(
+          '⚠️ Could not update/create Lead record for reporting:',
+          leadUpdateErr?.message
+        )
       }
-      
-      // Verify the conversion worked by checking if DC exists
-      try {
-        const verifyDC = await apiRequest(`/dc/${dc._id}`)
-        console.log('✅ Verification - DC exists:', {
-          id: verifyDC._id,
-          status: verifyDC.status,
-          employeeId: verifyDC.employeeId,
-          dcOrderId: verifyDC.dcOrderId
-        });
-      } catch (verifyErr) {
-        console.warn('⚠️ Could not verify DC creation (this is okay if query times out):', verifyErr);
-      }
-      
-      toast.success('Lead converted to client! DC created and submitted to My Clients successfully.')
-      
-      // Store the DC ID in sessionStorage so the Client DC page can fetch it directly
-      if (dc._id) {
-        sessionStorage.setItem('newlyConvertedDCId', dc._id);
-        sessionStorage.setItem('newlyConvertedDC', JSON.stringify(dc));
-      }
-      
-      // Redirect to Client DC page
-      router.push('/dashboard/dc/client-dc')
-    } finally {
-      setSubmitting(false)
+    } else {
+      updatePayload.status = 'Closed'
+      await apiRequest(`/leads/${leadId}`, {
+        method: 'PUT',
+        body: JSON.stringify(updatePayload),
+      })
     }
+
+    const dcPayload: any = {
+      dcOrderId: leadId,
+      dcDate: form.delivery_date || new Date().toISOString(),
+      dcRemarks: `Lead converted to client - ${lead?.school_name}`,
+      dcCategory: lead?.school_type === 'Existing' ? 'Existing School' : 'New School',
+      requestedQuantity: totalQuantity,
+      employeeId: assignedEmployeeId,
+      productDetails: dcProductDetails,
+      status: 'created',
+    }
+
+    if (poPhotoUrl) {
+      dcPayload.poPhotoUrl = poPhotoUrl
+      dcPayload.poDocument = poPhotoUrl
+    }
+
+    const dc = await apiRequest('/dc/raise', {
+      method: 'POST',
+      body: JSON.stringify(dcPayload),
+    })
+
+    if (poPhotoUrl && dc._id) {
+      try {
+        await apiRequest(`/dc/${dc._id}/submit-po`, {
+          method: 'POST',
+          body: JSON.stringify({ poPhotoUrl }),
+        })
+      } catch (poErr) {
+        console.error('Failed to submit PO:', poErr)
+      }
+    }
+
+    toast.success(
+      'Lead converted to client! DC created and submitted to My Clients successfully.'
+    )
+
+    if (dc._id) {
+      sessionStorage.setItem('newlyConvertedDCId', dc._id)
+      sessionStorage.setItem('newlyConvertedDC', JSON.stringify(dc))
+    }
+
+    router.push('/dashboard/dc/client-dc')
   }
 
   const handleSplitConfirm = async () => {
     if (!pendingSubmissionContext) return
     setSubmitting(true)
-    setSplitModalOpen(false)
-    setSplitPreview(null)
-    await proceedWithSubmission(
-      pendingSubmissionContext.dcProductDetails,
-      pendingSubmissionContext.totalQuantity
-    )
-    setPendingSubmissionContext(null)
+    setError(null)
+    try {
+      await closeRecordAndRaiseDc(
+        pendingSubmissionContext.dcProductDetails,
+        pendingSubmissionContext.totalQuantity
+      )
+      setSplitModalOpen(false)
+      setSplitPreview(null)
+      setPendingSubmissionContext(null)
+    } catch (err: any) {
+      const message = err?.message || 'Failed to convert lead to client'
+      setError(message)
+      toast.error(message)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const handleSplitCancel = () => {
@@ -499,229 +641,74 @@ export default function CloseLeadPage() {
     setSplitPreview(null)
     setPendingSubmissionContext(null)
     setSubmitting(false)
+    setError(null)
   }
 
   const handleTurnToClient = async () => {
     if (!lead) return
-    
+    setError(null)
+
     const productValidation = validateProducts()
     if (!productValidation.ok) {
+      setError(productValidation.message)
       toast.error(productValidation.message)
       return
     }
 
-    const actualProductDetails = childProductRows
-    const groupedProductDetails = groupedChildProductRows
-    
-    // Validate delivery date is required
     if (!form.delivery_date || form.delivery_date.trim() === '') {
-      toast.error('Delivery date is required')
+      const message =
+        'Delivery date is required. Pick a date in the Delivery Date field above.'
+      setError(message)
+      toast.error(message)
       return
     }
-    
-    // Validate PO document is required
+
     if (!poPhotoUrl || poPhotoUrl.trim() === '') {
-      toast.error('PO document is required. Please upload a PDF file.')
+      const message =
+        'PO document is required. Upload a PDF in the PO Document section above, then try again.'
+      setError(message)
+      toast.error(message)
       return
     }
-    
-    setSubmitting(true)
-    setError(null)
-    
-    try {
-      // Always use current user's ID for the DC - the employee converting the lead owns the client
-      if (!currentUser?._id) {
-        toast.error('User not found. Please login again.')
-        setSubmitting(false)
-        return
-      }
-      
-      const assignedEmployeeId = currentUser._id
-      
-      // Determine if this is a DC Order or Lead based on what was loaded
-      // (dc_code alone is unreliable — Super Admin Create Sale orders often have no dc_code yet)
-      const isDcOrder = isDcOrderRecord
-      
-      // Prepare update payload
-      const updatePayload: any = {
-        school_name: lead?.school_name || undefined,
-        contact_person: lead?.contact_person || undefined,
-        contact_mobile: lead?.contact_mobile || undefined,
-        email: lead?.email || undefined,
-        contact_person2: form.contact_person2 || undefined, // Decision Maker name
-        contact_mobile2: form.contact_mobile2 || undefined, // Decision Maker mobile
-        decision_maker: form.contact_person2 || undefined, // Also set decision_maker field
-        estimated_delivery_date: form.delivery_date ? new Date(form.delivery_date).toISOString() : undefined,
-        year: currentAcademicYear,
-        assigned_to: assignedEmployeeId,
-        products: buildDcOrderProducts(),
-      }
-      
-      // Update the lead/dc-order with appropriate status
-      console.log('🔄 Updating with payload:', {
-        leadId,
-        type: isDcOrder ? 'DcOrder' : 'Lead',
-        assigned_to: updatePayload.assigned_to,
-        hasProducts: !!updatePayload.products
-      });
-      
-      try {
-        if (isDcOrder) {
-          // DC Order status enum: 'saved', 'pending', 'in_transit', 'completed', 'hold', ...
-          // Use 'saved' so the record appears in Executive My Clients (same as convert-to-client).
-          updatePayload.status = 'saved'
-          
-          const updated = await apiRequest(`/dc-orders/${leadId}`, {
-            method: 'PUT',
-            body: JSON.stringify(updatePayload),
-          })
-          console.log('✅ DcOrder updated successfully:', {
-            id: updated._id,
-            status: updated.status,
-            assigned_to: updated.assigned_to
-          });
-          
-          // Also create/update Lead record with Closed status for reporting
-          try {
-            // Try to find existing lead by school name and mobile
-            const searchResponse = await apiRequest<any>(`/leads?schoolName=${encodeURIComponent(lead?.school_name || '')}&contactMobile=${lead?.contact_mobile || ''}`)
-            const allLeads = Array.isArray(searchResponse) ? searchResponse : (searchResponse?.data || [])
-            const existingLead = allLeads.find((l: any) => 
-              l.school_name === lead?.school_name && 
-              l.contact_mobile === lead?.contact_mobile
-            )
-            
-            const clientSchoolCode =
-              updated.school_code || lead?.school_code || ''
-            if (existingLead) {
-              // Update existing lead to Closed
-              await apiRequest(`/leads/${existingLead._id}`, {
-                method: 'PUT',
-                body: JSON.stringify({
-                  status: 'Closed',
-                  year: currentAcademicYear,
-                  ...(clientSchoolCode ? { school_code: clientSchoolCode } : {}),
-                  school_id: updated._id,
-                }),
-              })
-              console.log('✅ Lead record updated to Closed for reporting')
-            } else {
-              // Create new lead record for reporting
-              await apiRequest('/leads/create', {
-                method: 'POST',
-                body: JSON.stringify({
-                  school_name: lead?.school_name || updated.school_name,
-                  school_code: clientSchoolCode || undefined,
-                  school_id: updated._id,
-                  contact_person: lead?.contact_person || updated.contact_person,
-                  contact_mobile: lead?.contact_mobile || updated.contact_mobile,
-                  email: lead?.email || updated.email || undefined,
-                  zone: lead?.zone || updated.zone,
-                  location: lead?.location || updated.location,
-                  priority: lead?.priority || updated.priority || 'Hot',
-                  year: currentAcademicYear,
-                  status: 'Closed',
-                  createdBy: assignedEmployeeId,
-                }),
-              })
-              console.log('✅ Lead record created with Closed status for reporting')
-            }
-          } catch (leadUpdateErr: any) {
-            console.warn('⚠️ Could not update/create Lead record for reporting:', leadUpdateErr?.message)
-            // Don't fail the whole operation - DC Order update succeeded
-          }
-        } else {
-          // Lead status enum: 'Pending', 'Processing', 'Saved', 'Closed'
-          updatePayload.status = 'Closed' // Use 'Closed' for Leads
-          
-          const updated = await apiRequest(`/leads/${leadId}`, {
-            method: 'PUT',
-            body: JSON.stringify(updatePayload),
-          })
-          console.log('✅ Lead updated successfully:', {
-            id: updated._id,
-            status: updated.status
-          });
-        }
-      } catch (err: any) {
-        console.error('❌ Update failed:', err);
-        throw err; // Re-throw to be caught by outer catch
-      }
-      
-      // Prepare product details for DC (exclude parent rows).
-      // We send the FULL list of spec rows so Client DC can show all specs/levels,
-      // but requestedQuantity (below) is based on groupedProductDetails so total strength
-      // is still per class, not multiplied by specs.
-      const dcProductDetails = actualProductDetails.map(p => {
-        const parentRow = productDetails.find(parent => parent.isParentRow && p.id.startsWith(parent.id + '_'))
-        const deliverables = parentRow?.selectedDeliverables || []
-        const levelValue = p.level || getDefaultLevel(p.product)
-        const levelKey = (levelValue || '').toString().toLowerCase().replace(/\s+/g, '')
-        let termFromLevel: string | null = null
-        if (levelKey.startsWith('term2')) termFromLevel = 'Term 2'
-        else if (levelKey.startsWith('term1')) termFromLevel = 'Term 1'
-        else if (levelKey.includes('both')) termFromLevel = 'Both'
-        const skuCats = hasProductCategories(p.product) ? getProductCategories(p.product) : []
-        const catStr = typeof p.category === 'string' ? p.category.trim() : ''
-        const isSkuCategory = skuCats.some((c) => c.toLowerCase() === catStr.toLowerCase())
-        const enrollmentCategory =
-          lead?.school_type === 'Existing' ? 'Existing Students' : 'New Students'
-        return {
-          product: p.product,
-          class: p.class || '1', // Use actual class value
-          category: isSkuCategory
-            ? enrollmentCategory
-            : p.category ||
-              (hasProductCategories(p.product)
-                ? getProductCategories(p.product)[0] || enrollmentCategory
-                : enrollmentCategory),
-          productCategory: isSkuCategory
-            ? catStr
-            : (p as any).productCategory || undefined,
-          quantity: Number(p.quantity) || 0, // Keep for backend compatibility
-          strength: Number(p.strength) || 0,
-          price: Number(p.price) || 0,
-          total: Number(p.total) || (Number(p.strength) || 0) * (Number(p.price) || 0),
-          level: levelValue,
-          specs: p.specs || '',
-          subject: p.subject || undefined, // Include subject if present
-          deliverables,
-          term: persistProductTerm({
-            term: (p as any).term || (parentRow as any)?.term,
-            level: levelValue,
-          }),
-        }
+
+    if (!currentUser?._id) {
+      toast.error('User not found. Please login again.')
+      return
+    }
+
+    const dcProductDetails = buildDcProductDetails()
+    const totalQuantity = groupedChildProductRows.reduce(
+      (sum, p) => sum + (p.strength || 0),
+      0
+    )
+
+    const { myClientsProducts, termWiseProducts, needsTermWiseSplit } =
+      partitionProductsForCloseLeadRouting(dcProductDetails)
+
+    // Show split preview first — do NOT close the lead until Confirm & Submit.
+    if (needsTermWiseSplit) {
+      setSplitPreview({
+        term1: myClientsProducts.map((p: any) => ({
+          productName: `${p.productName || p.product}${p.level ? ` (${p.level})` : p.term ? ` (${p.term})` : ''}`,
+          strength: p.strength || p.quantity || 0,
+        })),
+        term2: termWiseProducts.map((p: any) => ({
+          productName: `${p.productName || p.product}${p.level ? ` (${p.level})` : p.term ? ` (${p.term})` : ''}`,
+          strength: p.strength || p.quantity || 0,
+        })),
       })
-      
-      // Total requested quantity is based on groupedProductDetails (per product + class),
-      // so having multiple specs for the same class does NOT multiply the strength.
-      const totalQuantity = groupedProductDetails.reduce((sum, p) => sum + (p.strength || 0), 0)
+      setPendingSubmissionContext({ dcProductDetails, totalQuantity })
+      setSplitModalOpen(true)
+      return
+    }
 
-      // Group by product: Term/Level 2 → Term-Wise only when same product also has Term/Level 1.
-      const { myClientsProducts, termWiseProducts, needsTermWiseSplit } =
-        partitionProductsForCloseLeadRouting(dcProductDetails)
-
-      if (needsTermWiseSplit) {
-        setSubmitting(false)
-        setSplitPreview({
-          term1: myClientsProducts.map((p: any) => ({
-            productName: `${p.productName || p.product}${p.level ? ` (${p.level})` : p.term ? ` (${p.term})` : ''}`,
-            strength: p.strength || p.quantity || 0,
-          })),
-          term2: termWiseProducts.map((p: any) => ({
-            productName: `${p.productName || p.product}${p.level ? ` (${p.level})` : p.term ? ` (${p.term})` : ''}`,
-            strength: p.strength || p.quantity || 0,
-          })),
-        })
-        setPendingSubmissionContext({ dcProductDetails, totalQuantity })
-        setSplitModalOpen(true)
-        return
-      }
-
-      await proceedWithSubmission(dcProductDetails, totalQuantity)
+    setSubmitting(true)
+    try {
+      await closeRecordAndRaiseDc(dcProductDetails, totalQuantity)
     } catch (err: any) {
       setError(err?.message || 'Failed to convert lead to client')
       toast.error(err?.message || 'Failed to convert lead to client')
+    } finally {
       setSubmitting(false)
     }
   }
@@ -936,22 +923,26 @@ export default function CloseLeadPage() {
           if (!open) handleSplitCancel()
         }}
       >
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
+        <DialogContent className="max-w-lg max-h-[90vh] flex flex-col gap-0 p-0 overflow-hidden">
+          <DialogHeader className="px-6 pt-6 pb-3 shrink-0">
             <DialogTitle>This lead will be split into 2 DCs</DialogTitle>
             <DialogDescription>
-              Review how products will be divided before confirming.
+              Level/Term 1 goes to My Clients. Level/Term 2 goes to Term-Wise DC.
+              Scroll the list if needed, then tap <strong>Confirm &amp; Submit</strong> below to continue.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
+          <div className="space-y-4 px-6 py-2 overflow-y-auto min-h-0 flex-1">
             {/* DC 1 */}
             <div className="rounded-md border border-border p-3">
               <p className="text-sm font-semibold mb-2 text-green-700">
-                DC 1 – My Clients (Term 1)
+                DC 1 – My Clients (Term 1 / Level 1)
               </p>
               <ul className="space-y-1">
-                {splitPreview?.term1.map((p, i) => (
+                {(splitPreview?.term1 || []).length === 0 ? (
+                  <li className="text-sm text-muted-foreground">No Term 1 / Level 1 lines</li>
+                ) : (
+                  splitPreview!.term1.map((p, i) => (
                   <li
                     key={i}
                     className="flex justify-between text-sm text-muted-foreground"
@@ -959,17 +950,21 @@ export default function CloseLeadPage() {
                     <span>• {p.productName}</span>
                     <span>Qty: {p.strength}</span>
                   </li>
-                ))}
+                  ))
+                )}
               </ul>
             </div>
 
             {/* DC 2 */}
             <div className="rounded-md border border-border p-3">
               <p className="text-sm font-semibold mb-2 text-blue-700">
-                DC 2 – Term Wise DC (Term 2)
+                DC 2 – Term Wise DC (Term 2 / Level 2)
               </p>
               <ul className="space-y-1">
-                {splitPreview?.term2.map((p, i) => (
+                {(splitPreview?.term2 || []).length === 0 ? (
+                  <li className="text-sm text-muted-foreground">No Term 2 / Level 2 lines</li>
+                ) : (
+                  splitPreview!.term2.map((p, i) => (
                   <li
                     key={i}
                     className="flex justify-between text-sm text-muted-foreground"
@@ -977,12 +972,16 @@ export default function CloseLeadPage() {
                     <span>• {p.productName}</span>
                     <span>Qty: {p.strength}</span>
                   </li>
-                ))}
+                  ))
+                )}
               </ul>
             </div>
+            {error ? (
+              <p className="text-sm text-red-600 text-center">{error}</p>
+            ) : null}
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="px-6 py-4 border-t bg-white shrink-0 sm:justify-end gap-2">
             <Button
               variant="outline"
               onClick={handleSplitCancel}
@@ -993,6 +992,7 @@ export default function CloseLeadPage() {
             <Button
               onClick={handleSplitConfirm}
               disabled={submitting}
+              className="bg-green-600 hover:bg-green-700 text-white"
             >
               {submitting ? 'Submitting...' : 'Confirm & Submit'}
             </Button>

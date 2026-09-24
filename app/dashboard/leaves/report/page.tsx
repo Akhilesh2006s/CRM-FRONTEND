@@ -119,7 +119,12 @@ export default function LeavesReportPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Leaves Report</h1>
+        <div>
+          <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Leaves Report</h1>
+          <p className="text-sm text-neutral-600 mt-1">
+            Scoped by hierarchy: managers see their team; vertical heads their vertical; HR, Admin, and Super Admin see everyone.
+          </p>
+        </div>
         <Link href="/dashboard/leaves/pending">
           <Button variant="outline" size="sm">
             Pending approvals

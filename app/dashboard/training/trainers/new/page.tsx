@@ -34,7 +34,11 @@ export default function AddTrainerPage() {
     trainerVedicLevels: '',
     trainerType: 'Employee',
     address1: '',
+    verticalManagerId: '',
   })
+  const [managers, setManagers] = useState<{ _id: string; name: string }[]>([])
+  const [zoneManagerName, setZoneManagerName] = useState('')
+  const [zoneManagerByName, setZoneManagerByName] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
   const [mobileError, setMobileError] = useState<string | null>(null)
   const [emailError, setEmailError] = useState<string | null>(null)
@@ -47,12 +51,14 @@ export default function AddTrainerPage() {
   useEffect(() => {
     ;(async () => {
       try {
-        const [pairsRaw, zonesRaw] = await Promise.all([
+        const [pairsRaw, zonesRaw, managersRaw] = await Promise.all([
           apiRequest<{ zone?: string; cluster?: string }[]>('/zones-clusters').catch(() => []),
-          apiRequest<{ name?: string }[]>('/zones').catch(() => []),
+          apiRequest<{ name?: string; managerId?: { name?: string } | string }[]>('/zones').catch(() => []),
+          apiRequest<{ _id: string; name: string }[]>('/executive-managers').catch(() => []),
         ])
         const pairs = Array.isArray(pairsRaw) ? pairsRaw : []
         const zoneDocs = Array.isArray(zonesRaw) ? zonesRaw : []
+        setManagers(Array.isArray(managersRaw) ? managersRaw : [])
         const zoneMap: Record<string, string[]> = {}
         pairs.forEach((zc) => {
           const zone = (zc.zone || '').trim()
@@ -67,11 +73,24 @@ export default function AddTrainerPage() {
         )
         setZones(allZones)
         setClustersByZone(zoneMap)
+        setZoneManagerByName(
+          Object.fromEntries(
+            zoneDocs.map((z) => {
+              const mid = z.managerId
+              const name = typeof mid === 'object' && mid ? mid.name || '' : ''
+              return [z.name || '', name]
+            })
+          )
+        )
       } catch (e) {
         console.error('Failed to load zones for trainer', e)
       }
     })()
   }, [])
+
+  useEffect(() => {
+    setZoneManagerName(form.zone ? zoneManagerByName[form.zone] || '' : '')
+  }, [form.zone, zoneManagerByName])
 
   const clusterList = useMemo(() => {
     return form.zone ? clustersByZone[form.zone] || [] : []
@@ -292,6 +311,29 @@ export default function AddTrainerPage() {
               </SelectContent>
             </Select>
             {zoneError && <p className="text-xs text-red-600 mt-1">{zoneError}</p>}
+            {form.zone && (
+              <p className="text-xs text-neutral-600 mt-1">
+                Zonal Manager: {zoneManagerName || 'Not assigned on this zone'}
+              </p>
+            )}
+          </div>
+          <div>
+            <Label>Vertical Manager (second manager)</Label>
+            <Select
+              value={form.verticalManagerId || undefined}
+              onValueChange={(v) => setForm((f) => ({ ...f, verticalManagerId: v }))}
+            >
+              <SelectTrigger className="bg-white text-neutral-900">
+                <SelectValue placeholder="Select vertical manager" />
+              </SelectTrigger>
+              <SelectContent>
+                {managers.map((m) => (
+                  <SelectItem key={m._id} value={m._id}>
+                    {m.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label htmlFor="trainer-cluster">Cluster</Label>

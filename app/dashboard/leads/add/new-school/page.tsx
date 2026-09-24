@@ -20,8 +20,7 @@ import { sanitizePhoneInput, validateIndianMobile } from '@/lib/phone'
 import { normalizeIntegerInput } from '@/lib/numericInput'
 import { toFollowUpDatePayload } from '@/lib/followUpDate'
 import { isBeforeToday } from '@/lib/todayDate'
-
-const LEAD_STATUS_OPTIONS = ['Hot', 'Warm', 'Cold'] as const
+import { geocodeSchoolLocation } from '@/lib/geocode'
 
 type ProductSelection = {
   name: string
@@ -33,6 +32,7 @@ type ProductSelection = {
   /** Manual unit price (same as Create Sale Add Products) — product master has no default price. */
   unit_price: string
   chance: string
+  not_interested_reason: string
 }
 
 export default function NewSchoolPage() {
@@ -46,9 +46,11 @@ export default function NewSchoolPage() {
     school_code: '',
     contact_person: '',
     contact_mobile: '',
+    contact_designation: '',
     email: '',
     decision_maker_name: '',
     decision_maker_mobile: '',
+    financial_contact_designation: '',
     location: '',
     city: '',
     address: '',
@@ -60,7 +62,6 @@ export default function NewSchoolPage() {
     cluster: '',
     latitude: '',
     longitude: '',
-    lead_status: 'Warm',
     zone: '',
     branches: '',
     strength: '',
@@ -69,45 +70,52 @@ export default function NewSchoolPage() {
     follow_up_date: '',
     cluster_code: '',
   })
+  const isSuperAdmin = currentUser?.role === 'Super Admin'
+  const [clustersForZone, setClustersForZone] = useState<string[]>([])
+  const [geocoding, setGeocoding] = useState(false)
   
   // Product selections - checkboxes for interest + per-product status/term/strength
   const [products, setProducts] = useState<ProductSelection[]>([])
   
-  // Initialize products when availableProducts are loaded
+  // Initialize products — all pre-selected (cannot deselect)
   useEffect(() => {
     if (availableProducts.length > 0 && products.length === 0) {
       setProducts(
         availableProducts.map((p) => ({
           name: p,
-          checked: false,
+          checked: true,
           term: 'Term 1',
-          status: 'Warm',
+          status: 'Warm' as const,
           strength: '',
           unit_price: '',
           chance: '',
+          not_interested_reason: '',
         })),
       )
     }
   }, [availableProducts])
 
-  // Auto-fill zone from employee's assigned zone
+  // Auto-fill zone + cluster from employee
   useEffect(() => {
     const loadUserZone = async () => {
       if (currentUser?._id) {
         try {
-          const userProfile = await apiRequest<{ assignedCity?: string; zone?: string }>(`/auth/me`)
+          const userProfile = await apiRequest<{
+            assignedCity?: string
+            zone?: string
+            cluster?: string
+          }>(`/auth/me`)
           const employeeZone = userProfile.assignedCity || userProfile.zone || ''
-          if (employeeZone) {
-            setForm((f) => {
-              // Only set if zone is not already set
-              if (!f.zone) {
-                return { ...f, zone: employeeZone }
-              }
-              return f
-            })
+          const employeeCluster = userProfile.cluster || ''
+          if (employeeZone || employeeCluster) {
+            setForm((f) => ({
+              ...f,
+              zone: f.zone || employeeZone,
+              cluster: f.cluster || employeeCluster,
+              cluster_code: f.cluster_code || employeeCluster,
+            }))
           }
         } catch (err) {
-          // Silently fail - zone will remain empty if fetch fails
           console.error('Failed to load user zone:', err)
         }
       }
@@ -115,6 +123,61 @@ export default function NewSchoolPage() {
     loadUserZone()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?._id])
+
+  // Load clusters when zone changes
+  useEffect(() => {
+    const loadClusters = async () => {
+      if (!form.zone) {
+        setClustersForZone([])
+        return
+      }
+      try {
+        const zones = await apiRequest<{ _id: string; name: string }[]>('/zones')
+        const match = (Array.isArray(zones) ? zones : []).find(
+          (z) => z.name === form.zone
+        )
+        if (!match?._id) {
+          setClustersForZone([])
+          return
+        }
+        const clusters = await apiRequest<{ name: string }[]>(
+          `/zones/${match._id}/clusters`
+        )
+        setClustersForZone(
+          (Array.isArray(clusters) ? clusters : []).map((c) => c.name).filter(Boolean)
+        )
+      } catch {
+        setClustersForZone([])
+      }
+    }
+    loadClusters()
+  }, [form.zone])
+
+  // Auto geocode when location pieces are enough
+  useEffect(() => {
+    const run = async () => {
+      if (!form.area && !form.location && !form.city) return
+      if (!form.state && !form.pincode) return
+      setGeocoding(true)
+      const coords = await geocodeSchoolLocation({
+        location: form.location,
+        area: form.area,
+        city: form.city,
+        state: form.state,
+        pincode: form.pincode,
+      })
+      setGeocoding(false)
+      if (coords) {
+        setForm((f) => ({
+          ...f,
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+        }))
+      }
+    }
+    const t = setTimeout(run, 800)
+    return () => clearTimeout(t)
+  }, [form.location, form.area, form.city, form.state, form.pincode])
   
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -191,10 +254,8 @@ export default function NewSchoolPage() {
     }
   }
 
-  const handleProductCheck = (index: number, checked: boolean) => {
-    const updated = [...products]
-    updated[index].checked = checked
-    setProducts(updated)
+  const handleProductCheck = (_index: number, _checked: boolean) => {
+    // Products cannot be deselected (Module 2)
   }
 
   const handleProductTermChange = (index: number, term: string) => {
@@ -210,10 +271,12 @@ export default function NewSchoolPage() {
     const updated = [...products]
     updated[index].status = status
 
-    // For non Hot/Warm statuses, strength and chance should be 0
     if (status !== 'Hot' && status !== 'Warm') {
       updated[index].strength = ''
       updated[index].chance = ''
+    }
+    if (status !== 'Not Interested') {
+      updated[index].not_interested_reason = ''
     }
 
     setProducts(updated)
@@ -244,19 +307,35 @@ export default function NewSchoolPage() {
     setProducts(updated)
   }
 
+  const handleNotInterestedReasonChange = (index: number, reason: string) => {
+    const updated = [...products]
+    updated[index].not_interested_reason = reason
+    setProducts(updated)
+  }
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSubmitting(true)
     setError(null)
     
     // Validate required fields
-    if (!form.school_code || !form.school_code.trim()) {
-      setError('School Code is required')
+    if (!form.contact_person?.trim()) {
+      setError('School contact person name is required')
+      setSubmitting(false)
+      return
+    }
+    if (!form.contact_designation?.trim()) {
+      setError('School contact designation is required')
       setSubmitting(false)
       return
     }
     if (!form.decision_maker_name || !form.decision_maker_name.trim()) {
-      setError('Decision Maker Name is required')
+      setError('Financial contact person name is required')
+      setSubmitting(false)
+      return
+    }
+    if (!form.financial_contact_designation?.trim()) {
+      setError('Financial contact designation is required')
       setSubmitting(false)
       return
     }
@@ -316,6 +395,11 @@ export default function NewSchoolPage() {
       setSubmitting(false)
       return
     }
+    if (!form.cluster || !form.cluster.trim()) {
+      setError('Cluster is required')
+      setSubmitting(false)
+      return
+    }
     if (!form.follow_up_date || !form.follow_up_date.trim()) {
       setError('Follow-up date is required')
       setSubmitting(false)
@@ -328,11 +412,11 @@ export default function NewSchoolPage() {
     }
     
     try {
-      // Build products array from checked products - include term and per-product status/strength/chance
+      // All products are mandatory / pre-selected
       const selectedProducts = products.filter((p) => p.checked)
 
       if (selectedProducts.length === 0) {
-        throw new Error('Please select at least one product.')
+        throw new Error('All products must be included. Please wait for products to load.')
       }
 
       // Validate per-product rules
@@ -341,7 +425,15 @@ export default function NewSchoolPage() {
         const chanceNum = p.chance === '' ? 0 : Number(p.chance)
         const unitPriceNum = Number(p.unit_price)
 
-        // Unit price required for every selected product (same rule as Create Sale / dc-orders create)
+        if (p.status === 'Not Interested') {
+          if (!String(p.not_interested_reason || '').trim()) {
+            throw new Error(
+              `Please enter a reason why the school is not interested in "${p.name}".`,
+            )
+          }
+          continue
+        }
+
         if (
           !String(p.unit_price || '').trim() ||
           !Number.isFinite(unitPriceNum) ||
@@ -352,14 +444,12 @@ export default function NewSchoolPage() {
           )
         }
 
-        // Strength is required for Hot/Warm
         if ((p.status === 'Hot' || p.status === 'Warm') && (!p.strength.trim() || strengthNum <= 0)) {
           throw new Error(
             `Please enter strength for product "${p.name}" when status is ${p.status}.`,
           )
         }
 
-        // Chance rules
         if (p.status === 'Hot') {
           if (chanceNum < 80) {
             throw new Error(
@@ -379,7 +469,7 @@ export default function NewSchoolPage() {
         const strengthNum = Number(p.strength) || 0
         const chanceNum =
           p.status === 'Hot' || p.status === 'Warm' ? Number(p.chance) || 0 : 0
-        const unitPriceNum = Number(p.unit_price)
+        const unitPriceNum = Number(p.unit_price) || 0
         return {
           product_name: p.name,
           quantity: strengthNum > 0 ? strengthNum : 1,
@@ -388,17 +478,21 @@ export default function NewSchoolPage() {
           status: p.status,
           strength: strengthNum,
           chance: chanceNum,
+          not_interested_reason:
+            p.status === 'Not Interested' ? p.not_interested_reason.trim() : '',
         }
       })
       
       const payload: any = {
         school_name: form.school_name,
-        school_code: form.school_code.trim(),
-        school_type: form.school_type || 'New', // Use selected school type (New or Existing)
+        // Omit school_code so backend auto-generates from state + district
+        school_type: form.school_type || 'New',
         contact_person: form.contact_person,
         contact_mobile: contactMobileCheck.digits,
+        contact_designation: form.contact_designation.trim(),
         contact_person2: form.decision_maker_name || undefined,
         contact_mobile2: decisionMobileCheck.digits,
+        financial_contact_designation: form.financial_contact_designation.trim(),
         decision_maker: form.decision_maker_name || undefined,
         location: form.location || undefined,
         address: form.address || undefined,
@@ -412,7 +506,6 @@ export default function NewSchoolPage() {
         latitude: form.latitude ? Number(form.latitude) : undefined,
         longitude: form.longitude ? Number(form.longitude) : undefined,
         zone: form.zone || undefined,
-        lead_status: form.lead_status || 'Warm',
         branches: form.branches ? Number(form.branches) : undefined,
         no_of_branches: form.branches ? Number(form.branches) : undefined,
         strength: form.strength && form.strength.trim() ? Number(form.strength) : undefined,
@@ -421,9 +514,9 @@ export default function NewSchoolPage() {
         avg_fee: form.average_fee ? Number(form.average_fee) : undefined,
         email: form.email,
         products: productsPayload,
-        follow_up_date: toFollowUpDatePayload(form.follow_up_date), // Date only — no default time
-        assigned_to: currentUser?._id, // Auto-assign to current employee
-        cluster_code: form.cluster_code || undefined,
+        follow_up_date: toFollowUpDatePayload(form.follow_up_date),
+        assigned_to: currentUser?._id,
+        cluster_code: form.cluster || form.cluster_code || undefined,
       }
       
       if (selectedProducts.length === 0) {
@@ -467,34 +560,20 @@ export default function NewSchoolPage() {
             <Input className="bg-white text-neutral-900" name="school_name" value={form.school_name} onChange={onChange} required />
           </div>
           <div>
-            <Label>School code *</Label>
+            <Label>School code</Label>
             <Input
-              className="bg-white text-neutral-900"
-              name="school_code"
-              value={form.school_code}
-              onChange={onChange}
-              placeholder="Enter school code"
-              required
+              className="bg-neutral-100 text-neutral-700"
+              value={form.school_code || 'Auto-generated from state + district on save'}
+              readOnly
+              disabled
             />
           </div>
           <div>
-            <Label>School Type</Label>
-            <Select value={form.school_type} onValueChange={(v) => setForm((f) => ({ ...f, school_type: v }))}>
-              <SelectTrigger className="bg-white text-neutral-900">
-                <SelectValue placeholder="Select Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="New">New</SelectItem>
-                <SelectItem value="Existing">Existing</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Contact person *</Label>
+            <Label>School contact person *</Label>
             <Input className="bg-white text-neutral-900" name="contact_person" value={form.contact_person} onChange={onChange} required />
           </div>
           <div>
-            <Label>Contact mobile *</Label>
+            <Label>School contact mobile *</Label>
             <Input
               className="bg-white text-neutral-900"
               name="contact_mobile"
@@ -507,18 +586,28 @@ export default function NewSchoolPage() {
               onChange={onPhoneChange}
               required
             />
-            <p className="text-xs text-neutral-500 mt-1">Digits only (10–15 digits)</p>
+          </div>
+          <div>
+            <Label>School contact designation *</Label>
+            <Input
+              className="bg-white text-neutral-900"
+              name="contact_designation"
+              value={form.contact_designation}
+              onChange={onChange}
+              placeholder="e.g. Principal"
+              required
+            />
           </div>
           <div>
             <Label>Email *</Label>
             <Input className="bg-white text-neutral-900" type="email" name="email" value={form.email} onChange={onChange} required />
           </div>
           <div>
-            <Label>Decision Maker Name *</Label>
+            <Label>Financial contact person *</Label>
             <Input className="bg-white text-neutral-900" name="decision_maker_name" value={form.decision_maker_name} onChange={onChange} required />
           </div>
           <div>
-            <Label>Decision Maker Mobile Number *</Label>
+            <Label>Financial contact mobile *</Label>
             <Input
               className="bg-white text-neutral-900"
               name="decision_maker_mobile"
@@ -531,7 +620,17 @@ export default function NewSchoolPage() {
               onChange={onPhoneChange}
               required
             />
-            <p className="text-xs text-neutral-500 mt-1">Digits only (10–15 digits)</p>
+          </div>
+          <div>
+            <Label>Financial contact designation *</Label>
+            <Input
+              className="bg-white text-neutral-900"
+              name="financial_contact_designation"
+              value={form.financial_contact_designation}
+              onChange={onChange}
+              placeholder="e.g. Accountant"
+              required
+            />
           </div>
           <div>
             <Label>Pincode *</Label>
@@ -562,8 +661,15 @@ export default function NewSchoolPage() {
             <Input className="bg-white text-neutral-900" name="region" value={form.region} onChange={onChange} />
           </div>
           <div>
-            <Label>Landmark</Label>
-            <Input className="bg-white text-neutral-900" name="location" value={form.location} onChange={onChange} />
+            <Label>Landmark {isSuperAdmin ? '' : '(Super Admin only)'}</Label>
+            <Input
+              className={`text-neutral-900 ${isSuperAdmin ? 'bg-white' : 'bg-neutral-100'}`}
+              name="location"
+              value={form.location}
+              onChange={onChange}
+              disabled={!isSuperAdmin}
+              readOnly={!isSuperAdmin}
+            />
           </div>
           <div>
             <Label>Area *</Label>
@@ -594,8 +700,15 @@ export default function NewSchoolPage() {
             </p>
           </div>
           <div className="md:col-span-2">
-            <Label>Address</Label>
-            <Textarea className="bg-white text-neutral-900" name="address" value={form.address} onChange={onChange} />
+            <Label>Address {isSuperAdmin ? '' : '(Super Admin only)'}</Label>
+            <Textarea
+              className={`text-neutral-900 ${isSuperAdmin ? 'bg-white' : 'bg-neutral-100'}`}
+              name="address"
+              value={form.address}
+              onChange={onChange}
+              disabled={!isSuperAdmin}
+              readOnly={!isSuperAdmin}
+            />
           </div>
           
           {/* Average School Fee */}
@@ -636,37 +749,57 @@ export default function NewSchoolPage() {
             />
           </div>
           <div>
-            <Label>Cluster</Label>
-            <Input
-              className="bg-white text-neutral-900"
-              name="cluster"
-              value={form.cluster}
-              onChange={onChange}
-              placeholder="Enter cluster"
-            />
+            <Label>Cluster *</Label>
+            {clustersForZone.length > 0 ? (
+              <Select
+                value={form.cluster || undefined}
+                onValueChange={(v) =>
+                  setForm((f) => ({ ...f, cluster: v, cluster_code: v }))
+                }
+              >
+                <SelectTrigger className="bg-white text-neutral-900">
+                  <SelectValue placeholder="Select cluster" />
+                </SelectTrigger>
+                <SelectContent>
+                  {clustersForZone.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {c}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input
+                className="bg-white text-neutral-900"
+                name="cluster"
+                value={form.cluster}
+                onChange={onChange}
+                placeholder="Cluster (from employee zone)"
+              />
+            )}
           </div>
           <div>
-            <Label>Latitude</Label>
+            <Label>Latitude {geocoding ? '(locating…)' : '(auto)'}</Label>
             <Input
-              className="bg-white text-neutral-900"
+              className="bg-neutral-100 text-neutral-700"
               type="number"
               step="any"
               name="latitude"
               value={form.latitude}
-              onChange={onChange}
-              placeholder="e.g. 17.3850"
+              readOnly
+              placeholder="Auto from location"
             />
           </div>
           <div>
-            <Label>Longitude</Label>
+            <Label>Longitude (auto)</Label>
             <Input
-              className="bg-white text-neutral-900"
+              className="bg-neutral-100 text-neutral-700"
               type="number"
               step="any"
               name="longitude"
               value={form.longitude}
-              onChange={onChange}
-              placeholder="e.g. 78.4867"
+              readOnly
+              placeholder="Auto from location"
             />
           </div>
           
@@ -697,7 +830,7 @@ export default function NewSchoolPage() {
           
           {/* Products Interested Section */}
           <div className="md:col-span-2">
-            <Label>Products Interested *</Label>
+            <Label>Products * (all required — cannot deselect)</Label>
             <div className="mt-2 p-4 bg-white rounded border border-neutral-200">
               {productsLoading ? (
                 <p className="text-sm text-neutral-500">Loading products…</p>
@@ -723,15 +856,13 @@ export default function NewSchoolPage() {
                           <div className="flex items-center gap-2 min-w-0">
                             <Checkbox
                               id={`product-${index}`}
-                              checked={product.checked}
-                              onCheckedChange={(checked) =>
-                                handleProductCheck(index, checked as boolean)
-                              }
-                              className="size-5 shrink-0 border-2 border-neutral-500 bg-white data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 data-[state=checked]:text-white shadow-sm"
+                              checked={true}
+                              disabled
+                              className="size-5 shrink-0 border-2 border-neutral-500 bg-white data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 data-[state=checked]:text-white shadow-sm opacity-100"
                             />
                             <Label
                               htmlFor={`product-${index}`}
-                              className="font-medium cursor-pointer text-neutral-900 leading-tight"
+                              className="font-medium text-neutral-900 leading-tight"
                             >
                               {product.name}
                             </Label>
@@ -801,6 +932,22 @@ export default function NewSchoolPage() {
                               <span className="text-xs text-neutral-500 shrink-0">%</span>
                             </div>
                           </div>
+                          {product.status === 'Not Interested' && (
+                            <div className="md:col-span-5 mt-1">
+                              <Label className="text-xs text-neutral-600">
+                                Reason not interested * ({product.name})
+                              </Label>
+                              <Input
+                                className="mt-1 h-9 text-xs bg-white text-neutral-900 border-neutral-300"
+                                placeholder="Why is the school not interested?"
+                                value={product.not_interested_reason}
+                                onChange={(e) =>
+                                  handleNotInterestedReasonChange(index, e.target.value)
+                                }
+                                required
+                              />
+                            </div>
+                          )}
                         </div>
                       )
                     })}
@@ -809,40 +956,24 @@ export default function NewSchoolPage() {
               )}
             </div>
             <p className="text-xs text-neutral-500 mt-2">
-              Select products, then set Status, Strength, Unit Price, and Chance % for each. Term is set after the lead is closed.
-              Unit Price is required for every selected product. Strength is required when status is Hot or Warm; other statuses will always
-              have 0 strength and 0% chance.
+              All products are required. Set Status, Strength, Unit Price, and Chance % for each. Term is set after the lead is closed.
+              Unit Price is required unless status is Not Interested (then a reason is required). Strength is required when status is Hot or Warm.
             </p>
           </div>
 
-          <div>
-            <Label>Lead status *</Label>
-            <Select
-              value={form.lead_status}
-              onValueChange={(v) => setForm((f) => ({ ...f, lead_status: v }))}
-              required
-            >
-              <SelectTrigger className="bg-white text-neutral-900">
-                <SelectValue placeholder="Select lead status" />
-              </SelectTrigger>
-              <SelectContent>
-                {LEAD_STATUS_OPTIONS.map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {option}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-neutral-500 mt-1">
-              Pipeline status (Hot / Warm / Cold). Product rows below can have finer status per SKU.
-            </p>
-          </div>
           <div>
             <Label>Zone *</Label>
             {zones.length > 0 ? (
               <Select
                 value={form.zone || undefined}
-                onValueChange={(v) => setForm((f) => ({ ...f, zone: v }))}
+                onValueChange={(v) =>
+                  setForm((f) => ({
+                    ...f,
+                    zone: v,
+                    cluster: '',
+                    cluster_code: '',
+                  }))
+                }
               >
                 <SelectTrigger className="bg-white text-neutral-900">
                   <SelectValue placeholder="Select zone" />

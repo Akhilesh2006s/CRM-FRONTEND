@@ -176,12 +176,14 @@ const NAV: NavItem[] = [
     label: 'Users / Employees',
     icon: Users,
     children: [
+      { label: 'Assign Managers', href: '/dashboard/executive-managers' },
       { label: 'New Employee', href: '/dashboard/employees/new' },
       { label: 'Active Employees', href: '/dashboard/employees/active' },
       { label: 'Inactive Employees', href: '/dashboard/employees/inactive' },
+      { label: 'Employee Verification', href: '/dashboard/employees/verification' },
       { label: 'Assign Areas', href: '/dashboard/executives/assign-areas' },
-      { label: 'Zones', href: '/dashboard/employees/zones', icon: Database },
-      { label: 'Clusters', href: '/dashboard/employees/clusters', icon: Database },
+      { label: 'Zones & Clusters', href: '/dashboard/employees/zones', icon: Database },
+      { label: 'Move Schools', href: '/dashboard/employees/move-schools', icon: Database },
     ],
   },
   {
@@ -661,10 +663,40 @@ export function Sidebar() {
   const isWarehouseExecutive = user?.role === 'Warehouse Executive'
   const isWarehouseManager = user?.role === 'Warehouse Manager'
   const isPartner = user?.role === 'Partner'
+  const isHrManager = user?.role === 'HR Manager'
 
   // Executive leave items are included in the Executive sidebar as Leave Management
   let finalNav: NavItem[] = []
-  if (isEmployee) {
+  if (isHrManager) {
+    finalNav = [
+      { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
+      {
+        label: 'Users / Employees',
+        icon: Users,
+        children: [
+          { label: 'Employee Verification', href: '/dashboard/employees/verification' },
+          { label: 'Active Employees', href: '/dashboard/employees/active' },
+          { label: 'Inactive Employees', href: '/dashboard/employees/inactive' },
+        ],
+      },
+      {
+        label: 'Leave Management',
+        icon: CalendarCheck2,
+        children: [
+          { label: 'Pending Leaves', href: '/dashboard/leaves/pending', icon: Clock },
+          { label: 'Leaves Report', href: '/dashboard/leaves/report', icon: FileText },
+          { label: 'Leave Request', href: '/dashboard/leaves/request', icon: PlusCircle },
+          { label: 'My Leaves', href: '/dashboard/leaves/approved', icon: CheckCircle2 },
+        ],
+      },
+      {
+        label: 'Settings',
+        icon: Settings,
+        children: [{ label: 'Change Password', href: '/dashboard/settings/password' }],
+      },
+      { label: 'Sign out', icon: LogOut, href: '/auth/login' },
+    ]
+  } else if (isEmployee) {
     finalNav = [
       { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
       {
@@ -1010,9 +1042,8 @@ export function Sidebar() {
     })
   }
 
-  // Keep role-specific Executive Manager nav intact (do not replace with RBAC catalog).
-  // Keep role-specific Executive nav intact so Clients submenu order is preserved.
-  if (rbacActive && permissionsReady && !isExecutiveManager && !isEmployee) {
+  // Keep role-specific Executive Manager / Executive / HR Manager nav intact (do not replace with RBAC catalog).
+  if (rbacActive && permissionsReady && !isExecutiveManager && !isEmployee && !isHrManager) {
     const baseNav = finalNav.length > 0 ? finalNav : NAV
     const catalogHrefs = rbacCatalogHrefs()
     const fromPermissions = rbacBuiltToNavItems(buildRbacSidebarNav(permUser))

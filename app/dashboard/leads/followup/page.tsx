@@ -59,7 +59,9 @@ type ProductInterested = {
   term: string
   status: string
   strength: string
+  unit_price: string
   chance: string
+  not_interested_reason: string
 }
 
 /** Align product-line enums across Lead/DcOrder schemas */
@@ -458,16 +460,25 @@ export default function FollowupLeadsPage() {
     }
     const incomplete = selectedProducts.find((p) => !isFollowUpProductLineComplete(p))
     if (incomplete) {
-      if ((Number(incomplete.strength) || 0) <= 0 || (Number(incomplete.chance) || 0) <= 0) {
+      if (incomplete.status === 'Not Interested') {
         toast.error(
-          `Enter Strength and Chance % for "${incomplete.product_name}" (required for every product)`
+          `Enter a reason why the school is not interested in "${incomplete.product_name}"`
+        )
+      } else if ((Number(incomplete.unit_price) || 0) <= 0) {
+        toast.error(`Enter Unit Price for "${incomplete.product_name}"`)
+      } else if (
+        (incomplete.status === 'Hot' || incomplete.status === 'Warm') &&
+        ((Number(incomplete.strength) || 0) <= 0 || (Number(incomplete.chance) || 0) <= 0)
+      ) {
+        toast.error(
+          `Enter Strength and Chance % for "${incomplete.product_name}" (required for Hot/Warm)`
         )
       } else if (incomplete.status === 'Hot' && Number(incomplete.chance) < 80) {
         toast.error(`Chance % for "${incomplete.product_name}" must be at least 80 when status is Hot`)
       } else if (incomplete.status === 'Warm' && Number(incomplete.chance) < 20) {
         toast.error(`Chance % for "${incomplete.product_name}" must be at least 20 when status is Warm`)
       } else {
-        toast.error('Complete Strength and Chance % for each product')
+        toast.error('Complete product details for each row')
       }
       return
     }
@@ -483,8 +494,12 @@ export default function FollowupLeadsPage() {
           strength: Number(p.strength) || 0,
           chance: Number(p.chance) || 0,
           important: false,
-          quantity: Number(p.strength) || 0,
-          unit_price: 0,
+          quantity: Number(p.strength) || 1,
+          unit_price: Number(p.unit_price) || 0,
+          not_interested_reason:
+            p.status === 'Not Interested'
+              ? String(p.not_interested_reason || '').trim()
+              : '',
         }))
 
       const derivedPriority = deriveLeadPriorityFromDealProducts(validProducts)
@@ -674,16 +689,21 @@ export default function FollowupLeadsPage() {
       ...prev,
       productsInterested: [
         ...prev.productsInterested,
-        { product_name: '', term: 'Term 1', status: 'Warm', strength: '', chance: '' },
+        {
+          product_name: '',
+          term: 'Term 1',
+          status: 'Warm',
+          strength: '',
+          unit_price: '',
+          chance: '',
+          not_interested_reason: '',
+        },
       ],
     }))
   }
 
-  const removeInterestedProduct = (index: number) => {
-    setUpdateForm((prev) => ({
-      ...prev,
-      productsInterested: prev.productsInterested.filter((_, i) => i !== index),
-    }))
+  const removeInterestedProduct = (_index: number) => {
+    // Module 2: products cannot be removed on follow-up
   }
 
   const updateInterestedProduct = (
@@ -960,9 +980,6 @@ export default function FollowupLeadsPage() {
                     <span className="w-2 h-2 rounded-full bg-purple-500"></span>
                     Products Interested *
                   </Label>
-                  <Button type="button" size="sm" variant="outline" onClick={addInterestedProduct}>
-                    Add Product
-                  </Button>
                 </div>
 
                 <div className="rounded-md border border-neutral-200 bg-white overflow-hidden">
@@ -970,12 +987,12 @@ export default function FollowupLeadsPage() {
                     <p className="text-xs text-neutral-500 p-3">No products added yet.</p>
                   ) : (
                     <>
-                      <div className="sticky top-0 z-10 grid grid-cols-[minmax(140px,2fr)_minmax(120px,1.4fr)_minmax(88px,1fr)_minmax(88px,1fr)_2.5rem] gap-3 text-xs font-medium text-neutral-500 px-3 py-2 border-b border-neutral-200 bg-white">
+                      <div className="sticky top-0 z-10 grid grid-cols-[minmax(120px,1.6fr)_minmax(110px,1.2fr)_minmax(72px,0.8fr)_minmax(80px,0.9fr)_minmax(72px,0.8fr)] gap-2 text-xs font-medium text-neutral-500 px-3 py-2 border-b border-neutral-200 bg-white">
                         <span>Product</span>
                         <span>Status</span>
                         <span className="text-center">Strength</span>
+                        <span className="text-center">Unit Price</span>
                         <span className="text-center">Chance %</span>
-                        <span></span>
                       </div>
 
                       <div
@@ -984,15 +1001,13 @@ export default function FollowupLeadsPage() {
                         aria-label="Products list"
                       >
                       {updateForm.productsInterested.map((product, index) => (
-                        <div
-                          key={`product-${index}`}
-                          className="grid grid-cols-[minmax(140px,2fr)_minmax(120px,1.4fr)_minmax(88px,1fr)_minmax(88px,1fr)_2.5rem] gap-3 items-center"
-                        >
+                        <div key={`product-${index}`} className="space-y-2">
+                          <div className="grid grid-cols-[minmax(120px,1.6fr)_minmax(110px,1.2fr)_minmax(72px,0.8fr)_minmax(80px,0.9fr)_minmax(72px,0.8fr)] gap-2 items-center">
                           <Select
                             value={product.product_name || undefined}
-                            onValueChange={(v) => updateInterestedProduct(index, 'product_name', v)}
+                            disabled
                           >
-                            <SelectTrigger className="h-9">
+                            <SelectTrigger className="h-9 bg-neutral-50">
                               <SelectValue placeholder="Select product" />
                             </SelectTrigger>
                             <SelectContent>
@@ -1025,33 +1040,50 @@ export default function FollowupLeadsPage() {
                             type="text"
                             inputMode="numeric"
                             className="h-9 text-center bg-white"
-                            placeholder="Qty *"
+                            placeholder="Qty"
                             value={product.strength}
-                            required
+                            disabled={product.status !== 'Hot' && product.status !== 'Warm'}
                             onChange={(e) =>
                               updateInterestedProduct(index, 'strength', e.target.value)
                             }
                           />
                           <Input
                             type="text"
+                            inputMode="decimal"
+                            className="h-9 text-center bg-white"
+                            placeholder="₹"
+                            value={product.unit_price}
+                            disabled={product.status === 'Not Interested'}
+                            onChange={(e) =>
+                              updateInterestedProduct(index, 'unit_price', e.target.value)
+                            }
+                          />
+                          <Input
+                            type="text"
                             inputMode="numeric"
                             className="h-9 text-center bg-white"
-                            placeholder="% *"
+                            placeholder="% "
                             value={product.chance}
-                            required
+                            disabled={product.status !== 'Hot' && product.status !== 'Warm'}
                             onChange={(e) =>
                               updateInterestedProduct(index, 'chance', e.target.value)
                             }
                           />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-9 w-9 text-neutral-500 hover:text-red-600"
-                            onClick={() => removeInterestedProduct(index)}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
+                          </div>
+                          {product.status === 'Not Interested' && (
+                            <Input
+                              className="h-9 bg-white text-sm"
+                              placeholder="Reason not interested *"
+                              value={product.not_interested_reason}
+                              onChange={(e) =>
+                                updateInterestedProduct(
+                                  index,
+                                  'not_interested_reason',
+                                  e.target.value
+                                )
+                              }
+                            />
+                          )}
                         </div>
                       ))}
                       </div>
@@ -1064,7 +1096,7 @@ export default function FollowupLeadsPage() {
                   </p>
                 )}
                 <p className="text-xs text-neutral-500">
-                  Required: add at least one product with Strength (quantity) and Chance % for each row.
+                  Products are locked. Edit status, unit price, strength, and chance. Not Interested requires a reason.
                 </p>
               </div>
               

@@ -84,6 +84,17 @@ export function canAccessPath(
     return canAccessExecutiveManagerWorkspace(user, pathname)
   }
 
+  // HR Manager always has employee directory + verification + leave access
+  if (
+    user.role === 'HR Manager' &&
+    (pathname.startsWith('/dashboard/employees') ||
+      pathname.startsWith('/dashboard/leaves') ||
+      pathname === '/dashboard' ||
+      pathname.startsWith('/dashboard/settings/password'))
+  ) {
+    return true
+  }
+
   const key = permissionForPath(pathname)
   if (!key) return true
   return hasPermission(user, key)

@@ -36,6 +36,8 @@ export default function NewEmployeePage() {
     phone: '',
     mobile: '',
     address1: '',
+    temporaryAddress: '',
+    permanentAddress: '',
     state: '',
     zone: '',
     cluster: '',
@@ -44,7 +46,16 @@ export default function NewEmployeePage() {
     pincode: '',
     role: 'Executive',
     taggedEmployeeIds: [] as string[],
+    references: [
+      { relation: '', name: '', mobile: '' },
+      { relation: '', name: '', mobile: '' },
+    ] as { relation: string; name: string; mobile: string }[],
+    aadhaarUrl: '',
+    locationPhotoUrl: '',
   })
+  const [uploadingAadhaar, setUploadingAadhaar] = useState(false)
+  const [uploadingLocation, setUploadingLocation] = useState(false)
+  const REFERENCE_RELATIONS = ['Wife', 'Brother', 'Sister', 'Father', 'Mother'] as const
   const [tagOptions, setTagOptions] = useState<EmployeeOption[]>([])
   const filteredTagOptions = useMemo(
     () => filterTagOptions(tagOptions, form.role),
@@ -263,6 +274,41 @@ export default function NewEmployeePage() {
         setSubmitting(false)
         return
       }
+
+      for (let i = 0; i < 2; i++) {
+        const ref = form.references[i]
+        if (!REFERENCE_RELATIONS.includes(ref.relation as any)) {
+          setError(`Reference ${i + 1}: select relationship (Wife, Brother, Sister, Father, or Mother)`)
+          setSubmitting(false)
+          return
+        }
+        const refMobile = validateStrictIndianMobile(ref.mobile)
+        if (!refMobile.ok) {
+          setError(`Reference ${i + 1}: ${refMobile.message}`)
+          setSubmitting(false)
+          return
+        }
+      }
+      if (!form.temporaryAddress.trim()) {
+        setError('Temporary address is required')
+        setSubmitting(false)
+        return
+      }
+      if (!form.permanentAddress.trim()) {
+        setError('Permanent address is required')
+        setSubmitting(false)
+        return
+      }
+      if (!form.aadhaarUrl.trim()) {
+        setError('Aadhaar upload is required')
+        setSubmitting(false)
+        return
+      }
+      if (!form.locationPhotoUrl.trim()) {
+        setError('Location upload is required')
+        setSubmitting(false)
+        return
+      }
       
       const payload: any = {
         ...form,
@@ -274,6 +320,11 @@ export default function NewEmployeePage() {
           `${identityCheck.values.firstName} ${identityCheck.values.lastName}`.trim() ||
           identityCheck.values.firstName ||
           'Executive',
+        address1: form.temporaryAddress,
+        references: form.references.map((r) => {
+          const m = validateStrictIndianMobile(r.mobile)
+          return { ...r, mobile: m.ok ? m.digits : r.mobile }
+        }),
       }
       // Only include cluster if role is Executive
       if (form.role !== 'Executive') {
@@ -371,8 +422,171 @@ export default function NewEmployeePage() {
             )}
           </div>
           <div className="md:col-span-2">
-            <Label>Address 1</Label>
-            <Textarea className="bg-white text-neutral-900" name="address1" value={form.address1} onChange={onChange} placeholder="Address 1" />
+            <Label>Temporary address *</Label>
+            <Textarea
+              className="bg-white text-neutral-900"
+              name="temporaryAddress"
+              value={form.temporaryAddress}
+              onChange={onChange}
+              placeholder="Temporary / current address"
+              required
+            />
+          </div>
+          <div className="md:col-span-2">
+            <Label>Permanent address *</Label>
+            <Textarea
+              className="bg-white text-neutral-900"
+              name="permanentAddress"
+              value={form.permanentAddress}
+              onChange={onChange}
+              placeholder="Permanent address"
+              required
+            />
+          </div>
+
+          <div className="md:col-span-2 text-lg font-semibold mb-2 mt-4">References *</div>
+          {[0, 1].map((idx) => (
+            <div key={idx} className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 border border-neutral-200 rounded p-3 bg-white">
+              <div>
+                <Label>Reference {idx + 1} — Relationship *</Label>
+                <Select
+                  value={form.references[idx].relation}
+                  onValueChange={(v) =>
+                    setForm((f) => {
+                      const references = [...f.references]
+                      references[idx] = { ...references[idx], relation: v }
+                      return { ...f, references }
+                    })
+                  }
+                >
+                  <SelectTrigger className="bg-white">
+                    <SelectValue placeholder="Select relationship" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {REFERENCE_RELATIONS.map((r) => (
+                      <SelectItem key={r} value={r}>
+                        {r}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Name</Label>
+                <Input
+                  className="bg-white"
+                  value={form.references[idx].name}
+                  onChange={(e) =>
+                    setForm((f) => {
+                      const references = [...f.references]
+                      references[idx] = { ...references[idx], name: e.target.value }
+                      return { ...f, references }
+                    })
+                  }
+                  placeholder="Reference name"
+                />
+              </div>
+              <div>
+                <Label>Mobile *</Label>
+                <Input
+                  className="bg-white"
+                  type="tel"
+                  inputMode="numeric"
+                  maxLength={10}
+                  value={form.references[idx].mobile}
+                  onChange={(e) =>
+                    setForm((f) => {
+                      const references = [...f.references]
+                      references[idx] = {
+                        ...references[idx],
+                        mobile: sanitizePhoneInput(e.target.value),
+                      }
+                      return { ...f, references }
+                    })
+                  }
+                  placeholder="10-digit mobile"
+                  required
+                />
+              </div>
+            </div>
+          ))}
+
+          <div className="md:col-span-2 text-lg font-semibold mb-2 mt-4">Documents *</div>
+          <div>
+            <Label>Aadhaar upload *</Label>
+            <Input
+              className="bg-white"
+              type="file"
+              accept="image/*,.pdf"
+              onChange={async (e) => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                setUploadingAadhaar(true)
+                setError(null)
+                try {
+                  const fd = new FormData()
+                  fd.append('file', file)
+                  fd.append('kind', 'aadhaar')
+                  const token = localStorage.getItem('authToken')
+                  const { apiUrl } = await import('@/lib/api')
+                  const res = await fetch(apiUrl('/employees/upload'), {
+                    method: 'POST',
+                    headers: token ? { Authorization: `Bearer ${token}` } : {},
+                    body: fd,
+                  })
+                  const data = await res.json()
+                  if (!res.ok) throw new Error(data?.message || 'Upload failed')
+                  setForm((f) => ({ ...f, aadhaarUrl: data.url }))
+                } catch (err: any) {
+                  setError(err?.message || 'Aadhaar upload failed')
+                } finally {
+                  setUploadingAadhaar(false)
+                }
+              }}
+            />
+            <p className="text-xs text-neutral-500 mt-1">
+              {uploadingAadhaar ? 'Uploading…' : form.aadhaarUrl ? `Uploaded: ${form.aadhaarUrl}` : 'Image or PDF'}
+            </p>
+          </div>
+          <div>
+            <Label>Location upload *</Label>
+            <Input
+              className="bg-white"
+              type="file"
+              accept="image/*"
+              onChange={async (e) => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                setUploadingLocation(true)
+                setError(null)
+                try {
+                  const fd = new FormData()
+                  fd.append('file', file)
+                  fd.append('kind', 'location')
+                  const token = localStorage.getItem('authToken')
+                  const { apiUrl } = await import('@/lib/api')
+                  const res = await fetch(apiUrl('/employees/upload'), {
+                    method: 'POST',
+                    headers: token ? { Authorization: `Bearer ${token}` } : {},
+                    body: fd,
+                  })
+                  const data = await res.json()
+                  if (!res.ok) throw new Error(data?.message || 'Upload failed')
+                  setForm((f) => ({ ...f, locationPhotoUrl: data.url }))
+                } catch (err: any) {
+                  setError(err?.message || 'Location upload failed')
+                } finally {
+                  setUploadingLocation(false)
+                }
+              }}
+            />
+            <p className="text-xs text-neutral-500 mt-1">
+              {uploadingLocation
+                ? 'Uploading…'
+                : form.locationPhotoUrl
+                  ? `Uploaded: ${form.locationPhotoUrl}`
+                  : 'Photo of location'}
+            </p>
           </div>
 
           <div className="md:col-span-2 text-lg font-semibold mb-2 mt-4">Location & User Type</div>
@@ -500,6 +714,7 @@ export default function NewEmployeePage() {
                 <SelectItem value="Executive">Executive</SelectItem>
                 <SelectItem value="Trainer">Trainer</SelectItem>
                 <SelectItem value="Finance Manager">Finance Manager</SelectItem>
+                <SelectItem value="HR Manager">HR Manager</SelectItem>
                 <SelectItem value="Coordinator">Coordinator</SelectItem>
                 <SelectItem value="Senior Coordinator">Senior Coordinator</SelectItem>
                 <SelectItem value="Manager">Manager</SelectItem>
