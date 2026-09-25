@@ -1554,7 +1554,7 @@ export default function DashboardPage() {
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                       <Card className="p-6 bg-white shadow-lg border border-neutral-200/60">
                         <div className="flex items-center justify-between mb-6">
-                          <h3 className="font-semibold text-lg text-neutral-900">Top 10 Executives by Total Leads</h3>
+                          <h3 className="font-semibold text-lg text-neutral-900">Top 10 BDEs by Total Leads</h3>
                           <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center">
                             <DollarSign className="w-5 h-5 text-white" />
                           </div>
@@ -1577,7 +1577,7 @@ export default function DashboardPage() {
                       </Card>
                       <Card className="p-6 bg-white shadow-lg border border-neutral-200/60">
                         <div className="flex items-center justify-between mb-6">
-                          <h3 className="font-semibold text-lg text-neutral-900">Executive Performance by Priority</h3>
+                          <h3 className="font-semibold text-lg text-neutral-900">BDE Performance by Priority</h3>
                           <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center">
                             <TrendingUp className="w-5 h-5 text-white" />
                           </div>
@@ -1644,7 +1644,7 @@ export default function DashboardPage() {
                     {executiveWiseClosedLeads.length > 0 && (
                       <Card className="p-6 bg-white shadow-lg border border-neutral-200/60">
                         <div className="flex items-center justify-between mb-6">
-                          <h3 className="font-semibold text-lg text-neutral-900">Top 10 Executives - Closed Leads</h3>
+                          <h3 className="font-semibold text-lg text-neutral-900">Top 10 BDEs - Closed Leads</h3>
                           <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center">
                             <TrendingUp className="w-5 h-5 text-white" />
                           </div>
@@ -1754,7 +1754,7 @@ export default function DashboardPage() {
             <Card className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="font-semibold text-neutral-900 text-base">Executive wise Leads</h3>
+                  <h3 className="font-semibold text-neutral-900 text-base">BDE wise Leads</h3>
                   <p className="text-xs text-neutral-500 mt-1">Lead performance by executive</p>
                 </div>
               </div>
@@ -1764,7 +1764,7 @@ export default function DashboardPage() {
                     <thead>
                       <tr className="border-b border-neutral-200/60 bg-neutral-50/50">
                         <th className="py-3 px-4 text-left font-semibold text-neutral-900 text-xs uppercase tracking-wider">Zone</th>
-                        <th className="py-3 px-4 text-left font-semibold text-neutral-900 text-xs uppercase tracking-wider">Executive</th>
+                        <th className="py-3 px-4 text-left font-semibold text-neutral-900 text-xs uppercase tracking-wider">BDE</th>
                         <th className="py-3 px-4 text-right font-semibold text-neutral-900 text-xs uppercase tracking-wider">Total</th>
                         <th className="py-3 px-4 text-right font-semibold text-neutral-900 text-xs uppercase tracking-wider">Hot</th>
                         <th className="py-3 px-4 text-right font-semibold text-neutral-900 text-xs uppercase tracking-wider">Warm</th>
@@ -1842,7 +1842,7 @@ export default function DashboardPage() {
             <Card className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="font-semibold text-neutral-900 text-base">Executive wise Closed Leads</h3>
+                  <h3 className="font-semibold text-neutral-900 text-base">BDE wise Closed Leads</h3>
                   <p className="text-xs text-neutral-500 mt-1">Closed leads by executive</p>
                 </div>
               </div>
@@ -1852,7 +1852,7 @@ export default function DashboardPage() {
                     <thead>
                       <tr className="border-b border-neutral-200/60 bg-neutral-50/50">
                         <th className="py-3 px-4 text-left font-semibold text-neutral-900 text-xs uppercase tracking-wider">Zone</th>
-                        <th className="py-3 px-4 text-left font-semibold text-neutral-900 text-xs uppercase tracking-wider">Executive</th>
+                        <th className="py-3 px-4 text-left font-semibold text-neutral-900 text-xs uppercase tracking-wider">BDE</th>
                         <th className="py-3 px-4 text-right font-semibold text-neutral-900 text-xs uppercase tracking-wider">Closed Leads</th>
                       </tr>
                     </thead>

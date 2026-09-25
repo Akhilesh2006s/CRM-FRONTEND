@@ -1342,7 +1342,7 @@ export default function CompletedDCPage() {
       'School Code',
       'School Type',
       'Zone',
-      'Executive',
+      'BDE',
       'Completed Date',
       'LR No',
       'LR Date',
@@ -1402,7 +1402,7 @@ export default function CompletedDCPage() {
         {/* Filters */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
           <Input placeholder="Zone" value={filters.zone} onChange={(e) => setFilters({ ...filters, zone: e.target.value })} />
-          <Input placeholder="Employee/Executive" value={filters.employee} onChange={(e) => setFilters({ ...filters, employee: e.target.value })} />
+          <Input placeholder="Employee/BDE" value={filters.employee} onChange={(e) => setFilters({ ...filters, employee: e.target.value })} />
           <Input placeholder="School Code" value={filters.schoolCode} onChange={(e) => setFilters({ ...filters, schoolCode: e.target.value })} />
           <Input placeholder="School Name" value={filters.schoolName} onChange={(e) => setFilters({ ...filters, schoolName: e.target.value })} />
           <Input placeholder="School Type" value={filters.schoolType} onChange={(e) => setFilters({ ...filters, schoolType: e.target.value })} />
@@ -1472,7 +1472,7 @@ export default function CompletedDCPage() {
                 <TableHead>School Code</TableHead>
                 <TableHead>School Type</TableHead>
                 <TableHead>Zone</TableHead>
-                <TableHead>Executive</TableHead>
+                <TableHead>BDE</TableHead>
                 <TableHead>Completed Date</TableHead>
                 <TableHead>LR Info</TableHead>
                 <TableHead>LR Date</TableHead>

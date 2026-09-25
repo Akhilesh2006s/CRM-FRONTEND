@@ -383,7 +383,7 @@ export default function SalesVisitReportPage() {
                 <tr>
                   <th className="text-left px-4 py-3 w-14">#</th>
                   <th className="text-left px-4 py-3 w-28">Visit Date</th>
-                  <th className="text-left px-4 py-3 w-44">Executive & Zone</th>
+                  <th className="text-left px-4 py-3 w-44">BDE & Zone</th>
                   <th className="text-left px-4 py-3 w-56">School Details</th>
                   <th className="text-left px-4 py-3 w-36">Town / Location</th>
                   <th className="text-left px-4 py-3 w-32">Visit Category</th>

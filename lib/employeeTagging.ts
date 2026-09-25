@@ -25,7 +25,7 @@ export function filterTagOptions<T extends { role: string }>(
 
 export function getTaggingSectionLabel(role: string): string {
   if (role === 'Executive Manager' || role === 'Manager') {
-    return 'Tag executives'
+    return 'Tag BDEs'
   }
   return 'Employee tagging'
 }

@@ -800,7 +800,7 @@ export default function WarehouseDcAtWarehouse() {
                       />
                     </div>
                 <div>
-                      <Label className="text-sm text-neutral-600">Executive</Label>
+                      <Label className="text-sm text-neutral-600">BDE</Label>
                       <Input
                         value={
                           pickNonEmpty(

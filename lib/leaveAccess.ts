@@ -8,6 +8,8 @@ export const LEAVE_SELF_SERVICE_ROLES = [
   'Sales BDE',
   'Employee',
   'Trainer',
+  'Trainer Manager',
+  'HR Executive',
   'Manager',
 ] as const
 
@@ -16,6 +18,7 @@ export const LEAVE_TEAM_MANAGER_ROLES = [
   'Admin',
   'Super Admin',
   'Executive Manager',
+  'Trainer Manager',
 ] as const
 
 const includesRole = (roles: readonly string[], role: string | undefined) =>

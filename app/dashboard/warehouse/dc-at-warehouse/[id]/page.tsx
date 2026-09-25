@@ -157,7 +157,7 @@ export default function DcFormUpdatePage() {
                 <Input value={dc?.contactMobile || ''} onChange={(e) => setDc({ ...dc, contactMobile: e.target.value })} readOnly={!isEdit} />
               </div>
               <div>
-                <div className="text-xs text-neutral-500">Executive (read-only)</div>
+                <div className="text-xs text-neutral-500">BDE (read-only)</div>
                 <Input value={dc?.executive || ''} readOnly />
               </div>
             </div>

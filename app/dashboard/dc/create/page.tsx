@@ -812,7 +812,7 @@ export default function CreateDealPage() {
             <Input className="bg-white text-neutral-900" type="number" name="branches" value={form.branches} onChange={onChange} required />
           </div>
           <div>
-            <Label>Assign to (Executive) *</Label>
+            <Label>Assign to (BDE) *</Label>
             <Select value={form.assigned_to} onValueChange={(v) => setForm((f) => ({ ...f, assigned_to: v }))} disabled={loadingEmployees} required>
               <SelectTrigger className="bg-white text-neutral-900">
                 <SelectValue placeholder={loadingEmployees ? "Loading employees..." : employees.length === 0 ? "No employees found" : "Select executive *"} />

@@ -192,7 +192,7 @@ const NAV: NavItem[] = [
     children: [
       { label: 'All Managers', href: '/dashboard/executive-managers' },
       { label: 'Create Manager', href: '/dashboard/executive-managers/new' },
-      { label: 'Executives', href: '/dashboard/executive-managers/executives' },
+      { label: 'BDEs', href: '/dashboard/executive-managers/executives' },
     ],
   },
   {
@@ -405,7 +405,7 @@ function applySuperAdminExecutiveManagersNav(nav: NavItem[]): NavItem[] {
       if (href === '/dashboard/executive-managers/new') return false
       if (href === '/dashboard/executive-managers/executives') return false
       if (c.label === 'All Managers' || c.label === 'Assign Managers') return false
-      if (c.label === 'Create Manager' || c.label === 'Executives') return false
+      if (c.label === 'Create Manager' || c.label === 'BDEs') return false
       return true
     })
 
@@ -660,14 +660,16 @@ export function Sidebar() {
   const isExecutiveManager = user?.role === 'Executive Manager'
   const isExecutive = user?.role === 'Executive'
   const isTrainer = user?.role === 'Trainer'
+  const isTrainerManager = user?.role === 'Trainer Manager'
   const isWarehouseExecutive = user?.role === 'Warehouse Executive'
   const isWarehouseManager = user?.role === 'Warehouse Manager'
   const isPartner = user?.role === 'Partner'
   const isHrManager = user?.role === 'HR Manager'
+  const isHrExecutive = user?.role === 'HR Executive'
 
   // Executive leave items are included in the Executive sidebar as Leave Management
   let finalNav: NavItem[] = []
-  if (isHrManager) {
+  if (isHrManager || isHrExecutive) {
     finalNav = [
       { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
       {
@@ -892,7 +894,7 @@ export function Sidebar() {
         href: `/dashboard/executive-managers/${user?._id || ''}/dashboard`,
       },
       {
-        label: 'Executives',
+        label: 'BDEs',
         icon: Users,
         href: '/dashboard/executive-managers/executives',
       },
@@ -948,6 +950,54 @@ export function Sidebar() {
         children: [
           { label: 'Leads Report', href: '/dashboard/reports/leads', icon: FileText },
           { label: 'All Expenses Report', href: '/dashboard/reports/expenses', icon: Receipt },
+        ],
+      },
+      {
+        label: 'Settings',
+        icon: Settings,
+        children: [
+          { label: 'Change Password', href: '/dashboard/settings/password', icon: UserCircle2 },
+        ],
+      },
+      { label: 'Sign out', icon: LogOut, href: '/auth/login' },
+    ]
+  } else if (isTrainerManager) {
+    finalNav = [
+      { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
+      {
+        label: 'Trainings & Services',
+        icon: GraduationCap,
+        children: [
+          { label: 'Add Trainer', href: '/dashboard/training/trainers/new' },
+          { label: 'Active Trainers', href: '/dashboard/training/trainers/active' },
+          { label: 'Trainers Dashboard', href: '/dashboard/training/dashboard' },
+          { label: 'Assign Training/Service', href: '/dashboard/training/assign' },
+          { label: 'Trainings List', href: '/dashboard/training/list' },
+          { label: 'Services List', href: '/dashboard/training/services' },
+          { label: 'Inactive Trainers', href: '/dashboard/training/trainers/inactive' },
+        ],
+      },
+      {
+        label: 'Users / Employees',
+        icon: Users,
+        children: [
+          { label: 'Employee Verification', href: '/dashboard/employees/verification' },
+        ],
+      },
+      {
+        label: 'Leave Management',
+        icon: CalendarCheck2,
+        children: [
+          { label: 'Pending Leaves', href: '/dashboard/leaves/pending', icon: Clock },
+          { label: 'Apply for Leave', href: '/dashboard/leaves/request', icon: PlusCircle },
+          { label: 'My Leaves', href: '/dashboard/leaves/approved', icon: CheckCircle2 },
+        ],
+      },
+      {
+        label: 'Reports',
+        icon: BarChart3,
+        children: [
+          { label: 'Training & Service Report', href: '/dashboard/reports/training-service', icon: FileText },
         ],
       },
       {
@@ -1043,7 +1093,7 @@ export function Sidebar() {
   }
 
   // Keep role-specific Executive Manager / Executive / HR Manager nav intact (do not replace with RBAC catalog).
-  if (rbacActive && permissionsReady && !isExecutiveManager && !isEmployee && !isHrManager) {
+  if (rbacActive && permissionsReady && !isExecutiveManager && !isEmployee && !isHrManager && !isHrExecutive) {
     const baseNav = finalNav.length > 0 ? finalNav : NAV
     const catalogHrefs = rbacCatalogHrefs()
     const fromPermissions = rbacBuiltToNavItems(buildRbacSidebarNav(permUser))

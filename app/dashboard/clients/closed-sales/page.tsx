@@ -412,7 +412,7 @@ export default function ExecutiveManagerClosedSalesPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">PO Edit Request</h1>
-        <p className="text-sm text-neutral-600 mt-1">Review and approve/reject PO edit requests from Executives</p>
+        <p className="text-sm text-neutral-600 mt-1">Review and approve/reject PO edit requests from BDEs</p>
       </div>
 
       {/* Search/Filter Section */}
@@ -423,7 +423,7 @@ export default function ExecutiveManagerClosedSalesPage() {
           <Input type="date" placeholder="From Date" />
           <Input type="date" placeholder="To Date" />
           <Input placeholder="Select Zone" />
-          <Input placeholder="Select Executive" />
+          <Input placeholder="Select BDE" />
           <Input placeholder="By Town" />
           <Button className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm">Search</Button>
         </div>
@@ -435,7 +435,7 @@ export default function ExecutiveManagerClosedSalesPage() {
         {!loading && editRequestItems.length === 0 && (
           <div className="p-6 text-neutral-500 text-center">
             <p>No pending PO edit requests found.</p>
-            <p className="text-sm mt-2">Executives can submit edit requests from their Client DC page.</p>
+            <p className="text-sm mt-2">BDEs can submit edit requests from their Client DC page.</p>
           </div>
         )}
         {!loading && editRequestItems.length > 0 && (
@@ -449,7 +449,7 @@ export default function ExecutiveManagerClosedSalesPage() {
                 <TableHead className="font-semibold">Town</TableHead>
                 <TableHead className="font-semibold">School Code</TableHead>
                 <TableHead className="font-semibold">School Name</TableHead>
-                <TableHead className="font-semibold">Executive</TableHead>
+                <TableHead className="font-semibold">BDE</TableHead>
                 <TableHead className="font-semibold">Mobile</TableHead>
                 <TableHead className="font-semibold">Products</TableHead>
                 <TableHead className="font-semibold">Status</TableHead>
@@ -501,7 +501,7 @@ export default function ExecutiveManagerClosedSalesPage() {
           <DialogHeader>
             <DialogTitle>PO Edit Request - {selectedEdit?.dcOrder.school_name || 'Client'}</DialogTitle>
             <DialogDescription>
-              Review the PO edit changes requested by Executive. Delivery address has already been saved directly. Approve or reject the other changes.
+              Review the PO edit changes requested by the BDE. Delivery address has already been saved directly. Approve or reject the other changes.
             </DialogDescription>
           </DialogHeader>
           

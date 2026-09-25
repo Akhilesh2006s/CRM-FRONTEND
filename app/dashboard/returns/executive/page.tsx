@@ -909,7 +909,7 @@ export default function ExecutiveStockReturnsPage() {
                   <Input value={returnId} readOnly className="bg-neutral-50" />
                 </div>
                 <div>
-                  <Label>Executive Name *</Label>
+                  <Label>BDE Name *</Label>
                   <Input value={executiveName} readOnly className="bg-neutral-50" />
                 </div>
                 <div>
@@ -1259,7 +1259,7 @@ export default function ExecutiveStockReturnsPage() {
                 )}
               </div>
               <div>
-                <Label>Executive Remarks</Label>
+                <Label>BDE Remarks</Label>
                 <Textarea
                   value={executiveRemarks}
                   onChange={(e) => setExecutiveRemarks(e.target.value)}
@@ -1357,7 +1357,7 @@ export default function ExecutiveStockReturnsPage() {
                   <Input value={selectedReturn.returnStatus} readOnly className="bg-neutral-50" />
                 </div>
                 <div>
-                  <Label>Executive Name</Label>
+                  <Label>BDE Name</Label>
                   <Input value={selectedReturn.executiveName || '-'} readOnly className="bg-neutral-50" />
                 </div>
                 <div>
@@ -1426,7 +1426,7 @@ export default function ExecutiveStockReturnsPage() {
 
               {selectedReturn.executiveRemarks && (
                 <div>
-                  <Label>Executive Remarks</Label>
+                  <Label>BDE Remarks</Label>
                   <Textarea value={selectedReturn.executiveRemarks} readOnly className="bg-neutral-50" rows={3} />
                 </div>
               )}

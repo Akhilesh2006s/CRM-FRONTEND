@@ -34,7 +34,7 @@ export default function EmployeeNewScreen({ navigation }: any) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const roles = [
-    'Executive', 'Trainer', 'Finance Manager', 'Coordinator', 'Senior Coordinator',
+    'Executive', 'Trainer', 'Trainer Manager', 'Finance Manager', 'HR Manager', 'HR Executive', 'Coordinator', 'Senior Coordinator',
     'Manager', 'Executive Manager', 'Warehouse Executive', 'Warehouse Manager', 'Admin', 'Super Admin',
   ];
 

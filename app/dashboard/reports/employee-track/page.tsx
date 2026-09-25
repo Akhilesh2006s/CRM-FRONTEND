@@ -311,7 +311,7 @@ export default function EmployeeTrackingReportPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Field Executives</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Field BDEs</p>
           <div className="mt-2 flex items-center justify-between">
             <p className="text-2xl font-semibold text-slate-800">{kpis.fieldExecutives}</p>
             <Users className="h-5 w-5 text-slate-400" />

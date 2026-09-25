@@ -1893,7 +1893,7 @@ export default function ClientDCPage() {
       // Show appropriate success message based on routing
       if (splitTerm2) {
         toast.success(
-          'Term 1 sent to Closed Sales. Term 2 DC will appear in Term-Wise DC (Executive Dashboard).'
+          'Term 1 sent to Closed Sales. Term 2 DC will appear in Term-Wise DC (BDE Dashboard).'
         )
       } else if (hasMixedTerms && requestDcTermRouting === 'both_terms') {
         toast.success(

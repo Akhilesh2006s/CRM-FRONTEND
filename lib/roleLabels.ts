@@ -2,7 +2,8 @@
 const ROLE_LABELS: Record<string, string> = {
   'Executive Manager': 'Zonal Manager',
   Manager: 'Product Manager',
-  Employee: 'Executive',
+  Executive: 'BDE',
+  Employee: 'BDE',
 }
 
 export function displayRoleName(role: string | null | undefined): string {

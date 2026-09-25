@@ -318,7 +318,7 @@ export default function WarehouseExecutiveStockReturnsPage() {
               <tr className="text-left border-b">
                 <th className="py-3 px-4 font-semibold">Return ID</th>
                 <th className="py-3 px-4 font-semibold">Customer</th>
-                <th className="py-3 px-4 font-semibold">Executive Name</th>
+                <th className="py-3 px-4 font-semibold">BDE Name</th>
                 <th className="py-3 px-4 font-semibold">Expected Qty</th>
                 <th className="py-3 px-4 font-semibold">Return Type</th>
                 <th className="py-3 px-4 font-semibold">Status</th>
@@ -402,7 +402,7 @@ export default function WarehouseExecutiveStockReturnsPage() {
                     <Input value={selectedReturn.saleId || selectedReturn.dcOrderId || '-'} readOnly className="bg-neutral-50" />
                   </div>
                   <div>
-                    <Label>Executive Name</Label>
+                    <Label>BDE Name</Label>
                     <Input value={selectedReturn.executiveName || '-'} readOnly className="bg-neutral-50" />
                   </div>
                   <div>
@@ -460,7 +460,7 @@ export default function WarehouseExecutiveStockReturnsPage() {
               {/* Executive Remarks - Read-only */}
               {selectedReturn.executiveRemarks && (
                 <div className="border-b pb-4">
-                  <Label>Executive Remarks</Label>
+                  <Label>BDE Remarks</Label>
                   <Textarea value={selectedReturn.executiveRemarks} readOnly className="bg-neutral-50" rows={3} />
                 </div>
               )}
@@ -468,7 +468,7 @@ export default function WarehouseExecutiveStockReturnsPage() {
               {/* Executive Uploaded Photos - Read-only */}
               {selectedReturn.evidencePhotos && selectedReturn.evidencePhotos.length > 0 && (
                 <div className="border-b pb-4">
-                  <Label>Executive Uploaded Photos</Label>
+                  <Label>BDE Uploaded Photos</Label>
                   <div className="mt-2 grid grid-cols-4 gap-2">
                     {selectedReturn.evidencePhotos.map((url, idx) => (
                       <img key={idx} src={url} alt={`Evidence ${idx + 1}`} className="w-full h-24 object-cover rounded border" />

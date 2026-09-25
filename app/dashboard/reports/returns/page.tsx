@@ -158,7 +158,7 @@ export default function ReturnsReportPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Returns Report</h1>
-          <p className="text-sm text-neutral-500 mt-1">Executive and warehouse stock returns</p>
+          <p className="text-sm text-neutral-500 mt-1">BDE and warehouse stock returns</p>
         </div>
         <Button onClick={handleExport} className="bg-blue-600 hover:bg-blue-700 text-white whitespace-nowrap shrink-0">
           <Download className="w-4 h-4 mr-2" />
@@ -210,7 +210,7 @@ export default function ReturnsReportPage() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') load() }}
-              placeholder="Search by LR No, Executive, or Remarks..."
+              placeholder="Search by LR No, BDE, or Remarks..."
               className="pl-9 rounded-xl bg-white"
             />
           </div>
@@ -267,7 +267,7 @@ export default function ReturnsReportPage() {
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Executive Returns ({executiveReturns.length})
+              BDE Returns ({executiveReturns.length})
             </button>
             <button
               type="button"

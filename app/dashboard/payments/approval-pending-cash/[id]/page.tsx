@@ -182,7 +182,7 @@ export default function PaymentDetailPage() {
             <h2 className="text-lg font-semibold border-b pb-2">Payment Information Update</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="text-sm text-neutral-500">Executive</label>
+                <label className="text-sm text-neutral-500">BDE</label>
                 <Input value={data.createdBy?.name || '-'} readOnly className="bg-neutral-50" />
               </div>
               <div>
@@ -255,7 +255,7 @@ export default function PaymentDetailPage() {
               </select>
             </div>
               <div>
-                <label className="text-sm text-neutral-500">Executive Remarks</label>
+                <label className="text-sm text-neutral-500">BDE Remarks</label>
                 <textarea
                   value={data.description || '-'}
                   readOnly

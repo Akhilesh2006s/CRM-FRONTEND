@@ -489,7 +489,7 @@ export default function WarehouseManagerStockReturnsPage() {
                     <Input value={selectedReturn.saleId || selectedReturn.dcOrderId || '-'} readOnly className="bg-neutral-50" />
                   </div>
                   <div>
-                    <Label>Sales Executive</Label>
+                    <Label>Sales BDE</Label>
                     <Input value={selectedReturn.executiveName || '-'} readOnly className="bg-neutral-50" />
                   </div>
                   <div>
@@ -506,7 +506,7 @@ export default function WarehouseManagerStockReturnsPage() {
               {/* Executive Remarks - Read-only */}
               {selectedReturn.executiveRemarks && (
                 <div className="border-b pb-4">
-                  <Label>Executive Remarks</Label>
+                  <Label>BDE Remarks</Label>
                   <Textarea value={selectedReturn.executiveRemarks} readOnly className="bg-neutral-50" rows={3} />
                 </div>
               )}
@@ -518,7 +518,7 @@ export default function WarehouseManagerStockReturnsPage() {
                   <Label>Photos</Label>
                   {selectedReturn.evidencePhotos && selectedReturn.evidencePhotos.length > 0 && (
                     <div className="mt-2">
-                      <p className="text-sm text-neutral-600 mb-2">Executive Uploaded:</p>
+                      <p className="text-sm text-neutral-600 mb-2">BDE Uploaded:</p>
                       <div className="grid grid-cols-4 gap-2">
                         {selectedReturn.evidencePhotos.map((url, idx) => (
                           <img key={idx} src={url} alt={`Evidence ${idx + 1}`} className="w-full h-24 object-cover rounded border" />

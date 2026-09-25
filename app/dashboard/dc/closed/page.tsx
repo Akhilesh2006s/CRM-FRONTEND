@@ -1603,10 +1603,10 @@ export default function ClosedSalesPage() {
           </Select>
           <Select value={searchExecutive || 'all'} onValueChange={(value) => setSearchExecutive(value === 'all' ? '' : value)}>
             <SelectTrigger>
-              <SelectValue placeholder="Select Executive" />
+              <SelectValue placeholder="Select BDE" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Executives</SelectItem>
+              <SelectItem value="all">All BDEs</SelectItem>
               {uniqueExecutives.map(exec => (
                 <SelectItem key={exec} value={exec}>{exec}</SelectItem>
               ))}
@@ -1648,7 +1648,7 @@ export default function ClosedSalesPage() {
                 <th className="py-3 px-4 text-left font-semibold text-sm">Town</th>
                 <th className="py-3 px-4 text-left font-semibold text-sm">School Code</th>
                 <th className="py-3 px-4 text-left font-semibold text-sm">School Name</th>
-                <th className="py-3 px-4 text-left font-semibold text-sm">Executive</th>
+                <th className="py-3 px-4 text-left font-semibold text-sm">BDE</th>
                 <th className="py-3 px-4 text-left font-semibold text-sm">Mobile</th>
                 <th className="py-3 px-4 text-left font-semibold text-sm">Products</th>
                 <th className="py-3 px-4 text-left font-semibold text-sm">PO</th>

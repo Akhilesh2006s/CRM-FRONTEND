@@ -193,13 +193,13 @@ export default function ExecutiveManagersPage() {
           <DialogHeader>
             <DialogTitle>Assign Employees to {selectedManager?.name}</DialogTitle>
             <DialogDescription>
-              Select executives to assign to this Zonal Manager
+              Select BDEs to assign to this Zonal Manager
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 max-h-[400px] overflow-y-auto">
             {employees.length === 0 ? (
               <div className="text-center py-4">
-                <p className="text-sm text-neutral-500 mb-2">No unassigned executives available</p>
+                <p className="text-sm text-neutral-500 mb-2">No unassigned BDEs available</p>
                 <div className="flex gap-2 justify-center">
                   <Link href="/dashboard/employees/active">
                     <Button variant="outline" size="sm">

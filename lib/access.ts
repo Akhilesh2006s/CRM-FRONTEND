@@ -86,7 +86,7 @@ export function canAccessPath(
 
   // HR Manager always has employee directory + verification + leave access
   if (
-    user.role === 'HR Manager' &&
+    (user.role === 'HR Manager' || user.role === 'HR Executive') &&
     (pathname.startsWith('/dashboard/employees') ||
       pathname.startsWith('/dashboard/leaves') ||
       pathname === '/dashboard' ||

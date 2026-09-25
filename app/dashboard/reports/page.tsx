@@ -37,7 +37,7 @@ const REPORT_LINKS = [
   { href: '/dashboard/reports/change-logs', label: 'Change Logs Report', description: 'Creates, updates, and deletes', icon: History },
   { href: '/dashboard/reports/stock', label: 'Stock Report', description: 'Warehouse inventory snapshot', icon: Package },
   { href: '/dashboard/reports/dc', label: 'DC Report', description: 'Delivery challan pipeline', icon: Truck },
-  { href: '/dashboard/reports/returns', label: 'Returns Report', description: 'Executive and warehouse returns', icon: RefreshCw },
+  { href: '/dashboard/reports/returns', label: 'Returns Report', description: 'BDE and warehouse returns', icon: RefreshCw },
   { href: '/dashboard/reports/expenses', label: 'All Expenses Report', description: 'Approved and pending expenses', icon: Receipt },
   { href: '/dashboard/reports/training-service', label: 'Training & Service Report', description: 'Assigned trainings and services', icon: GraduationCap },
 ]

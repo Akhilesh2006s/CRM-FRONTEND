@@ -125,7 +125,7 @@ export const RBAC_NAV_MODULES: RbacNavModule[] = [
     label: MODULE_LABELS.returns,
     pages: [
       { label: 'Employee Returns List', href: '/dashboard/returns/employees' },
-      { label: 'Executive Stock Returns', href: '/dashboard/returns/executive' },
+      { label: 'BDE Stock Returns', href: '/dashboard/returns/executive' },
       { label: 'Warehouse Executive Returns', href: '/dashboard/returns/warehouse-executive' },
       { label: 'Warehouse Manager Returns', href: '/dashboard/returns/warehouse-manager' },
       { label: 'Warehouse Returns List', href: '/dashboard/returns/warehouse' },
@@ -206,7 +206,7 @@ export const RBAC_NAV_MODULES: RbacNavModule[] = [
     pages: [
       { label: 'All Managers', href: '/dashboard/executive-managers' },
       { label: 'Create Manager', href: '/dashboard/executive-managers/new' },
-      { label: 'Executives', href: '/dashboard/executive-managers/executives' },
+      { label: 'BDEs', href: '/dashboard/executive-managers/executives' },
     ],
   },
   {

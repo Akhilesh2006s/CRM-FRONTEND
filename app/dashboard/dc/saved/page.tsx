@@ -615,7 +615,7 @@ export default function SavedDCPage() {
           <Input type="date" placeholder="From Date" />
           <Input type="date" placeholder="To Date" />
           <Input placeholder="Select Zone" />
-          <Input placeholder="Select Executive" />
+          <Input placeholder="Select BDE" />
           <Input placeholder="By Town" />
           <Button className="bg-slate-700 hover:bg-slate-800 text-white shadow-sm">Search</Button>
         </div>
@@ -633,7 +633,7 @@ export default function SavedDCPage() {
                 <th className="py-3 px-4 text-left font-semibold text-sm">Zone</th>
                 <th className="py-3 px-4 text-left font-semibold text-sm">Town</th>
                 <th className="py-3 px-4 text-left font-semibold text-sm">School Name</th>
-                <th className="py-3 px-4 text-left font-semibold text-sm">Executive</th>
+                <th className="py-3 px-4 text-left font-semibold text-sm">BDE</th>
                 <th className="py-3 px-4 text-left font-semibold text-sm">Mobile</th>
                 <th className="py-3 px-4 text-left font-semibold text-sm">Products</th>
                 <th className="py-3 px-4 text-left font-semibold text-sm">PO</th>

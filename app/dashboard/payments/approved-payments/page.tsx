@@ -129,7 +129,7 @@ export default function ApprovedPaymentsPage() {
             ))}
           </select>
           <Input
-            placeholder="Select Executive"
+            placeholder="Select BDE"
             value={filters.executive}
             onChange={(e) => setFilters({ ...filters, executive: e.target.value })}
           />

@@ -42,7 +42,7 @@ const ROLE_LABELS: Record<string, string> = {
 
 export default function EmployeeVerificationPage() {
   const currentUser = getCurrentUser()
-  const isHr = currentUser?.role === 'HR Manager'
+  const isHr = currentUser?.role === 'HR Manager' || currentUser?.role === 'HR Executive'
   const isAdmin =
     currentUser?.role === 'Admin' || currentUser?.role === 'Super Admin'
 
@@ -63,6 +63,9 @@ export default function EmployeeVerificationPage() {
         roleKey === 'vertical_manager' ||
         roleKey === 'training_head'
       )
+    }
+    if (currentUser?.role === 'Trainer Manager') {
+      return roleKey === 'training_head' || roleKey === 'vertical_manager'
     }
     return false
   }

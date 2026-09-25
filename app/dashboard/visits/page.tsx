@@ -422,10 +422,10 @@ export default function VisitsPage() {
           </div>
           <Select value={executiveId} onValueChange={setExecutiveId}>
             <SelectTrigger>
-              <SelectValue placeholder="Executive" />
+              <SelectValue placeholder="BDE" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All executives</SelectItem>
+              <SelectItem value="all">All BDEs</SelectItem>
               {employees.map((e) => (
                 <SelectItem key={e._id} value={e._id}>
                   {e.name || 'Unnamed'}
@@ -460,7 +460,7 @@ export default function VisitsPage() {
             <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="px-4 py-3 text-left font-medium">School</th>
-                <th className="px-4 py-3 text-left font-medium">Executive</th>
+                <th className="px-4 py-3 text-left font-medium">BDE</th>
                 <th className="px-4 py-3 text-left font-medium">Category</th>
                 <th className="px-4 py-3 text-left font-medium">Outcome</th>
                 <th className="px-4 py-3 text-left font-medium">Visit date</th>

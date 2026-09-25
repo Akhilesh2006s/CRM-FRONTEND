@@ -271,7 +271,7 @@ export default function NewEmployeePage() {
 
       // Validate cluster for Executive role
       if (form.role === 'Executive' && !form.cluster?.trim()) {
-        setError('Cluster is required for Executive role')
+        setError('Cluster is required for BDE role')
         setSubmitting(false)
         return
       }
@@ -712,10 +712,12 @@ export default function NewEmployeePage() {
                 <SelectValue placeholder="Select Option" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Executive">Executive</SelectItem>
+                <SelectItem value="Executive">BDE</SelectItem>
                 <SelectItem value="Trainer">Trainer</SelectItem>
+                <SelectItem value="Trainer Manager">Trainer Manager</SelectItem>
                 <SelectItem value="Finance Manager">Finance Manager</SelectItem>
                 <SelectItem value="HR Manager">HR Manager</SelectItem>
+                <SelectItem value="HR Executive">HR Executive</SelectItem>
                 <SelectItem value="Coordinator">Coordinator</SelectItem>
                 <SelectItem value="Senior Coordinator">Senior Coordinator</SelectItem>
                 <SelectItem value="Manager">Product Manager</SelectItem>
@@ -737,14 +739,14 @@ export default function NewEmployeePage() {
               <Label className="mb-2 block">{getTaggingSectionLabel(form.role)}</Label>
               <p className="text-xs text-neutral-500 mb-2">
                 {form.role === 'Executive Manager' || form.role === 'Manager'
-                  ? 'Select executives assigned to this role.'
+                  ? 'Select BDEs assigned to this role.'
                   : 'Select employees to tag under this role.'}
               </p>
               <div className="max-h-48 overflow-y-auto border rounded p-3 bg-white space-y-2">
                 {filteredTagOptions.length === 0 ? (
                   <p className="text-sm text-neutral-500">
                     {form.role === 'Executive Manager' || form.role === 'Manager'
-                      ? 'No active executives available to tag'
+                      ? 'No active BDEs available to tag'
                       : 'No employees available to tag'}
                   </p>
                 ) : (

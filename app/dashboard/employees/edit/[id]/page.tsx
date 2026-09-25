@@ -208,7 +208,7 @@ export default function EditEmployeePage() {
       setIdentityErrors({})
 
       if (form.role === 'Executive' && !form.cluster?.trim()) {
-        setError('Cluster is required for Executive role')
+        setError('Cluster is required for BDE role')
         setSubmitting(false)
         return
       }
@@ -341,7 +341,7 @@ export default function EditEmployeePage() {
             <Select value={form.role} onValueChange={(v) => setForm((f) => ({ ...f, role: v, cluster: v === 'Executive' ? f.cluster : '' }))}>
               <SelectTrigger className="bg-white text-neutral-900"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {['Executive', 'Trainer', 'Finance Manager', 'Coordinator', 'Senior Coordinator', 'Manager', 'Executive Manager', 'Warehouse Executive', 'Warehouse Manager', 'Admin', 'Super Admin'].map((r) => (
+                {['Executive', 'Trainer', 'Trainer Manager', 'Finance Manager', 'HR Manager', 'HR Executive', 'Coordinator', 'Senior Coordinator', 'Manager', 'Executive Manager', 'Warehouse Executive', 'Warehouse Manager', 'Admin', 'Super Admin'].map((r) => (
                   <SelectItem key={r} value={r}>{displayRoleName(r)}</SelectItem>
                 ))}
               </SelectContent>

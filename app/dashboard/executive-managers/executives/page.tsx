@@ -33,7 +33,7 @@ export default function ExecutivesPage() {
       setExecutives(data || [])
     } catch (e: any) {
       console.error('Failed to load executives:', e)
-      toast.error(e?.message || 'Failed to load executives')
+      toast.error(e?.message || 'Failed to load BDEs')
       setExecutives([])
     } finally {
       setLoading(false)
@@ -57,8 +57,8 @@ export default function ExecutivesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Executives</h1>
-        <p className="text-sm text-neutral-600 mt-1">View all executives assigned to you</p>
+        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">BDEs</h1>
+        <p className="text-sm text-neutral-600 mt-1">View all BDEs assigned to you</p>
       </div>
 
       {/* Executives Table */}
@@ -66,8 +66,8 @@ export default function ExecutivesPage() {
         {loading && <div className="p-6 text-neutral-600">Loading...</div>}
         {!loading && executives.length === 0 && (
           <div className="p-6 text-neutral-500 text-center">
-            <p>No executives assigned to you.</p>
-            <p className="text-sm mt-2">Contact Super Admin to assign executives to your account.</p>
+            <p>No BDEs assigned to you.</p>
+            <p className="text-sm mt-2">Contact Super Admin to assign BDEs to your account.</p>
           </div>
         )}
         {!loading && executives.length > 0 && (

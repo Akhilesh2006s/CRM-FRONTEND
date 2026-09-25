@@ -273,7 +273,7 @@ export default function ContactQueriesPage() {
         'School Type',
         'School Name',
         'Zone',
-        'Executive',
+        'BDE',
         'Town',
         'Contact Person',
         'Contact Mobile',
@@ -504,7 +504,7 @@ export default function ContactQueriesPage() {
                   <th className="text-left px-4 py-3 w-14">#</th>
                   <th className="text-left px-4 py-3 w-28">Enquiry Date</th>
                   <th className="text-left px-4 py-3 w-56">School</th>
-                  <th className="text-left px-4 py-3 w-40">Zone / Executive</th>
+                  <th className="text-left px-4 py-3 w-40">Zone / BDE</th>
                   <th className="text-left px-4 py-3 w-40">Contact</th>
                   <th className="text-left px-4 py-3">Subject</th>
                   <th className="text-left px-4 py-3 w-28">Status</th>

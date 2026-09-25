@@ -419,7 +419,7 @@ export default function AssignTrainingServicePage() {
   }, [trainers])
 
   const exportToExcel = () => {
-    const headers = ['S.No', 'School Code', 'School Type', 'School Name', 'Contact Name', 'Mobile', 'Products', 'Executive', 'Location']
+    const headers = ['S.No', 'School Code', 'School Type', 'School Name', 'Contact Name', 'Mobile', 'Products', 'BDE', 'Location']
     const rows: string[][] = []
 
     filteredSchools.forEach((school, index) => {
@@ -523,13 +523,13 @@ export default function AssignTrainingServicePage() {
             />
           </div>
           <div>
-            <label className="text-sm font-medium text-neutral-700 mb-1 block">Select Executive</label>
+            <label className="text-sm font-medium text-neutral-700 mb-1 block">Select BDE</label>
             <Select value={filters.executive || 'all'} onValueChange={(v) => setFilters(f => ({ ...f, executive: v === 'all' ? '' : v }))}>
               <SelectTrigger className="bg-white text-neutral-900">
-                <SelectValue placeholder="Select Executive" />
+                <SelectValue placeholder="Select BDE" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Executives</SelectItem>
+                <SelectItem value="all">All BDEs</SelectItem>
                 {executives.map(e => (
                   <SelectItem key={e} value={e}>{e}</SelectItem>
                 ))}
@@ -595,7 +595,7 @@ export default function AssignTrainingServicePage() {
                   <th className="py-2 px-3 text-left border">Products</th>
                   <th className="py-2 px-3 text-left border">
                     <button onClick={() => toggleSort('executive')} className="flex items-center gap-1 hover:underline">
-                      Executive <ArrowUpDown className="w-3 h-3" />
+                      BDE <ArrowUpDown className="w-3 h-3" />
                     </button>
                   </th>
                   <th className="py-2 px-3 text-left border">

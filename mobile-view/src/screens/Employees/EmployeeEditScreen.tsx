@@ -7,7 +7,7 @@ import { WebInput, WebSelect } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 
 const roles = [
-  'Executive', 'Trainer', 'Finance Manager', 'Coordinator', 'Senior Coordinator',
+  'Executive', 'Trainer', 'Trainer Manager', 'Finance Manager', 'HR Manager', 'HR Executive', 'Coordinator', 'Senior Coordinator',
   'Manager', 'Executive Manager', 'Warehouse Executive', 'Warehouse Manager', 'Admin', 'Super Admin',
 ];
 

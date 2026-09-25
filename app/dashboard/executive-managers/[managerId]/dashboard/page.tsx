@@ -532,14 +532,14 @@ export default function ExecutiveManagerDashboardPage() {
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
             <Card className="p-5 bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-200">
               <div className="flex items-center justify-between mb-3">
-                <div className="text-xs font-semibold text-blue-700 uppercase">Active Executives</div>
+                <div className="text-xs font-semibold text-blue-700 uppercase">Active BDEs</div>
                 <Users className="w-5 h-5 text-blue-600" />
               </div>
               <div className="text-3xl font-bold text-blue-900 mb-1">
                 {dashboardData.employeeDetails.filter(emp => emp.totalLeads > 0 || emp.totalDCs > 0 || emp.totalSales > 0).length}
               </div>
               <div className="text-xs text-blue-600">
-                out of {dashboardData.totalEmployees} executives
+                out of {dashboardData.totalEmployees} BDEs
               </div>
             </Card>
             <Card className="p-5 bg-gradient-to-br from-emerald-50 to-emerald-100 border-2 border-emerald-200">
@@ -556,7 +556,7 @@ export default function ExecutiveManagerDashboardPage() {
             </Card>
             <Card className="p-5 bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-200">
               <div className="flex items-center justify-between mb-3">
-                <div className="text-xs font-semibold text-purple-700 uppercase">Top Sales Executive</div>
+                <div className="text-xs font-semibold text-purple-700 uppercase">Top Sales BDE</div>
                 <Award className="w-5 h-5 text-purple-600" />
               </div>
               <div className="text-lg font-bold text-purple-900 mb-1 truncate">
@@ -583,8 +583,8 @@ export default function ExecutiveManagerDashboardPage() {
             <Card className="p-6 bg-white shadow-lg border border-neutral-200/60">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="font-semibold text-lg text-neutral-900">Executive Performance Comparison</h3>
-                  <p className="text-xs text-neutral-500 mt-1">Detailed comparison of all executives' activities and performance</p>
+                  <h3 className="font-semibold text-lg text-neutral-900">BDE Performance Comparison</h3>
+                  <p className="text-xs text-neutral-500 mt-1">Detailed comparison of all BDEs' activities and performance</p>
                 </div>
                 <BarChart3 className="w-5 h-5 text-indigo-500" />
               </div>
@@ -626,8 +626,8 @@ export default function ExecutiveManagerDashboardPage() {
               <Card className="p-6 bg-white shadow-lg border border-neutral-200/60">
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h3 className="font-semibold text-lg text-neutral-900">Executive Distribution by Zone</h3>
-                    <p className="text-xs text-neutral-500 mt-1">How executives are distributed across zones</p>
+                    <h3 className="font-semibold text-lg text-neutral-900">BDE Distribution by Zone</h3>
+                    <p className="text-xs text-neutral-500 mt-1">How BDEs are distributed across zones</p>
                   </div>
                   <MapPin className="w-5 h-5 text-blue-500" />
                 </div>
@@ -657,7 +657,7 @@ export default function ExecutiveManagerDashboardPage() {
               <Card className="p-6 bg-white shadow-lg border border-neutral-200/60">
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h3 className="font-semibold text-lg text-neutral-900">Executive Activity by Zone</h3>
+                    <h3 className="font-semibold text-lg text-neutral-900">BDE Activity by Zone</h3>
                     <p className="text-xs text-neutral-500 mt-1">Total activities (Leads + DCs + Sales) per zone</p>
                   </div>
                   <TrendingUp className="w-5 h-5 text-emerald-500" />
@@ -1098,7 +1098,7 @@ export default function ExecutiveManagerDashboardPage() {
             <Card className="p-6 bg-white shadow-lg border border-neutral-200/60">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="font-semibold text-base text-neutral-900">Top 10 Executives by Activity</h3>
+                  <h3 className="font-semibold text-base text-neutral-900">Top 10 BDEs by Activity</h3>
                   <p className="text-xs text-neutral-500 mt-1">Ranked by total activities (Leads + DCs + Sales)</p>
                 </div>
                 <Award className="w-5 h-5 text-amber-500" />
@@ -1141,8 +1141,8 @@ export default function ExecutiveManagerDashboardPage() {
             <Card className="p-6 bg-white shadow-lg border border-neutral-200/60">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="font-semibold text-base text-neutral-900">Executive Activity Distribution</h3>
-                  <p className="text-xs text-neutral-500 mt-1">How activities are distributed across executives</p>
+                  <h3 className="font-semibold text-base text-neutral-900">BDE Activity Distribution</h3>
+                  <p className="text-xs text-neutral-500 mt-1">How activities are distributed across BDEs</p>
                 </div>
                 <Users className="w-5 h-5 text-cyan-500" />
               </div>
@@ -1202,7 +1202,7 @@ export default function ExecutiveManagerDashboardPage() {
 
             <Card className="p-6 bg-white shadow-lg border border-neutral-200/60">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-base text-neutral-900">Executive Activity Insights</h3>
+                <h3 className="font-semibold text-base text-neutral-900">BDE Activity Insights</h3>
                 <Zap className="w-5 h-5 text-purple-500" />
               </div>
               <div className="space-y-4">
@@ -1216,7 +1216,7 @@ export default function ExecutiveManagerDashboardPage() {
                   <div className="text-xs text-blue-600">Above 2x average activity</div>
                 </div>
                 <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-200">
-                  <div className="text-sm font-semibold text-emerald-900 mb-2">Active Executives</div>
+                  <div className="text-sm font-semibold text-emerald-900 mb-2">Active BDEs</div>
                   <div className="text-2xl font-bold text-emerald-700 mb-1">
                     {dashboardData.employeeDetails.filter(emp => 
                       emp.totalLeads > 0 || emp.totalDCs > 0 || emp.totalSales > 0
@@ -1234,7 +1234,7 @@ export default function ExecutiveManagerDashboardPage() {
                   <div className="text-xs text-orange-600">No activities recorded</div>
                 </div>
                 <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
-                  <div className="text-sm font-semibold text-purple-900 mb-2">Avg Activity/Executive</div>
+                  <div className="text-sm font-semibold text-purple-900 mb-2">Avg Activity/BDE</div>
                   <div className="text-2xl font-bold text-purple-700 mb-1">
                     {dashboardData.employeeDetails.length > 0
                       ? Math.round(dashboardData.employeeDetails.reduce((sum, emp) => 
@@ -1400,7 +1400,7 @@ export default function ExecutiveManagerDashboardPage() {
               {dashboardData.employeeDetails.length === 0 ? (
                 <TableRow>
                       <TableCell colSpan={11} className="text-center text-neutral-500">
-                        No executives assigned yet
+                        No BDEs assigned yet
                   </TableCell>
                 </TableRow>
               ) : (
@@ -1909,7 +1909,7 @@ export default function ExecutiveManagerDashboardPage() {
           <DialogHeader>
             <DialogTitle>Assign Employees to Zonal Manager</DialogTitle>
             <DialogDescription>
-              Select employees (Executives) to assign to this Zonal Manager
+              Select employees (BDEs) to assign to this Zonal Manager
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 max-h-[400px] overflow-y-auto">
@@ -1919,7 +1919,7 @@ export default function ExecutiveManagerDashboardPage() {
               <div className="text-center py-4">
                 <p className="text-sm text-neutral-500 mb-2">No unassigned employees available</p>
                 <p className="text-xs text-neutral-400 mb-3">
-                  All employees with Executive role are already assigned to other managers, or you need to create more employees.
+                  All employees with the BDE role are already assigned to other managers, or you need to create more employees.
                 </p>
                 <div className="flex gap-2 justify-center">
                   <Link href="/dashboard/employees/active">
@@ -1938,7 +1938,7 @@ export default function ExecutiveManagerDashboardPage() {
               <>
                 <div className="flex justify-between items-center mb-2">
                   <p className="text-xs text-neutral-500">
-                    Showing {availableEmployees.length} unassigned employee(s) with Executive role
+                    Showing {availableEmployees.length} unassigned employee(s) with the BDE role
                   </p>
                   <Link href="/dashboard/employees/active">
                     <Button variant="ghost" size="sm" className="text-xs">

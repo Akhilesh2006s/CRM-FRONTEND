@@ -50,6 +50,8 @@ export default function ZonesPage() {
   const [loadingClusters, setLoadingClusters] = useState(false)
   const [savingZone, setSavingZone] = useState(false)
   const [savingCluster, setSavingCluster] = useState(false)
+  const [moveZoneByCluster, setMoveZoneByCluster] = useState<Record<string, string>>({})
+  const [movingClusterId, setMovingClusterId] = useState('')
   const [savingPincode, setSavingPincode] = useState(false)
   const [zoneName, setZoneName] = useState('')
   const [zoneManagerId, setZoneManagerId] = useState('')
@@ -66,6 +68,11 @@ export default function ZonesPage() {
 
   const selectedZone = useMemo(
     () => zones.find((z) => z._id === selectedZoneId) || null,
+    [zones, selectedZoneId]
+  )
+
+  const otherZones = useMemo(
+    () => zones.filter((z) => z._id && z._id !== selectedZoneId),
     [zones, selectedZoneId]
   )
 
@@ -116,6 +123,7 @@ export default function ZonesPage() {
   }, [])
 
   useEffect(() => {
+    setMoveZoneByCluster({})
     if (selectedZoneId) {
       loadClustersForZone(selectedZoneId)
     } else {
@@ -210,6 +218,45 @@ export default function ZonesPage() {
       toast.error(e?.message || 'Failed to save cluster')
     } finally {
       setSavingCluster(false)
+    }
+  }
+
+  const onMoveCluster = async (clusterId?: string, clusterName?: string) => {
+    if (!clusterId || !selectedZone) return
+    const targetZoneId = moveZoneByCluster[clusterId]
+    const targetZone = otherZones.find((z) => z._id === targetZoneId)
+    if (!targetZone) {
+      toast.error('Select a zone to move this cluster to')
+      return
+    }
+    const ok = confirm(
+      `Move "${clusterName || 'this cluster'}" from ${selectedZone.name} to ${targetZone.name}? Schools in this cluster will move with it.`
+    )
+    if (!ok) return
+    setMovingClusterId(clusterId)
+    try {
+      const result = await apiRequest<{
+        toZone: string
+        leadsUpdated: number
+        ordersUpdated: number
+        pincodesUpdated: number
+      }>(`/clusters/${clusterId}/move`, {
+        method: 'POST',
+        body: JSON.stringify({ zoneId: targetZoneId }),
+      })
+      toast.success(
+        `Moved to ${result.toZone}. Schools updated — leads: ${result.leadsUpdated}, DCs: ${result.ordersUpdated}.`
+      )
+      setMoveZoneByCluster((prev) => {
+        const next = { ...prev }
+        delete next[clusterId]
+        return next
+      })
+      loadClustersForZone(selectedZoneId)
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to move cluster')
+    } finally {
+      setMovingClusterId('')
     }
   }
 
@@ -490,23 +537,52 @@ export default function ZonesPage() {
             <thead>
               <tr className="bg-neutral-100 border-b">
                 <th className="py-2 px-3 text-left">Cluster</th>
-                <th className="py-2 px-3 text-right">Action</th>
+                <th className="py-2 px-3 text-right">Move to zone</th>
               </tr>
             </thead>
             <tbody>
               {zoneClusters.map((c) => (
                 <tr key={c._id || c.name} className="border-b last:border-0">
                   <td className="py-2 px-3">{c.name}</td>
-                  <td className="py-2 px-3 text-right">
+                  <td className="py-2 px-3">
                     {c._id && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-red-600"
-                        onClick={() => onDeleteCluster(c._id)}
-                      >
-                        Delete
-                      </Button>
+                      <div className="flex items-center justify-end gap-2">
+                        <Select
+                          value={moveZoneByCluster[c._id] || undefined}
+                          onValueChange={(v) =>
+                            setMoveZoneByCluster((prev) => ({ ...prev, [c._id!]: v }))
+                          }
+                          disabled={otherZones.length === 0 || movingClusterId === c._id}
+                        >
+                          <SelectTrigger className="bg-white h-8 w-[180px]">
+                            <SelectValue placeholder={otherZones.length === 0 ? 'No other zone' : 'Select zone'} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {otherZones.map((z) => (
+                              <SelectItem key={z._id} value={z._id!}>
+                                {z.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={!moveZoneByCluster[c._id] || movingClusterId === c._id}
+                          onClick={() => onMoveCluster(c._id, c.name)}
+                        >
+                          {movingClusterId === c._id ? 'Moving…' : 'Move'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-red-600"
+                          disabled={movingClusterId === c._id}
+                          onClick={() => onDeleteCluster(c._id)}
+                        >
+                          Delete
+                        </Button>
+                      </div>
                     )}
                   </td>
                 </tr>

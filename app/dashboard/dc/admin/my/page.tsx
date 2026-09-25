@@ -279,13 +279,13 @@ export default function AllCreatedDCsPage() {
 
       <Card className="p-4">
         <div className="flex items-center gap-4">
-          <Label className="whitespace-nowrap">Filter by Executive:</Label>
+          <Label className="whitespace-nowrap">Filter by BDE:</Label>
           <select
             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             value={filterEmployee}
             onChange={(e) => setFilterEmployee(e.target.value)}
           >
-            <option value="">All Executives</option>
+            <option value="">All BDEs</option>
             {allEmployees.map((emp) => (
               <option key={emp._id} value={emp._id}>
                 {emp.name}
@@ -317,7 +317,7 @@ export default function AllCreatedDCsPage() {
                 <th className="py-2 px-3 text-left whitespace-nowrap">Created On</th>
                 <th className="py-2 px-3 text-left whitespace-nowrap">DC Number</th>
                 <th className="py-2 px-3 text-left whitespace-nowrap">Created By</th>
-                <th className="py-2 px-3 text-left whitespace-nowrap">Assigned Executive</th>
+                <th className="py-2 px-3 text-left whitespace-nowrap">Assigned BDE</th>
                 <th className="py-2 px-3 text-left whitespace-nowrap">Customer Name</th>
                 <th className="py-2 px-3 text-left whitespace-nowrap">Customer Phone</th>
                 <th className="py-2 px-3 text-left whitespace-nowrap">Products</th>
@@ -399,7 +399,7 @@ export default function AllCreatedDCsPage() {
                 <span className="text-neutral-500">Created By:</span> {personName(selectedDC.createdBy)}
               </p>
               <p>
-                <span className="text-neutral-500">Assigned Executive:</span>{' '}
+                <span className="text-neutral-500">Assigned BDE:</span>{' '}
                 {personName(selectedDC.employeeId)}
               </p>
               <p>
@@ -447,7 +447,7 @@ export default function AllCreatedDCsPage() {
                 'this DC'}
               <br />
               <span className="text-sm font-medium mt-1 block">
-                Executive: {selectedDC ? personName(selectedDC.employeeId) : '—'}
+                BDE: {selectedDC ? personName(selectedDC.employeeId) : '—'}
               </span>
             </DialogDescription>
           </DialogHeader>

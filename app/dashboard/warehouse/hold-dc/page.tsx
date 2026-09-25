@@ -114,7 +114,7 @@ export default function HoldDCPage() {
                 <TableHead>School Name</TableHead>
                 <TableHead>School Code</TableHead>
                 <TableHead>Zone</TableHead>
-                <TableHead>Executive</TableHead>
+                <TableHead>BDE</TableHead>
                 <TableHead>Hold Remarks</TableHead>
               </TableRow>
             </TableHeader>
