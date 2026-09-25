@@ -23,6 +23,7 @@ export const RBAC_MODULE_ORDER = [
   'employees',
   'leaves',
   'training',
+  'complaints',
   'warehouse',
   'returns',
   'payments',
@@ -49,6 +50,7 @@ export const RBAC_NAV_MODULES: RbacNavModule[] = [
     label: MODULE_LABELS.clients,
     pages: [
       { label: 'Create Sale', href: '/dashboard/dc/create' },
+      { label: 'Create DC / Main DCs', href: '/dashboard/dc/grid' },
       // All Created DCs: Admin / Coordinator only (not Super Admin Clients nav)
       { label: 'All Created DCs', href: '/dashboard/dc/admin/my' },
       { label: 'Closed Sales', href: '/dashboard/dc/closed' },
@@ -81,6 +83,7 @@ export const RBAC_NAV_MODULES: RbacNavModule[] = [
       { label: 'Assign Areas', href: '/dashboard/executives/assign-areas' },
       { label: 'Zones & Clusters', href: '/dashboard/employees/zones' },
       { label: 'Move Schools', href: '/dashboard/employees/move-schools' },
+      { label: 'Chain', href: '/dashboard/employees/chain' },
     ],
   },
   {
@@ -105,6 +108,16 @@ export const RBAC_NAV_MODULES: RbacNavModule[] = [
       { label: 'Services List', href: '/dashboard/training/services' },
       { label: 'Inactive Trainers', href: '/dashboard/training/trainers/inactive' },
       { label: 'Completed Training & Services', href: '/dashboard/training/trainer/completed' },
+      { label: 'Training Request', href: '/dashboard/training/request' },
+      { label: 'Training Requests', href: '/dashboard/training/requests' },
+    ],
+  },
+  {
+    module: 'complaints',
+    label: MODULE_LABELS.complaints,
+    pages: [
+      { label: 'Raise Complaint', href: '/dashboard/complaints/raise' },
+      { label: 'BDE Complaints', href: '/dashboard/complaints' },
     ],
   },
   {

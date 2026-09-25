@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
+import Link from 'next/link'
 import { apiRequest, API_BASE_URL, resolveUploadUrl } from '@/lib/api'
+import { chainRowClass } from '@/lib/chainSchool'
 import {
   STUDENT_TYPE_OPTIONS,
   STUDENT_TYPE_PLACEHOLDER,
@@ -62,6 +64,7 @@ import { useRouter } from 'next/navigation'
 
 type DC = {
   _id: string
+  grid?: { academicYear: string }
   parentDcId?: string | { _id: string; dc_code?: string }
   clusterId?: string
   dcType?: 'normal' | 'shortage'
@@ -992,6 +995,10 @@ export default function ClientDCPage() {
   }
 
   const openClientDCDialog = async (dc: DC) => {
+    if (dc.grid) {
+      router.push(`/dashboard/dc/grid?dc=${dc._id}`)
+      return
+    }
     setSelectedDC(dc)
     setRequestDcTermRouting(null)
 
@@ -1293,8 +1300,8 @@ export default function ClientDCPage() {
       toast.error('Select a student type first')
       return
     }
-    if (isShortageStudentType(sel)) {
-      openRecordShortageDialog(dc)
+    if (['Excess', 'Shortage', 'Exchange'].includes(sel)) {
+      router.push(`/dashboard/dc/grid?dc=${dc._id}&action=sub`)
       return
     }
     try {
@@ -1989,6 +1996,10 @@ export default function ClientDCPage() {
   }
 
   const openEditPODialog = async (dc: DC) => {
+    if (dc.grid) {
+      router.push(`/dashboard/dc/grid?dc=${dc._id}`)
+      return
+    }
     // Get the DcOrder ID from the DC
     let dcOrderId = null
     if (dc.dcOrderId) {
@@ -2550,6 +2561,7 @@ export default function ClientDCPage() {
           <p className="text-sm text-neutral-600 font-medium">
             Manage products, PO photos, and request details for your clients
           </p>
+          <Link href="/dashboard/dc/grid" className="inline-block text-sm font-medium text-blue-700 underline">Create DC / Main DCs</Link>
         </div>
         <Button 
           variant="outline" 
@@ -2846,7 +2858,7 @@ export default function ClientDCPage() {
                       : '-'
                     
                     return (
-                      <TableRow key={d._id} className="hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-neutral-50 transition-all duration-200 border-b border-neutral-100/80 hover:shadow-sm">
+                      <TableRow key={d._id} className={chainRowClass(d, 'hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-neutral-50 transition-all duration-200 border-b border-neutral-100/80 hover:shadow-sm')}>
                         <TableCell className="font-medium text-neutral-600">{idx + 1}</TableCell>
                         <TableCell className="font-semibold text-blue-600">{schoolCode}</TableCell>
                         <TableCell className="font-semibold text-neutral-900">{customerName}</TableCell>
@@ -2896,6 +2908,7 @@ export default function ClientDCPage() {
                           )}
                         </TableCell>
                         <TableCell className="text-center">
+                          {!d._isConvertedLead && d.dcType !== 'shortage' && <Link className="mb-2 block text-xs font-medium text-blue-700 underline" href={`/dashboard/dc/grid?dc=${d._id}`}>Main DC / Sub DC history</Link>}
                           {rawStatus === 'created' || rawStatus === 'po_submitted' || rawStatus === 'dc_requested' ? (
                           <div className="flex items-center gap-2 justify-center">
                             {d.poPhotoUrl && (

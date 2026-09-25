@@ -165,6 +165,7 @@ const NAV: NavItem[] = [
     icon: Truck,
     children: [
       { label: 'Create Sale', href: '/dashboard/dc/create', icon: PlusCircle },
+      { label: 'Create DC / Main DCs', href: '/dashboard/dc/grid', icon: PlusCircle },
       { label: 'All Created DCs', href: '/dashboard/dc/admin/my', icon: FileText },
       { label: 'Closed Sales', href: '/dashboard/dc/closed', icon: CheckCircle2 },
       { label: 'Saved DC', href: '/dashboard/dc/saved', icon: Save },
@@ -184,6 +185,7 @@ const NAV: NavItem[] = [
       { label: 'Assign Areas', href: '/dashboard/executives/assign-areas' },
       { label: 'Zones & Clusters', href: '/dashboard/employees/zones', icon: Database },
       { label: 'Move Schools', href: '/dashboard/employees/move-schools', icon: Database },
+      { label: 'Chain', href: '/dashboard/employees/chain' },
     ],
   },
   {
@@ -211,10 +213,16 @@ const NAV: NavItem[] = [
       { label: 'Active Trainers', href: '/dashboard/training/trainers/active' },
       { label: 'Trainers Dashboard', href: '/dashboard/training/dashboard' },
       { label: 'Assign Training/Service', href: '/dashboard/training/assign' },
+      { label: 'Training Requests', href: '/dashboard/training/requests' },
       { label: 'Trainings List', href: '/dashboard/training/list' },
       { label: 'Services List', href: '/dashboard/training/services' },
       { label: 'Inactive Trainers', href: '/dashboard/training/trainers/inactive' },
     ],
+  },
+  {
+    label: 'Complaints',
+    icon: AlertCircle,
+    children: [{ label: 'BDE Complaints', href: '/dashboard/complaints' }],
   },
   {
     label: 'Warehouse',
@@ -497,6 +505,8 @@ function applyExecutiveSidebarOrder(nav: NavItem[]): NavItem[] {
     'Stock Returns',
     'Payments',
     'Expenses',
+    'Training',
+    'Complaints',
     'Settings',
     'Samples',
   ] as const
@@ -523,6 +533,7 @@ function applyExecutiveSidebarOrder(nav: NavItem[]): NavItem[] {
     icon: Users,
     children: [
       { label: 'My Clients', href: '/dashboard/dc/client-dc', icon: Users },
+      { label: 'Create DC / Main DCs', href: '/dashboard/dc/grid', icon: PlusCircle },
       { label: 'Term-Wise DC', href: '/dashboard/dc/client-dc/term-wise', icon: FileText },
     ],
   })
@@ -660,7 +671,6 @@ export function Sidebar() {
   const isExecutiveManager = user?.role === 'Executive Manager'
   const isExecutive = user?.role === 'Executive'
   const isTrainer = user?.role === 'Trainer'
-  const isTrainerManager = user?.role === 'Trainer Manager'
   const isWarehouseExecutive = user?.role === 'Warehouse Executive'
   const isWarehouseManager = user?.role === 'Warehouse Manager'
   const isPartner = user?.role === 'Partner'
@@ -749,6 +759,20 @@ export function Sidebar() {
         ],
       },
       {
+        label: 'Training',
+        icon: GraduationCap,
+        children: [
+          { label: 'Training Request', href: '/dashboard/training/request', icon: PlusCircle },
+        ],
+      },
+      {
+        label: 'Complaints',
+        icon: AlertCircle,
+        children: [
+          { label: 'Raise Complaint', href: '/dashboard/complaints/raise', icon: PlusCircle },
+        ],
+      },
+      {
         label: 'Settings',
         icon: Settings,
         children: [
@@ -813,7 +837,7 @@ export function Sidebar() {
       })
   } else if (isCoordinator) {
     // For Coordinator role, only show: Dashboard, Clients, Users / Employees, Trainings & Services, Warehouse, Payments, Reports, Settings, Sign out
-    const allowedMenuItems = ['Dashboard', 'Clients', 'Users / Employees', 'Trainings & Services', 'Warehouse', 'Payments', 'Reports', 'Settings', 'Sign out']
+    const allowedMenuItems = ['Dashboard', 'Clients', 'Users / Employees', 'Trainings & Services', 'Complaints', 'Warehouse', 'Payments', 'Reports', 'Settings', 'Sign out']
     finalNav = NAV.filter(item => allowedMenuItems.includes(item.label))
       .map(item => {
         if (item.label === 'Clients' && item.children) {
@@ -950,54 +974,6 @@ export function Sidebar() {
         children: [
           { label: 'Leads Report', href: '/dashboard/reports/leads', icon: FileText },
           { label: 'All Expenses Report', href: '/dashboard/reports/expenses', icon: Receipt },
-        ],
-      },
-      {
-        label: 'Settings',
-        icon: Settings,
-        children: [
-          { label: 'Change Password', href: '/dashboard/settings/password', icon: UserCircle2 },
-        ],
-      },
-      { label: 'Sign out', icon: LogOut, href: '/auth/login' },
-    ]
-  } else if (isTrainerManager) {
-    finalNav = [
-      { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
-      {
-        label: 'Trainings & Services',
-        icon: GraduationCap,
-        children: [
-          { label: 'Add Trainer', href: '/dashboard/training/trainers/new' },
-          { label: 'Active Trainers', href: '/dashboard/training/trainers/active' },
-          { label: 'Trainers Dashboard', href: '/dashboard/training/dashboard' },
-          { label: 'Assign Training/Service', href: '/dashboard/training/assign' },
-          { label: 'Trainings List', href: '/dashboard/training/list' },
-          { label: 'Services List', href: '/dashboard/training/services' },
-          { label: 'Inactive Trainers', href: '/dashboard/training/trainers/inactive' },
-        ],
-      },
-      {
-        label: 'Users / Employees',
-        icon: Users,
-        children: [
-          { label: 'Employee Verification', href: '/dashboard/employees/verification' },
-        ],
-      },
-      {
-        label: 'Leave Management',
-        icon: CalendarCheck2,
-        children: [
-          { label: 'Pending Leaves', href: '/dashboard/leaves/pending', icon: Clock },
-          { label: 'Apply for Leave', href: '/dashboard/leaves/request', icon: PlusCircle },
-          { label: 'My Leaves', href: '/dashboard/leaves/approved', icon: CheckCircle2 },
-        ],
-      },
-      {
-        label: 'Reports',
-        icon: BarChart3,
-        children: [
-          { label: 'Training & Service Report', href: '/dashboard/reports/training-service', icon: FileText },
         ],
       },
       {

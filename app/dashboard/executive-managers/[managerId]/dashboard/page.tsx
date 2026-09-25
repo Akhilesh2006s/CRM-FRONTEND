@@ -31,6 +31,7 @@ import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { INDIAN_STATES, STATE_CITIES, getCitiesForState } from '@/lib/indianStatesCities'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import ChainClientsPanel from '@/components/dashboard/ChainClientsPanel'
 import PieChart from '@/components/charts/PieChart'
 import LineChart from '@/components/charts/LineChart'
 import MultiBarChart from '@/components/charts/MultiBarChart'
@@ -412,6 +413,8 @@ export default function ExecutiveManagerDashboardPage() {
           </div>
         </div>
       </Card>
+
+      <ChainClientsPanel userId={managerId} />
 
       {/* Premium Tab Navigation */}
       <div className="flex items-center gap-1 border-b border-neutral-200/60">

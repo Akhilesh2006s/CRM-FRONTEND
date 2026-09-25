@@ -62,8 +62,20 @@ export function SearchableSelect({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-        <Command>
+      <PopoverContent
+        className="w-[var(--radix-popover-trigger-width)] p-0"
+        align="start"
+        onOpenAutoFocus={(event) => event.preventDefault()}
+      >
+        <Command
+          className="h-auto"
+          filter={(itemValue, search) => {
+            if (!search.trim()) return 1
+            const option = options.find((item) => item.value === itemValue)
+            const haystack = `${option?.label || ''} ${itemValue}`.toLowerCase()
+            return haystack.includes(search.trim().toLowerCase()) ? 1 : 0
+          }}
+        >
           <CommandInput placeholder={searchPlaceholder} />
           <CommandList>
             <CommandEmpty>{emptyText}</CommandEmpty>
@@ -71,7 +83,14 @@ export function SearchableSelect({
               {options.map((option) => (
                 <CommandItem
                   key={option.value}
-                  value={option.label}
+                  value={option.value}
+                  className="cursor-pointer"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onPointerDown={(event) => {
+                    event.preventDefault()
+                    onValueChange(option.value)
+                    setOpen(false)
+                  }}
                   onSelect={() => {
                     onValueChange(option.value)
                     setOpen(false)

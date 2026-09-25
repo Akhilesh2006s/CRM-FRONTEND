@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox'
 import { Pencil, Package, Plus, Upload, X } from 'lucide-react'
 import { useProducts } from '@/hooks/useProducts'
+import { chainRowClass } from '@/lib/chainSchool'
 
 type DC = {
   _id: string
@@ -321,7 +322,7 @@ export default function MyDCPage() {
         {!loading && items.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
               {items.map((d) => (
-              <Card key={d._id} className="p-4 space-y-3">
+              <Card key={d._id} className={chainRowClass(d, 'p-4 space-y-3')}>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <h3 className="font-semibold text-neutral-900">

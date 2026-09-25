@@ -18,6 +18,7 @@ import {
 } from '@/lib/dcStudentTypeOptions'
 import { shortageParentRowKey } from '@/lib/shortageDcRowKey'
 import { useProducts } from '@/hooks/useProducts'
+import { chainRowClass } from '@/lib/chainSchool'
 import { fetchDcInvoiceData, type DcInvoiceData } from '@/lib/dcInvoiceData'
 import DcInvoiceViewDialog from '@/components/dc/DcInvoiceViewDialog'
 import StockReturnFromCompletedDcDialog from '@/components/warehouse/StockReturnFromCompletedDcDialog'
@@ -69,6 +70,7 @@ type Row = {
   poDocument?: string
   dcId?: string // The actual DC model ID (if this row is from DcOrder)
   isDcOrder?: boolean // Flag to indicate if this is from DcOrder model
+  isChain?: boolean
 }
 
 export default function CompletedDCPage() {
@@ -368,6 +370,7 @@ export default function CompletedDCPage() {
           completedAt: dc.completedAt || '',
           poPhotoUrl: dc.poPhotoUrl || dc.poDocument || '',
           poDocument: dc.poDocument || dc.poPhotoUrl || '',
+          isChain: dc.isChain === true || dc.dcOrderId?.isChain === true,
         }
       })
       
@@ -405,6 +408,7 @@ export default function CompletedDCPage() {
             row.poPhotoUrl = matchingDC.poPhotoUrl || matchingDC.poDocument || row.poPhotoUrl
             row.lrCost = matchingDC.lrCost || row.lrCost
             row.remarks = listRemarks(matchingDC)
+            row.isChain = matchingDC.isChain === true || matchingDC.dcOrderId?.isChain === true || row.isChain
             console.log(`Found DC ${row.dcId} for DcOrder ${row._id}`)
           } else {
             console.warn(`No DC found for DcOrder ${row._id} - this entry cannot be updated`)
@@ -1492,7 +1496,7 @@ export default function CompletedDCPage() {
               {rows.map((r, idx) => (
                 <TableRow 
                   key={r._id} 
-                  className="cursor-pointer hover:bg-neutral-50"
+                  className={chainRowClass(r, 'cursor-pointer hover:bg-neutral-50')}
                   onClick={(e) => {
                     // Don't trigger if clicking on buttons
                     if ((e.target as HTMLElement).closest('button')) return

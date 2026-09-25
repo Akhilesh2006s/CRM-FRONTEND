@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { apiRequest } from '@/lib/api'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -490,6 +491,7 @@ export default function CreateDealPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Create Deal (Sale)</h1>
+      <Link href="/dashboard/dc/grid" className="inline-block text-sm font-medium text-blue-700 underline">Create DC / Main DCs</Link>
       <Card className="p-4 md:p-6 bg-neutral-50 border border-neutral-200 text-neutral-900">
         <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>

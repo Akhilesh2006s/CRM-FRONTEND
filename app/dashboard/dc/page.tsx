@@ -26,7 +26,7 @@ export default function DCPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Deal Conversion</h1>
-        <Link href="/dashboard/dc/create"><Button>Create Sale</Button></Link>
+        <Link href="/dashboard/dc/grid"><Button>Create DC</Button></Link>
       </div>
       <Card className="p-4">
         {loading && 'Loading...'}

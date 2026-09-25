@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { apiRequest } from '@/lib/api'
+import { chainRowClass } from '@/lib/chainSchool'
 import { getCurrentUser } from '@/lib/auth'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -1341,7 +1342,7 @@ export default function PendingDCPage() {
             </thead>
             <tbody>
               {items.map((d, idx) => (
-                <tr key={d._id} className="border-b last:border-0 hover:bg-gray-50">
+                <tr key={d._id} className={chainRowClass(d, 'border-b last:border-0 hover:bg-gray-50')}>
                   <td className="py-2 px-3">{idx + 1}</td>
                   <td className="py-2 px-3 font-medium">{getDCNumber(d)}</td>
                   <td className="py-2 px-3 font-medium text-blue-700">{getSchoolCode(d)}</td>

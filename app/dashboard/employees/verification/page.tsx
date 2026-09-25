@@ -64,9 +64,6 @@ export default function EmployeeVerificationPage() {
         roleKey === 'training_head'
       )
     }
-    if (currentUser?.role === 'Trainer Manager') {
-      return roleKey === 'training_head' || roleKey === 'vertical_manager'
-    }
     return false
   }
 

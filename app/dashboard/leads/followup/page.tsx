@@ -43,6 +43,7 @@ type Lead = {
   createdAt?: string
   remarks?: string
   school_type?: string
+  isChain?: boolean
   products?: Array<{
     product_name?: string
     product?: string
@@ -292,6 +293,7 @@ export default function FollowupLeadsPage() {
           products: Array.isArray(order.products) ? order.products : undefined,
           lead_status: order.lead_status,
           priority: order.priority,
+          isChain: order.isChain === true,
           }
           return mapped
         })
@@ -811,7 +813,7 @@ export default function FollowupLeadsPage() {
             )}
             
             {leads.map((lead) => (
-              <Card key={lead._id} className="p-5 border border-neutral-200 hover:shadow-md transition-shadow">
+              <Card key={lead._id} className={lead.isChain ? 'p-5 border border-blue-300 bg-blue-100 hover:bg-blue-200 hover:shadow-md transition-shadow' : 'p-5 border border-neutral-200 hover:shadow-md transition-shadow'}>
                 <div className="space-y-4">
                   {/* Header with School Name and Location */}
                   <div className="flex items-start justify-between">

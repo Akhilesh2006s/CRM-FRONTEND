@@ -63,6 +63,11 @@ export function canAccessPath(
   if (isSuperAdmin(user)) return true
   if (!isRbacActive(user)) return true
 
+  if (pathname === '/dashboard/dc/grid' || pathname.startsWith('/dashboard/dc/grid/')) {
+    return ['clients.create_sale.page.view', 'clients.my_clients.page.view', 'clients.closed_sales.approve_dc']
+      .some((key) => hasPermission(user, key))
+  }
+
   // All Created DCs — Admin + Coordinators + Super Admin (via Create Sale redirect / Clients nav).
   if (
     (user.role === 'Admin' ||

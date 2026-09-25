@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
+import { chainRowClass } from '@/lib/chainSchool'
 
 type DC = {
   _id: string
@@ -268,6 +269,7 @@ export default function AllCreatedDCsPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button asChild><Link href="/dashboard/dc/grid">Create DC</Link></Button>
           <Button variant="outline" asChild>
             <Link href="/dashboard/dc/create">Create Sale</Link>
           </Button>
@@ -328,7 +330,7 @@ export default function AllCreatedDCsPage() {
             </thead>
             <tbody>
               {items.map((d) => (
-                <tr key={d._id} className="border-b last:border-0 hover:bg-gray-50">
+                <tr key={d._id} className={chainRowClass(d, 'border-b last:border-0 hover:bg-gray-50')}>
                   <td className="py-2 px-3 whitespace-nowrap">
                     {d.createdAt ? new Date(d.createdAt).toLocaleDateString() : '—'}
                   </td>
@@ -359,6 +361,7 @@ export default function AllCreatedDCsPage() {
                   </td>
                   <td className="py-2 px-3 whitespace-nowrap">
                     <div className="flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" asChild><Link href={`/dashboard/dc/grid?dc=${d._id}`}>Main DC / Sub DC</Link></Button>
                       <Button size="sm" variant="outline" onClick={() => openViewDialog(d)}>
                         View
                       </Button>

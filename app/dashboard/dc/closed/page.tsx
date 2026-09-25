@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { apiRequest, resolveUploadUrl } from '@/lib/api'
+import { chainRowClass } from '@/lib/chainSchool'
 import { getCurrentUser } from '@/lib/auth'
 import { isSuperAdmin as checkIsSuperAdmin } from '@/lib/permissions'
 import { Card } from '@/components/ui/card'
@@ -89,6 +90,8 @@ function closedSalesOwnedLines(rows: any[], siblingRows: any[] = []): any[] {
  * Never pick Term-Wise DC lines or the merged DcOrder list (90 + 20 = 110).
  */
 function resolveClosedSalesProductLines(deal?: any, dc?: any, siblingRows: any[] = []): any[] {
+  // Grid.docx pairs are one explicit allocation, even when book names contain Level 1 / Level 2.
+  if (dc?.grid && Array.isArray(dc.productDetails)) return dc.productDetails
   const sources: any[][] = []
   if (!isTermWiseDcRecord(dc) && Array.isArray(dc?.productDetails) && dc.productDetails.length > 0) {
     sources.push(dc.productDetails)
@@ -1657,7 +1660,7 @@ export default function ClosedSalesPage() {
             </thead>
             <tbody>
               {filteredItems.map((d) => (
-                <tr key={d._id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors">
+                <tr key={d._id} className={chainRowClass(d, 'border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors')}>
                   <td className="py-3 px-4 text-slate-700">
                     {d.created_at ? new Date(d.created_at).toLocaleString() : 
                      d.createdAt ? new Date(d.createdAt).toLocaleString() : '-'}

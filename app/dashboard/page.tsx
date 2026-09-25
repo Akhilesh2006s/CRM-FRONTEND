@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { getCurrentUser } from '@/lib/auth'
 import VendorDashboard from '@/components/dashboard/VendorDashboard'
+import ChainClientsPanel from '@/components/dashboard/ChainClientsPanel'
 
 const sections = [
   { href: '/dashboard/leads', label: 'Leads' },
@@ -589,6 +590,11 @@ export default function DashboardPage() {
       {/* Dashboard Content */}
       {activeTab === 'dashboard' && (
         <>
+          {currentUser?.role === 'Executive' && currentUser._id && (
+            <div className="mb-6">
+              <ChainClientsPanel userId={currentUser._id} />
+            </div>
+          )}
           {/* Executive Summary Stats - Only for Executives */}
           {currentUser?.role === 'Executive' && executiveAnalytics && (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">

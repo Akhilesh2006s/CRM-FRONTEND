@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { apiRequest } from '@/lib/api'
+import { chainRowClass } from '@/lib/chainSchool'
 import { getCurrentUser } from '@/lib/auth'
 import { Pencil } from 'lucide-react'
 import { useRouter } from 'next/navigation'
@@ -716,7 +717,7 @@ export default function WarehouseDcAtWarehouse() {
                 </TableRow>
               )}
               {rows.map((r, idx) => (
-                <TableRow key={r._id}>
+                <TableRow key={r._id} className={chainRowClass(r)}>
                   <TableCell className="whitespace-nowrap">{idx + 1}</TableCell>
                   <TableCell className="whitespace-nowrap">DC-{r._id.slice(-6)}</TableCell>
                   <TableCell className="whitespace-nowrap">

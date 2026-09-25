@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiRequest, resolveUploadUrl } from '@/lib/api'
+import { chainRowClass } from '@/lib/chainSchool'
 import { getCurrentUser } from '@/lib/auth'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -642,7 +643,7 @@ export default function SavedDCPage() {
             </thead>
             <tbody>
           {items.map((d) => (
-                <tr key={d._id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors">
+                <tr key={d._id} className={chainRowClass(d, 'border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors')}>
                   <td className="py-3 px-4 text-slate-700">{d.created_at ? new Date(d.created_at).toLocaleString() : d.createdAt ? new Date(d.createdAt).toLocaleString() : '-'}</td>
                   <td className="py-3 px-4 text-slate-700">{d.school_type || '-'}</td>
                   <td className="py-3 px-4 text-slate-700">{d.zone || '-'}</td>

@@ -51,26 +51,15 @@ export default function AddTrainerPage() {
   useEffect(() => {
     ;(async () => {
       try {
-        const [pairsRaw, zonesRaw, managersRaw, trainerManagersRaw] = await Promise.all([
+        const [pairsRaw, zonesRaw, managersRaw] = await Promise.all([
           apiRequest<{ zone?: string; cluster?: string }[]>('/zones-clusters').catch(() => []),
           apiRequest<{ name?: string; managerId?: { name?: string } | string }[]>('/zones').catch(() => []),
           apiRequest<{ _id: string; name: string }[]>('/executive-managers').catch(() => []),
-          apiRequest<{ _id: string; name: string }[]>(
-            '/employees?isActive=true&role=Trainer%20Manager'
-          ).catch(() => []),
         ])
         const pairs = Array.isArray(pairsRaw) ? pairsRaw : []
         const zoneDocs = Array.isArray(zonesRaw) ? zonesRaw : []
         const zonalManagers = Array.isArray(managersRaw) ? managersRaw : []
-        const trainerManagers = Array.isArray(trainerManagersRaw) ? trainerManagersRaw : []
-        const seen = new Set<string>()
-        setManagers(
-          [...zonalManagers, ...trainerManagers].filter((m) => {
-            if (!m?._id || seen.has(m._id)) return false
-            seen.add(m._id)
-            return true
-          })
-        )
+        setManagers(zonalManagers.filter((m) => Boolean(m?._id)))
         const zoneMap: Record<string, string[]> = {}
         pairs.forEach((zc) => {
           const zone = (zc.zone || '').trim()

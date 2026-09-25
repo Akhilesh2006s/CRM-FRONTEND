@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { CheckCircle, XCircle, Eye, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { getCurrentUser } from '@/lib/auth'
+import { isChainSchool } from '@/lib/chainSchool'
 
 type PendingEdit = {
   school_name?: string
@@ -460,7 +461,7 @@ export default function ExecutiveManagerClosedSalesPage() {
               {editRequestItems.map((d, index) => (
                 <TableRow
                   key={d._id}
-                  className={`bg-orange-50 border-l-4 border-orange-500 ${index % 2 === 0 ? '' : 'bg-orange-100/50'}`}
+                  className={isChainSchool(d) ? 'bg-blue-100 border-l-4 border-blue-600' : `bg-orange-50 border-l-4 border-orange-500 ${index % 2 === 0 ? '' : 'bg-orange-100/50'}`}
                 >
                   <TableCell>{index + 1}</TableCell>
                   <TableCell>{formatDate(d.created_at || d.createdAt)}</TableCell>
