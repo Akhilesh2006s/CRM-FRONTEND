@@ -2334,7 +2334,7 @@ export default function ClientDCPage() {
             setDcsWithPendingEditRequests(prev => new Set(prev).add(currentEditingDCId))
           }
           
-          toast.success('PO edit request submitted! Executive Manager will review and approve.')
+          toast.success('PO edit request submitted! Zonal Manager will review and approve.')
         } catch (e: any) {
           console.error('❌ Failed to create pendingEdit request:', e)
           toast.error(e?.message || 'Failed to submit edit request. Please try again.')

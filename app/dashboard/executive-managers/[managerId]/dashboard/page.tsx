@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { apiRequest } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
+import { displayRoleName } from '@/lib/roleLabels'
 import { Users, TrendingUp, Package, ShoppingCart, Calendar, MapPin, Building2, UserPlus, ArrowLeft, Zap, DollarSign, AlertTriangle, Award, BarChart3 } from 'lucide-react'
 import Link from 'next/link'
 import {
@@ -249,7 +250,7 @@ export default function ExecutiveManagerDashboardPage() {
         phone: emp.phone,
         assignedCity: emp.assignedCity,
         assignedArea: emp.assignedArea,
-        role: emp.role === 'Employee' ? 'Executive' : emp.role,
+        role: displayRoleName(emp.role),
         department: emp.department,
         totalLeads: 0,
         totalDCs: 0,
@@ -338,7 +339,7 @@ export default function ExecutiveManagerDashboardPage() {
               Back to Managers
             </Button>
           </Link>
-          <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Executive Manager Dashboard</h1>
+          <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Zonal Manager Dashboard</h1>
           {dashboardData.managerState && (
             <span className="text-sm text-neutral-500 bg-neutral-100 px-3 py-1 rounded-full">
               {dashboardData.managerState}
@@ -1845,7 +1846,7 @@ export default function ExecutiveManagerDashboardPage() {
           <DialogHeader>
             <DialogTitle>Assign Zone to {selectedEmployee?.name}</DialogTitle>
             <DialogDescription>
-              Assign or update the zone (city) for this employee. Zones are cities from the Executive Manager's assigned state.
+              Assign or update the zone (city) for this employee. Zones are cities from the Zonal Manager's assigned state.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -1857,10 +1858,10 @@ export default function ExecutiveManagerDashboardPage() {
                     value={zone}
                     disabled
                     className="bg-neutral-100 cursor-not-allowed"
-                    placeholder="Executive Manager's state must be set first"
+                    placeholder="Zonal Manager's state must be set first"
                   />
                   <p className="text-xs text-orange-600 mt-1">
-                    Executive Manager's state is not set. Please update the manager's state first.
+                    Zonal Manager's state is not set. Please update the manager's state first.
                   </p>
                 </>
               ) : availableZones.length === 0 ? (
@@ -1906,9 +1907,9 @@ export default function ExecutiveManagerDashboardPage() {
       <Dialog open={assignEmployeesDialogOpen} onOpenChange={setAssignEmployeesDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Assign Employees to Executive Manager</DialogTitle>
+            <DialogTitle>Assign Employees to Zonal Manager</DialogTitle>
             <DialogDescription>
-              Select employees (Executives) to assign to this Executive Manager
+              Select employees (Executives) to assign to this Zonal Manager
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 max-h-[400px] overflow-y-auto">
@@ -1984,9 +1985,9 @@ export default function ExecutiveManagerDashboardPage() {
       <Dialog open={updateManagerStateDialogOpen} onOpenChange={setUpdateManagerStateDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Set Executive Manager's State</DialogTitle>
+            <DialogTitle>Set Zonal Manager's State</DialogTitle>
             <DialogDescription>
-              Set or update the state for this Executive Manager. Cities in this state will become zones that can be assigned to employees.
+              Set or update the state for this Zonal Manager. Cities in this state will become zones that can be assigned to employees.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -2027,7 +2028,7 @@ export default function ExecutiveManagerDashboardPage() {
                       method: 'PUT',
                       body: JSON.stringify({ state: managerStateInput.trim() }),
                     })
-                    toast.success('Executive Manager state updated successfully')
+                    toast.success('Zonal Manager state updated successfully')
                     setUpdateManagerStateDialogOpen(false)
                     setManagerStateInput('')
                     loadDashboard()

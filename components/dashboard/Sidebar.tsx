@@ -187,7 +187,7 @@ const NAV: NavItem[] = [
     ],
   },
   {
-    label: 'Executive Managers',
+    label: 'Zonal Managers',
     icon: Shield,
     children: [
       { label: 'All Managers', href: '/dashboard/executive-managers' },
@@ -394,7 +394,7 @@ function applySuperAdminTrainingNav(nav: NavItem[]): NavItem[] {
 
 /** Super Admin: drop Executive Managers section; surface Assign Managers under Users / Employees. */
 function applySuperAdminExecutiveManagersNav(nav: NavItem[]): NavItem[] {
-  const withoutEmSection = nav.filter((item) => item.label !== 'Executive Managers')
+  const withoutEmSection = nav.filter((item) => item.label !== 'Zonal Managers')
 
   return withoutEmSection.map((item) => {
     if (item.label !== 'Users / Employees' || !item.children) return item

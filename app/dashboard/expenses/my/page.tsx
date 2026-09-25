@@ -72,8 +72,9 @@ export default function MyExpensesPage() {
   }
 
   const getStatusDisplay = (status: string) => {
-    if (status === 'Pending') return 'Pending at Executive Manager'
-    if (status === 'Executive Manager Approved') return 'Approved by Executive Manager, Pending at Manager'
+    if (status === 'Pending') return 'Pending at Zonal Manager'
+    if (status === 'Manager Approved') return 'Product Manager Approved'
+    if (status === 'Executive Manager Approved') return 'Approved by Zonal Manager, Pending at Product Manager'
     if (status === 'Approved') return 'Approved'
     return status
   }

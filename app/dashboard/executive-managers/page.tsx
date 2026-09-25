@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { apiRequest } from '@/lib/api'
 import { toast } from 'sonner'
+import { displayRoleName } from '@/lib/roleLabels'
 import { Users, Eye, UserPlus, PlusCircle } from 'lucide-react'
 import Link from 'next/link'
 import {
@@ -59,7 +60,7 @@ export default function ExecutiveManagersPage() {
       const data = await apiRequest<ExecutiveManager[]>('/executive-managers')
       setManagers(Array.isArray(data) ? data : [])
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to load Executive Managers')
+      toast.error(err instanceof Error ? err.message : 'Failed to load Zonal Managers')
     } finally {
       setLoading(false)
     }
@@ -121,7 +122,7 @@ export default function ExecutiveManagersPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap justify-between items-center gap-3">
-        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Executive Managers</h1>
+        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Zonal Managers</h1>
         <Button asChild>
           <Link href="/dashboard/executive-managers/new">
             <PlusCircle className="w-4 h-4 mr-2" />
@@ -133,7 +134,7 @@ export default function ExecutiveManagersPage() {
       <Card className="p-4 md:p-6 bg-neutral-50 border border-neutral-200">
         <div className="mb-4">
           <Input
-            placeholder="Search Executive Managers..."
+            placeholder="Search Zonal Managers..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="max-w-md bg-white"
@@ -144,7 +145,7 @@ export default function ExecutiveManagersPage() {
           <div className="text-center py-8 text-neutral-500">Loading…</div>
         ) : filteredManagers.length === 0 ? (
           <div className="text-center py-8 text-neutral-500">
-            No Executive Managers found.{' '}
+            No Zonal Managers found.{' '}
             <Link href="/dashboard/executive-managers/new" className="text-blue-600 underline">
               Create one
             </Link>
@@ -192,7 +193,7 @@ export default function ExecutiveManagersPage() {
           <DialogHeader>
             <DialogTitle>Assign Employees to {selectedManager?.name}</DialogTitle>
             <DialogDescription>
-              Select executives to assign to this Executive Manager
+              Select executives to assign to this Zonal Manager
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 max-h-[400px] overflow-y-auto">
@@ -234,7 +235,7 @@ export default function ExecutiveManagersPage() {
                     <p className="font-medium">{employee.name}</p>
                     <p className="text-sm text-neutral-600">
                       {employee.email} •{' '}
-                      {employee.role === 'Employee' ? 'Executive' : employee.role}
+                      {displayRoleName(employee.role)}
                     </p>
                   </div>
                 </div>

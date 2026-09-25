@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { apiRequest, resolveUploadUrl } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
+import { displayRoleName } from '@/lib/roleLabels'
 import { toast } from 'sonner'
 
 type Approval = {
@@ -137,7 +138,7 @@ export default function EmployeeVerificationPage() {
               <div>
                 <h2 className="text-lg font-semibold">{emp.name}</h2>
                 <p className="text-sm text-neutral-600">
-                  {emp.role} · {emp.email}
+                  {displayRoleName(emp.role)} · {emp.email}
                   {emp.zone ? ` · Zone: ${emp.zone}` : ''}
                   {emp.cluster ? ` · Cluster: ${emp.cluster}` : ''}
                 </p>

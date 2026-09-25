@@ -155,7 +155,7 @@ export default function ExpensesReportPage() {
   }
 
   const getStatusDisplay = (status: string) => {
-    if (status === 'Pending') return 'Pending at Manager'
+    if (status === 'Pending') return 'Pending at Product Manager'
     if (status === 'Manager Approved') return 'Pending at Finance'
     return status
   }
@@ -227,7 +227,7 @@ export default function ExpensesReportPage() {
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="Pending">Pending</SelectItem>
-                <SelectItem value="Manager Approved">Manager Approved</SelectItem>
+                <SelectItem value="Manager Approved">Product Manager Approved</SelectItem>
                 <SelectItem value="Approved">Approved</SelectItem>
                 <SelectItem value="Rejected">Rejected</SelectItem>
               </SelectContent>

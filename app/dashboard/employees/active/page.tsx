@@ -13,6 +13,7 @@ import { Can } from '@/components/permissions/Can'
 import { usePermissions } from '@/components/permissions/PermissionsProvider'
 import { toast } from 'sonner'
 import { Pencil } from 'lucide-react'
+import { displayRoleName } from '@/lib/roleLabels'
 
 type Employee = {
   _id: string
@@ -182,7 +183,7 @@ export default function ActiveEmployeesPage() {
                 <td className="py-2 px-3">{e.name}</td>
                 <td className="py-2 px-3">{e.email}</td>
                 <td className="py-2 px-3 text-center">{displayMobile(e)}</td>
-                <td className="py-2 px-3 text-center">{e.role}</td>
+                <td className="py-2 px-3 text-center">{displayRoleName(e.role)}</td>
                 <td className="py-2 px-3 text-center">{e.department || '-'}</td>
                 <td className="py-2 px-3 text-center">{e.cluster || '-'}</td>
                 {!shouldHideAction && (
@@ -277,7 +278,7 @@ export default function ActiveEmployeesPage() {
                 </SelectTrigger>
                 <SelectContent>
                   {availableRoles.map(role => (
-                    <SelectItem key={role} value={role}>{role}</SelectItem>
+                    <SelectItem key={role} value={role}>{displayRoleName(role)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

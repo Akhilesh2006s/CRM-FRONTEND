@@ -15,6 +15,7 @@ import {
   supportsEmployeeTagging,
 } from '@/lib/employeeTagging'
 import { sanitizePhoneInput, validateStrictIndianMobile } from '@/lib/phone'
+import { displayRoleName } from '@/lib/roleLabels'
 import {
   validateEmployeeFirstName,
   validateEmployeeLastName,
@@ -717,8 +718,8 @@ export default function NewEmployeePage() {
                 <SelectItem value="HR Manager">HR Manager</SelectItem>
                 <SelectItem value="Coordinator">Coordinator</SelectItem>
                 <SelectItem value="Senior Coordinator">Senior Coordinator</SelectItem>
-                <SelectItem value="Manager">Manager</SelectItem>
-                <SelectItem value="Executive Manager">Executive Manager</SelectItem>
+                <SelectItem value="Manager">Product Manager</SelectItem>
+                <SelectItem value="Executive Manager">Zonal Manager</SelectItem>
                 <SelectItem value="Warehouse Executive">Warehouse Executive</SelectItem>
                 <SelectItem value="Warehouse Manager">Warehouse Manager</SelectItem>
                 <SelectItem value="Admin">Admin</SelectItem>
@@ -754,7 +755,7 @@ export default function NewEmployeePage() {
                         checked={form.taggedEmployeeIds.includes(e._id)}
                         onChange={() => toggleTagged(e._id)}
                       />
-                      {e.name} ({e.role})
+                      {e.name} ({displayRoleName(e.role)})
                     </label>
                   ))
                 )}

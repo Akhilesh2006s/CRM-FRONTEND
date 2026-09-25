@@ -36,7 +36,7 @@ export default function ManagerDCPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Manager DC Dashboard</h1>
+        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Product Manager DC Dashboard</h1>
       </div>
       <Card className="p-4">
         {loading && <div className="p-4">Loading...</div>}

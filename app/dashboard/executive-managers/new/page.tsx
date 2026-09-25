@@ -42,10 +42,10 @@ export default function CreateExecutiveManagerPage() {
           department: form.department.trim() || undefined,
         }),
       })
-      toast.success('Executive Manager created successfully')
+      toast.success('Zonal Manager created successfully')
       router.push('/dashboard/executive-managers')
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to create Executive Manager'
+      const msg = err instanceof Error ? err.message : 'Failed to create Zonal Manager'
       setError(msg)
       toast.error(msg)
     } finally {
@@ -57,7 +57,7 @@ export default function CreateExecutiveManagerPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">
-          Create Executive Manager
+          Create Zonal Manager
         </h1>
         <Button variant="outline" asChild>
           <Link href="/dashboard/executive-managers">All Managers</Link>

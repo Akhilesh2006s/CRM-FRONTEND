@@ -135,7 +135,7 @@ export const MODULE_LABELS: Record<string, string> = {
   reports: 'Reports',
   products: 'Products',
   settings: 'Settings',
-  executive_managers: 'Executive Managers',
+  executive_managers: 'Zonal Managers',
   samples: 'Samples',
   vendor: 'Vendor',
 }

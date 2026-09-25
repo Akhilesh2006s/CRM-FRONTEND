@@ -89,7 +89,7 @@ const PAGE_ENTRIES = [
   { href: '/dashboard/expenses/finance-pending', module: 'expenses', resource: 'finance_pending', label: 'Finance Approved Exp List' },
   { href: '/dashboard/expenses/create', module: 'expenses', resource: 'create', label: 'Create Expense' },
   { href: '/dashboard/expenses/my', module: 'expenses', resource: 'my', label: 'My Expenses' },
-  { href: '/dashboard/expenses/executive-manager-pending', module: 'expenses', resource: 'executive_manager_pending', label: 'Executive Manager Pending' },
+  { href: '/dashboard/expenses/executive-manager-pending', module: 'expenses', resource: 'executive_manager_pending', label: 'Zonal Manager Pending' },
   // Reports
   { href: '/dashboard/reports/leads', module: 'reports', resource: 'leads', label: 'Leads Report' },
   { href: '/dashboard/reports/sales-visit', module: 'reports', resource: 'sales_visit', label: 'Sales Visit Report' },

@@ -18,6 +18,7 @@ import {
 import { apiRequest } from '@/lib/api'
 import { usePermissions } from '@/components/permissions/PermissionsProvider'
 import { MODULE_LABELS } from '@/lib/nav-permissions'
+import { displayRoleName } from '@/lib/roleLabels'
 import { toast } from 'sonner'
 import { Copy, Plus, RefreshCw, Trash2 } from 'lucide-react'
 
@@ -174,7 +175,7 @@ export default function RolesPermissionsPage() {
       toast.error('System roles cannot be deleted')
       return
     }
-    if (!confirm(`Delete role "${role.name}"?`)) return
+    if (!confirm(`Delete role "${displayRoleName(role.name)}"?`)) return
     try {
       await apiRequest(`/roles/${role._id}`, { method: 'DELETE' })
       toast.success('Role deleted')
@@ -251,7 +252,7 @@ export default function RolesPermissionsPage() {
                     : 'hover:bg-neutral-100 text-neutral-800'
                 }`}
               >
-                <span className="font-medium">{role.name}</span>
+                <span className="font-medium">{displayRoleName(role.name)}</span>
                 {role.isSystem && (
                   <span className={`block text-xs ${selectedId === role._id ? 'text-neutral-300' : 'text-neutral-500'}`}>
                     System template
@@ -268,7 +269,7 @@ export default function RolesPermissionsPage() {
             <>
               <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
                 <div>
-                  <h2 className="text-xl font-semibold">{selected.name}</h2>
+                  <h2 className="text-xl font-semibold">{displayRoleName(selected.name)}</h2>
                   <p className="text-sm text-neutral-500">{selected.slug}</p>
                 </div>
                 <div className="flex gap-2">

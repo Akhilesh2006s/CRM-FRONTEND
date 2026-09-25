@@ -174,8 +174,9 @@ export default function ManagerPendingExpensesPage() {
   }
 
   const getStatusDisplay = (status: string) => {
-    if (status === 'Pending') return 'Pending at Executive Manager'
-    if (status === 'Executive Manager Approved') return 'Approved by Executive Manager, Pending at Manager'
+    if (status === 'Pending') return 'Pending at Zonal Manager'
+    if (status === 'Manager Approved') return 'Product Manager Approved'
+    if (status === 'Executive Manager Approved') return 'Approved by Zonal Manager, Pending at Product Manager'
     if (status === 'Approved') return 'Approved'
     return status
   }
@@ -183,7 +184,7 @@ export default function ManagerPendingExpensesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Manager Pending Expenses List</h1>
+        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Product Manager Pending Expenses List</h1>
       </div>
 
       {/* Filter Section */}
@@ -259,7 +260,7 @@ export default function ManagerPendingExpensesPage() {
                   <TableCell colSpan={8} className="text-center py-8 text-neutral-500">
                     No pending expenses found.
                     <span className="block text-sm text-neutral-400 mt-1">
-                      New submissions appear here while awaiting Executive Manager or Manager approval.
+                      New submissions appear here while awaiting Zonal Manager or Product Manager approval.
                     </span>
                   </TableCell>
                 </TableRow>

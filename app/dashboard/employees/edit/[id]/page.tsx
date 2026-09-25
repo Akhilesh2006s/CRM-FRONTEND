@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { apiRequest } from '@/lib/api'
+import { displayRoleName } from '@/lib/roleLabels'
 import { toast } from 'sonner'
 import {
   validateEmployeeFirstName,
@@ -341,7 +342,7 @@ export default function EditEmployeePage() {
               <SelectTrigger className="bg-white text-neutral-900"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {['Executive', 'Trainer', 'Finance Manager', 'Coordinator', 'Senior Coordinator', 'Manager', 'Executive Manager', 'Warehouse Executive', 'Warehouse Manager', 'Admin', 'Super Admin'].map((r) => (
-                  <SelectItem key={r} value={r}>{r}</SelectItem>
+                  <SelectItem key={r} value={r}>{displayRoleName(r)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -361,7 +362,7 @@ export default function EditEmployeePage() {
                         checked={form.taggedEmployeeIds.includes(e._id)}
                         onChange={() => toggleTagged(e._id)}
                       />
-                      {e.name} ({e.role})
+                      {e.name} ({displayRoleName(e.role)})
                     </label>
                   ))
                 )}
