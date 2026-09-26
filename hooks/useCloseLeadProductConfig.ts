@@ -250,7 +250,7 @@ export function useCloseLeadProductConfig(options: UseCloseLeadProductConfigOpti
                 : [],
           classSelections: [],
           sameStrengthForAllClasses: false,
-          selectedSpecs: getProductSpecs(product).slice(0, 1),
+          selectedSpecs: ['CW'],
           selectedSubjects: [],
           selectedDeliverables: [],
           selectedCategories: undefined,

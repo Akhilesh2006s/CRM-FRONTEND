@@ -9,14 +9,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { apiRequest } from '@/lib/api'
 import { isDuplicateName, normalizeName } from '@/lib/normalizeName'
 import { toast } from 'sonner'
+import { INDIAN_STATES } from '@/lib/stateCodes'
 
 type Manager = { _id: string; name: string; email?: string; role?: string }
 type Zone = {
   _id?: string
   name: string
   managerId?: Manager | string | null
+  zoneCode?: string
+  stateCode?: string
+  ownership?: string
 }
-type Cluster = { _id?: string; name: string; zoneId?: string | Zone | null }
+type Cluster = { _id?: string; name: string; zoneId?: string | Zone | null; clusterLetter?: string }
 type PincodeMapping = {
   _id?: string
   pincode: string
@@ -54,6 +58,9 @@ export default function ZonesPage() {
   const [movingClusterId, setMovingClusterId] = useState('')
   const [savingPincode, setSavingPincode] = useState(false)
   const [zoneName, setZoneName] = useState('')
+  const [zoneCode, setZoneCode] = useState('')
+  const [stateCode, setStateCode] = useState('')
+  const [ownership, setOwnership] = useState('')
   const [zoneManagerId, setZoneManagerId] = useState('')
   const [clusterName, setClusterName] = useState('')
   const [pincodeForm, setPincodeForm] = useState({
@@ -142,6 +149,18 @@ export default function ZonesPage() {
       toast.error('Zone already exists')
       return
     }
+    if (!/^\d{2}$/.test(zoneCode)) {
+      toast.error('Zone code must be 2 digits')
+      return
+    }
+    if (!stateCode) {
+      toast.error('Select the state')
+      return
+    }
+    if (ownership !== 'Franchise' && ownership !== 'Own') {
+      toast.error('Select Franchise or Own')
+      return
+    }
     if (!zoneManagerId) {
       toast.error('Select a zone manager')
       return
@@ -150,9 +169,18 @@ export default function ZonesPage() {
     try {
       const created = await apiRequest<Zone>('/zones', {
         method: 'POST',
-        body: JSON.stringify({ name: trimmed, managerId: zoneManagerId }),
+        body: JSON.stringify({
+          name: trimmed,
+          managerId: zoneManagerId,
+          zoneCode,
+          stateCode,
+          ownership,
+        }),
       })
       setZoneName('')
+      setZoneCode('')
+      setStateCode('')
+      setOwnership('')
       setZoneManagerId('')
       toast.success('Zone added')
       await loadZonesAndManagers()
@@ -161,6 +189,27 @@ export default function ZonesPage() {
       toast.error(e?.message || 'Failed to save zone')
     } finally {
       setSavingZone(false)
+    }
+  }
+
+  const saveZoneDetails = async (zone: Zone, patch: Partial<Zone>) => {
+    if (!zone._id) return
+    try {
+      await apiRequest('/zones', {
+        method: 'POST',
+        body: JSON.stringify({
+          id: zone._id,
+          name: zone.name,
+          managerId: managerIdOf(zone) || undefined,
+          zoneCode: patch.zoneCode ?? zone.zoneCode,
+          stateCode: patch.stateCode ?? zone.stateCode,
+          ownership: patch.ownership ?? zone.ownership,
+        }),
+      })
+      toast.success('Zone updated')
+      loadZonesAndManagers()
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to update zone')
     }
   }
 
@@ -387,14 +436,14 @@ export default function ZonesPage() {
       <div>
         <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Zones & Clusters</h1>
         <p className="text-sm text-neutral-600 mt-1">
-          Step 1: create a zone and assign its manager. Step 2: select the zone and add clusters under it.
+          A zone gets a 2-digit code, a state, and Franchise or Own. Clusters are lettered A, B, C. School codes use state + zone code + cluster letter.
         </p>
       </div>
 
       {/* Step 1 — Zones */}
       <Card className="p-4 md:p-6 bg-neutral-50 border border-neutral-200 space-y-4">
         <h2 className="text-lg font-semibold text-neutral-900">Step 1 — Zones</h2>
-        <form onSubmit={onAddZone} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+        <form onSubmit={onAddZone} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
           <div className="space-y-2">
             <Label>Zone name *</Label>
             <Input
@@ -404,6 +453,45 @@ export default function ZonesPage() {
               placeholder="Enter zone"
               required
             />
+          </div>
+          <div className="space-y-2">
+            <Label>Zone code *</Label>
+            <Input
+              className="bg-white text-neutral-900"
+              value={zoneCode}
+              onChange={(e) => setZoneCode(e.target.value.replace(/\D/g, '').slice(0, 2))}
+              placeholder="01"
+              inputMode="numeric"
+              maxLength={2}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>State *</Label>
+            <Select value={stateCode || undefined} onValueChange={setStateCode}>
+              <SelectTrigger className="bg-white">
+                <SelectValue placeholder="Select state" />
+              </SelectTrigger>
+              <SelectContent>
+                {INDIAN_STATES.map((state) => (
+                  <SelectItem key={state.code} value={state.code}>
+                    {state.code} — {state.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Franchise or Own *</Label>
+            <Select value={ownership || undefined} onValueChange={setOwnership}>
+              <SelectTrigger className="bg-white">
+                <SelectValue placeholder="Select" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Franchise">Franchise</SelectItem>
+                <SelectItem value="Own">Own</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2 md:col-span-2">
             <Label>Zone manager *</Label>
@@ -441,6 +529,9 @@ export default function ZonesPage() {
             <thead>
               <tr className="bg-neutral-100 border-b">
                 <th className="py-2 px-3 text-left">Zone</th>
+                <th className="py-2 px-3 text-left">Code</th>
+                <th className="py-2 px-3 text-left">State</th>
+                <th className="py-2 px-3 text-left">Type</th>
                 <th className="py-2 px-3 text-left">Manager</th>
                 <th className="py-2 px-3 text-right">Action</th>
               </tr>
@@ -455,6 +546,42 @@ export default function ZonesPage() {
                   onClick={() => z._id && setSelectedZoneId(z._id)}
                 >
                   <td className="py-2 px-3 font-medium">{z.name}</td>
+                  <td className="py-2 px-3" onClick={(e) => e.stopPropagation()}>
+                    {z.zoneCode || (
+                      <Input
+                        className="bg-white h-8 w-16"
+                        placeholder="01"
+                        maxLength={2}
+                        onBlur={(e) => {
+                          const value = e.target.value.replace(/\D/g, '').slice(0, 2)
+                          if (/^\d{2}$/.test(value)) void saveZoneDetails(z, { zoneCode: value })
+                        }}
+                      />
+                    )}
+                  </td>
+                  <td className="py-2 px-3" onClick={(e) => e.stopPropagation()}>
+                    {z.stateCode || (
+                      <Select onValueChange={(value) => void saveZoneDetails(z, { stateCode: value })}>
+                        <SelectTrigger className="bg-white h-8 w-[140px]"><SelectValue placeholder="State" /></SelectTrigger>
+                        <SelectContent>
+                          {INDIAN_STATES.map((state) => (
+                            <SelectItem key={state.code} value={state.code}>{state.code}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </td>
+                  <td className="py-2 px-3" onClick={(e) => e.stopPropagation()}>
+                    {z.ownership || (
+                      <Select onValueChange={(value) => void saveZoneDetails(z, { ownership: value })}>
+                        <SelectTrigger className="bg-white h-8 w-[120px]"><SelectValue placeholder="Type" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Franchise">Franchise</SelectItem>
+                          <SelectItem value="Own">Own</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </td>
                   <td className="py-2 px-3" onClick={(e) => e.stopPropagation()}>
                     <Select
                       value={managerIdOf(z) || undefined}
@@ -537,6 +664,7 @@ export default function ZonesPage() {
             <thead>
               <tr className="bg-neutral-100 border-b">
                 <th className="py-2 px-3 text-left">Cluster</th>
+                <th className="py-2 px-3 text-left">Letter</th>
                 <th className="py-2 px-3 text-right">Move to zone</th>
               </tr>
             </thead>
@@ -544,6 +672,7 @@ export default function ZonesPage() {
               {zoneClusters.map((c) => (
                 <tr key={c._id || c.name} className="border-b last:border-0">
                   <td className="py-2 px-3">{c.name}</td>
+                  <td className="py-2 px-3 font-medium">{c.clusterLetter || '—'}</td>
                   <td className="py-2 px-3">
                     {c._id && (
                       <div className="flex items-center justify-end gap-2">

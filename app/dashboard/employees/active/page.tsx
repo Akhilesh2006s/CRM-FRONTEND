@@ -136,7 +136,7 @@ export default function ActiveEmployeesPage() {
   const displayMobile = (e: Employee) => e.mobile || (e.phone && e.phone !== '0' ? e.phone : '') || '-'
 
   const deactivate = async (id: string, name: string) => {
-    if (!confirm(`Deactivate ${name}?`)) return
+    if (!confirm(`Deactivate ${name}? Their personal details will be removed. Leads and clients stay on this login.`)) return
     try {
       await apiRequest(`/employees/${id}`, {
         method: 'PUT',

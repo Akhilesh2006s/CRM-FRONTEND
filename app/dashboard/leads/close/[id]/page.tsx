@@ -91,7 +91,6 @@ export default function CloseLeadPage() {
     groupedChildProductRows,
     availableProducts,
     getDefaultLevel,
-    getProductSpecs,
     getProductCategories,
     hasProductCategories,
     validateProducts,
@@ -300,11 +299,11 @@ export default function CloseLeadPage() {
               price: savedUnitPrice || 0,
               total: (savedStrength || 0) * (savedUnitPrice || 0),
               level: productData?.level || getDefaultLevel(product),
-              specs: getProductSpecs(product)[0] || '',
+              specs: 'CW',
               isParentRow: true,
               sameRateForAllClasses: false,
               selectedSubjects: [],
-              selectedSpecs: getProductSpecs(product).slice(0, 1),
+              selectedSpecs: ['CW'],
               selectedDeliverables: productData?.deliverables || [],
               selectedCategories: hasProductCategories(product) 
                 ? getProductCategories(product) 
@@ -886,7 +885,7 @@ export default function CloseLeadPage() {
           {/* Add Products (shared Close Lead product config) */}
           <CloseLeadProductConfig config={productConfig} schoolType={lead?.school_type} />
 
-          {/* Turn Lead to Client Button */}
+          {/* Upload PO Button */}
           <div className="pt-4 border-t">
             <Button
               onClick={handleTurnToClient}
@@ -905,7 +904,7 @@ export default function CloseLeadPage() {
               ) : (
                 <span className="flex items-center gap-2">
                   <CheckCircle2 className="w-5 h-5" />
-                  Turn Lead to Client
+                  Upload PO
                 </span>
               )}
             </Button>

@@ -23,6 +23,8 @@ import { Package, PlusCircle, X, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   SELECTABLE_CLOSE_CLASSES,
+  CLOSE_SPEC_CHOICES,
+  closeSpecChoiceKey,
   getLineClassSelections,
   computeLineDisplayTotal,
   computeProductDetailsDisplayQuantity,
@@ -274,8 +276,12 @@ function CloseLeadProductConfigView({
                         const productSubjects = getProductSubjects(line.product)
                         const hasSubjects = hasProductSubjects(line.product)
                         const selectedSubjects = line.selectedSubjects || []
-                        const productSpecs = getProductSpecs(line.product)
+                        const catalogSpecs = getProductSpecs(line.product)
+                        const productSpecs = catalogSpecs
                         const selectedSpecs = line.selectedSpecs || []
+                        const specChoice = closeSpecChoiceKey(
+                          line.specsTouched || selectedSpecs.length > 0 ? selectedSpecs : ['CW']
+                        )
                         const productLevels = getProductLevels(line.product)
                         const selectedLevels = line.selectedLevels || []
                         const productCategories = getProductCategories(line.product)
@@ -401,6 +407,34 @@ function CloseLeadProductConfigView({
                                 )}
                               </div>
 
+                              <div className="space-y-2 border-t pt-2">
+                                <Label className="text-xs font-semibold">Select Specs:</Label>
+                                <div className="flex flex-wrap gap-4">
+                                  {CLOSE_SPEC_CHOICES.map((choice) => (
+                                    <div key={choice.key} className="flex items-center space-x-1">
+                                      <Checkbox
+                                        className="border-neutral-400"
+                                        id={`spec-visible-${line.id}-${choice.key}`}
+                                        checked={specChoice === choice.key}
+                                        onCheckedChange={(checked) => {
+                                          if (!checked) return
+                                          updateProductSectionLine(section.id, line.id, {
+                                            selectedSpecs: [...choice.specs],
+                                            specsTouched: true,
+                                          })
+                                        }}
+                                      />
+                                      <Label
+                                        htmlFor={`spec-visible-${line.id}-${choice.key}`}
+                                        className="text-xs cursor-pointer"
+                                      >
+                                        {choice.label}
+                                      </Label>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+
                               {productLevels.length > 0 && (
                                 <div className="space-y-2 border-t pt-2">
                                   <Label className="text-xs font-semibold">Select Levels:</Label>
@@ -475,38 +509,7 @@ function CloseLeadProductConfigView({
 
                               {allowLineConfig && productSpecs.length > 0 && (
                                 <div className="mt-2 pt-2 border-t">
-                                  <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-                                    <div>
-                                      <Label className="text-xs font-semibold mb-2 block">
-                                        Select Specs:
-                                      </Label>
-                                      <div className="flex flex-wrap gap-2">
-                                        {productSpecs.map((spec) => (
-                                          <div key={spec} className="flex items-center space-x-1">
-                                            <Checkbox
-                                              className="border-neutral-400"
-                                              id={`spec-${line.id}-${spec}`}
-                                              checked={selectedSpecs.includes(spec)}
-                                              onCheckedChange={(checked) => {
-                                                const newSpecs = checked
-                                                  ? [...selectedSpecs, spec]
-                                                  : selectedSpecs.filter((s) => s !== spec)
-                                                updateProductSectionLine(section.id, line.id, {
-                                                  selectedSpecs: newSpecs,
-                                                })
-                                              }}
-                                            />
-                                            <Label
-                                              htmlFor={`spec-${line.id}-${spec}`}
-                                              className="text-xs cursor-pointer"
-                                            >
-                                              {spec}
-                                            </Label>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                    <div className="flex flex-col md:flex-row gap-3 md:items-end">
+                                  <div className="flex flex-col md:flex-row gap-3 md:items-end">
                                       <div>
                                         <Label className="text-xs font-semibold mb-1 block">
                                           Unit Price *
@@ -550,7 +553,6 @@ function CloseLeadProductConfigView({
                                       </div>
                                     </div>
                                   </div>
-                                </div>
                               )}
 
                               {productSpecs.length === 0 && (

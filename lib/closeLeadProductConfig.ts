@@ -1,6 +1,17 @@
 import { computeBucketAmount, type CalculationType } from '@/lib/paymentDivisor'
 import { normalizeProductTerm, termFromLevelLabel, type ProductTerm } from '@/lib/productTerm'
 
+/** Add Products spec choices. Exactly one of these can be selected. */
+export const CLOSE_SPEC_CHOICES = [
+  { key: 'cw', label: 'CW', specs: ['CW'] },
+  { key: 'both', label: 'CW and HW', specs: ['CW', 'HW'] },
+] as const
+
+export function closeSpecChoiceKey(specs: string[] | undefined): 'cw' | 'both' {
+  const selected = new Set((specs || []).map((s) => String(s || '').trim().toUpperCase()))
+  return selected.has('CW') && selected.has('HW') ? 'both' : 'cw'
+}
+
 export type GroupProductOpts = {
   getCalculationType: (productName: string) => CalculationType
   getCatalogFallbackCount: (productName: string, ct: CalculationType) => number
@@ -50,6 +61,8 @@ export type CloseProductSectionLine = {
   toClass?: string
   strength?: number
   selectedSpecs: string[]
+  /** User changed the spec checkboxes. Empty selection stays empty. */
+  specsTouched?: boolean
   selectedSubjects: string[]
   selectedDeliverables: string[]
   selectedCategories?: string[]
@@ -641,6 +654,13 @@ export function expandSectionsToProductDetails(
           }) || skuCategories[0] || ''
         : enrollmentDefault
 
+      const selectedSpecs = line.specsTouched
+        ? line.selectedSpecs || []
+        : (line.selectedSpecs || []).length > 0
+          ? line.selectedSpecs || []
+          : ['CW']
+      const specsToUse = selectedSpecs.length > 0 ? selectedSpecs : ['CW']
+
       const parentRow: ProductDetailRow = {
         id: line.parentRowId,
         product: line.product,
@@ -653,11 +673,11 @@ export function expandSectionsToProductDetails(
         price: priceToUse,
         total: 0,
         level: levelsToUse[0] || line.level,
-        specs: (line.selectedSpecs && line.selectedSpecs[0]) || '',
+        specs: specsToUse[0] || '',
         isParentRow: true,
         sameRateForAllClasses: line.sameRateForAllClasses,
         selectedSubjects: line.selectedSubjects || [],
-        selectedSpecs: line.selectedSpecs || [],
+        selectedSpecs,
         selectedDeliverables: line.selectedDeliverables || [],
         selectedCategories: selectedCategories.length > 0 ? selectedCategories : undefined,
         term:
@@ -667,8 +687,6 @@ export function expandSectionsToProductDetails(
       }
       out.push(parentRow)
 
-      const selectedSpecs = line.selectedSpecs || []
-      const specsToUse = selectedSpecs.length > 0 ? selectedSpecs : ['']
       const selectedSubjects = line.selectedSubjects || []
       const hasSubjects =
         ctx.hasProductSubjects(line.product) && selectedSubjects.length > 0

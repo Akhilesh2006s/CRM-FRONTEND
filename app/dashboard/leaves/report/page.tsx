@@ -37,6 +37,10 @@ export default function LeavesReportPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [date, setDate] = useState<string>('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [month, setMonth] = useState(() => {
+    const now = new Date()
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  })
 
   const load = async () => {
     setLoading(true)
@@ -77,6 +81,15 @@ export default function LeavesReportPage() {
 
   const filteredLeaves = useMemo(() => {
     let list = [...items]
+    if (month) {
+      list = list.filter((i) => {
+        const stamp = i.approvedAt || i.startDate
+        if (!stamp) return false
+        const d = new Date(stamp)
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+        return key === month
+      })
+    }
     if (statusFilter !== 'all') {
       list = list.filter((i) => i.status === statusFilter)
     }
@@ -92,7 +105,7 @@ export default function LeavesReportPage() {
     return list.sort(
       (a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
     )
-  }, [items, date, statusFilter])
+  }, [items, date, statusFilter, month])
 
   const employeeName = (l: Leave) => {
     if (!l.employeeId) return 'Unknown'
@@ -122,7 +135,7 @@ export default function LeavesReportPage() {
         <div>
           <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Leaves Report</h1>
           <p className="text-sm text-neutral-600 mt-1">
-            Scoped by hierarchy: managers see their team; vertical heads their vertical; HR, Admin, and Super Admin see everyone.
+            Leave approvals are listed month by month. The HR Manager approves employee leave. Super Admin can see every record.
           </p>
         </div>
         <Link href="/dashboard/leaves/pending">
@@ -162,6 +175,18 @@ export default function LeavesReportPage() {
       <Card className="overflow-hidden border border-neutral-200">
         <div className="p-3 md:p-4 border-b border-neutral-200 bg-white">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 items-end">
+            <div className="space-y-1.5 min-w-0">
+              <Label htmlFor="leave-report-month" className="text-sm text-neutral-700">
+                Month
+              </Label>
+              <Input
+                id="leave-report-month"
+                type="month"
+                className="bg-white w-full"
+                value={month}
+                onChange={(e) => setMonth(e.target.value)}
+              />
+            </div>
             <div className="space-y-1.5 min-w-0">
               <Label htmlFor="leave-report-status" className="text-sm text-neutral-700">
                 Status

@@ -9,6 +9,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { apiRequest } from '@/lib/api'
+import { getCurrentUser } from '@/lib/auth'
+import { toast } from 'sonner'
 import {
   filterTagOptions,
   getTaggingSectionLabel,
@@ -338,7 +340,13 @@ export default function NewEmployeePage() {
         method: 'POST',
         body: JSON.stringify(payload),
       })
-      router.push('/dashboard/employees/active')
+      if (getCurrentUser()?.role === 'HR Executive') {
+        toast.success('Employee request sent to the HR Manager. They are added only after approval.')
+        router.push('/dashboard/employees/requests')
+      } else {
+        toast.success('Employee added.')
+        router.push('/dashboard/employees/active')
+      }
     } catch (err: any) {
       setError(err?.message || 'Failed to create employee')
     } finally {

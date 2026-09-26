@@ -35,6 +35,8 @@ type Leave = {
 export default function AdminPendingLeavesPage() {
   const { user, permissionsReady } = usePermissions()
   const isExecutiveManager = user?.role === 'Executive Manager'
+  const isHrExecutive = user?.role === 'HR Executive'
+  const canDecide = !isHrExecutive
   const [items, setItems] = useState<Leave[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -183,19 +185,23 @@ export default function AdminPendingLeavesPage() {
                   </td>
                   <td className="py-2 px-3">{l.reason || '-'}</td>
                   <td className="py-2 px-3 text-right">
-                    <div className="flex gap-2 justify-end">
-                      <Button size="sm" disabled={acting} onClick={() => approve(l._id)}>
-                        Approve
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={acting}
-                        onClick={() => openReject(l._id)}
-                      >
-                        Reject
-                      </Button>
-                    </div>
+                    {canDecide ? (
+                      <div className="flex gap-2 justify-end">
+                        <Button size="sm" disabled={acting} onClick={() => approve(l._id)}>
+                          Approve
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={acting}
+                          onClick={() => openReject(l._id)}
+                        >
+                          Reject
+                        </Button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-neutral-500">Waiting for HR Manager</span>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -64,7 +64,6 @@ export const RBAC_NAV_MODULES: RbacNavModule[] = [
     label: MODULE_LABELS.leads,
     pages: [
       { label: 'Add Lead', href: '/dashboard/leads/add' },
-      { label: 'Renewal Leads', href: '/dashboard/leads/renewal' },
       { label: 'Followup Leads', href: '/dashboard/leads/followup' },
       { label: 'Cross-Sale Leads', href: '/dashboard/leads/cross-sale' },
       { label: 'School Visits', href: '/dashboard/visits' },
@@ -83,7 +82,12 @@ export const RBAC_NAV_MODULES: RbacNavModule[] = [
       { label: 'Assign Areas', href: '/dashboard/executives/assign-areas' },
       { label: 'Zones & Clusters', href: '/dashboard/employees/zones' },
       { label: 'Move Schools', href: '/dashboard/employees/move-schools' },
+      { label: 'Cluster Schools', href: '/dashboard/employees/cluster-schools' },
       { label: 'Chain', href: '/dashboard/employees/chain' },
+      { label: 'Employee Requests', href: '/dashboard/employees/requests' },
+      { label: 'Salary', href: '/dashboard/employees/salary' },
+      { label: 'Pay Slips', href: '/dashboard/employees/payslips' },
+      { label: 'Employee History', href: '/dashboard/employees/history' },
     ],
   },
   {

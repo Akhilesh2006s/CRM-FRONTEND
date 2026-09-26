@@ -185,7 +185,12 @@ const NAV: NavItem[] = [
       { label: 'Assign Areas', href: '/dashboard/executives/assign-areas' },
       { label: 'Zones & Clusters', href: '/dashboard/employees/zones', icon: Database },
       { label: 'Move Schools', href: '/dashboard/employees/move-schools', icon: Database },
+      { label: 'Cluster Schools', href: '/dashboard/employees/cluster-schools', icon: Database },
       { label: 'Chain', href: '/dashboard/employees/chain' },
+      { label: 'Employee Requests', href: '/dashboard/employees/requests' },
+      { label: 'Salary', href: '/dashboard/employees/salary' },
+      { label: 'Pay Slips', href: '/dashboard/employees/payslips' },
+      { label: 'Employee History', href: '/dashboard/employees/history' },
     ],
   },
   {
@@ -686,9 +691,14 @@ export function Sidebar() {
         label: 'Users / Employees',
         icon: Users,
         children: [
-          { label: 'Employee Verification', href: '/dashboard/employees/verification' },
+          { label: 'New Employee', href: '/dashboard/employees/new' },
+          { label: 'Employee Requests', href: '/dashboard/employees/requests' },
           { label: 'Active Employees', href: '/dashboard/employees/active' },
           { label: 'Inactive Employees', href: '/dashboard/employees/inactive' },
+          { label: 'Employee Verification', href: '/dashboard/employees/verification' },
+          { label: 'Salary', href: '/dashboard/employees/salary' },
+          { label: 'Pay Slips', href: '/dashboard/employees/payslips' },
+          { label: 'Employee History', href: '/dashboard/employees/history' },
         ],
       },
       {
@@ -724,7 +734,6 @@ export function Sidebar() {
         icon: TrendingUp,
         children: [
           { label: 'Add Lead', href: '/dashboard/leads/add', icon: PlusCircle },
-          { label: 'Renewal Leads', href: '/dashboard/leads/renewal', icon: Building2 },
           { label: 'Followup Leads', href: '/dashboard/leads/followup', icon: Phone },
         ],
       },
@@ -734,6 +743,7 @@ export function Sidebar() {
         children: [
           { label: 'Leave Request', href: '/dashboard/leaves/request', icon: PlusCircle },
           { label: 'Leaves', href: '/dashboard/leaves/approved', icon: CheckCircle2 },
+          { label: 'My Pay Slips', href: '/dashboard/payslips', icon: FileText },
         ],
       },
       {
@@ -1090,6 +1100,13 @@ export function Sidebar() {
   // Remove Samples. Bottom order: Reports → Products → Vendor → Settings → Sign out.
   // Keep Clients → All Created DCs (Create Sale lands there after Deal + DC).
   const isSuperAdminNav = user?.role === 'Super Admin' || permUser?.role === 'Super Admin'
+  if (!isSuperAdminNav) {
+    finalNav = finalNav.map((item) => {
+      if (!item.children) return item
+      const children = item.children.filter((child) => child.href !== '/dashboard/employees/cluster-schools')
+      return children.length === item.children.length ? item : { ...item, children }
+    })
+  }
   if (isSuperAdminNav) {
     finalNav = finalNav.filter((item) => {
       if (item.label === 'Samples' || item.label === 'Employee Sample') return false

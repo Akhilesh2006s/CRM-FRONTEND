@@ -127,7 +127,7 @@ function createSectionProduct(product: string, catalogProducts: any[]): SectionP
     strengthForAll: '',
     sameRateForAllClasses: true,
     unitPrice: '',
-    selectedSpec: specs[0] || '',
+    selectedSpec: 'CW',
     selectedCategory: categories[0] || '',
     selectedLevels: levels.length > 0 ? [levels[0]] : [],
     selectedSubjects: subjects.length > 0 ? [subjects[0]] : [],
@@ -202,10 +202,12 @@ function expandSectionsToRows(
         if (strength <= 0) return;
         const entry = sp.classes[cls];
         let idx = 0;
+        const specsToUse = sp.selectedSpec === 'CW and HW' ? ['CW', 'HW'] : ['CW'];
         levelsToUse.forEach((level) => {
           subjectsToUse.forEach((subject) => {
+            specsToUse.forEach((specs) => {
             rows.push({
-              id: `${sec.id}_${sp.product}_${cls}_${idx++}`,
+              id: `${sec.id}_${sp.product}_${cls}_${specs}_${idx++}`,
               product: sp.product,
               class: cls,
               category: entry?.category || sp.selectedCategory || '',
@@ -214,7 +216,7 @@ function expandSectionsToRows(
               price,
               total: strength * price,
               level: level || '',
-              specs: sp.selectedSpec || '',
+              specs,
               subject: subject || undefined,
               deliverables: sp.selectedDeliverables?.length
                 ? [...sp.selectedDeliverables]
@@ -554,7 +556,7 @@ export default function CloseLeadProductsModal({
                     const deliverableOptions = deliverablesByProduct[sp.product] || [];
                     const subjectOptions = getProductSubjectsOptions(catalogProducts, sp.product);
                     const levelOptions = getProductLevelsOptions(catalogProducts, sp.product);
-                    const specOptions = getProductSpecsOptions(catalogProducts, sp.product);
+                    const specOptions = ['CW', 'CW and HW'];
                     const totalAmt = lineTotalAmount(sp, catalogProducts);
                     return (
                       <View key={sp.product} style={styles.productPanel}>
