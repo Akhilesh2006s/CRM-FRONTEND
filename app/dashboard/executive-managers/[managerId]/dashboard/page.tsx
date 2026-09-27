@@ -321,6 +321,14 @@ export default function ExecutiveManagerDashboardPage() {
   }
 
   const isAdmin = currentUser?.role === 'Admin' || currentUser?.role === 'Super Admin'
+  const hierarchyHome =
+    currentUser?.role === 'Regional Manager'
+      ? `/dashboard/hierarchy/regional-manager/${currentUser._id}`
+      : currentUser?.role === 'Regional Head'
+        ? `/dashboard/hierarchy/regional-head/${currentUser._id}`
+        : currentUser?.role === 'National Head'
+          ? `/dashboard/hierarchy/national-head/${currentUser._id}`
+          : ''
 
   if (loading) {
     return <div className="text-center py-8">Loading dashboard...</div>
@@ -334,12 +342,21 @@ export default function ExecutiveManagerDashboardPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-4">
-          <Link href="/dashboard/executive-managers">
-            <Button variant="outline" size="sm">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Managers
-            </Button>
-          </Link>
+          {hierarchyHome ? (
+            <Link href={hierarchyHome}>
+              <Button variant="outline" size="sm">
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to my dashboard
+              </Button>
+            </Link>
+          ) : (
+            <Link href="/dashboard/executive-managers">
+              <Button variant="outline" size="sm">
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Managers
+              </Button>
+            </Link>
+          )}
           <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Zonal Manager Dashboard</h1>
           {dashboardData.managerState && (
             <span className="text-sm text-neutral-500 bg-neutral-100 px-3 py-1 rounded-full">
@@ -366,10 +383,12 @@ export default function ExecutiveManagerDashboardPage() {
               </Button>
             </>
           )}
-          <Button variant="outline" onClick={() => router.push(`/dashboard/executive-managers/${managerId}/leaves`)}>
-            <Calendar className="w-4 h-4 mr-2" />
-            Manage Leaves
-          </Button>
+          {!hierarchyHome && (
+            <Button variant="outline" onClick={() => router.push(`/dashboard/executive-managers/${managerId}/leaves`)}>
+              <Calendar className="w-4 h-4 mr-2" />
+              Manage Leaves
+            </Button>
+          )}
         </div>
       </div>
 

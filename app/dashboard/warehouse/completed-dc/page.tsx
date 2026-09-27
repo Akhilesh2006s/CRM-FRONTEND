@@ -351,7 +351,7 @@ export default function CompletedDCPage() {
           ? `${new Date(dc.createdAt).getFullYear()}-${new Date(dc.createdAt).getFullYear() + 1}`
           : '',
         schoolName: dc.dcOrderId?.school_name || dc.customerName || '',
-        schoolCode: dc.dcOrderId?.dc_code || '',
+        schoolCode: dc.dcOrderId?.school_code || dc.dcOrderId?.dc_code || '',
         schoolType: dc.dcOrderId?.school_type || '',
         zone: dc.dcOrderId?.zone || '',
         executive: dc.employeeId?.name || dc.dcOrderId?.assigned_to?.name || '',

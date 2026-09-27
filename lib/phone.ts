@@ -3,44 +3,50 @@ export function sanitizePhoneInput(value: string, maxDigits = 15): string {
   return String(value || '').replace(/\D/g, '').slice(0, maxDigits)
 }
 
-/** Indian mobile: exactly 10 digits, first digit 6–9. */
-export const INDIAN_MOBILE_REGEX = /^[6-9]\d{9}$/
+/** Phone numbers: 10 to 15 digits. */
+export const PHONE_DIGITS_REGEX = /^\d{10,15}$/
+
+export const PHONE_DIGITS_MESSAGE = 'Enter a phone number with 10 to 15 digits.'
+
+/** @deprecated Use PHONE_DIGITS_REGEX. Kept so older imports still resolve. */
+export const INDIAN_MOBILE_REGEX = PHONE_DIGITS_REGEX
 
 /**
- * Strict Indian mobile validation (New Employee, etc.).
- * Message matches product requirement.
+ * Required phone/mobile: digits only, length 10–15.
  */
 export function validateStrictIndianMobile(
   value: string
 ): { ok: true; digits: string } | { ok: false; message: string } {
+  return validatePhoneDigits(value, { required: true })
+}
+
+export function validatePhoneDigits(
+  value: string,
+  options: { required?: boolean } = {}
+): { ok: true; digits: string } | { ok: false; message: string } {
+  const { required = true } = options
   const trimmed = String(value || '').trim()
-  if (!trimmed) {
-    return { ok: false, message: 'Enter a valid 10-digit mobile number.' }
+  if (!trimmed || trimmed === '0') {
+    if (!required) return { ok: true, digits: '' }
+    return { ok: false, message: PHONE_DIGITS_MESSAGE }
   }
-  // Reject if any non-digit remains (emails, spaces, symbols, decimals)
-  if (/\D/.test(trimmed)) {
-    return { ok: false, message: 'Enter a valid 10-digit mobile number.' }
-  }
-  if (!INDIAN_MOBILE_REGEX.test(trimmed)) {
-    return { ok: false, message: 'Enter a valid 10-digit mobile number.' }
+  if (/\D/.test(trimmed) || !PHONE_DIGITS_REGEX.test(trimmed)) {
+    return { ok: false, message: PHONE_DIGITS_MESSAGE }
   }
   return { ok: true, digits: trimmed }
 }
 
-/** Indian-style mobile: 10 digits, starting with 6–9 (optional strictness). */
+/** Phone/mobile: digits only, length 10–15. */
 export function validateIndianMobile(
   value: string,
   fieldLabel: string
 ): { ok: true; digits: string } | { ok: false; message: string } {
   const digits = sanitizePhoneInput(value, 15)
   if (!digits) {
-    return { ok: false, message: `${fieldLabel} is required` }
+    return { ok: false, message: `${fieldLabel} must be 10 to 15 digits` }
   }
-  if (digits.length < 10) {
-    return { ok: false, message: `${fieldLabel} must be at least 10 digits` }
-  }
-  if (digits.length > 15) {
-    return { ok: false, message: `${fieldLabel} must be at most 15 digits` }
+  if (!PHONE_DIGITS_REGEX.test(digits)) {
+    return { ok: false, message: `${fieldLabel} must be 10 to 15 digits` }
   }
   return { ok: true, digits }
 }

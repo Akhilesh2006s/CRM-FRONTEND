@@ -4,7 +4,8 @@ const SCHOOL_NAME_ALLOWED = /^[A-Za-z0-9 .,'&()\-]+$/
 const SCHOOL_NAME_CONSECUTIVE_SPECIAL = /[.,'&()\-]{2,}/
 const CONTACT_PERSON_ALLOWED = /^[A-Za-z .'\-]+$/
 const SCHOOL_CODE_ALLOWED = /^[A-Za-z0-9_-]+$/
-const MOBILE_DIGITS = /^\d{10}$/
+const MOBILE_DIGITS = /^\d{10,15}$/
+const MOBILE_MESSAGE = 'Enter a phone number with 10 to 15 digits.'
 
 export type FieldValidationResult = { ok: true; value: string } | { ok: false; message: string }
 
@@ -48,18 +49,18 @@ export function validateContactMobile(
   const { required = true } = options
   const trimmed = String(raw || '').trim()
   if (!trimmed) {
-    if (required) return { ok: false, message: 'Enter a valid 10-digit mobile number.' }
+    if (required) return { ok: false, message: MOBILE_MESSAGE }
     return { ok: true, value: '' }
   }
   if (/\D/.test(trimmed) || !MOBILE_DIGITS.test(trimmed)) {
-    return { ok: false, message: 'Enter a valid 10-digit mobile number.' }
+    return { ok: false, message: MOBILE_MESSAGE }
   }
   return { ok: true, value: trimmed }
 }
 
-/** Sanitize mobile as the user types: digits only, max 10. */
+/** Sanitize mobile as the user types: digits only, max 15. */
 export function sanitizeMobileInput(value: string): string {
-  return String(value || '').replace(/\D/g, '').slice(0, 10)
+  return String(value || '').replace(/\D/g, '').slice(0, 15)
 }
 
 export function validateSchoolCode(raw: string): FieldValidationResult {

@@ -203,6 +203,16 @@ const NAV: NavItem[] = [
     ],
   },
   {
+    label: 'Hierarchy',
+    icon: Building2,
+    children: [{ label: 'Assign Hierarchy', href: '/dashboard/hierarchy' }],
+  },
+  {
+    label: 'Product Managers',
+    icon: Package,
+    children: [{ label: 'Assign Products', href: '/dashboard/product-managers' }],
+  },
+  {
     label: 'Leave Management',
     icon: CalendarCheck2,
     children: [
@@ -674,6 +684,10 @@ export function Sidebar() {
   const isCoordinator = user?.role === 'Coordinator'
   const isSeniorCoordinator = user?.role === 'Senior Coordinator'
   const isExecutiveManager = user?.role === 'Executive Manager'
+  const isRegionalManager = user?.role === 'Regional Manager'
+  const isRegionalHead = user?.role === 'Regional Head'
+  const isNationalHead = user?.role === 'National Head'
+  const isHierarchyRole = isRegionalManager || isRegionalHead || isNationalHead
   const isExecutive = user?.role === 'Executive'
   const isTrainer = user?.role === 'Trainer'
   const isWarehouseExecutive = user?.role === 'Warehouse Executive'
@@ -799,52 +813,15 @@ export function Sidebar() {
       { label: 'Sign out', icon: LogOut, href: '/auth/login' },
     ]
   } else if (isManager) {
-    // For Manager role, only show: Dashboard, Clients, Warehouse, Expenses, Reports, Settings, Sign out
-    const allowedMenuItems = ['Dashboard', 'Clients', 'Warehouse', 'Expenses', 'Reports', 'Settings', 'Sign out']
-    finalNav = NAV.filter(item => allowedMenuItems.includes(item.label))
-      .map(item => {
-        // Filter Clients menu items to exclude "Create Sale" and "All Created DCs" for Manager
-        if (item.label === 'Clients' && item.children) {
-          return {
-            ...item,
-            children: item.children.filter(child => 
-              child.label !== 'Create Sale' &&
-              child.label !== 'All Created DCs' &&
-              !child.adminOnly
-            )
-          }
-        }
-        // Filter Warehouse menu items to show "DC @ Warehouse", "Completed DC", and "DC listed" for Manager
-        if (item.label === 'Warehouse' && item.children) {
-          const allowedWarehouseItems = ['DC @ Warehouse', 'Completed DC', 'DC listed']
-          return {
-            ...item,
-            children: item.children.filter(child => 
-              allowedWarehouseItems.includes(child.label)
-            )
-          }
-        }
-        // Filter Expenses menu items to only show "Pending Expenses List" for Manager
-        if (item.label === 'Expenses' && item.children) {
-          return {
-            ...item,
-            children: item.children.filter(child => 
-              child.label === 'Pending Expenses List'
-            )
-          }
-        }
-        // Filter Reports menu items to only show: Leads, Sales Visit, Employee Track, All Expenses for Manager
-        if (item.label === 'Reports' && item.children) {
-          const allowedReportItems = ['Leads Report', 'Sales Visit Report', 'Employee Track Report', 'All Expenses Report']
-          return {
-            ...item,
-            children: item.children.filter(child => 
-              allowedReportItems.includes(child.label)
-            )
-          }
-        }
-        return item
-      })
+    finalNav = [
+      { label: 'My Products', icon: LayoutDashboard, href: '/dashboard/product-manager' },
+      {
+        label: 'Settings',
+        icon: Settings,
+        children: [{ label: 'Change Password', href: '/dashboard/settings/password' }],
+      },
+      { label: 'Sign out', icon: LogOut, href: '/auth/login' },
+    ]
   } else if (isCoordinator) {
     // For Coordinator role, only show: Dashboard, Clients, Users / Employees, Trainings & Services, Warehouse, Payments, Reports, Settings, Sign out
     const allowedMenuItems = ['Dashboard', 'Clients', 'Users / Employees', 'Trainings & Services', 'Complaints', 'Warehouse', 'Payments', 'Reports', 'Settings', 'Sign out']
@@ -950,6 +927,20 @@ export function Sidebar() {
         label: 'Leave Management',
         icon: CalendarCheck2,
         href: `/dashboard/executive-managers/${user?._id || ''}/leaves`,
+      },
+      { label: 'Sign out', icon: LogOut, href: '/auth/login' },
+    ]
+  } else if (isHierarchyRole) {
+    const home =
+      (isRegionalManager && `/dashboard/hierarchy/regional-manager/${user?._id || ''}`) ||
+      (isRegionalHead && `/dashboard/hierarchy/regional-head/${user?._id || ''}`) ||
+      `/dashboard/hierarchy/national-head/${user?._id || ''}`
+    finalNav = [
+      { label: 'My Dashboard', icon: LayoutDashboard, href: home },
+      {
+        label: 'Settings',
+        icon: Settings,
+        children: [{ label: 'Change Password', href: '/dashboard/settings/password' }],
       },
       { label: 'Sign out', icon: LogOut, href: '/auth/login' },
     ]
@@ -1079,7 +1070,7 @@ export function Sidebar() {
   }
 
   // Keep role-specific Executive Manager / Executive / HR Manager nav intact (do not replace with RBAC catalog).
-  if (rbacActive && permissionsReady && !isExecutiveManager && !isEmployee && !isHrManager && !isHrExecutive) {
+  if (rbacActive && permissionsReady && !isExecutiveManager && !isEmployee && !isHrManager && !isHrExecutive && !isHierarchyRole && !isManager) {
     const baseNav = finalNav.length > 0 ? finalNav : NAV
     const catalogHrefs = rbacCatalogHrefs()
     const fromPermissions = rbacBuiltToNavItems(buildRbacSidebarNav(permUser))
@@ -1101,7 +1092,9 @@ export function Sidebar() {
   // Keep Clients → All Created DCs (Create Sale lands there after Deal + DC).
   const isSuperAdminNav = user?.role === 'Super Admin' || permUser?.role === 'Super Admin'
   if (!isSuperAdminNav) {
-    finalNav = finalNav.map((item) => {
+    finalNav = finalNav
+      .filter((item) => item.label !== 'Hierarchy' && item.label !== 'Product Managers')
+      .map((item) => {
       if (!item.children) return item
       const children = item.children.filter((child) => child.href !== '/dashboard/employees/cluster-schools')
       return children.length === item.children.length ? item : { ...item, children }

@@ -38,6 +38,9 @@ export function getRoleFlags(user: CrmUser | null | undefined) {
       role === 'Executive Manager' ||
       roleLower === 'executive manager' ||
       roleIncludes(user, 'executive manager'),
+    isRegionalManager: role === 'Regional Manager' || roleLower === 'regional manager',
+    isRegionalHead: role === 'Regional Head' || roleLower === 'regional head',
+    isNationalHead: role === 'National Head' || roleLower === 'national head',
     isTrainer: role === 'Trainer',
     isWarehouseExecutive: role === 'Warehouse Executive',
     isWarehouseManager: role === 'Warehouse Manager',

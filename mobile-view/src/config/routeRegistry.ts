@@ -53,6 +53,12 @@ export const ROUTE_REGISTRY: RouteEntry[] = [
 
   { webPath: '/dashboard/executive-managers', mobileScreen: 'ExecutiveManagers', module: 'ExecutiveManagers', status: 'done' },
   { webPath: '/dashboard/executive-managers/[managerId]/dashboard', mobileScreen: 'ExecutiveManagerDashboard', module: 'ExecutiveManagers', status: 'done' },
+  { webPath: '/dashboard/hierarchy', mobileScreen: 'HierarchyAssign', module: 'Hierarchy', status: 'done', roles: ['Super Admin'] },
+  { webPath: '/dashboard/product-managers', mobileScreen: 'ProductManagerAssign', module: 'ProductManager', status: 'partial', roles: ['Super Admin'] },
+  { webPath: '/dashboard/product-manager', mobileScreen: 'ProductManager', module: 'ProductManager', status: 'done', roles: ['Manager'] },
+  { webPath: '/dashboard/hierarchy/regional-manager/[id]', mobileScreen: 'HierarchyDashboard', module: 'Hierarchy', status: 'done' },
+  { webPath: '/dashboard/hierarchy/regional-head/[id]', mobileScreen: 'HierarchyDashboard', module: 'Hierarchy', status: 'done' },
+  { webPath: '/dashboard/hierarchy/national-head/[id]', mobileScreen: 'HierarchyDashboard', module: 'Hierarchy', status: 'done' },
   { webPath: '/dashboard/executive-managers/[managerId]/leaves', mobileScreen: 'ExecutiveManagerLeaves', module: 'ExecutiveManagers', status: 'done' },
   { webPath: '/dashboard/executive-managers/executives', mobileScreen: 'ExecutiveManagerExecutives', module: 'ExecutiveManagers', status: 'done' },
 

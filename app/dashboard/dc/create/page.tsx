@@ -19,7 +19,6 @@ import { useProducts } from '@/hooks/useProducts'
 import {
   validateContactMobile,
   validateContactPerson,
-  validateSchoolCode,
   validateSchoolName,
 } from '@/lib/saleFormValidation'
 
@@ -53,7 +52,6 @@ export default function CreateDealPage() {
   const [form, setForm] = useState({
     school_type: '',
     school_name: '',
-    school_code: '',
     contact_person: '',
     contact_mobile: '',
     email: '',
@@ -68,6 +66,7 @@ export default function CreateDealPage() {
     area: '',
     lead_status: 'pending',
     zone: '',
+    cluster: '',
     branches: '',
     strength: '',
     remarks: '',
@@ -78,11 +77,8 @@ export default function CreateDealPage() {
   const [areas, setAreas] = useState<PostOfficeArea[]>([])
   const [loadingPincode, setLoadingPincode] = useState(false)
   const [pincodeError, setPincodeError] = useState<string | null>(null)
-  const [schoolCodeError, setSchoolCodeError] = useState<string | null>(null)
-  const [checkingSchoolCode, setCheckingSchoolCode] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<{
     school_name?: string
-    school_code?: string
     contact_person?: string
     contact_mobile?: string
     contact_person2?: string
@@ -132,8 +128,46 @@ export default function CreateDealPage() {
     setProducts(updated)
   }
   
+  const [zones, setZones] = useState<{ _id: string; name: string }[]>([])
+  const [clusters, setClusters] = useState<string[]>([])
   const [employees, setEmployees] = useState<{ _id: string; name: string }[]>([])
   const [loadingEmployees, setLoadingEmployees] = useState(true)
+  useEffect(() => {
+    ;(async () => {
+      try {
+        const data = await apiRequest<Array<{ _id: string; name?: string }>>('/zones')
+        setZones(
+          (Array.isArray(data) ? data : [])
+            .map((z) => ({ _id: z._id, name: z.name || '' }))
+            .filter((z) => z.name)
+        )
+      } catch {
+        setZones([])
+      }
+    })()
+  }, [])
+  useEffect(() => {
+    const zoneName = form.zone.trim()
+    if (!zoneName) {
+      setClusters([])
+      return
+    }
+    const match = zones.find((z) => z.name.toLowerCase() === zoneName.toLowerCase())
+    if (!match) {
+      setClusters([])
+      return
+    }
+    ;(async () => {
+      try {
+        const data = await apiRequest<Array<{ name?: string }>>(`/zones/${match._id}/clusters`)
+        setClusters(
+          (Array.isArray(data) ? data : []).map((c) => c.name || '').filter(Boolean)
+        )
+      } catch {
+        setClusters([])
+      }
+    })()
+  }, [form.zone, zones])
   useEffect(() => {
     ;(async () => {
       setLoadingEmployees(true)
@@ -167,11 +201,11 @@ export default function CreateDealPage() {
     if (name === 'contact_mobile' || name === 'contact_mobile2') {
       const hasNonDigits = /\D/.test(value)
       const digits = value.replace(/\D/g, '')
-      nextValue = digits.slice(0, 10)
-      if (hasNonDigits || digits.length > 10) {
+      nextValue = digits.slice(0, 15)
+      if (hasNonDigits || digits.length > 15) {
         setFieldErrors((prev) => ({
           ...prev,
-          [name]: 'Enter a valid 10-digit mobile number.',
+          [name]: 'Enter a phone number with 10 to 15 digits.',
         }))
       } else {
         clearFieldError(name)
@@ -184,45 +218,6 @@ export default function CreateDealPage() {
     }
     setForm((f) => ({ ...f, [name]: nextValue }))
     clearFieldError(name)
-    if (name === 'school_code' && schoolCodeError) {
-      setSchoolCodeError(null)
-    }
-  }
-
-  const checkSchoolCodeUnique = async (rawCode: string): Promise<boolean> => {
-    const format = validateSchoolCode(rawCode)
-    if (!format.ok) {
-      setSchoolCodeError(format.message)
-      setFieldErrors((prev) => ({ ...prev, school_code: format.message }))
-      return false
-    }
-    const code = format.value
-    setCheckingSchoolCode(true)
-    try {
-      const schools = await apiRequest<Array<{ schoolCode?: string }>>('/schools')
-      const list = Array.isArray(schools) ? schools : []
-      const exists = list.some(
-        (s) => (s.schoolCode || '').trim().toLowerCase() === code.toLowerCase()
-      )
-      if (exists) {
-        setSchoolCodeError('School Code already exists. Please enter a unique School Code.')
-        setFieldErrors((prev) => ({
-          ...prev,
-          school_code: 'School Code already exists. Please enter a unique School Code.',
-        }))
-        return false
-      }
-      setSchoolCodeError(null)
-      clearFieldError('school_code')
-      return true
-    } catch (err) {
-      console.error('School code uniqueness check failed:', err)
-      // Backend create still enforces uniqueness; allow submit to proceed to server check
-      setSchoolCodeError(null)
-      return true
-    } finally {
-      setCheckingSchoolCode(false)
-    }
   }
 
   const handlePincodeChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -275,7 +270,6 @@ export default function CreateDealPage() {
 
     // Update form fields
     if (formData.school_name) setForm(prev => ({ ...prev, school_name: formData.school_name }))
-    if (formData.school_code) setForm(prev => ({ ...prev, school_code: formData.school_code }))
     if (formData.school_type) {
       const schoolType = normalizeCreateSaleSchoolType(formData.school_type)
       if (schoolType) setForm(prev => ({ ...prev, school_type: schoolType }))
@@ -325,9 +319,6 @@ export default function CreateDealPage() {
       const schoolNameCheck = validateSchoolName(form.school_name)
       if (!schoolNameCheck.ok) nextFieldErrors.school_name = schoolNameCheck.message
 
-      const schoolCodeCheck = validateSchoolCode(form.school_code)
-      if (!schoolCodeCheck.ok) nextFieldErrors.school_code = schoolCodeCheck.message
-
       const contactPersonCheck = validateContactPerson(form.contact_person, {
         required: true,
         label: 'Contact person',
@@ -366,16 +357,12 @@ export default function CreateDealPage() {
       }
 
       setFieldErrors(nextFieldErrors)
-      if (nextFieldErrors.school_code) {
-        setSchoolCodeError(nextFieldErrors.school_code)
-      }
       if (Object.keys(nextFieldErrors).length > 0) {
         const firstMessage = Object.values(nextFieldErrors)[0]
         throw new Error(firstMessage || 'Please fix the highlighted fields.')
       }
       if (
         !schoolNameCheck.ok ||
-        !schoolCodeCheck.ok ||
         !contactPersonCheck.ok ||
         !contactMobileCheck.ok ||
         !contactPerson2Check.ok ||
@@ -384,19 +371,12 @@ export default function CreateDealPage() {
         throw new Error('Please fix the highlighted fields.')
       }
 
-      const schoolCode = schoolCodeCheck.value
-
       if (!form.email.trim()) {
         throw new Error('Email is required')
       }
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
       if (!emailRegex.test(form.email.trim())) {
         throw new Error('Please enter a valid email address')
-      }
-
-      const schoolCodeOk = await checkSchoolCodeUnique(schoolCode)
-      if (!schoolCodeOk) {
-        throw new Error('School Code already exists. Please enter a unique School Code.')
       }
 
       if (!form.assigned_to) {
@@ -426,7 +406,6 @@ export default function CreateDealPage() {
 
       const payload: any = {
         school_name: schoolNameCheck.value,
-        school_code: schoolCode,
         school_type: form.school_type || undefined,
         contact_person: contactPersonCheck.value,
         contact_mobile: contactMobileCheck.value,
@@ -440,6 +419,7 @@ export default function CreateDealPage() {
         region: form.region || undefined,
         area: form.area || undefined,
         zone: form.zone,
+        cluster: form.cluster || undefined,
         status: form.lead_status || 'pending',
         branches: Number(form.branches),
         strength: Number(form.strength),
@@ -509,26 +489,13 @@ export default function CreateDealPage() {
             )}
           </div>
           <div>
-            <Label>School Code *</Label>
+            <Label>School code</Label>
             <Input
-              className={`bg-white text-neutral-900 ${schoolCodeError || fieldErrors.school_code ? 'border-red-500' : ''}`}
-              name="school_code"
-              value={form.school_code}
-              onChange={onChange}
-              onBlur={() => {
-                if (form.school_code.trim()) {
-                  void checkSchoolCodeUnique(form.school_code)
-                }
-              }}
-              placeholder="Enter unique school code"
-              required
+              className="bg-neutral-100 text-neutral-700"
+              value="Assigned automatically from the pincode, zone, and cluster"
+              readOnly
+              disabled
             />
-            {checkingSchoolCode && (
-              <p className="text-xs text-blue-600 mt-1">Checking school code...</p>
-            )}
-            {(schoolCodeError || fieldErrors.school_code) && !checkingSchoolCode && (
-              <p className="text-xs text-red-600 mt-1">{schoolCodeError || fieldErrors.school_code}</p>
-            )}
           </div>
           <div>
             <Label>School Type</Label>
@@ -572,7 +539,7 @@ export default function CreateDealPage() {
               value={form.contact_mobile}
               onChange={onChange}
               inputMode="numeric"
-              maxLength={10}
+              maxLength={15}
               required
             />
             {fieldErrors.contact_mobile && (
@@ -612,7 +579,7 @@ export default function CreateDealPage() {
               value={form.contact_mobile2}
               onChange={onChange}
               inputMode="numeric"
-              maxLength={10}
+              maxLength={15}
               required
             />
             {fieldErrors.contact_mobile2 && (
@@ -806,8 +773,44 @@ export default function CreateDealPage() {
             </Select>
           </div>
           <div>
-            <Label>Zone</Label>
-            <Input className="bg-white text-neutral-900" name="zone" value={form.zone} onChange={onChange} />
+            <Label>Zone *</Label>
+            {zones.length > 0 ? (
+              <Select
+                value={form.zone || undefined}
+                onValueChange={(v) => setForm((f) => ({ ...f, zone: v, cluster: '' }))}
+              >
+                <SelectTrigger className="bg-white text-neutral-900">
+                  <SelectValue placeholder="Select zone" />
+                </SelectTrigger>
+                <SelectContent>
+                  {zones.map((z) => (
+                    <SelectItem key={z._id} value={z.name}>{z.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input className="bg-white text-neutral-900" name="zone" value={form.zone} onChange={onChange} />
+            )}
+          </div>
+          <div>
+            <Label>Cluster *</Label>
+            {clusters.length > 0 ? (
+              <Select
+                value={form.cluster || undefined}
+                onValueChange={(v) => setForm((f) => ({ ...f, cluster: v }))}
+              >
+                <SelectTrigger className="bg-white text-neutral-900">
+                  <SelectValue placeholder="Select cluster" />
+                </SelectTrigger>
+                <SelectContent>
+                  {clusters.map((c) => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input className="bg-white text-neutral-900" name="cluster" value={form.cluster} onChange={onChange} placeholder="Cluster in this zone" />
+            )}
           </div>
           <div>
             <Label>No. of Branches *</Label>

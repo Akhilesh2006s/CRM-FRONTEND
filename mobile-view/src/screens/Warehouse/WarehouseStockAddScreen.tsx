@@ -5,11 +5,15 @@ import { typography } from '../../theme/typography';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 
 export default function WarehouseStockAddScreen({ navigation }: any) {
+  const { user } = useAuth();
+  const isWarehouseExecutive = user?.role === 'Warehouse Executive';
   const [items, setItems] = useState<any[]>([]);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [quantity, setQuantity] = useState('');
+  const [batchLot, setBatchLot] = useState('');
   const [reason, setReason] = useState('Manual add');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -41,17 +45,43 @@ export default function WarehouseStockAddScreen({ navigation }: any) {
       return;
     }
 
+    if (isWarehouseExecutive && !batchLot.trim()) {
+      Alert.alert('Error', 'Batch / lot number is required');
+      return;
+    }
+
     setSubmitting(true);
     try {
-      await apiService.post('/warehouse/stock', {
-        productId: selectedItem._id,
-        quantity: amount,
-        movementType: 'In',
-        reason: reason || 'Manual add',
-      });
-      Alert.alert('Success', 'Quantity added successfully', [
-        { text: 'OK', onPress: () => navigation.navigate('WarehouseStock') },
-      ]);
+      if (isWarehouseExecutive) {
+        await apiService.post('/warehouse/stock-requests', {
+          productId: selectedItem._id,
+          productName: selectedItem.productName,
+          category: selectedItem.category,
+          level: selectedItem.level,
+          specs: selectedItem.specs,
+          subject: selectedItem.subject,
+          supplier: selectedItem.supplier || selectedItem.vendor,
+          quantity: amount,
+          batchLot: batchLot.trim(),
+          unit: selectedItem.unit || 'pcs',
+          location: selectedItem.location || 'Main Warehouse',
+          stockDate: new Date().toISOString(),
+          notes: reason,
+        });
+        Alert.alert('Submitted', 'Pending Manager Approval', [
+          { text: 'OK', onPress: () => navigation.navigate('WarehouseStockApprovals') },
+        ]);
+      } else {
+        await apiService.post('/warehouse/stock', {
+          productId: selectedItem._id,
+          quantity: amount,
+          movementType: 'In',
+          reason: reason || 'Manual add',
+        });
+        Alert.alert('Success', 'Quantity added successfully', [
+          { text: 'OK', onPress: () => navigation.navigate('WarehouseStock') },
+        ]);
+      }
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to add quantity');
     } finally {
@@ -91,6 +121,9 @@ export default function WarehouseStockAddScreen({ navigation }: any) {
           </ScrollView>
         </View>
         <FormField label="Quantity *" value={quantity} onChangeText={setQuantity} placeholder="Enter quantity" keyboardType="decimal-pad" />
+        {isWarehouseExecutive ? (
+          <FormField label="Batch / Lot *" value={batchLot} onChangeText={setBatchLot} placeholder="Batch or lot number" />
+        ) : null}
         <FormField label="Reason" value={reason} onChangeText={setReason} placeholder="Enter reason" />
         <TouchableOpacity style={[styles.submitButton, submitting && styles.submitButtonDisabled]} onPress={handleSubmit} disabled={submitting}>
           </TouchableOpacity>

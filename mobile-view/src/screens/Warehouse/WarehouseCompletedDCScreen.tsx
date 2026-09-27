@@ -211,7 +211,7 @@ function transformDc(dc: any): CompletedRow {
     dcCategory: dc.dcCategory || 'Term 2',
     dcFinYear: finYearFrom(dc.createdAt),
     schoolName: order?.school_name || dc.customerName || '',
-    schoolCode: order?.dc_code || order?.school_code || '',
+    schoolCode: order?.school_code || order?.dc_code || '',
     schoolType: order?.school_type || '',
     zone: order?.zone || '',
     executive: dc.employeeId?.name || order?.assigned_to?.name || '',

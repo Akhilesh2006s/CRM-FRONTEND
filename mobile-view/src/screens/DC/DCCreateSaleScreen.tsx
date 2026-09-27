@@ -186,6 +186,7 @@ export default function DCCreateSaleScreen({ navigation }: any) {
     area: '',
     lead_status: 'pending',
     zone: '',
+    cluster: '',
     branches: '',
     strength: '',
     average_fee: '',
@@ -343,12 +344,6 @@ export default function DCCreateSaleScreen({ navigation }: any) {
       setError('School name, contact person, and mobile are required');
       return;
     }
-    const schoolCodeCheck = validateSchoolCode(form.school_code);
-    if (!schoolCodeCheck.ok) {
-      setSchoolCodeError(schoolCodeCheck.message);
-      setError(schoolCodeCheck.message);
-      return;
-    }
     const email = form.email.trim();
     if (!email) {
       setError('Email is required');
@@ -363,8 +358,9 @@ export default function DCCreateSaleScreen({ navigation }: any) {
       return;
     }
     const mobile2 = form.contact_mobile2.replace(/\D/g, '');
-    if (mobile2.length !== 10) {
-      setError('Contact Mobile 2 must be a valid 10-digit number');
+    const mobile1 = form.contact_mobile.replace(/\D/g, '');
+    if (mobile1.length < 10 || mobile1.length > 15 || mobile2.length < 10 || mobile2.length > 15) {
+      setError('Enter a phone number with 10 to 15 digits');
       return;
     }
     const pincode = form.pincode.replace(/\D/g, '').slice(0, 6);
@@ -375,11 +371,6 @@ export default function DCCreateSaleScreen({ navigation }: any) {
     }
     if (!form.address.trim()) {
       setError('Address is required');
-      return;
-    }
-    const uniqueCheck = await checkSchoolCodeUnique(schoolCodeCheck.value);
-    if (!uniqueCheck.ok) {
-      setError(uniqueCheck.message);
       return;
     }
     if (!form.assigned_to) {
@@ -430,7 +421,6 @@ export default function DCCreateSaleScreen({ navigation }: any) {
         : undefined;
       await apiService.post('/dc-orders/create', {
         school_name: form.school_name.trim(),
-        school_code: schoolCodeCheck.value,
         school_type: form.school_type || undefined,
         contact_person: form.contact_person.trim(),
         contact_mobile: form.contact_mobile.trim(),
@@ -444,6 +434,7 @@ export default function DCCreateSaleScreen({ navigation }: any) {
         region: form.region || undefined,
         area: form.area || undefined,
         zone: form.zone,
+        cluster: form.cluster || undefined,
         status: form.lead_status || 'pending',
         branches: Number(form.branches),
         strength: Number(form.strength),
@@ -484,24 +475,11 @@ export default function DCCreateSaleScreen({ navigation }: any) {
         value={form.school_name}
         onChangeText={(v) => setField('school_name', v)}
       />
-      <Text style={styles.label}>School Code *</Text>
+      <Text style={styles.label}>School code</Text>
       <WebInput
-        placeholder="Enter unique school code"
-        value={form.school_code}
-        onChangeText={(v) => setField('school_code', v)}
-        onBlur={() => {
-          if (form.school_code.trim()) {
-            void checkSchoolCodeUnique(form.school_code);
-          }
-        }}
-        autoCapitalize="characters"
-        style={schoolCodeError ? styles.inputError : undefined}
+        value="Assigned automatically from the pincode, zone, and cluster"
+        editable={false}
       />
-      {checkingSchoolCode ? (
-        <Text style={styles.checkingText}>Checking school code...</Text>
-      ) : schoolCodeError ? (
-        <Text style={styles.fieldError}>{schoolCodeError}</Text>
-      ) : null}
       <WebSelect
         label="School Type"
         value={form.school_type}
@@ -517,11 +495,11 @@ export default function DCCreateSaleScreen({ navigation }: any) {
       />
       <Text style={styles.label}>Contact mobile *</Text>
       <WebInput
-        placeholder="10-digit mobile"
+        placeholder="10 to 15 digits"
         value={form.contact_mobile}
-        onChangeText={(v) => setField('contact_mobile', v.replace(/\D/g, '').slice(0, 10))}
+        onChangeText={(v) => setField('contact_mobile', v.replace(/\D/g, '').slice(0, 15))}
         keyboardType="phone-pad"
-        maxLength={10}
+        maxLength={15}
       />
       <Text style={styles.label}>Email *</Text>
       <WebInput
@@ -539,11 +517,11 @@ export default function DCCreateSaleScreen({ navigation }: any) {
       />
       <Text style={styles.label}>Contact Mobile 2 *</Text>
       <WebInput
-        placeholder="10-digit mobile"
+        placeholder="10 to 15 digits"
         value={form.contact_mobile2}
-        onChangeText={(v) => setField('contact_mobile2', v.replace(/\D/g, '').slice(0, 10))}
+        onChangeText={(v) => setField('contact_mobile2', v.replace(/\D/g, '').slice(0, 15))}
         keyboardType="phone-pad"
-        maxLength={10}
+        maxLength={15}
       />
       <Text style={styles.label}>Location/Town</Text>
       <WebInput
@@ -660,8 +638,10 @@ export default function DCCreateSaleScreen({ navigation }: any) {
         onValueChange={(v) => setField('lead_status', v)}
         items={DEAL_STATUS_OPTIONS}
       />
-      <Text style={styles.label}>Zone</Text>
+      <Text style={styles.label}>Zone *</Text>
       <WebInput placeholder="Zone" value={form.zone} onChangeText={(v) => setField('zone', v)} />
+      <Text style={styles.label}>Cluster *</Text>
+      <WebInput placeholder="Cluster" value={form.cluster} onChangeText={(v) => setField('cluster', v)} />
       <Text style={styles.label}>No. of Branches *</Text>
       <WebInput
         placeholder="No. of Branches"

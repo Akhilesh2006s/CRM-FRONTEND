@@ -50,13 +50,14 @@ export default function NewEmployeePage() {
     role: 'Executive',
     taggedEmployeeIds: [] as string[],
     references: [
-      { relation: '', name: '', mobile: '' },
-      { relation: '', name: '', mobile: '' },
-    ] as { relation: string; name: string; mobile: string }[],
+      { relation: '', name: '', mobile: '', aadhaarUrl: '' },
+      { relation: '', name: '', mobile: '', aadhaarUrl: '' },
+    ] as { relation: string; name: string; mobile: string; aadhaarUrl: string }[],
     aadhaarUrl: '',
     locationPhotoUrl: '',
   })
   const [uploadingAadhaar, setUploadingAadhaar] = useState(false)
+  const [uploadingRefAadhaar, setUploadingRefAadhaar] = useState<number | null>(null)
   const [uploadingLocation, setUploadingLocation] = useState(false)
   const REFERENCE_RELATIONS = ['Wife', 'Brother', 'Sister', 'Father', 'Mother'] as const
   const [tagOptions, setTagOptions] = useState<EmployeeOption[]>([])
@@ -117,10 +118,10 @@ export default function NewEmployeePage() {
 
   const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
-    if (name === 'mobile') {
-      const digits = sanitizePhoneInput(value, 10)
-      setForm((f) => ({ ...f, mobile: digits }))
-      if (mobileError) setMobileError(null)
+    if (name === 'mobile' || name === 'phone') {
+      const digits = sanitizePhoneInput(value, 15)
+      setForm((f) => ({ ...f, [name]: digits }))
+      if (name === 'mobile' && mobileError) setMobileError(null)
       return
     }
     setForm((f) => ({ ...f, [name]: value }))
@@ -270,6 +271,14 @@ export default function NewEmployeePage() {
         setSubmitting(false)
         return
       }
+      if (form.phone.trim()) {
+        const phoneCheck = validateStrictIndianMobile(form.phone)
+        if (!phoneCheck.ok) {
+          setError(phoneCheck.message)
+          setSubmitting(false)
+          return
+        }
+      }
 
       // Validate cluster for Executive role
       if (form.role === 'Executive' && !form.cluster?.trim()) {
@@ -288,6 +297,11 @@ export default function NewEmployeePage() {
         const refMobile = validateStrictIndianMobile(ref.mobile)
         if (!refMobile.ok) {
           setError(`Reference ${i + 1}: ${refMobile.message}`)
+          setSubmitting(false)
+          return
+        }
+        if (!ref.aadhaarUrl.trim()) {
+          setError(`Reference ${i + 1}: Aadhaar upload is required`)
           setSubmitting(false)
           return
         }
@@ -411,7 +425,7 @@ export default function NewEmployeePage() {
           </div>
           <div>
             <Label>Phone (optional)</Label>
-            <Input className="bg-white text-neutral-900" name="phone" value={form.phone} onChange={onChange} placeholder="Secondary phone" />
+            <Input className="bg-white text-neutral-900" name="phone" value={form.phone} onChange={onChange} placeholder="10 to 15 digits" inputMode="numeric" maxLength={15} />
           </div>
           <div>
             <Label>Mobile *</Label>
@@ -422,8 +436,8 @@ export default function NewEmployeePage() {
               name="mobile"
               value={form.mobile}
               onChange={onChange}
-              placeholder="Mobile"
-              maxLength={10}
+              placeholder="10 to 15 digits"
+              maxLength={15}
               required
             />
             {mobileError && (
@@ -455,7 +469,7 @@ export default function NewEmployeePage() {
 
           <div className="md:col-span-2 text-lg font-semibold mb-2 mt-4">References *</div>
           {[0, 1].map((idx) => (
-            <div key={idx} className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 border border-neutral-200 rounded p-3 bg-white">
+            <div key={idx} className="md:col-span-2 grid grid-cols-1 md:grid-cols-4 gap-4 border border-neutral-200 rounded p-3 bg-white">
               <div>
                 <Label>Reference {idx + 1} — Relationship *</Label>
                 <Select
@@ -501,7 +515,7 @@ export default function NewEmployeePage() {
                   className="bg-white"
                   type="tel"
                   inputMode="numeric"
-                  maxLength={10}
+                  maxLength={15}
                   value={form.references[idx].mobile}
                   onChange={(e) =>
                     setForm((f) => {
@@ -513,9 +527,53 @@ export default function NewEmployeePage() {
                       return { ...f, references }
                     })
                   }
-                  placeholder="10-digit mobile"
+                  placeholder="10 to 15 digits"
                   required
                 />
+              </div>
+              <div>
+                <Label>Aadhaar upload *</Label>
+                <Input
+                  className="bg-white"
+                  type="file"
+                  accept="image/*,.pdf"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    setUploadingRefAadhaar(idx)
+                    setError(null)
+                    try {
+                      const fd = new FormData()
+                      fd.append('file', file)
+                      fd.append('kind', 'reference-aadhaar')
+                      const token = localStorage.getItem('authToken')
+                      const { apiUrl } = await import('@/lib/api')
+                      const res = await fetch(apiUrl('/employees/upload'), {
+                        method: 'POST',
+                        headers: token ? { Authorization: `Bearer ${token}` } : {},
+                        body: fd,
+                      })
+                      const data = await res.json()
+                      if (!res.ok) throw new Error(data?.message || 'Upload failed')
+                      setForm((f) => {
+                        const references = [...f.references]
+                        references[idx] = { ...references[idx], aadhaarUrl: data.url }
+                        return { ...f, references }
+                      })
+                    } catch (err: any) {
+                      setError(err?.message || `Reference ${idx + 1} Aadhaar upload failed`)
+                    } finally {
+                      setUploadingRefAadhaar(null)
+                    }
+                  }}
+                />
+                <p className="text-xs text-neutral-500 mt-1">
+                  {uploadingRefAadhaar === idx
+                    ? 'Uploading…'
+                    : form.references[idx].aadhaarUrl
+                      ? `Uploaded: ${form.references[idx].aadhaarUrl}`
+                      : 'Image or PDF'}
+                </p>
               </div>
             </div>
           ))}
@@ -729,6 +787,9 @@ export default function NewEmployeePage() {
                 <SelectItem value="Senior Coordinator">Senior Coordinator</SelectItem>
                 <SelectItem value="Manager">Product Manager</SelectItem>
                 <SelectItem value="Executive Manager">Zonal Manager</SelectItem>
+                <SelectItem value="Regional Manager">Regional Manager</SelectItem>
+                <SelectItem value="Regional Head">Regional Head</SelectItem>
+                <SelectItem value="National Head">National Head</SelectItem>
                 <SelectItem value="Warehouse Executive">Warehouse Executive</SelectItem>
                 <SelectItem value="Warehouse Manager">Warehouse Manager</SelectItem>
                 <SelectItem value="Admin">Admin</SelectItem>

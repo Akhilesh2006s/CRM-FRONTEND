@@ -13,6 +13,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
+import { phoneDigitsError, sanitizePhoneDigits } from '../../utils/phone';
 import { useAuth } from '../../context/AuthContext';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
@@ -257,11 +258,6 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
-    if (!form.school_code?.trim()) {
-      setErrorMessage('School code is required');
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
-      return;
-    }
     if (!form.contact_person?.trim()) {
       setErrorMessage('Contact person is required');
       return;
@@ -276,6 +272,11 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
     }
     if (!form.decision_maker_mobile?.trim()) {
       setErrorMessage('Decision Maker Mobile Number is required');
+      return;
+    }
+    const mobileError = phoneDigitsError(form.contact_mobile, true) || phoneDigitsError(form.decision_maker_mobile, true);
+    if (mobileError) {
+      setErrorMessage(mobileError);
       return;
     }
     if (form.pincode.length !== 6) {
@@ -346,7 +347,6 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
 
       const payload = {
         school_name: form.school_name.trim(),
-        school_code: form.school_code.trim(),
         school_type: form.school_type || 'New',
         contact_person: form.contact_person.trim(),
         contact_mobile: form.contact_mobile.trim(),
@@ -428,10 +428,10 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
         />
 
         <FormField
-          label="School code *"
-          value={form.school_code}
-          onChangeText={(text) => setForm((f) => ({ ...f, school_code: text }))}
-          placeholder="Enter school code"
+          label="School code"
+          value="Assigned automatically from the pincode, zone, and cluster"
+          onChangeText={() => {}}
+          editable={false}
         />
 
         <WebSelect
@@ -451,9 +451,10 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
         <FormField
           label="Contact mobile *"
           value={form.contact_mobile}
-          onChangeText={(text) => setForm((f) => ({ ...f, contact_mobile: text }))}
-          placeholder="Enter mobile number"
+          onChangeText={(text) => setForm((f) => ({ ...f, contact_mobile: sanitizePhoneDigits(text) }))}
+          placeholder="10 to 15 digits"
           keyboardType="phone-pad"
+          maxLength={15}
         />
 
         <FormField
@@ -474,9 +475,10 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
         <FormField
           label="Decision Maker Mobile Number *"
           value={form.decision_maker_mobile}
-          onChangeText={(text) => setForm((f) => ({ ...f, decision_maker_mobile: text }))}
-          placeholder="Enter decision maker mobile"
+          onChangeText={(text) => setForm((f) => ({ ...f, decision_maker_mobile: sanitizePhoneDigits(text) }))}
+          placeholder="10 to 15 digits"
           keyboardType="phone-pad"
+          maxLength={15}
         />
 
         <FormField
@@ -795,6 +797,7 @@ function FormField({
   placeholder,
   keyboardType,
   editable = true,
+  maxLength,
 }: {
   label: string;
   value: string;
@@ -802,6 +805,7 @@ function FormField({
   placeholder?: string;
   keyboardType?: 'default' | 'phone-pad' | 'number-pad' | 'email-address';
   editable?: boolean;
+  maxLength?: number;
 }) {
   return (
     <View style={styles.fieldContainer}>
@@ -813,6 +817,7 @@ function FormField({
         placeholder={placeholder}
         keyboardType={keyboardType}
         editable={editable}
+        maxLength={maxLength}
       />
     </View>
   );

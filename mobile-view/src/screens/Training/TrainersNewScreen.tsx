@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
+import { phoneDigitsError, sanitizePhoneDigits } from '../../utils/phone';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebSelect } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
@@ -77,8 +78,9 @@ export default function TrainersNewScreen({ navigation }: any) {
       setErrorMessage('Trainer name is required');
       return;
     }
-    if (!form.mobile?.trim() || form.mobile.replace(/\D/g, '').length < 10) {
-      setErrorMessage('Valid mobile number is required');
+    const mobileError = phoneDigitsError(form.mobile, true);
+    if (mobileError) {
+      setErrorMessage(mobileError);
       return;
     }
     if (form.trainerProducts.length === 0) {
@@ -124,7 +126,7 @@ export default function TrainersNewScreen({ navigation }: any) {
         {errorMessage && <MessageBanner type="error" message={errorMessage} onDismiss={() => setErrorMessage(null)} />}
 
         <FormField label="Trainer Name *" value={form.name} onChangeText={(t: string) => setForm((f) => ({ ...f, name: t }))} />
-        <FormField label="Mobile *" value={form.mobile} onChangeText={(t: string) => setForm((f) => ({ ...f, mobile: t }))} keyboardType="phone-pad" />
+        <FormField label="Mobile *" value={form.mobile} onChangeText={(t: string) => setForm((f) => ({ ...f, mobile: sanitizePhoneDigits(t) }))} keyboardType="phone-pad" maxLength={15} placeholder="10 to 15 digits" />
         <FormField label="Email" value={form.email} onChangeText={(t: string) => setForm((f) => ({ ...f, email: t }))} keyboardType="email-address" />
 
         <Text style={styles.sectionTitle}>Employment Type *</Text>
@@ -211,7 +213,7 @@ export default function TrainersNewScreen({ navigation }: any) {
   );
 }
 
-function FormField({ label, value, onChangeText, placeholder, keyboardType, multiline }: any) {
+function FormField({ label, value, onChangeText, placeholder, keyboardType, multiline, maxLength }: any) {
   return (
     <View style={styles.fieldContainer}>
       <Text style={styles.label}>{label}</Text>
@@ -222,6 +224,7 @@ function FormField({ label, value, onChangeText, placeholder, keyboardType, mult
         placeholder={placeholder}
         keyboardType={keyboardType}
         multiline={multiline}
+        maxLength={maxLength}
       />
     </View>
   );

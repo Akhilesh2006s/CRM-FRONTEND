@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { apiService } from '../../services/api';
+import { phoneDigitsError, sanitizePhoneDigits } from '../../utils/phone';
 import { getCurrentLocation, getTownFromPincode } from '../../services/location';
 import { useAuth } from '../../context/AuthContext';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
@@ -199,6 +200,12 @@ export default function DCCaptureScreen({ navigation, route }: any) {
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
+    const mobileError = phoneDigitsError(contactMobile, true);
+    if (mobileError) {
+      setErrorMessage(mobileError);
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+      return;
+    }
     if (schoolCategory && !schoolRemarks) {
       setErrorMessage('Remarks are mandatory when school category is selected');
       scrollRef.current?.scrollTo({ y: 0, animated: true });
@@ -340,9 +347,10 @@ export default function DCCaptureScreen({ navigation, route }: any) {
           <WebInput
             style={styles.input}
             value={contactMobile}
-            onChangeText={setContactMobile}
-            placeholder="Enter mobile number"
+            onChangeText={(text) => setContactMobile(sanitizePhoneDigits(text))}
+            placeholder="10 to 15 digits"
             keyboardType="phone-pad"
+            maxLength={15}
           />
         </View>
 

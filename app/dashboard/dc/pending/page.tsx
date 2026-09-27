@@ -804,7 +804,7 @@ export default function PendingDCPage() {
                 <div>
                   <Label>School Code</Label>
                   <Input 
-                    value={selectedDC.dcOrderId?.dc_code || ''} 
+                    value={selectedDC.dcOrderId?.school_code || selectedDC.dcOrderId?.dc_code || ''} 
                     disabled 
                     className="bg-gray-100 text-gray-900" 
                     placeholder="School Code"

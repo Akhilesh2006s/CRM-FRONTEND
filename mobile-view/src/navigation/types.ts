@@ -42,6 +42,10 @@ export type RootStackParamList = {
   ExecutiveManagers: undefined;
   ExecutiveManagerNew: undefined;
   ExecutiveManagerDashboard: { managerId: string };
+  HierarchyDashboard: { level: 'regional-manager' | 'regional-head' | 'national-head'; personId?: string };
+  HierarchyAssign: undefined;
+  ProductManager: { managerId?: string } | undefined;
+  ProductManagerAssign: undefined;
   ExecutiveManagerLeaves: { managerId: string };
   POChangeRequests: undefined;
   POChangeRequestDetail: { orderId: string };
@@ -70,6 +74,7 @@ export type RootStackParamList = {
   WarehouseInventoryItemEdit: { id: string };
   WarehouseStock: undefined;
   WarehouseStockAdd: undefined;
+  WarehouseStockApprovals: undefined;
   WarehouseDCAtWarehouse: undefined;
   WarehouseDCAtWarehouseDetail: { id: string };
   WarehouseCompletedDC: undefined;

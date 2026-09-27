@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { apiRequest } from '@/lib/api'
 import { displayRoleName } from '@/lib/roleLabels'
 import { toast } from 'sonner'
+import { sanitizePhoneInput, validateStrictIndianMobile } from '@/lib/phone'
 import {
   validateEmployeeFirstName,
   validateEmployeeLastName,
@@ -122,7 +123,8 @@ export default function EditEmployeePage() {
 
   const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
-    setForm((f) => ({ ...f, [name]: value }))
+    const nextValue = name === 'phone' || name === 'mobile' ? sanitizePhoneInput(value, 15) : value
+    setForm((f) => ({ ...f, [name]: nextValue }))
     if (name === 'firstName') {
       if (!value.trim()) {
         clearIdentityError('firstName')
@@ -207,6 +209,21 @@ export default function EditEmployeePage() {
       }
       setIdentityErrors({})
 
+      const mobileCheck = validateStrictIndianMobile(form.mobile)
+      if (!mobileCheck.ok) {
+        setError(mobileCheck.message)
+        setSubmitting(false)
+        return
+      }
+      if (form.phone.trim()) {
+        const phoneCheck = validateStrictIndianMobile(form.phone)
+        if (!phoneCheck.ok) {
+          setError(phoneCheck.message)
+          setSubmitting(false)
+          return
+        }
+      }
+
       if (form.role === 'Executive' && !form.cluster?.trim()) {
         setError('Cluster is required for BDE role')
         setSubmitting(false)
@@ -288,11 +305,11 @@ export default function EditEmployeePage() {
           </div>
           <div>
             <Label>Phone (optional)</Label>
-            <Input className="bg-white text-neutral-900" name="phone" value={form.phone} onChange={onChange} />
+            <Input className="bg-white text-neutral-900" name="phone" value={form.phone} onChange={onChange} inputMode="numeric" maxLength={15} placeholder="10 to 15 digits" />
           </div>
           <div>
             <Label>Mobile *</Label>
-            <Input className="bg-white text-neutral-900" name="mobile" value={form.mobile} onChange={onChange} required />
+            <Input className="bg-white text-neutral-900" name="mobile" value={form.mobile} onChange={onChange} inputMode="numeric" maxLength={15} placeholder="10 to 15 digits" required />
           </div>
           <div className="md:col-span-2">
             <Label>Address 1</Label>
@@ -341,7 +358,7 @@ export default function EditEmployeePage() {
             <Select value={form.role} onValueChange={(v) => setForm((f) => ({ ...f, role: v, cluster: v === 'Executive' ? f.cluster : '' }))}>
               <SelectTrigger className="bg-white text-neutral-900"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {['Executive', 'Trainer', 'Finance Manager', 'HR Manager', 'HR Executive', 'Coordinator', 'Senior Coordinator', 'Manager', 'Executive Manager', 'Warehouse Executive', 'Warehouse Manager', 'Admin', 'Super Admin'].map((r) => (
+                {['Executive', 'Trainer', 'Finance Manager', 'HR Manager', 'HR Executive', 'Coordinator', 'Senior Coordinator', 'Manager', 'Executive Manager', 'Regional Manager', 'Regional Head', 'National Head', 'Warehouse Executive', 'Warehouse Manager', 'Admin', 'Super Admin'].map((r) => (
                   <SelectItem key={r} value={r}>{displayRoleName(r)}</SelectItem>
                 ))}
               </SelectContent>

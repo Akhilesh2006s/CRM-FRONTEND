@@ -27,7 +27,7 @@ type Employee = {
   permanentAddress?: string
   aadhaarUrl?: string
   locationPhotoUrl?: string
-  references?: { relation: string; name?: string; mobile: string }[]
+  references?: { relation: string; name?: string; mobile: string; aadhaarUrl?: string }[]
   verificationStatus?: string
   approvals?: Approval[]
   executiveManagerId?: { name?: string } | string | null
@@ -197,6 +197,19 @@ export default function EmployeeVerificationPage() {
                     <li key={i}>
                       {r.relation}
                       {r.name ? ` — ${r.name}` : ''} — {r.mobile}
+                      {r.aadhaarUrl ? (
+                        <>
+                          {' — '}
+                          <a
+                            className="text-blue-600 underline"
+                            href={resolveUploadUrl(r.aadhaarUrl)}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            View Aadhaar
+                          </a>
+                        </>
+                      ) : null}
                     </li>
                   ))}
                 </ul>

@@ -15,6 +15,7 @@ import { typography } from '../../theme/typography';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebInput } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 
 function cell(value: string | number | undefined | null) {
   if (value === undefined || value === null || value === '') return '-';
@@ -22,6 +23,8 @@ function cell(value: string | number | undefined | null) {
 }
 
 export default function WarehouseStockScreen({ navigation }: any) {
+  const { user } = useAuth();
+  const isWarehouseExecutive = user?.role === 'Warehouse Executive';
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -29,6 +32,7 @@ export default function WarehouseStockScreen({ navigation }: any) {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [quantity, setQuantity] = useState('');
+  const [batchLot, setBatchLot] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -56,6 +60,7 @@ export default function WarehouseStockScreen({ navigation }: any) {
   const openAddQty = (item: any) => {
     setSelectedItem(item);
     setQuantity('');
+    setBatchLot('');
     setModalVisible(true);
   };
 
@@ -67,17 +72,40 @@ export default function WarehouseStockScreen({ navigation }: any) {
       return;
     }
 
+    if (isWarehouseExecutive && !batchLot.trim()) {
+      Alert.alert('Error', 'Batch / lot number is required');
+      return;
+    }
+
     setSubmitting(true);
     try {
-      await apiService.post('/warehouse/stock', {
-        productId: selectedItem._id,
-        quantity: amount,
-        movementType: 'In',
-        reason: 'Manual add',
-      });
-      Alert.alert('Success', 'Quantity added successfully');
+      if (isWarehouseExecutive) {
+        await apiService.post('/warehouse/stock-requests', {
+          productId: selectedItem._id,
+          productName: selectedItem.productName,
+          category: selectedItem.category,
+          level: selectedItem.level,
+          specs: selectedItem.specs,
+          subject: selectedItem.subject,
+          supplier: selectedItem.supplier || selectedItem.vendor,
+          quantity: amount,
+          batchLot: batchLot.trim(),
+          unit: selectedItem.unit || 'pcs',
+          location: selectedItem.location || 'Main Warehouse',
+          stockDate: new Date().toISOString(),
+        });
+        Alert.alert('Submitted', 'Pending Manager Approval. Stock is added only after the Warehouse Manager approves it.');
+      } else {
+        await apiService.post('/warehouse/stock', {
+          productId: selectedItem._id,
+          quantity: amount,
+          movementType: 'In',
+          reason: 'Manual add',
+        });
+        Alert.alert('Success', 'Quantity added successfully');
+        loadData();
+      }
       setModalVisible(false);
-      loadData();
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to add quantity');
     } finally {
@@ -160,6 +188,14 @@ export default function WarehouseStockScreen({ navigation }: any) {
               placeholder="Enter quantity"
               keyboardType="decimal-pad"
             />
+            {isWarehouseExecutive ? (
+              <WebInput
+                style={styles.modalInput}
+                value={batchLot}
+                onChangeText={setBatchLot}
+                placeholder="Batch / lot number"
+              />
+            ) : null}
             <View style={styles.modalButtons}>
               <TouchableOpacity style={styles.modalCancelButton} onPress={() => setModalVisible(false)}>
                 <Text style={styles.modalCancelButtonText}>Cancel</Text>

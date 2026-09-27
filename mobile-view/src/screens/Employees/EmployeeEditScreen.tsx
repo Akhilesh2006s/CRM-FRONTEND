@@ -5,10 +5,11 @@ import { typography } from '../../theme/typography';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebSelect } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
+import { phoneDigitsError, sanitizePhoneDigits } from '../../utils/phone';
 
 const roles = [
   'Executive', 'Trainer', 'Finance Manager', 'HR Manager', 'HR Executive', 'Coordinator', 'Senior Coordinator',
-  'Manager', 'Executive Manager', 'Warehouse Executive', 'Warehouse Manager', 'Admin', 'Super Admin',
+  'Manager', 'Executive Manager', 'Regional Manager', 'Regional Head', 'National Head', 'Warehouse Executive', 'Warehouse Manager', 'Admin', 'Super Admin',
 ];
 
 export default function EmployeeEditScreen({ navigation, route }: any) {
@@ -55,6 +56,11 @@ export default function EmployeeEditScreen({ navigation, route }: any) {
       setErrorMessage('Name, email, and mobile are required');
       return;
     }
+    const mobileError = phoneDigitsError(form.mobile, true) || phoneDigitsError(form.phone, false);
+    if (mobileError) {
+      setErrorMessage(mobileError);
+      return;
+    }
     if (form.role === 'Executive' && !form.cluster?.trim()) {
       setErrorMessage('Cluster is required for Executive role');
       return;
@@ -94,8 +100,8 @@ export default function EmployeeEditScreen({ navigation, route }: any) {
         {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
         <FormField label="Name *" value={form.name} onChangeText={(t: string) => setForm((f) => ({ ...f, name: t }))} />
         <FormField label="Email *" value={form.email} onChangeText={(t: string) => setForm((f) => ({ ...f, email: t }))} keyboardType="email-address" />
-        <FormField label="Mobile *" value={form.mobile} onChangeText={(t: string) => setForm((f) => ({ ...f, mobile: t }))} keyboardType="phone-pad" />
-        <FormField label="Phone (optional)" value={form.phone} onChangeText={(t: string) => setForm((f) => ({ ...f, phone: t }))} keyboardType="phone-pad" />
+        <FormField label="Mobile *" value={form.mobile} onChangeText={(t: string) => setForm((f) => ({ ...f, mobile: sanitizePhoneDigits(t) }))} keyboardType="phone-pad" maxLength={15} placeholder="10 to 15 digits" />
+        <FormField label="Phone (optional)" value={form.phone} onChangeText={(t: string) => setForm((f) => ({ ...f, phone: sanitizePhoneDigits(t) }))} keyboardType="phone-pad" maxLength={15} placeholder="10 to 15 digits" />
         <WebSelect label="Role *" value={form.role} onValueChange={(role) => setForm((f) => ({ ...f, role }))} items={roles.map((role) => ({ label: role, value: role }))} />
         <FormField label="Department" value={form.department} onChangeText={(t: string) => setForm((f) => ({ ...f, department: t }))} />
         <FormField label="Cluster" value={form.cluster} onChangeText={(t: string) => setForm((f) => ({ ...f, cluster: t }))} />
@@ -110,11 +116,11 @@ export default function EmployeeEditScreen({ navigation, route }: any) {
   );
 }
 
-function FormField({ label, value, onChangeText, keyboardType }: any) {
+function FormField({ label, value, onChangeText, keyboardType, maxLength, placeholder }: any) {
   return (
     <View style={styles.fieldContainer}>
       <Text style={styles.label}>{label}</Text>
-      <WebInput style={styles.input} value={value} onChangeText={onChangeText} keyboardType={keyboardType} />
+      <WebInput style={styles.input} value={value} onChangeText={onChangeText} keyboardType={keyboardType} maxLength={maxLength} placeholder={placeholder} />
     </View>
   );
 }

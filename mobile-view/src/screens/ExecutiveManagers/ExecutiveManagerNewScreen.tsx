@@ -5,6 +5,7 @@ import { typography } from '../../theme/typography';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
+import { phoneDigitsError, sanitizePhoneDigits } from '../../utils/phone';
 
 export default function ExecutiveManagerNewScreen({ navigation }: any) {
   const [form, setForm] = useState({
@@ -25,6 +26,11 @@ export default function ExecutiveManagerNewScreen({ navigation }: any) {
   const handleSubmit = async () => {
     if (!form.name.trim() || !form.email.trim()) {
       setErrorMessage('Full name and email are required');
+      return;
+    }
+    const phoneError = phoneDigitsError(form.phone, false);
+    if (phoneError) {
+      setErrorMessage(phoneError);
       return;
     }
     setSubmitting(true);
@@ -70,10 +76,11 @@ export default function ExecutiveManagerNewScreen({ navigation }: any) {
           secureTextEntry
         />
         <WebInput
-          placeholder="Phone number"
+          placeholder="10 to 15 digits"
           value={form.phone}
-          onChangeText={(v) => setField('phone', v)}
+          onChangeText={(v) => setField('phone', sanitizePhoneDigits(v))}
           keyboardType="phone-pad"
+          maxLength={15}
         />
         <WebInput
           placeholder="Department"

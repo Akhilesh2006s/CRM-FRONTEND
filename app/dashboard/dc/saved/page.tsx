@@ -18,6 +18,7 @@ import { resolveExistingProductTerm } from '@/lib/productTerm'
 type DcOrder = {
   _id: string
   dc_code?: string
+  school_code?: string
   school_name?: string
   school_type?: string
   contact_person?: string
@@ -749,7 +750,7 @@ export default function SavedDCPage() {
                   <div>
                     <Label>School Code</Label>
                     <Input 
-                      value={selectedDeal.dc_code || ''} 
+                      value={selectedDeal.school_code || selectedDeal.dc_code || ''} 
                       disabled 
                       className="bg-slate-50 text-slate-900 border-slate-200" 
                       placeholder="School Code"

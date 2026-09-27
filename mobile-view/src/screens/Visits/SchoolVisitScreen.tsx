@@ -13,7 +13,7 @@ import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
 import { getCurrentLocation } from '../../services/location';
 import ScreenShell from '../../ui/ScreenShell';
-import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
+import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 
 type Visit = {
@@ -28,7 +28,57 @@ type Visit = {
   trainingDate?: string;
   latitude?: number;
   longitude?: number;
+  operations?: {
+    deliveryStatus?: string;
+    booksDistributed?: string;
+    programsStarted?: string;
+    programsStartedDate?: string;
+    pagesCompleted?: { program: string; pages: number }[];
+  };
 };
+
+type PageRow = { program: string; pages: string };
+
+type ClientProgram = {
+  id: string;
+  schoolName: string;
+  dcOrderId?: string;
+  programs: string[];
+};
+
+const OPERATIONS = 'OPERATIONS';
+
+function clientsFromMyDcs(rows: any[]): ClientProgram[] {
+  const bySchool = new Map<string, ClientProgram>();
+  for (const dc of Array.isArray(rows) ? rows : []) {
+    const order = dc?.dcOrderId && typeof dc.dcOrderId === 'object' ? dc.dcOrderId : null;
+    const schoolName = String(order?.school_name || dc?.customerName || dc?.school_name || '').trim();
+    if (!schoolName) continue;
+    const names = new Set<string>();
+    for (const row of dc?.productDetails || []) {
+      const name = String(row?.product || row?.product_name || '').trim();
+      if (name) names.add(name);
+    }
+    for (const row of order?.products || []) {
+      const name = String(row?.product_name || row?.product || '').trim();
+      if (name) names.add(name);
+    }
+    const key = schoolName.toLowerCase();
+    const existing = bySchool.get(key);
+    if (existing) {
+      existing.programs = [...new Set([...existing.programs, ...names])];
+      if (!existing.dcOrderId && order?._id) existing.dcOrderId = String(order._id);
+      continue;
+    }
+    bySchool.set(key, {
+      id: String(order?._id || dc?._id || schoolName),
+      schoolName,
+      dcOrderId: order?._id ? String(order._id) : undefined,
+      programs: [...names],
+    });
+  }
+  return [...bySchool.values()].sort((a, b) => a.schoolName.localeCompare(b.schoolName));
+}
 
 const emptyForm = {
   schoolName: '',
@@ -37,6 +87,12 @@ const emptyForm = {
   nextVisitDate: '',
   trainingDate: '',
   outcome: '',
+  clientId: '',
+  dcOrderId: '',
+  booksDistributed: '',
+  programsStarted: '',
+  programsStartedDate: '',
+  pagesCompleted: [] as PageRow[],
 };
 
 export default function SchoolVisitScreen({ navigation, route }: any) {
@@ -56,6 +112,8 @@ export default function SchoolVisitScreen({ navigation, route }: any) {
     schoolName: schoolNameHint || '',
   });
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [clients, setClients] = useState<ClientProgram[]>([]);
+  const [clientsLoaded, setClientsLoaded] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -97,6 +155,17 @@ export default function SchoolVisitScreen({ navigation, route }: any) {
     loadAll();
   }, [loadAll]);
 
+  useEffect(() => {
+    if (form.category !== OPERATIONS || clientsLoaded) return;
+    apiService
+      .get('/dc/employee/my?limit=500')
+      .then((data) => {
+        setClients(clientsFromMyDcs(Array.isArray(data) ? data : []));
+        setClientsLoaded(true);
+      })
+      .catch(() => setClientsLoaded(true));
+  }, [form.category, clientsLoaded]);
+
   const onRefresh = () => {
     setRefreshing(true);
     loadAll();
@@ -125,6 +194,35 @@ export default function SchoolVisitScreen({ navigation, route }: any) {
       setErrorMessage('Visit category is required');
       return;
     }
+    if (form.category === OPERATIONS) {
+      if (form.booksDistributed !== 'Yes' && form.booksDistributed !== 'No') {
+        setErrorMessage('Books distributed to students must be Yes or No');
+        return;
+      }
+      if (form.programsStarted !== 'Yes' && form.programsStarted !== 'No') {
+        setErrorMessage('Programs started must be Yes or No');
+        return;
+      }
+      if (form.programsStarted === 'Yes' && !form.programsStartedDate.trim()) {
+        setErrorMessage('Enter the date programs started');
+        return;
+      }
+      const filled = form.pagesCompleted.filter((row) => row.program.trim() || row.pages.trim());
+      if (filled.length === 0) {
+        setErrorMessage('Enter pages completed for at least one program');
+        return;
+      }
+      for (const row of filled) {
+        if (!row.program.trim()) {
+          setErrorMessage('Each pages row needs a program name');
+          return;
+        }
+        if (!/^\d+$/.test(row.pages.trim())) {
+          setErrorMessage(`Pages completed for ${row.program.trim()} must be a whole number`);
+          return;
+        }
+      }
+    }
 
     setSubmitting(true);
     try {
@@ -150,6 +248,18 @@ export default function SchoolVisitScreen({ navigation, route }: any) {
       if (form.nextVisitDate.trim()) payload.nextVisitDate = form.nextVisitDate.trim();
       if (form.trainingDate.trim()) payload.trainingDate = form.trainingDate.trim();
       if (leadId) payload.leadId = leadId;
+      if (form.dcOrderId) payload.dcOrderId = form.dcOrderId;
+      if (form.category === OPERATIONS) {
+        payload.operations = {
+          deliveryStatus: 'DELIVERED',
+          booksDistributed: form.booksDistributed,
+          programsStarted: form.programsStarted,
+          programsStartedDate: form.programsStarted === 'Yes' ? form.programsStartedDate.trim() : undefined,
+          pagesCompleted: form.pagesCompleted
+            .filter((row) => row.program.trim())
+            .map((row) => ({ program: row.program.trim(), pages: Number(row.pages) })),
+        };
+      }
       if (typeof lat === 'number' && typeof lng === 'number') {
         payload.latitude = lat;
         payload.longitude = lng;
@@ -216,10 +326,132 @@ export default function SchoolVisitScreen({ navigation, route }: any) {
             <WebSelect
               label="Category *"
               value={form.category}
-              onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}
+              onValueChange={(v) =>
+                setForm((f) => ({
+                  ...f,
+                  category: v,
+                  pagesCompleted:
+                    v === OPERATIONS && f.pagesCompleted.length === 0
+                      ? [{ program: '', pages: '' }]
+                      : f.pagesCompleted,
+                }))
+              }
               items={categories.map((c) => ({ label: c, value: c }))}
               placeholder="Select category"
             />
+
+            {form.category === OPERATIONS ? (
+              <View style={styles.opsBox}>
+                <Text style={styles.sectionTitle}>Operations</Text>
+                <WebSelect
+                  label="Client"
+                  value={form.clientId}
+                  onValueChange={(clientId) => {
+                    const client = clients.find((c) => c.id === clientId);
+                    setForm((f) => {
+                      if (!client) {
+                        return { ...f, clientId: '', dcOrderId: '' };
+                      }
+                      const previous = new Map(f.pagesCompleted.map((row) => [row.program, row.pages]));
+                      return {
+                        ...f,
+                        clientId: client.id,
+                        dcOrderId: client.dcOrderId || '',
+                        schoolName: client.schoolName,
+                        pagesCompleted:
+                          client.programs.length > 0
+                            ? client.programs.map((program) => ({
+                                program,
+                                pages: previous.get(program) || '',
+                              }))
+                            : [{ program: '', pages: '' }],
+                      };
+                    });
+                  }}
+                  items={clients.map((c) => ({ label: c.schoolName, value: c.id }))}
+                  placeholder="Select a client to load programs"
+                />
+                <WebLabel>Delivery status</WebLabel>
+                <Text style={styles.opsLocked}>DELIVERED</Text>
+                <WebSelect
+                  label="Books distributed to students *"
+                  value={form.booksDistributed}
+                  onValueChange={(v) => setForm((f) => ({ ...f, booksDistributed: v }))}
+                  items={[
+                    { label: 'Yes', value: 'Yes' },
+                    { label: 'No', value: 'No' },
+                  ]}
+                  placeholder="Yes or No"
+                />
+                <WebSelect
+                  label="Programs started *"
+                  value={form.programsStarted}
+                  onValueChange={(v) =>
+                    setForm((f) => ({
+                      ...f,
+                      programsStarted: v,
+                      programsStartedDate: v === 'Yes' ? f.programsStartedDate : '',
+                    }))
+                  }
+                  items={[
+                    { label: 'Yes', value: 'Yes' },
+                    { label: 'No', value: 'No' },
+                  ]}
+                  placeholder="Yes or No"
+                />
+                {form.programsStarted === 'Yes' ? (
+                  <WebInput
+                    style={styles.input}
+                    value={form.programsStartedDate}
+                    onChangeText={(t) => setForm((f) => ({ ...f, programsStartedDate: t }))}
+                    placeholder="Programs started date (YYYY-MM-DD) *"
+                  />
+                ) : null}
+                <WebLabel>Pages completed (program wise) *</WebLabel>
+                {form.pagesCompleted.map((row, idx) => (
+                  <View key={idx} style={styles.pageRow}>
+                    <WebInput
+                      style={[styles.input, styles.pageProgram]}
+                      value={row.program}
+                      onChangeText={(t) =>
+                        setForm((f) => {
+                          const pagesCompleted = [...f.pagesCompleted];
+                          pagesCompleted[idx] = { ...pagesCompleted[idx], program: t };
+                          return { ...f, pagesCompleted };
+                        })
+                      }
+                      placeholder="Program"
+                    />
+                    <WebInput
+                      style={[styles.input, styles.pageCount]}
+                      value={row.pages}
+                      keyboardType="number-pad"
+                      onChangeText={(t) =>
+                        setForm((f) => {
+                          const pagesCompleted = [...f.pagesCompleted];
+                          pagesCompleted[idx] = {
+                            ...pagesCompleted[idx],
+                            pages: t.replace(/\D/g, ''),
+                          };
+                          return { ...f, pagesCompleted };
+                        })
+                      }
+                      placeholder="Pages"
+                    />
+                  </View>
+                ))}
+                <WebButton
+                  title="Add program"
+                  variant="outline"
+                  onPress={() =>
+                    setForm((f) => ({
+                      ...f,
+                      pagesCompleted: [...f.pagesCompleted, { program: '', pages: '' }],
+                    }))
+                  }
+                />
+              </View>
+            ) : null}
 
             <WebSelect
               label="Outcome"
@@ -307,6 +539,16 @@ export default function SchoolVisitScreen({ navigation, route }: any) {
                   {v.nextVisitDate ? (
                     <Text style={styles.cardMeta}>Next: {formatDate(v.nextVisitDate)}</Text>
                   ) : null}
+                  {v.category === OPERATIONS && v.operations ? (
+                    <Text style={styles.remarks} numberOfLines={3}>
+                      {v.operations.deliveryStatus || 'DELIVERED'}
+                      {v.operations.booksDistributed ? ` · Books: ${v.operations.booksDistributed}` : ''}
+                      {v.operations.programsStarted ? ` · Started: ${v.operations.programsStarted}` : ''}
+                      {(v.operations.pagesCompleted || []).length
+                        ? ` · ${(v.operations.pagesCompleted || []).map((row) => `${row.program}: ${row.pages}`).join(', ')}`
+                        : ''}
+                    </Text>
+                  ) : null}
                   {v.remarks ? <Text style={styles.remarks} numberOfLines={2}>{v.remarks}</Text> : null}
                   {typeof v.latitude === 'number' && typeof v.longitude === 'number' ? (
                     <Text style={styles.gpsTag}>GPS ✓</Text>
@@ -367,6 +609,30 @@ const styles = StyleSheet.create({
   gpsMeta: {
     color: colors.textSecondary,
     fontSize: 13,
+  },
+  opsBox: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+    backgroundColor: colors.backgroundLight,
+  },
+  opsLocked: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: 10,
+  },
+  pageRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  pageProgram: {
+    flex: 1,
+  },
+  pageCount: {
+    width: 90,
   },
   empty: {
     paddingVertical: 40,

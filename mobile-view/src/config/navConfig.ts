@@ -52,7 +52,36 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
     isWarehouseManager,
     isFinanceManager,
     isExecutiveManager,
+    isRegionalManager,
+    isRegionalHead,
+    isNationalHead,
   } = flags;
+
+  if (isRegionalManager || isRegionalHead || isNationalHead) {
+    const level = isRegionalManager
+      ? 'regional-manager'
+      : isRegionalHead
+        ? 'regional-head'
+        : 'national-head';
+    return [
+      {
+        title: 'My Dashboard',
+        icon: I.managers,
+        items: [
+          {
+            label: 'My Dashboard',
+            screen: 'HierarchyDashboard',
+            params: { level, personId: (user as { _id?: string } | null | undefined)?._id },
+          },
+        ],
+      },
+      {
+        title: 'Settings',
+        icon: I.settings,
+        items: [{ label: 'Change Password', screen: 'SettingsPassword', icon: '🔐' }],
+      },
+    ];
+  }
 
   if (isPartner || role === 'Vendor') {
     return [
@@ -172,7 +201,22 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
     ];
   }
 
-  if (isManager || isCoordinator || isSeniorCoordinator) {
+  if (isManager) {
+    return [
+      {
+        title: 'My Products',
+        icon: I.managers,
+        items: [{ label: 'Assigned products', screen: 'ProductManager' }],
+      },
+      {
+        title: 'Settings',
+        icon: I.settings,
+        items: [{ label: 'Change Password', screen: 'SettingsPassword', icon: '🔐' }],
+      },
+    ];
+  }
+
+  if (isCoordinator || isSeniorCoordinator) {
     const clientsChildren: NavLink[] = [
       { label: 'Closed Sales', screen: 'DCClosed' },
       { label: 'Saved DC', screen: 'DCSaved' },
@@ -227,6 +271,7 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
         items: [
           { label: 'Inventory Items', screen: 'WarehouseInventoryItems' },
           { label: 'Stock', screen: 'WarehouseStock' },
+          { label: 'Pending Stock Approvals', screen: 'WarehouseStockApprovals' },
           { label: 'DC @ Warehouse', screen: 'WarehouseDCAtWarehouse' },
           { label: 'Hold DC', screen: 'WarehouseHoldDC' },
           { label: 'Returns', screen: isWarehouseManager ? 'ReturnsWarehouseManager' : 'ReturnsWarehouseExecutive' },
@@ -317,6 +362,7 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
       items: [
         { label: 'Inventory Items', screen: 'WarehouseInventoryItems', icon: '📋' },
         { label: 'Stock', screen: 'WarehouseStock', icon: '📦' },
+        { label: 'Pending Stock Approvals', screen: 'WarehouseStockApprovals', icon: '✅' },
         { label: 'DC @ Warehouse', screen: 'WarehouseDCAtWarehouse', icon: '🏭' },
         { label: 'Completed DC', screen: 'WarehouseCompletedDC', icon: '✅' },
         { label: 'Hold DC', screen: 'WarehouseHoldDC', icon: '⏸️' },
@@ -414,6 +460,14 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
 
   // Super Admin has no operational Leads module; privileged menus are Super Admin only.
   if (isSuperAdmin) {
+    sections.splice(1, 0, {
+      title: 'Hierarchy',
+      icon: I.managers,
+      items: [
+        { label: 'Assign Hierarchy', screen: 'HierarchyAssign', icon: '🛡️' },
+        { label: 'Assign Products', screen: 'ProductManagerAssign', icon: '📦' },
+      ],
+    });
     return sections.filter((s) => s.title !== 'Leads');
   }
 

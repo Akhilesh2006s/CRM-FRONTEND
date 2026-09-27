@@ -46,6 +46,64 @@ type Visit = {
   trainingDate?: string
   products?: string[]
   executiveId?: { _id: string; name?: string; email?: string }
+  operations?: {
+    deliveryStatus?: string
+    booksDistributed?: string
+    programsStarted?: string
+    programsStartedDate?: string
+    pagesCompleted?: { program: string; pages: number }[]
+  }
+}
+
+type PageRow = { program: string; pages: string }
+
+type ClientProgram = {
+  id: string
+  schoolName: string
+  schoolCode: string
+  dcOrderId?: string
+  programs: string[]
+}
+
+const OPERATIONS = 'OPERATIONS'
+
+function programNamesFromClient(dc: any): string[] {
+  const names = new Set<string>()
+  const order = dc?.dcOrderId && typeof dc.dcOrderId === 'object' ? dc.dcOrderId : null
+  for (const row of dc?.productDetails || []) {
+    const name = String(row?.product || row?.product_name || '').trim()
+    if (name) names.add(name)
+  }
+  for (const row of order?.products || []) {
+    const name = String(row?.product_name || row?.product || '').trim()
+    if (name) names.add(name)
+  }
+  return [...names]
+}
+
+function clientsFromMyDcs(rows: any[]): ClientProgram[] {
+  const bySchool = new Map<string, ClientProgram>()
+  for (const dc of Array.isArray(rows) ? rows : []) {
+    const order = dc?.dcOrderId && typeof dc.dcOrderId === 'object' ? dc.dcOrderId : null
+    const schoolName = String(order?.school_name || dc?.customerName || dc?.school_name || '').trim()
+    if (!schoolName) continue
+    const key = schoolName.toLowerCase()
+    const programs = programNamesFromClient(dc)
+    const existing = bySchool.get(key)
+    if (existing) {
+      existing.programs = [...new Set([...existing.programs, ...programs])]
+      if (!existing.dcOrderId && order?._id) existing.dcOrderId = String(order._id)
+      continue
+    }
+    bySchool.set(key, {
+      id: String(order?._id || dc?._id || schoolName),
+      schoolName,
+      schoolCode: String(order?.school_code || dc?.school_code || '').trim(),
+      dcOrderId: order?._id ? String(order._id) : undefined,
+      programs,
+    })
+  }
+  return [...bySchool.values()].sort((a, b) => a.schoolName.localeCompare(b.schoolName))
 }
 
 type Employee = { _id: string; name?: string }
@@ -65,6 +123,20 @@ const fmtDate = (value?: string) => {
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
 }
 
+function operationsSummary(ops?: Visit['operations']) {
+  if (!ops) return ''
+  const pages = (ops.pagesCompleted || []).map((row) => `${row.program}: ${row.pages}`).join(', ')
+  const started =
+    ops.programsStarted === 'Yes'
+      ? `Started ${fmtDate(ops.programsStartedDate)}`
+      : ops.programsStarted
+        ? `Started: ${ops.programsStarted}`
+        : ''
+  return [`${ops.deliveryStatus || 'DELIVERED'}`, ops.booksDistributed ? `Books: ${ops.booksDistributed}` : '', started, pages]
+    .filter(Boolean)
+    .join(' · ')
+}
+
 const emptyForm = {
   schoolName: '',
   schoolCode: '',
@@ -78,6 +150,12 @@ const emptyForm = {
   trainingDate: '',
   latitude: '' as string | number,
   longitude: '' as string | number,
+  clientId: '',
+  dcOrderId: '',
+  booksDistributed: '',
+  programsStarted: '',
+  programsStartedDate: '',
+  pagesCompleted: [] as PageRow[],
 }
 
 export default function VisitsPage() {
@@ -89,6 +167,8 @@ export default function VisitsPage() {
   const [saving, setSaving] = useState(false)
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({ ...emptyForm })
+  const [clients, setClients] = useState<ClientProgram[]>([])
+  const [clientsLoaded, setClientsLoaded] = useState(false)
 
   // filters
   const [schoolName, setSchoolName] = useState('')
@@ -137,6 +217,36 @@ export default function VisitsPage() {
       .catch(() => {})
   }, [])
 
+  useEffect(() => {
+    if (!open || form.category !== OPERATIONS || clientsLoaded) return
+    apiRequest<any[]>('/dc/employee/my?limit=500')
+      .then((data) => {
+        setClients(clientsFromMyDcs(Array.isArray(data) ? data : []))
+        setClientsLoaded(true)
+      })
+      .catch(() => setClientsLoaded(true))
+  }, [open, form.category, clientsLoaded])
+
+  const applyClient = (clientId: string) => {
+    const client = clients.find((c) => c.id === clientId)
+    setForm((f) => {
+      if (!client) return { ...f, clientId: '', dcOrderId: '' }
+      const previous = new Map(f.pagesCompleted.map((row) => [row.program, row.pages]))
+      const pagesCompleted =
+        client.programs.length > 0
+          ? client.programs.map((program) => ({ program, pages: previous.get(program) || '' }))
+          : [{ program: '', pages: '' }]
+      return {
+        ...f,
+        clientId: client.id,
+        dcOrderId: client.dcOrderId || '',
+        schoolName: client.schoolName,
+        schoolCode: client.schoolCode || f.schoolCode,
+        pagesCompleted,
+      }
+    })
+  }
+
   const useMyLocation = () => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
       toast.error('Location is not available in this browser')
@@ -158,6 +268,25 @@ export default function VisitsPage() {
   const submitVisit = async () => {
     if (!form.schoolName.trim()) return toast.error('School name is required')
     if (!form.category) return toast.error('Visit category is required')
+    if (form.category === OPERATIONS) {
+      if (form.booksDistributed !== 'Yes' && form.booksDistributed !== 'No') {
+        return toast.error('Books distributed to students must be Yes or No')
+      }
+      if (form.programsStarted !== 'Yes' && form.programsStarted !== 'No') {
+        return toast.error('Programs started must be Yes or No')
+      }
+      if (form.programsStarted === 'Yes' && !form.programsStartedDate) {
+        return toast.error('Enter the date programs started')
+      }
+      const filled = form.pagesCompleted.filter((row) => row.program.trim() || row.pages.trim())
+      if (filled.length === 0) return toast.error('Enter pages completed for at least one program')
+      for (const row of filled) {
+        if (!row.program.trim()) return toast.error('Each pages row needs a program name')
+        if (!/^\d+$/.test(row.pages.trim())) {
+          return toast.error(`Pages completed for ${row.program.trim()} must be a whole number`)
+        }
+      }
+    }
 
     setSaving(true)
     try {
@@ -172,6 +301,18 @@ export default function VisitsPage() {
         remarks: form.remarks.trim() || undefined,
         nextVisitDate: form.nextVisitDate || undefined,
         trainingDate: form.trainingDate || undefined,
+        dcOrderId: form.dcOrderId || undefined,
+      }
+      if (form.category === OPERATIONS) {
+        payload.operations = {
+          deliveryStatus: 'DELIVERED',
+          booksDistributed: form.booksDistributed,
+          programsStarted: form.programsStarted,
+          programsStartedDate: form.programsStarted === 'Yes' ? form.programsStartedDate : undefined,
+          pagesCompleted: form.pagesCompleted
+            .filter((row) => row.program.trim())
+            .map((row) => ({ program: row.program.trim(), pages: Number(row.pages) })),
+        }
       }
       if (form.latitude !== '' && form.longitude !== '') {
         payload.latitude = Number(form.latitude)
@@ -272,7 +413,16 @@ export default function VisitsPage() {
                   <Label>Visit category *</Label>
                   <Select
                     value={form.category}
-                    onValueChange={(v) => setForm({ ...form, category: v })}
+                    onValueChange={(v) =>
+                      setForm((f) => ({
+                        ...f,
+                        category: v,
+                        pagesCompleted:
+                          v === OPERATIONS && f.pagesCompleted.length === 0
+                            ? [{ program: '', pages: '' }]
+                            : f.pagesCompleted,
+                      }))
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select category" />
@@ -304,6 +454,148 @@ export default function VisitsPage() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {form.category === OPERATIONS && (
+                  <div className="sm:col-span-2 space-y-4 rounded-md border border-neutral-200 bg-neutral-50 p-4">
+                    <p className="text-sm font-semibold">Operations</p>
+                    <div className="space-y-2">
+                      <Label>Client</Label>
+                      <Select value={form.clientId || 'none'} onValueChange={(v) => applyClient(v === 'none' ? '' : v)}>
+                        <SelectTrigger className="bg-white">
+                          <SelectValue placeholder="Select a client to load programs" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Type programs manually</SelectItem>
+                          {clients.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.schoolName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Choosing a client fills the school and one pages row per program.
+                      </p>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>Delivery status</Label>
+                        <Input value="DELIVERED" readOnly className="bg-neutral-100" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Books distributed to students *</Label>
+                        <Select
+                          value={form.booksDistributed}
+                          onValueChange={(v) => setForm((f) => ({ ...f, booksDistributed: v }))}
+                        >
+                          <SelectTrigger className="bg-white">
+                            <SelectValue placeholder="Yes or No" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Yes">Yes</SelectItem>
+                            <SelectItem value="No">No</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Programs started *</Label>
+                        <Select
+                          value={form.programsStarted}
+                          onValueChange={(v) =>
+                            setForm((f) => ({
+                              ...f,
+                              programsStarted: v,
+                              programsStartedDate: v === 'Yes' ? f.programsStartedDate : '',
+                            }))
+                          }
+                        >
+                          <SelectTrigger className="bg-white">
+                            <SelectValue placeholder="Yes or No" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Yes">Yes</SelectItem>
+                            <SelectItem value="No">No</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {form.programsStarted === 'Yes' && (
+                        <div className="space-y-2">
+                          <Label>Programs started date *</Label>
+                          <Input
+                            type="date"
+                            className="bg-white"
+                            value={form.programsStartedDate}
+                            onChange={(e) => setForm((f) => ({ ...f, programsStartedDate: e.target.value }))}
+                          />
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Pages completed (program wise) *</Label>
+                      <div className="space-y-2">
+                        {form.pagesCompleted.map((row, idx) => (
+                          <div key={idx} className="grid grid-cols-[1fr_8rem_auto] gap-2">
+                            <Input
+                              className="bg-white"
+                              placeholder="Program"
+                              value={row.program}
+                              onChange={(e) =>
+                                setForm((f) => {
+                                  const pagesCompleted = [...f.pagesCompleted]
+                                  pagesCompleted[idx] = { ...pagesCompleted[idx], program: e.target.value }
+                                  return { ...f, pagesCompleted }
+                                })
+                              }
+                            />
+                            <Input
+                              className="bg-white"
+                              inputMode="numeric"
+                              placeholder="Pages"
+                              value={row.pages}
+                              onChange={(e) =>
+                                setForm((f) => {
+                                  const pagesCompleted = [...f.pagesCompleted]
+                                  pagesCompleted[idx] = {
+                                    ...pagesCompleted[idx],
+                                    pages: e.target.value.replace(/\D/g, ''),
+                                  }
+                                  return { ...f, pagesCompleted }
+                                })
+                              }
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={form.pagesCompleted.length === 1}
+                              onClick={() =>
+                                setForm((f) => ({
+                                  ...f,
+                                  pagesCompleted: f.pagesCompleted.filter((_, i) => i !== idx),
+                                }))
+                              }
+                            >
+                              Remove
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setForm((f) => ({
+                            ...f,
+                            pagesCompleted: [...f.pagesCompleted, { program: '', pages: '' }],
+                          }))
+                        }
+                      >
+                        Add program
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label htmlFor="v-next">Next visit date</Label>
@@ -501,7 +793,14 @@ export default function VisitsPage() {
                         {v.executiveId?.name || '—'}
                       </div>
                     </td>
-                    <td className="px-4 py-3">{v.category || '—'}</td>
+                    <td className="px-4 py-3">
+                      <div>{v.category || '—'}</div>
+                      {v.category === OPERATIONS && operationsSummary(v.operations) ? (
+                        <div className="mt-1 max-w-xs text-xs text-muted-foreground">
+                          {operationsSummary(v.operations)}
+                        </div>
+                      ) : null}
+                    </td>
                     <td className="px-4 py-3">
                       {v.outcome ? (
                         <span

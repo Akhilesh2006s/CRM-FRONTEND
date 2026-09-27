@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import Link from 'next/link'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -68,6 +69,12 @@ const ROLES_WITHOUT_TRAINING = new Set([
   'Warehouse Manager',
   'Trainer',
 ])
+
+const HIERARCHY_HOME: Record<string, string> = {
+  'Regional Manager': 'regional-manager',
+  'Regional Head': 'regional-head',
+  'National Head': 'national-head',
+}
 
 function getStatHref(role: string | undefined, index: number): string | null {
   if (index < 0 || index >= DEFAULT_STAT_HREFS.length) return null
@@ -273,6 +280,7 @@ type ExecutiveWiseClosedLeadData = {
 }
 
 export default function DashboardPage() {
+  const router = useRouter()
   const [stats, setStats] = useState(MOCK_STATS)
   const [trends, setTrends] = useState(MOCK_TRENDS)
   const [zones, setZones] = useState(MOCK_ZONES)
@@ -314,7 +322,13 @@ export default function DashboardPage() {
   useEffect(() => {
     const user = getCurrentUser()
     setCurrentUser(user)
-  }, [])
+    const segment = user?.role ? HIERARCHY_HOME[user.role] : undefined
+    if (user?._id && segment) {
+      router.replace(`/dashboard/hierarchy/${segment}/${user._id}`)
+    } else if (user?._id && user.role === 'Manager') {
+      router.replace('/dashboard/product-manager')
+    }
+  }, [router])
 
   // Super Admin dashboard has no Leads section; other roles keep Leads UI/fetches.
   const hideLeadsOnDashboard = currentUser?.role === 'Super Admin'
@@ -390,6 +404,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!currentUser) return
+    if (HIERARCHY_HOME[currentUser.role] || currentUser.role === 'Manager') return
 
     const fetchDashboardData = async () => {
       setLoading(true)
@@ -472,6 +487,13 @@ export default function DashboardPage() {
     if (currentUser?.role === 'Executive') {
       fetchExecutiveAnalytics()
     }
+  }
+
+  // Regional Manager, Regional Head, and National Head use their consolidated dashboards.
+  if (currentUser?._id && (HIERARCHY_HOME[currentUser.role] || currentUser.role === 'Manager')) {
+    return (
+      <div className="p-8 text-center text-neutral-500">Opening your dashboard…</div>
+    )
   }
 
   // Vendor gets dedicated dashboard with product/DC/stock insights

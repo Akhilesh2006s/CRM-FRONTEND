@@ -39,6 +39,39 @@ function canAccessExecutiveManagerOwnRoute(
     return String(user._id) === String(managerId)
   }
 
+  // Higher hierarchy roles open assigned Zonal Manager dashboards. The API rejects anyone outside their chain.
+  if (
+    user.role === 'Regional Manager' ||
+    user.role === 'Regional Head' ||
+    user.role === 'National Head'
+  ) {
+    return true
+  }
+
+  return false
+}
+
+function canAccessHierarchyPath(user: AuthUserWithPermissions, pathname: string): boolean {
+  if (user.role === 'Super Admin' || user.isSuperAdmin) return true
+  if (pathname === '/dashboard/hierarchy') return false
+
+  const regionalManager = pathname.match(/^\/dashboard\/hierarchy\/regional-manager\/([^/]+)(?:\/|$)/)
+  if (regionalManager) {
+    if (user.role === 'Regional Manager') return String(user._id) === regionalManager[1]
+    return user.role === 'Regional Head' || user.role === 'National Head'
+  }
+
+  const regionalHead = pathname.match(/^\/dashboard\/hierarchy\/regional-head\/([^/]+)(?:\/|$)/)
+  if (regionalHead) {
+    if (user.role === 'Regional Head') return String(user._id) === regionalHead[1]
+    return user.role === 'National Head'
+  }
+
+  const nationalHead = pathname.match(/^\/dashboard\/hierarchy\/national-head\/([^/]+)(?:\/|$)/)
+  if (nationalHead) {
+    return user.role === 'National Head' && String(user._id) === nationalHead[1]
+  }
+
   return false
 }
 
@@ -61,6 +94,13 @@ export function canAccessPath(
   if (options?.loading) return true
   if (!user) return false
   if (isSuperAdmin(user)) return true
+  if (user.role === 'Manager') {
+    return (
+      pathname === '/dashboard' ||
+      pathname === '/dashboard/product-manager' ||
+      pathname.startsWith('/dashboard/settings/password')
+    )
+  }
   if (!isRbacActive(user)) return true
 
   if (pathname === '/dashboard/dc/grid' || pathname.startsWith('/dashboard/dc/grid/')) {
@@ -82,11 +122,23 @@ export function canAccessPath(
     return canAccessExecutiveManagerOwnRoute(user, pathname)
   }
 
+  if (pathname === '/dashboard/hierarchy' || pathname.startsWith('/dashboard/hierarchy/')) {
+    return canAccessHierarchyPath(user, pathname)
+  }
+
   const isEmWorkspace = EXECUTIVE_MANAGER_WORKSPACE_ROUTES.some(
     (route) => pathname === route || pathname.startsWith(route + '/')
   )
   if (isEmWorkspace) {
     return canAccessExecutiveManagerWorkspace(user, pathname)
+  }
+
+  // BDE logs OPERATIONS visits from Clients → Visits
+  if (
+    user.role === 'Executive' &&
+    (pathname === '/dashboard/visits' || pathname.startsWith('/dashboard/visits/'))
+  ) {
+    return true
   }
 
   // HR Manager always has employee directory + verification + leave access

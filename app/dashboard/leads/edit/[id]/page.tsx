@@ -16,6 +16,7 @@ import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { useProducts } from '@/hooks/useProducts'
 import { normalizeIntegerInput } from '@/lib/numericInput'
+import { sanitizePhoneInput, validatePhoneDigits } from '@/lib/phone'
 
 type ProductSelection = {
   name: string
@@ -388,7 +389,10 @@ export default function EditLeadPage() {
 
   const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
-    setForm((f) => ({ ...f, [name]: value }))
+    const next = name === 'contact_mobile' || name === 'decision_maker_mobile'
+      ? sanitizePhoneInput(value)
+      : value
+    setForm((f) => ({ ...f, [name]: next }))
   }
 
   const handleProductCheck = (_index: number, _checked: boolean) => {
@@ -451,6 +455,18 @@ export default function EditLeadPage() {
     e.preventDefault()
     setSubmitting(true)
     setError(null)
+    const contactCheck = validatePhoneDigits(form.contact_mobile, { required: true })
+    if (!contactCheck.ok) {
+      setError(contactCheck.message)
+      setSubmitting(false)
+      return
+    }
+    const decisionCheck = validatePhoneDigits(form.decision_maker_mobile, { required: true })
+    if (!decisionCheck.ok) {
+      setError(decisionCheck.message)
+      setSubmitting(false)
+      return
+    }
     try {
       const parseFollowUp = (s: string) => {
         if (!s) return undefined
@@ -668,7 +684,7 @@ export default function EditLeadPage() {
           </div>
           <div>
             <Label>Contact mobile *</Label>
-            <Input className="bg-white text-neutral-900" name="contact_mobile" value={form.contact_mobile} onChange={onChange} required />
+            <Input className="bg-white text-neutral-900" name="contact_mobile" value={form.contact_mobile} onChange={onChange} inputMode="numeric" maxLength={15} placeholder="10 to 15 digits" required />
           </div>
           <div>
             <Label>Email</Label>
@@ -680,7 +696,7 @@ export default function EditLeadPage() {
           </div>
           <div>
             <Label>Decision Maker Mobile Number *</Label>
-            <Input className="bg-white text-neutral-900" name="decision_maker_mobile" value={form.decision_maker_mobile} onChange={onChange} required />
+            <Input className="bg-white text-neutral-900" name="decision_maker_mobile" value={form.decision_maker_mobile} onChange={onChange} inputMode="numeric" maxLength={15} placeholder="10 to 15 digits" required />
           </div>
           <div>
             <Label>Pincode *</Label>

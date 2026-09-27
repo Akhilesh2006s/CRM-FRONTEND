@@ -18,8 +18,7 @@ export default function WarehouseDCAtWarehouseScreen({ navigation }: any) {
       // Only DCs with status sent_to_manager appear here; once processed (completed) or on hold they disappear
       const data = await apiService.get('/dc/pending-warehouse');
       const arr = Array.isArray(data) ? data : (data?.data ?? []);
-      const atWarehouseOnly = (arr as any[]).filter((d: any) => d.status === 'sent_to_manager');
-      setDcs(atWarehouseOnly);
+      setDcs(arr as any[]);
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to load DCs at warehouse');
     } finally {
@@ -98,7 +97,17 @@ export default function WarehouseDCAtWarehouseScreen({ navigation }: any) {
                     </View>
                     <View style={[styles.statusBadge, { backgroundColor: colors.info + '15' }]}>
                       <View style={[styles.statusDot, { backgroundColor: colors.info }]} />
-                      <Text style={[styles.statusBadgeText, { color: colors.info }]}>At Warehouse</Text>
+                      <Text style={[styles.statusBadgeText, { color: colors.info }]}>
+                        {dc.warehouseStage === 'awaiting_receipt'
+                          ? 'Incoming'
+                          : dc.warehouseStage === 'accepted'
+                            ? 'Action Required'
+                            : dc.warehouseStage === 'pending_approval'
+                              ? 'Pending Approval'
+                              : dc.warehouseStage === 'returned'
+                                ? 'Returned'
+                                : 'At Warehouse'}
+                      </Text>
                     </View>
                   </View>
                 </View>

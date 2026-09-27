@@ -13,6 +13,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
+import { phoneDigitsError, sanitizePhoneDigits } from '../../utils/phone';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
@@ -458,6 +459,12 @@ export default function LeadEditScreen({ navigation, route }: any) {
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
+    const mobileError = phoneDigitsError(form.contact_mobile, true) || phoneDigitsError(form.decision_maker_mobile, true);
+    if (mobileError) {
+      setErrorMessage(mobileError);
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+      return;
+    }
     if (!form.remarks?.trim()) {
       setErrorMessage('Remarks is required');
       return;
@@ -610,8 +617,10 @@ export default function LeadEditScreen({ navigation, route }: any) {
         <FormField
           label="Contact mobile *"
           value={form.contact_mobile}
-          onChangeText={(text) => setForm((f) => ({ ...f, contact_mobile: text }))}
+          onChangeText={(text) => setForm((f) => ({ ...f, contact_mobile: sanitizePhoneDigits(text) }))}
           keyboardType="phone-pad"
+          placeholder="10 to 15 digits"
+          maxLength={15}
         />
         <FormField
           label="Email"
@@ -626,8 +635,10 @@ export default function LeadEditScreen({ navigation, route }: any) {
         <FormField
           label="Decision Maker Mobile *"
           value={form.decision_maker_mobile}
-          onChangeText={(text) => setForm((f) => ({ ...f, decision_maker_mobile: text }))}
+          onChangeText={(text) => setForm((f) => ({ ...f, decision_maker_mobile: sanitizePhoneDigits(text) }))}
           keyboardType="phone-pad"
+          placeholder="10 to 15 digits"
+          maxLength={15}
         />
         <FormField
           label="Landmark"
@@ -870,6 +881,7 @@ function FormField({
   keyboardType,
   placeholder,
   editable = true,
+  maxLength,
 }: {
   label: string;
   value: string;
@@ -877,6 +889,7 @@ function FormField({
   keyboardType?: 'default' | 'phone-pad' | 'number-pad';
   placeholder?: string;
   editable?: boolean;
+  maxLength?: number;
 }) {
   return (
     <View style={styles.fieldContainer}>
@@ -888,6 +901,7 @@ function FormField({
         keyboardType={keyboardType}
         placeholder={placeholder}
         editable={editable}
+        maxLength={maxLength}
       />
     </View>
   );

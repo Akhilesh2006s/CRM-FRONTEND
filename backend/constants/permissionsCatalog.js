@@ -72,6 +72,7 @@ const PAGE_ENTRIES = [
   // Warehouse
   { href: '/dashboard/warehouse/inventory-items', module: 'warehouse', resource: 'inventory_items', label: 'Inventory Items' },
   { href: '/dashboard/warehouse/stock', module: 'warehouse', resource: 'stock', label: 'Stock' },
+  { href: '/dashboard/warehouse/stock-approvals', module: 'warehouse', resource: 'stock_approvals', label: 'Pending Stock Approvals' },
   { href: '/dashboard/warehouse/dc-at-warehouse', module: 'warehouse', resource: 'dc_at_warehouse', label: 'DC @ Warehouse' },
   { href: '/dashboard/warehouse/completed-dc', module: 'warehouse', resource: 'completed_dc', label: 'Completed DC' },
   { href: '/dashboard/warehouse/hold-dc', module: 'warehouse', resource: 'hold_dc', label: 'Hold DC' },
@@ -121,6 +122,9 @@ const PAGE_ENTRIES = [
   { href: '/dashboard/settings/backup', module: 'settings', resource: 'backup', label: 'DB Backup' },
   { href: '/dashboard/settings/expenses', module: 'settings', resource: 'expenses', label: 'Expense policy' },
   { href: '/dashboard/settings/roles', module: 'settings', resource: 'roles', label: 'Roles & Permissions' },
+  { href: '/dashboard/hierarchy', module: 'hierarchy', resource: 'assign', label: 'Assign Hierarchy' },
+  { href: '/dashboard/product-managers', module: 'product_managers', resource: 'assign', label: 'Assign Products' },
+  { href: '/dashboard/product-manager', module: 'product_managers', resource: 'workspace', label: 'My Products' },
   // Executive manager
   { href: '/dashboard/executive-managers', module: 'executive_managers', resource: 'list', label: 'All Managers' },
   { href: '/dashboard/executive-managers/new', module: 'executive_managers', resource: 'create', label: 'Create Manager' },
@@ -188,7 +192,9 @@ const ROLE_TEMPLATE_KEYS = {
     (k) =>
       !k.startsWith('leads.') &&
       !k.includes('my_clients') &&
-      k !== pageKey('expenses', 'executive_manager_pending')
+      k !== pageKey('expenses', 'executive_manager_pending') &&
+      !k.startsWith('hierarchy.') &&
+      !k.startsWith('product_managers.')
   ),
   'finance-manager': [
     moduleKey('dashboard'),
@@ -296,24 +302,8 @@ const ROLE_TEMPLATE_KEYS = {
   manager: [
     moduleKey('dashboard'),
     pageKey('dashboard', 'home'),
-    moduleKey('clients'),
-    pageKey('clients', 'closed_sales'),
-    pageKey('clients', 'saved_dc'),
-    pageKey('clients', 'pending_dc'),
-    pageKey('clients', 'emp_dc'),
-    moduleKey('warehouse'),
-    pageKey('warehouse', 'dc_at_warehouse'),
-    pageKey('warehouse', 'completed_dc'),
-    buttonKey('warehouse', 'completed_dc', 'view_pdf'),
-    buttonKey('warehouse', 'completed_dc', 'replace_pdf'),
-    pageKey('warehouse', 'dc_listed'),
-    moduleKey('expenses'),
-    pageKey('expenses', 'pending'),
-    moduleKey('reports'),
-    pageKey('reports', 'leads'),
-    pageKey('reports', 'sales_visit'),
-    pageKey('reports', 'employee_track'),
-    pageKey('reports', 'expenses'),
+    moduleKey('product_managers'),
+    pageKey('product_managers', 'workspace'),
     moduleKey('settings'),
     pageKey('settings', 'password'),
   ],
@@ -390,6 +380,11 @@ const ROLE_TEMPLATE_KEYS = {
   'warehouse-executive': [
     moduleKey('dashboard'),
     pageKey('dashboard', 'home'),
+    moduleKey('warehouse'),
+    pageKey('warehouse', 'stock'),
+    pageKey('warehouse', 'stock_approvals'),
+    pageKey('warehouse', 'dc_at_warehouse'),
+    pageKey('warehouse', 'hold_dc'),
     moduleKey('returns'),
     pageKey('returns', 'warehouse_executive'),
     buttonKey('returns', 'warehouse', 'verify'),
@@ -404,9 +399,13 @@ const ROLE_TEMPLATE_KEYS = {
     buttonKey('returns', 'warehouse', 'verify'),
     buttonKey('returns', 'warehouse', 'approve'),
     moduleKey('warehouse'),
+    pageKey('warehouse', 'stock'),
+    pageKey('warehouse', 'stock_approvals'),
+    pageKey('warehouse', 'dc_at_warehouse'),
     pageKey('warehouse', 'completed_dc'),
     buttonKey('warehouse', 'completed_dc', 'view_pdf'),
     buttonKey('warehouse', 'completed_dc', 'replace_pdf'),
+    pageKey('warehouse', 'hold_dc'),
     moduleKey('settings'),
     pageKey('settings', 'password'),
   ],
@@ -447,6 +446,27 @@ const ROLE_TEMPLATE_KEYS = {
     moduleKey('settings'),
     pageKey('settings', 'password'),
   ],
+  'regional-manager': [
+    moduleKey('dashboard'),
+    pageKey('dashboard', 'home'),
+    moduleKey('hierarchy'),
+    moduleKey('settings'),
+    pageKey('settings', 'password'),
+  ],
+  'regional-head': [
+    moduleKey('dashboard'),
+    pageKey('dashboard', 'home'),
+    moduleKey('hierarchy'),
+    moduleKey('settings'),
+    pageKey('settings', 'password'),
+  ],
+  'national-head': [
+    moduleKey('dashboard'),
+    pageKey('dashboard', 'home'),
+    moduleKey('hierarchy'),
+    moduleKey('settings'),
+    pageKey('settings', 'password'),
+  ],
 };
 
 const LEGACY_ROLE_TO_SLUG = {
@@ -465,6 +485,9 @@ const LEGACY_ROLE_TO_SLUG = {
   Vendor: 'vendor',
   Partner: 'vendor',
   'Executive Manager': 'executive-manager',
+  'Regional Manager': 'regional-manager',
+  'Regional Head': 'regional-head',
+  'National Head': 'national-head',
   'Sales BDE': 'executive',
 };
 

@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useProducts } from '@/hooks/useProducts'
 import { sortDcsNewestFirst } from '@/lib/dcListSort'
+import { sanitizePhoneInput, validatePhoneDigits } from '@/lib/phone'
 import {
   mapInventoryIdentityOntoDcRow,
   requiredQtyFromDcRow,
@@ -117,6 +118,43 @@ type DC = {
   boxes?: string
   transportArea?: string
   deliveryStatus?: string
+  warehouseStage?: string
+  vehicleNo?: string
+  dispatchRemarks?: string
+  warehouseApprovalRemarks?: string
+  bags?: Array<{
+    bagNo?: string
+    product?: string
+    productName?: string
+    quantity?: number
+    unit?: string
+    label?: string
+    details?: string
+  }>
+}
+
+type BagDraft = {
+  bagNo: string
+  product: string
+  quantity: string
+  unit: string
+  label: string
+  details: string
+}
+
+function warehouseStageOf(dc: { warehouseStage?: string; status?: string }) {
+  if (dc.warehouseStage) return dc.warehouseStage
+  if (dc.status === 'warehouse_processing') return 'accepted'
+  if (dc.status === 'sent_to_manager') return 'awaiting_receipt'
+  return ''
+}
+
+const STAGE_LABEL: Record<string, string> = {
+  awaiting_receipt: 'Incoming — Pending Manager Receipt',
+  accepted: 'Accepted / Received at Warehouse',
+  pending_approval: 'Pending Manager Approval',
+  returned: 'Returned for Correction',
+  approved: 'Approved',
 }
 
 /** Prefer first non-empty string; never overwrite saved values with blanks. */
@@ -189,6 +227,10 @@ export default function WarehouseDcAtWarehouse() {
   const [lrNo, setLrNo] = useState('')
   const [lrDate, setLrDate] = useState('')
   const [boxes, setBoxes] = useState('')
+  const [vehicleNo, setVehicleNo] = useState('')
+  const [dispatchRemarks, setDispatchRemarks] = useState('')
+  const [approvalRemarks, setApprovalRemarks] = useState('')
+  const [bags, setBags] = useState<BagDraft[]>([])
   const [processing, setProcessing] = useState(false)
   const [onHoldProcessing, setOnHoldProcessing] = useState(false)
   const [openDialog, setOpenDialog] = useState(false)
@@ -217,6 +259,8 @@ export default function WarehouseDcAtWarehouse() {
   const isWarehouseExecutive = currentUser?.role === 'Warehouse Executive'
   const isWarehouseManager = currentUser?.role === 'Warehouse Manager'
   const canAccessWarehouse = isManager || isAdmin || isWarehouseExecutive || isWarehouseManager
+  const isChecker = isWarehouseManager || isAdmin
+  const isMaker = isWarehouseExecutive || isAdmin
 
   async function load() {
     try {
@@ -398,6 +442,31 @@ export default function WarehouseDcAtWarehouse() {
       setLrNo(pickNonEmpty(mergedDC.lrNo))
       setLrDate(mergedDC.lrDate ? new Date(mergedDC.lrDate).toISOString().split('T')[0] : '')
       setBoxes(pickNonEmpty(mergedDC.boxes))
+      setVehicleNo(pickNonEmpty(mergedDC.vehicleNo))
+      setDispatchRemarks(pickNonEmpty(mergedDC.dispatchRemarks))
+      setApprovalRemarks(pickNonEmpty(mergedDC.warehouseApprovalRemarks))
+      const loadedBags = Array.isArray(mergedDC.bags) ? mergedDC.bags : []
+      setBags(
+        loadedBags.length > 0
+          ? loadedBags.map((bag, index) => ({
+              bagNo: bag.bagNo || String(index + 1),
+              product: bag.product || bag.productName || '',
+              quantity: bag.quantity != null ? String(bag.quantity) : '',
+              unit: bag.unit || 'pcs',
+              label: bag.label || '',
+              details: bag.details || '',
+            }))
+          : (Array.isArray(fullDC.productDetails) && fullDC.productDetails.length > 0
+              ? fullDC.productDetails.map((p, index) => ({
+                  bagNo: String(index + 1),
+                  product: p.product || p.productName || '',
+                  quantity: String(p.deliverableQuantity ?? p.quantity ?? ''),
+                  unit: 'pcs',
+                  label: '',
+                  details: '',
+                }))
+              : [{ bagNo: '1', product: '', quantity: '', unit: 'pcs', label: '', details: '' }])
+      )
       setRemarks(pickNonEmpty(mergedDC.remarks, dcOrder.remarks))
       setInsufficientQuantity(false)
       setInsufficientStockMessage('')
@@ -423,11 +492,77 @@ export default function WarehouseDcAtWarehouse() {
     }
   }, [productRows, openDialog, selectedDC, warehouseInventory])
 
-  const processDC = async () => {
+  const packedBags = () =>
+    bags
+      .filter((bag) => bag.product.trim() && bag.bagNo.trim() && Number(bag.quantity) > 0)
+      .map((bag) => ({
+        bagNo: bag.bagNo.trim(),
+        product: bag.product.trim(),
+        productName: bag.product.trim(),
+        quantity: Number(bag.quantity),
+        unit: bag.unit || 'pcs',
+        label: bag.label,
+        details: bag.details,
+      }))
+
+  const acceptDC = async () => {
     if (!selectedDC) return
+    setProcessing(true)
+    try {
+      await apiRequest(`/dc/${selectedDC._id}/warehouse-accept`, { method: 'POST', body: '{}' })
+      alert('DC accepted. The Warehouse Executive can now receive, pack, and dispatch it.')
+      setOpenDialog(false)
+      load()
+    } catch (err: any) {
+      alert(err?.message || 'Failed to accept DC')
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  const returnDC = async () => {
+    if (!selectedDC) return
+    if (!approvalRemarks.trim()) {
+      alert('Enter remarks before returning this DC for correction.')
+      return
+    }
+    setProcessing(true)
+    try {
+      await apiRequest(`/dc/${selectedDC._id}/warehouse-return`, {
+        method: 'POST',
+        body: JSON.stringify({ remarks: approvalRemarks.trim() }),
+      })
+      alert('DC returned to the Warehouse Executive for correction.')
+      setOpenDialog(false)
+      load()
+    } catch (err: any) {
+      alert(err?.message || 'Failed to return DC')
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  const processDC = async (mode: 'submit' | 'approve' = 'submit') => {
+    if (!selectedDC) return
+
+    if (mode === 'submit') {
+      if (!lrNo.trim()) {
+        alert('LR Number is required before submitting for manager approval.')
+        return
+      }
+      if (packedBags().length === 0) {
+        alert('Add at least one bag with a material, bag number, and quantity.')
+        return
+      }
+    }
 
     if (!schoolType || schoolType.trim() === '') {
       alert('School Type is required. Please enter the school type before submitting.')
+      return
+    }
+    const mobileCheck = validatePhoneDigits(contactMobile, { required: false })
+    if (!mobileCheck.ok) {
+      alert(mobileCheck.message)
       return
     }
 
@@ -517,36 +652,58 @@ export default function WarehouseDcAtWarehouse() {
         }),
       })
 
-      await apiRequest(`/dc/${selectedDC._id}/warehouse-process`, {
-        method: 'POST',
-        body: JSON.stringify({
-          availableQuantity: totalAvailableQty,
-          deliverableQuantity: totalDeliverableQty,
-          remarks,
-          productDetails: updatedProductRows.map(p => ({
-            product: p.product,
-            productName: p.productName || p.product,
-            productCategory: p.productCategory,
-            class: p.class,
-            category: p.category,
-            specs: p.specs || '',
-            subject: p.subject || undefined,
-            quantity: p.quantity,
-            availableQuantity: p.availableQuantity,
-            deliverableQuantity: p.deliverableQuantity,
-            remainingQuantity: p.remainingQuantity,
-            strength: p.strength,
-            price: Number(p.price) || Number(p.unit_price) || 0,
-            unit_price: Number(p.unit_price) || Number(p.price) || 0,
-            total:
-              (Number(p.quantity) || 0) *
-              (Number(p.price) || Number(p.unit_price) || 0),
-            level: p.level || '',
-          })),
-        }),
-      })
+      const productPayload = updatedProductRows.map(p => ({
+        product: p.product,
+        productName: p.productName || p.product,
+        productCategory: p.productCategory,
+        class: p.class,
+        category: p.category,
+        specs: p.specs || '',
+        subject: p.subject || undefined,
+        quantity: p.quantity,
+        availableQuantity: p.availableQuantity,
+        deliverableQuantity: p.deliverableQuantity,
+        remainingQuantity: p.remainingQuantity,
+        strength: p.strength,
+        price: Number(p.price) || Number(p.unit_price) || 0,
+        unit_price: Number(p.unit_price) || Number(p.price) || 0,
+        total:
+          (Number(p.quantity) || 0) *
+          (Number(p.price) || Number(p.unit_price) || 0),
+        level: p.level || '',
+      }))
 
-      alert('DC processed successfully! It will appear in Completed DC page.')
+      if (mode === 'approve') {
+        await apiRequest(`/dc/${selectedDC._id}/warehouse-approve`, {
+          method: 'POST',
+          body: JSON.stringify({
+            availableQuantity: totalAvailableQty,
+            deliverableQuantity: totalDeliverableQty,
+            remarks,
+            productDetails: productPayload,
+          }),
+        })
+        alert('DC approved. Inventory is updated and the DC is now completed.')
+      } else {
+        await apiRequest(`/dc/${selectedDC._id}/warehouse-submit`, {
+          method: 'POST',
+          body: JSON.stringify({
+            availableQuantity: totalAvailableQty,
+            deliverableQuantity: totalDeliverableQty,
+            remarks,
+            productDetails: productPayload,
+            bags: packedBags(),
+            lrNo: lrNo.trim(),
+            lrDate: lrDate || undefined,
+            transport: transport || undefined,
+            transportArea: transportArea || undefined,
+            vehicleNo: vehicleNo || undefined,
+            boxes: boxes || undefined,
+            dispatchRemarks: dispatchRemarks || undefined,
+          }),
+        })
+        alert('Submitted for Warehouse Manager approval. Stock is not reduced until the manager approves.')
+      }
       setOpenDialog(false)
       load()
     } catch (err: any) {
@@ -567,6 +724,11 @@ export default function WarehouseDcAtWarehouse() {
     // Validate required fields
     if (!schoolType || schoolType.trim() === '') {
       alert('School Type is required. Please enter the school type before putting the DC on hold.')
+      return
+    }
+    const holdMobileCheck = validatePhoneDigits(contactMobile, { required: false })
+    if (!holdMobileCheck.ok) {
+      alert(holdMobileCheck.message)
       return
     }
 
@@ -686,9 +848,21 @@ export default function WarehouseDcAtWarehouse() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">DC Warehouse - Pending DCs</h1>
-          <p className="text-sm text-neutral-600 mt-1">Review and process DCs requested by Manager</p>
+          <p className="text-sm text-neutral-600 mt-1">
+            {isWarehouseManager
+              ? 'Accept incoming DCs, then approve packing and dispatch submitted by the Warehouse Executive.'
+              : isWarehouseExecutive
+                ? 'Process DCs the Warehouse Manager has accepted. Submit packing, LR, and dispatch for approval.'
+                : 'Review DCs at the warehouse'}
+          </p>
         </div>
       </div>
+
+      {isWarehouseExecutive && rows.some((row) => ['accepted', 'returned'].includes(warehouseStageOf(row))) && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          New DC Received – Action Required. Open each accepted DC, pack the material, enter the LR and dispatch details, then submit for manager approval.
+        </div>
+      )}
 
       <Card className="p-6 rounded-lg border border-neutral-200">
         <div className="overflow-x-auto">
@@ -702,18 +876,19 @@ export default function WarehouseDcAtWarehouse() {
                 <TableHead>Customer Phone</TableHead>
                 <TableHead>Requested Qty</TableHead>
                 <TableHead>Manager</TableHead>
+                <TableHead>Warehouse stage</TableHead>
                 <TableHead>Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading && (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-neutral-500">Loading...</TableCell>
+                  <TableCell colSpan={9} className="text-center text-neutral-500">Loading...</TableCell>
                 </TableRow>
               )}
               {!loading && rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-neutral-500">No pending DCs</TableCell>
+                  <TableCell colSpan={9} className="text-center text-neutral-500">No pending DCs</TableCell>
                 </TableRow>
               )}
               {rows.map((r, idx) => (
@@ -740,11 +915,18 @@ export default function WarehouseDcAtWarehouse() {
                     })()}
                   </TableCell>
                   <TableCell className="whitespace-nowrap">{r.managerId?.name || '-'}</TableCell>
+                  <TableCell className="whitespace-nowrap">{STAGE_LABEL[warehouseStageOf(r)] || warehouseStageOf(r) || '-'}</TableCell>
                   <TableCell className="whitespace-nowrap">
                     {canAccessWarehouse && (
                       <div className="flex items-center gap-2">
                         <Button size="sm" onClick={() => openProcessDialog(r)}>
-                          Update & Submit
+                          {isChecker && warehouseStageOf(r) === 'awaiting_receipt'
+                            ? 'Accept DC'
+                            : isMaker && ['accepted', 'returned'].includes(warehouseStageOf(r))
+                              ? 'Process DC'
+                              : isChecker && warehouseStageOf(r) === 'pending_approval'
+                                ? 'Review'
+                                : 'View'}
                         </Button>
                       </div>
                     )}
@@ -785,8 +967,10 @@ export default function WarehouseDcAtWarehouse() {
                       <Label className="text-sm text-neutral-600">Contact Mobile</Label>
                       <Input
                         value={contactMobile}
-                        onChange={(e) => setContactMobile(e.target.value)}
-                        placeholder="Contact Mobile"
+                        onChange={(e) => setContactMobile(sanitizePhoneInput(e.target.value))}
+                        placeholder="10 to 15 digits"
+                        inputMode="numeric"
+                        maxLength={15}
                         className="mt-1"
                       />
                 </div>
@@ -927,12 +1111,31 @@ export default function WarehouseDcAtWarehouse() {
                         />
                       </div>
                       <div>
+                        <Label className="text-sm text-neutral-600">Vehicle No</Label>
+                        <Input
+                          value={vehicleNo}
+                          onChange={(e) => setVehicleNo(e.target.value)}
+                          className="mt-1"
+                          placeholder="Vehicle number"
+                        />
+                      </div>
+                      <div>
                         <Label className="text-sm text-neutral-600">Boxes</Label>
                         <Input
                           value={boxes}
                           onChange={(e) => setBoxes(e.target.value)}
                           className="mt-1"
                           placeholder="Number of boxes"
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <Label className="text-sm text-neutral-600">Dispatch details</Label>
+                        <Textarea
+                          value={dispatchRemarks}
+                          onChange={(e) => setDispatchRemarks(e.target.value)}
+                          className="mt-1"
+                          placeholder="Transporter and dispatch notes"
+                          rows={2}
                         />
                       </div>
                       {selectedDC.deliveryStatus && (
@@ -950,6 +1153,36 @@ export default function WarehouseDcAtWarehouse() {
                   </Card>
                 )
               })()}
+
+              <Card className="p-4 border-t-4 border-t-amber-500">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div>
+                    <h3 className="font-semibold text-neutral-900">Packing / Bags</h3>
+                    <p className="text-sm text-neutral-500">DC → Material → Bag → LR → Dispatch. Packed quantity cannot exceed the deliverable quantity.</p>
+                  </div>
+                  {isMaker && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setBags((prev) => [...prev, { bagNo: String(prev.length + 1), product: productRows[0]?.product || '', quantity: '', unit: 'pcs', label: '', details: '' }])}
+                    >
+                      Add bag
+                    </Button>
+                  )}
+                </div>
+                <div className="space-y-3">
+                  {bags.map((bag, index) => (
+                    <div key={index} className="grid grid-cols-1 md:grid-cols-6 gap-2">
+                      <Input placeholder="Bag no" value={bag.bagNo} onChange={(e) => setBags((prev) => prev.map((row, i) => i === index ? { ...row, bagNo: e.target.value } : row))} />
+                      <Input className="md:col-span-2" placeholder="Material" value={bag.product} onChange={(e) => setBags((prev) => prev.map((row, i) => i === index ? { ...row, product: e.target.value } : row))} />
+                      <Input placeholder="Qty" type="number" min="0" value={bag.quantity} onChange={(e) => setBags((prev) => prev.map((row, i) => i === index ? { ...row, quantity: e.target.value } : row))} />
+                      <Input placeholder="Label / details" value={bag.details} onChange={(e) => setBags((prev) => prev.map((row, i) => i === index ? { ...row, details: e.target.value } : row))} />
+                      <Button type="button" variant="outline" onClick={() => setBags((prev) => prev.filter((_, i) => i !== index))} disabled={bags.length === 1}>Remove</Button>
+                    </div>
+                  ))}
+                </div>
+              </Card>
 
               {/* DC Information Update - Full Width */}
               <Card className="p-4 border-t-4 border-t-blue-500">
@@ -1099,8 +1332,24 @@ export default function WarehouseDcAtWarehouse() {
               </Card>
             </div>
           )}
-          <DialogFooter>
+          <DialogFooter className="flex-col items-stretch gap-3 sm:flex-col">
+            {selectedDC && (
+              <p className="text-sm text-neutral-600">
+                {STAGE_LABEL[warehouseStageOf(selectedDC)] || 'Warehouse stage pending'}
+                {selectedDC.warehouseApprovalRemarks ? ` — ${selectedDC.warehouseApprovalRemarks}` : ''}
+              </p>
+            )}
+            {isChecker && selectedDC && warehouseStageOf(selectedDC) === 'pending_approval' && (
+              <Textarea
+                value={approvalRemarks}
+                onChange={(e) => setApprovalRemarks(e.target.value)}
+                placeholder="Remarks for return or approval"
+                rows={2}
+              />
+            )}
+            <div className="flex flex-wrap justify-end gap-2">
             <Button variant="outline" onClick={() => setOpenDialog(false)}>Cancel</Button>
+            {(isMaker || isChecker) && selectedDC && warehouseStageOf(selectedDC) !== 'pending_approval' && (
             <Button 
               onClick={putOnHold} 
               disabled={onHoldProcessing || processing || productRows.length === 0}
@@ -1109,12 +1358,32 @@ export default function WarehouseDcAtWarehouse() {
             >
               {onHoldProcessing ? 'Putting on Hold...' : 'Hold DC'}
             </Button>
-            <Button 
-              onClick={processDC} 
-              disabled={processing || onHoldProcessing || productRows.length === 0 || insufficientQuantity}
-            >
-              {processing ? 'Processing...' : 'Update'}
-            </Button>
+            )}
+            {isChecker && selectedDC && warehouseStageOf(selectedDC) === 'awaiting_receipt' && (
+              <Button onClick={acceptDC} disabled={processing}>
+                {processing ? 'Accepting...' : 'Accept DC'}
+              </Button>
+            )}
+            {isMaker && selectedDC && ['accepted', 'returned'].includes(warehouseStageOf(selectedDC)) && (
+              <Button
+                onClick={() => processDC('submit')}
+                disabled={processing || onHoldProcessing || productRows.length === 0 || insufficientQuantity}
+              >
+                {processing ? 'Submitting...' : 'Submit for Manager Approval'}
+              </Button>
+            )}
+            {isChecker && selectedDC && warehouseStageOf(selectedDC) === 'pending_approval' && (
+              <>
+                <Button variant="outline" onClick={returnDC} disabled={processing}>Return for correction</Button>
+                <Button
+                  onClick={() => processDC('approve')}
+                  disabled={processing || productRows.length === 0 || insufficientQuantity}
+                >
+                  {processing ? 'Approving...' : 'Approve'}
+                </Button>
+              </>
+            )}
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Activi
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
+import { phoneDigitsError, sanitizePhoneDigits } from '../../utils/phone';
 import { useAuth } from '../../context/AuthContext';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
@@ -54,6 +55,12 @@ export default function PaymentAddScreen({ navigation }: any) {
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
+    const mobileError = phoneDigitsError(form.mobileNumber, false);
+    if (mobileError) {
+      setErrorMessage(mobileError);
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -95,7 +102,7 @@ export default function PaymentAddScreen({ navigation }: any) {
         <FormField label="Customer Name *" value={form.customerName} onChangeText={(text: string) => setForm((f) => ({ ...f, customerName: text }))} placeholder="Enter customer name" />
         <FormField label="School Code" value={form.schoolCode} onChangeText={(text: string) => setForm((f) => ({ ...f, schoolCode: text }))} placeholder="Enter school code" />
         <FormField label="Contact Name" value={form.contactName} onChangeText={(text: string) => setForm((f) => ({ ...f, contactName: text }))} placeholder="Enter contact name" />
-        <FormField label="Mobile Number" value={form.mobileNumber} onChangeText={(text: string) => setForm((f) => ({ ...f, mobileNumber: text }))} placeholder="Enter mobile number" keyboardType="phone-pad" />
+        <FormField label="Mobile Number" value={form.mobileNumber} onChangeText={(text: string) => setForm((f) => ({ ...f, mobileNumber: sanitizePhoneDigits(text) }))} placeholder="10 to 15 digits" keyboardType="phone-pad" maxLength={15} />
         <FormField label="Location" value={form.location} onChangeText={(text: string) => setForm((f) => ({ ...f, location: text }))} placeholder="Enter location" />
         <FormField label="Payment Date *" value={form.paymentDate} onChangeText={(text: string) => setForm((f) => ({ ...f, paymentDate: text }))} placeholder="YYYY-MM-DD" />
         <FormField label="Amount *" value={form.amount} onChangeText={(text: string) => setForm((f) => ({ ...f, amount: text }))} placeholder="Enter amount" keyboardType="decimal-pad" />
@@ -134,11 +141,11 @@ export default function PaymentAddScreen({ navigation }: any) {
   );
 }
 
-function FormField({ label, value, onChangeText, placeholder, keyboardType }: any) {
+function FormField({ label, value, onChangeText, placeholder, keyboardType, maxLength }: any) {
   return (
     <View style={styles.fieldContainer}>
       <Text style={styles.label}>{label}</Text>
-      <WebInput style={styles.input} value={value} onChangeText={onChangeText} placeholder={placeholder} keyboardType={keyboardType} />
+      <WebInput style={styles.input} value={value} onChangeText={onChangeText} placeholder={placeholder} keyboardType={keyboardType} maxLength={maxLength} />
     </View>
   );
 }

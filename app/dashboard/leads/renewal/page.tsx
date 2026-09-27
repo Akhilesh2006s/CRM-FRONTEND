@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { getCurrentUser } from '@/lib/auth'
 import { useProducts } from '@/hooks/useProducts'
 import { toast } from 'sonner'
+import { sanitizePhoneInput, validatePhoneDigits } from '@/lib/phone'
 import { ArrowLeft, MapPin, Edit, History, X, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -371,6 +372,11 @@ export default function RenewalLeadsPage() {
     }
     if (!renewContactPerson.trim() || !renewContactMobile.trim()) {
       toast.error('Contact person and mobile are required')
+      return
+    }
+    const mobileCheck = validatePhoneDigits(renewContactMobile, { required: true })
+    if (!mobileCheck.ok) {
+      toast.error(mobileCheck.message)
       return
     }
     const rows = renewProducts.filter((r) => r.product_name.trim())
@@ -778,8 +784,11 @@ export default function RenewalLeadsPage() {
                 <Label>Mobile (editable)</Label>
                 <Input
                   value={renewContactMobile}
-                  onChange={(e) => setRenewContactMobile(e.target.value)}
+                  onChange={(e) => setRenewContactMobile(sanitizePhoneInput(e.target.value))}
                   disabled={!selectedSchool}
+                  inputMode="numeric"
+                  maxLength={15}
+                  placeholder="10 to 15 digits"
                 />
               </div>
             </div>

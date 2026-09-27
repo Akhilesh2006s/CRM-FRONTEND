@@ -64,7 +64,7 @@ export default function DcGridWorkspace({ initialDcId, initialAction }: { initia
   const [previewError, setPreviewError] = useState('')
   const [selections, setSelections] = useState<Selection[]>([])
   const [allocationId, setAllocationId] = useState('')
-  const [school, setSchool] = useState({ school_name: '', school_code: '', contact_mobile: '', address: '' })
+  const [school, setSchool] = useState({ school_name: '', school_code: '', contact_mobile: '', address: '', pincode: '', state: '', zone: '', cluster: '' })
   const [employeeId, setEmployeeId] = useState('')
   const [employees, setEmployees] = useState<{ _id: string; name: string }[]>([])
   const [remarks, setRemarks] = useState('')
@@ -206,8 +206,12 @@ export default function DcGridWorkspace({ initialDcId, initialAction }: { initia
       {creationType && <>
         {creationType === 'new_school' ? <div className="grid gap-4 md:grid-cols-2">
           <Field title="School name"><Input value={school.school_name} onChange={(e) => setSchool({ ...school, school_name: e.target.value })} /></Field>
-          <Field title="School code"><Input value={school.school_code} onChange={(e) => setSchool({ ...school, school_code: e.target.value })} /></Field>
-          <Field title="Contact mobile"><Input inputMode="numeric" maxLength={10} value={school.contact_mobile} onChange={(e) => setSchool({ ...school, contact_mobile: e.target.value })} /></Field>
+          <Field title="School code"><Input value="Assigned automatically from the pincode, zone, and cluster" readOnly disabled /></Field>
+          <Field title="Pincode"><Input inputMode="numeric" maxLength={6} value={school.pincode} onChange={(e) => setSchool({ ...school, pincode: e.target.value.replace(/\D/g, '').slice(0, 6) })} /></Field>
+          <Field title="State"><Input value={school.state} onChange={(e) => setSchool({ ...school, state: e.target.value })} /></Field>
+          <Field title="Zone"><Input value={school.zone} onChange={(e) => setSchool({ ...school, zone: e.target.value })} /></Field>
+          <Field title="Cluster"><Input value={school.cluster} onChange={(e) => setSchool({ ...school, cluster: e.target.value })} /></Field>
+          <Field title="Contact mobile"><Input inputMode="numeric" maxLength={15} value={school.contact_mobile} onChange={(e) => setSchool({ ...school, contact_mobile: e.target.value.replace(/\D/g, '').slice(0, 15) })} /></Field>
           <Field title="School address"><Input value={school.address} onChange={(e) => setSchool({ ...school, address: e.target.value })} /></Field>
           {canAssign && <Field title="Assigned employee"><select className={selectClass} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}><option value="">Select employee</option>{employees.map((employee) => <option key={employee._id} value={employee._id}>{employee.name}</option>)}</select></Field>}
         </div> : <div className="space-y-3">{sourceSelector}<p className="text-sm text-neutral-500">This creates a new DC transaction linked to the selected DC.</p></div>}

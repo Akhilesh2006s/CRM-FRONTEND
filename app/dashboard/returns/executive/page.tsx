@@ -17,6 +17,7 @@ import {
   resolvePersistedUnitPrice,
 } from '@/lib/clientDcProductRows'
 import { toast } from 'sonner'
+import { sanitizePhoneInput, validatePhoneDigits } from '@/lib/phone'
 import { PlusCircle, X, Upload, Eye } from 'lucide-react'
 import { ReturnsListFilters } from '@/components/returns/ReturnsListFilters'
 import {
@@ -634,6 +635,11 @@ export default function ExecutiveStockReturnsPage() {
       toast.error('Please select Return Type')
       return false
     }
+    const mobileCheck = validatePhoneDigits(contactMobile, { required: false })
+    if (!mobileCheck.ok) {
+      toast.error(mobileCheck.message)
+      return false
+    }
     if (productRows.length === 0) {
       toast.error('Please add at least one product')
       return false
@@ -1066,8 +1072,10 @@ export default function ExecutiveStockReturnsPage() {
                   <Label>Contact Mobile</Label>
                   <Input
                     value={contactMobile}
-                    onChange={(e) => setContactMobile(e.target.value)}
-                    placeholder="Mobile number"
+                    onChange={(e) => setContactMobile(sanitizePhoneInput(e.target.value))}
+                    placeholder="10 to 15 digits"
+                    inputMode="numeric"
+                    maxLength={15}
                   />
                 </div>
                 <div className="md:col-span-2">

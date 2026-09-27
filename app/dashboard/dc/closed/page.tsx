@@ -1840,7 +1840,7 @@ export default function ClosedSalesPage() {
                   <div>
                     <Label className="text-sm font-medium mb-2 block">School Code</Label>
                     <Input 
-                      value={selectedDeal.dc_code || ''} 
+                      value={selectedDeal.school_code || selectedDeal.dc_code || ''} 
                       disabled 
                       className="bg-slate-50 text-slate-900 border-slate-200 h-11 text-sm" 
                       placeholder="School Code"
@@ -2377,10 +2377,10 @@ export default function ClosedSalesPage() {
                         }
                       }}
                       inputMode="numeric"
-                      maxLength={10}
+                      maxLength={15}
                       required
                       className={`h-11 text-sm border-slate-200 hover:border-blue-400 focus:border-blue-500 focus:ring-blue-500 bg-white ${dcDetailsErrors.contact_mobile2 ? 'border-red-500' : ''}`}
-                      placeholder="10-digit mobile number"
+                      placeholder="10 to 15 digits"
                     />
                     {dcDetailsErrors.contact_mobile2 && (
                       <p className="text-xs text-red-600 mt-1">{dcDetailsErrors.contact_mobile2}</p>

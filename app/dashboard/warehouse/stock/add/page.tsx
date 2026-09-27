@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { apiRequest } from '@/lib/api'
+import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
 import { useProducts } from '@/hooks/useProducts'
 import { MappedVendorField } from '@/components/warehouse/MappedVendorField'
@@ -126,7 +127,13 @@ export default function StockAddPage() {
   const [subject, setSubject] = useState('')
   const [vendor, setVendor] = useState('')
   const [qty, setQty] = useState('')
+  const [batchLot, setBatchLot] = useState('')
+  const [unit, setUnit] = useState('pcs')
+  const [stockDate, setStockDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [location, setLocation] = useState('Main Warehouse')
+  const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
+  const isWarehouseExecutive = getCurrentUser()?.role === 'Warehouse Executive'
 
   function upsertWarehouseItem(item: WarehouseItem) {
     setWarehouseItems((prev) => {
@@ -356,12 +363,47 @@ export default function StockAddPage() {
       toast.error('Enter a positive quantity')
       return
     }
+    if (isWarehouseExecutive) {
+      if (!batchLot.trim()) {
+        toast.error('Batch / lot number is required')
+        return
+      }
+      if (!location.trim()) {
+        toast.error('Warehouse location is required')
+        return
+      }
+    }
 
     const fields = { productName, category, specs, level, subject, vendor: mappedVendor }
     const targetId = selectedItemId || resolveExistingItemId(fields)
 
     try {
       setSaving(true)
+      if (isWarehouseExecutive) {
+        await apiRequest('/warehouse/stock-requests', {
+          method: 'POST',
+          body: JSON.stringify({
+            productId: targetId || undefined,
+            productName,
+            class: '',
+            category: showCategory ? category : '',
+            level: showLevel ? level : '',
+            specs: showSpecs ? specs : '',
+            subject: showSubject ? subject : '',
+            supplier: mappedVendor,
+            vendor: mappedVendor,
+            quantity: amount,
+            batchLot: batchLot.trim(),
+            unit: unit || 'pcs',
+            stockDate,
+            location: location.trim(),
+            notes,
+          }),
+        })
+        toast.success('Submitted. Pending Manager Approval. Stock is not in inventory until the Warehouse Manager approves it.')
+        router.push('/dashboard/warehouse/stock-approvals')
+        return
+      }
       if (targetId) {
         await apiRequest('/warehouse/stock', {
           method: 'POST',
@@ -403,13 +445,18 @@ export default function StockAddPage() {
     (!showCategory || Boolean(category)) &&
     (!showLevel || Boolean(level)) &&
     (!showSpecs || Boolean(specs)) &&
-    (!showSubject || Boolean(subject))
+    (!showSubject || Boolean(subject)) &&
+    (!isWarehouseExecutive || (Boolean(batchLot.trim()) && Boolean(location.trim())))
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Add Item Details</h1>
-        <p className="text-neutral-500">Add quantity to an existing inventory item</p>
+        <p className="text-neutral-500">
+          {isWarehouseExecutive
+            ? 'Submit stock for Warehouse Manager approval. Quantity is added to inventory only after approval.'
+            : 'Add quantity to an existing inventory item'}
+        </p>
       </div>
       <Card className="p-6">
         {loadingItem ? (
@@ -548,9 +595,30 @@ export default function StockAddPage() {
               />
             </div>
 
+            <div className="space-y-2">
+              <div className="text-sm font-medium">Batch / Lot Number{isWarehouseExecutive ? ' *' : ''}</div>
+              <Input value={batchLot} onChange={(e) => setBatchLot(e.target.value)} placeholder="Batch or lot number" />
+            </div>
+            <div className="space-y-2">
+              <div className="text-sm font-medium">Unit</div>
+              <Input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="pcs" />
+            </div>
+            <div className="space-y-2">
+              <div className="text-sm font-medium">Date</div>
+              <Input type="date" value={stockDate} onChange={(e) => setStockDate(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <div className="text-sm font-medium">Warehouse location{isWarehouseExecutive ? ' *' : ''}</div>
+              <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Main Warehouse" />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <div className="text-sm font-medium">Notes</div>
+              <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional notes" />
+            </div>
+
             <div className="md:col-span-2 flex gap-3">
               <Button type="submit" disabled={saving || !canSubmit}>
-                {saving ? 'Adding…' : 'Add Item'}
+                {saving ? 'Submitting…' : isWarehouseExecutive ? 'Submit for Approval' : 'Add Item'}
               </Button>
               <Button type="button" variant="destructive" onClick={() => router.push('/dashboard/warehouse/stock')}>
                 Cancel

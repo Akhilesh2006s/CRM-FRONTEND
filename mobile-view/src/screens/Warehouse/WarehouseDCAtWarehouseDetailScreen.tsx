@@ -21,6 +21,8 @@ import ScreenShell from '../../ui/ScreenShell';
 import { WebInput } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 import { apiService } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
+import { phoneDigitsError, sanitizePhoneDigits } from '../../utils/phone';
 import {
   findCatalogProduct,
   getProductSpecsOptions,
@@ -233,6 +235,7 @@ function Field({
   multiline,
   required,
   keyboardType,
+  maxLength,
 }: {
   label: string;
   value: string;
@@ -242,6 +245,7 @@ function Field({
   multiline?: boolean;
   required?: boolean;
   keyboardType?: any;
+  maxLength?: number;
 }) {
   return (
     <View style={styles.field}>
@@ -258,6 +262,7 @@ function Field({
         multiline={multiline}
         numberOfLines={multiline ? 3 : 1}
         keyboardType={keyboardType}
+        maxLength={maxLength}
       />
     </View>
   );
@@ -265,7 +270,14 @@ function Field({
 
 export default function WarehouseDCAtWarehouseDetailScreen({ navigation, route }: any) {
   const { id } = route.params;
+  const { user } = useAuth();
+  const role = user?.role || '';
+  const isChecker = role === 'Warehouse Manager' || role === 'Admin' || role === 'Super Admin';
+  const isMaker = role === 'Warehouse Executive' || role === 'Admin' || role === 'Super Admin';
   const [dc, setDc] = useState<any>(null);
+  const [lrNo, setLrNo] = useState('');
+  const [vehicleNo, setVehicleNo] = useState('');
+  const [returnRemarks, setReturnRemarks] = useState('');
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [holding, setHolding] = useState(false);
@@ -339,6 +351,8 @@ export default function WarehouseDCAtWarehouseDetailScreen({ navigation, route }
       setDcRemarks(fullDC.dcRemarks || '');
       setDcCategory(fullDC.dcCategory || 'Term 1');
       setDcNotes(fullDC.dcNotes || '');
+      setLrNo(fullDC.lrNo || '');
+      setVehicleNo(fullDC.vehicleNo || '');
 
       if (Array.isArray(fullDC.productDetails) && fullDC.productDetails.length > 0) {
         setProductRows(
@@ -482,9 +496,47 @@ export default function WarehouseDCAtWarehouseDetailScreen({ navigation, route }
     };
   };
 
+  const handleReturn = async () => {
+    if (!returnRemarks.trim()) {
+      setBanner({ type: 'error', message: 'Enter remarks before returning this DC for correction.' });
+      return;
+    }
+    setProcessing(true);
+    try {
+      await apiService.post(`/dc/${id}/warehouse-return`, { remarks: returnRemarks.trim() });
+      navigation.goBack();
+    } catch (e: any) {
+      setBanner({ type: 'error', message: errMsg(e, 'Failed to return DC') });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   const handleUpdateAndSubmit = async () => {
+    const stage = dc?.warehouseStage || (dc?.status === 'sent_to_manager' ? 'awaiting_receipt' : '');
+    if (stage === 'awaiting_receipt') {
+      if (!isChecker) {
+        setBanner({ type: 'error', message: 'The Warehouse Manager must accept this DC before it can be processed.' });
+        return;
+      }
+      setProcessing(true);
+      try {
+        await apiService.post(`/dc/${id}/warehouse-accept`, {});
+        navigation.goBack();
+      } catch (e: any) {
+        setBanner({ type: 'error', message: errMsg(e, 'Failed to accept DC') });
+      } finally {
+        setProcessing(false);
+      }
+      return;
+    }
     if (!schoolType.trim()) {
       setBanner({ type: 'error', message: 'School Type is required. Please enter the school type before submitting.' });
+      return;
+    }
+    const mobileError = phoneDigitsError(contactMobile, false);
+    if (mobileError) {
+      setBanner({ type: 'error', message: mobileError });
       return;
     }
     if (!dcDate.trim()) {
@@ -503,13 +555,40 @@ export default function WarehouseDCAtWarehouseDetailScreen({ navigation, route }
     setBanner(null);
     try {
       const t = totals(productRows);
+      const stage = dc?.warehouseStage || (dc?.status === 'warehouse_processing' ? 'accepted' : '');
       await apiService.put(`/dc/${id}`, sharedBody(productRows));
-      await apiService.post(`/dc/${id}/warehouse-process`, {
-        availableQuantity: t.available,
-        deliverableQuantity: t.deliverable,
-        remarks: dcRemarks || undefined,
+      if (stage === 'pending_approval' && isChecker) {
+        await apiService.post(`/dc/${id}/warehouse-approve`, {
+          availableQuantity: t.available,
+          deliverableQuantity: t.deliverable,
+          remarks: dcRemarks || undefined,
+          productDetails: productPayload(productRows),
+        });
+        navigation.navigate('WarehouseCompletedDC');
+        return;
+      }
+      if (!isMaker) {
+        setBanner({ type: 'error', message: 'Only a Warehouse Executive can submit packing for approval.' });
+        return;
+      }
+      if (!lrNo.trim()) {
+        setBanner({ type: 'error', message: 'LR Number is required before submitting for manager approval.' });
+        return;
+      }
+      await apiService.post(`/dc/${id}/warehouse-submit`, {
+        ...sharedBody(productRows),
+        lrNo: lrNo.trim(),
+        vehicleNo: vehicleNo.trim() || undefined,
+        bags: productRows.map((p, index) => ({
+          bagNo: String(index + 1),
+          product: p.product,
+          productName: p.product,
+          quantity: p.deliverableQuantity || p.quantity || 0,
+          unit: 'pcs',
+        })),
       });
-      navigation.navigate('WarehouseCompletedDC');
+      setBanner({ type: 'success', message: 'Submitted for Warehouse Manager approval.' });
+      navigation.goBack();
     } catch (e: any) {
       setBanner({ type: 'error', message: errMsg(e, 'Failed to process DC') });
     } finally {
@@ -561,9 +640,10 @@ export default function WarehouseDCAtWarehouseDetailScreen({ navigation, route }
         <Field
           label="Contact Mobile"
           value={contactMobile}
-          onChangeText={setContactMobile}
-          placeholder="Contact Mobile"
+          onChangeText={(text) => setContactMobile(sanitizePhoneDigits(text))}
+          placeholder="10 to 15 digits"
           keyboardType="phone-pad"
+          maxLength={15}
         />
         <Field
           label="School Type *"
@@ -689,6 +769,15 @@ export default function WarehouseDCAtWarehouseDetailScreen({ navigation, route }
         </ScrollView>
       </View>
 
+      <View style={[styles.section, styles.dcSection]}>
+        <Text style={styles.sectionTitle}>LR & Dispatch</Text>
+        <Field label="LR Number" value={lrNo} onChangeText={setLrNo} placeholder="LR number" />
+        <Field label="Vehicle No" value={vehicleNo} onChangeText={setVehicleNo} placeholder="Vehicle number" />
+        {isChecker && (dc?.warehouseStage === 'pending_approval') ? (
+          <Field label="Return remarks" value={returnRemarks} onChangeText={setReturnRemarks} placeholder="Required to send back for correction" multiline />
+        ) : null}
+      </View>
+
       <View style={styles.buttonCol}>
         <TouchableOpacity style={styles.cancelBtn} onPress={() => navigation.goBack()} disabled={busy}>
           <Text style={styles.cancelText}>Cancel</Text>
@@ -700,15 +789,26 @@ export default function WarehouseDCAtWarehouseDetailScreen({ navigation, route }
         >
           {holding ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Hold DC</Text>}
         </TouchableOpacity>
+        {isChecker && dc?.warehouseStage === 'pending_approval' ? (
+          <TouchableOpacity style={[styles.holdBtn, busy && styles.btnDisabled]} onPress={handleReturn} disabled={busy}>
+            <Text style={styles.primaryText}>Return</Text>
+          </TouchableOpacity>
+        ) : null}
         <TouchableOpacity
-          style={[styles.submitBtn, (busy || insufficientQuantity || productRows.length === 0) && styles.btnDisabled]}
+          style={[styles.submitBtn, (busy || (dc?.warehouseStage !== 'awaiting_receipt' && (insufficientQuantity || productRows.length === 0))) && styles.btnDisabled]}
           onPress={handleUpdateAndSubmit}
-          disabled={busy || insufficientQuantity || productRows.length === 0}
+          disabled={busy || (dc?.warehouseStage !== 'awaiting_receipt' && (insufficientQuantity || productRows.length === 0))}
         >
           {processing ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.primaryText}>Update & Submit</Text>
+            <Text style={styles.primaryText}>
+              {dc?.warehouseStage === 'awaiting_receipt'
+                ? 'Accept DC'
+                : dc?.warehouseStage === 'pending_approval'
+                  ? 'Approve'
+                  : 'Submit for Approval'}
+            </Text>
           )}
         </TouchableOpacity>
       </View>

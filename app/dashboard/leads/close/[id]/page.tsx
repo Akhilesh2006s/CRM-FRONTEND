@@ -20,6 +20,7 @@ import {
 } from '@/lib/closeLeadProductConfig'
 import { useCloseLeadProductConfig } from '@/hooks/useCloseLeadProductConfig'
 import { CloseLeadProductConfig } from '@/components/leads/CloseLeadProductConfig'
+import { sanitizePhoneInput, validatePhoneDigits } from '@/lib/phone'
 
 type Lead = {
   _id: string
@@ -487,6 +488,17 @@ export default function CloseLeadPage() {
     if (!currentUser?._id) {
       throw new Error('User not found. Please login again.')
     }
+    const mobileCheck = validatePhoneDigits(lead?.contact_mobile || '', { required: true })
+    if (!mobileCheck.ok) {
+      throw new Error(mobileCheck.message)
+    }
+    const decisionMobile = String(form.contact_mobile2 || '').trim()
+    if (decisionMobile) {
+      const decisionCheck = validatePhoneDigits(decisionMobile, { required: true })
+      if (!decisionCheck.ok) {
+        throw new Error(decisionCheck.message)
+      }
+    }
 
     const assignedEmployeeId = currentUser._id
     const isDcOrder = isDcOrderRecord
@@ -784,7 +796,10 @@ export default function CloseLeadPage() {
             <Label className="text-sm font-semibold text-neutral-700">Mob 1</Label>
             <Input
               value={lead?.contact_mobile || ''}
-              onChange={(e) => setLead(lead ? { ...lead, contact_mobile: e.target.value } : null)}
+              onChange={(e) => setLead(lead ? { ...lead, contact_mobile: sanitizePhoneInput(e.target.value) } : null)}
+              inputMode="numeric"
+              maxLength={15}
+              placeholder="10 to 15 digits"
               className="mt-1"
             />
           </div>
@@ -805,8 +820,10 @@ export default function CloseLeadPage() {
             <Label className="text-sm font-semibold text-neutral-700">Decision Maker Mobile Number</Label>
             <Input
               value={form.contact_mobile2}
-              onChange={(e) => setForm({ ...form, contact_mobile2: e.target.value })}
-              placeholder="Enter decision maker mobile"
+              onChange={(e) => setForm({ ...form, contact_mobile2: sanitizePhoneInput(e.target.value) })}
+              inputMode="numeric"
+              maxLength={15}
+              placeholder="10 to 15 digits"
               className="mt-1"
             />
           </div>

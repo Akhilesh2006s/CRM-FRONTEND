@@ -13,6 +13,7 @@ import { Can } from '@/components/permissions/Can'
 import { usePermissions } from '@/components/permissions/PermissionsProvider'
 import { toast } from 'sonner'
 import { Pencil } from 'lucide-react'
+import { sanitizePhoneInput, validateStrictIndianMobile } from '@/lib/phone'
 import { displayRoleName } from '@/lib/roleLabels'
 
 type Employee = {
@@ -53,7 +54,7 @@ export default function ActiveEmployeesPage() {
     ? !hasPermission('employees.active.edit') && !hasPermission('employees.active.delete')
     : isCoordinator || isSeniorCoordinator
   
-  const availableRoles = ['Executive', 'Trainer', 'Finance Manager', 'HR Manager', 'HR Executive', 'Coordinator', 'Senior Coordinator', 'Manager', 'Admin', 'Super Admin', 'Executive Manager']
+  const availableRoles = ['Executive', 'Trainer', 'Finance Manager', 'HR Manager', 'HR Executive', 'Coordinator', 'Senior Coordinator', 'Manager', 'Admin', 'Super Admin', 'Executive Manager', 'Regional Manager', 'Regional Head', 'National Head']
 
   const load = async () => {
     setLoading(true)
@@ -83,7 +84,7 @@ export default function ActiveEmployeesPage() {
     setEditForm({
       name: employee.name || '',
       email: employee.email || '',
-      phone: employee.phone || '',
+      phone: employee.phone && employee.phone !== '0' ? employee.phone : '',
       mobile: employee.mobile || '',
       role: employee.role || '',
       department: employee.department || '',
@@ -106,6 +107,18 @@ export default function ActiveEmployeesPage() {
     if (!editForm.role?.trim()) {
       toast.error('Role is required')
       return
+    }
+    const mobileCheck = validateStrictIndianMobile(editForm.mobile)
+    if (!mobileCheck.ok) {
+      toast.error(mobileCheck.message)
+      return
+    }
+    if (editForm.phone.trim()) {
+      const phoneCheck = validateStrictIndianMobile(editForm.phone)
+      if (!phoneCheck.ok) {
+        toast.error(phoneCheck.message)
+        return
+      }
     }
     
     setSaving(true)
@@ -253,8 +266,10 @@ export default function ActiveEmployeesPage() {
                 id="edit-mobile"
                 type="tel"
                 value={editForm.mobile}
-                onChange={(e) => setEditForm({ ...editForm, mobile: e.target.value })}
-                placeholder="Primary mobile number"
+                onChange={(e) => setEditForm({ ...editForm, mobile: sanitizePhoneInput(e.target.value, 15) })}
+                placeholder="10 to 15 digits"
+                inputMode="numeric"
+                maxLength={15}
                 className="mt-1"
               />
             </div>
@@ -264,8 +279,10 @@ export default function ActiveEmployeesPage() {
                 id="edit-phone"
                 type="tel"
                 value={editForm.phone}
-                onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-                placeholder="Secondary phone"
+                onChange={(e) => setEditForm({ ...editForm, phone: sanitizePhoneInput(e.target.value, 15) })}
+                placeholder="10 to 15 digits"
+                inputMode="numeric"
+                maxLength={15}
                 className="mt-1"
               />
             </div>

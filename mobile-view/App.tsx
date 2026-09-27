@@ -56,6 +56,10 @@ import EmployeesLeavesScreen from './src/screens/Employees/EmployeesLeavesScreen
 import ExecutiveManagersScreen from './src/screens/ExecutiveManagers/ExecutiveManagersScreen';
 import ExecutiveManagerNewScreen from './src/screens/ExecutiveManagers/ExecutiveManagerNewScreen';
 import ExecutiveManagerDashboardScreen from './src/screens/ExecutiveManagers/ExecutiveManagerDashboardScreen';
+import HierarchyDashboardScreen from './src/screens/Hierarchy/HierarchyDashboardScreen';
+import HierarchyAssignScreen from './src/screens/Hierarchy/HierarchyAssignScreen';
+import ProductManagerScreen from './src/screens/ProductManager/ProductManagerScreen';
+import ProductManagerAssignScreen from './src/screens/ProductManager/ProductManagerAssignScreen';
 import ExecutiveManagerLeavesScreen from './src/screens/ExecutiveManagers/ExecutiveManagerLeavesScreen';
 import POChangeRequestsScreen from './src/screens/ExecutiveManagers/POChangeRequestsScreen';
 import POChangeRequestDetailScreen from './src/screens/ExecutiveManagers/POChangeRequestDetailScreen';
@@ -80,6 +84,7 @@ import WarehouseInventoryItemNewScreen from './src/screens/Warehouse/WarehouseIn
 import WarehouseInventoryItemEditScreen from './src/screens/Warehouse/WarehouseInventoryItemEditScreen';
 import WarehouseStockScreen from './src/screens/Warehouse/WarehouseStockScreen';
 import WarehouseStockAddScreen from './src/screens/Warehouse/WarehouseStockAddScreen';
+import WarehouseStockApprovalsScreen from './src/screens/Warehouse/WarehouseStockApprovalsScreen';
 import WarehouseDCAtWarehouseScreen from './src/screens/Warehouse/WarehouseDCAtWarehouseScreen';
 import WarehouseDCAtWarehouseDetailScreen from './src/screens/Warehouse/WarehouseDCAtWarehouseDetailScreen';
 import WarehouseCompletedDCScreen from './src/screens/Warehouse/WarehouseCompletedDCScreen';
@@ -282,6 +287,10 @@ function AuthenticatedStack() {
         <Stack.Screen name="ExecutiveManagers" component={ExecutiveManagersScreen} />
         <Stack.Screen name="ExecutiveManagerNew" component={ExecutiveManagerNewScreen} />
         <Stack.Screen name="ExecutiveManagerDashboard" component={ExecutiveManagerDashboardScreen} />
+        <Stack.Screen name="HierarchyDashboard" component={HierarchyDashboardScreen} />
+        <Stack.Screen name="HierarchyAssign" component={HierarchyAssignScreen} />
+        <Stack.Screen name="ProductManager" component={ProductManagerScreen} />
+        <Stack.Screen name="ProductManagerAssign" component={ProductManagerAssignScreen} />
         <Stack.Screen name="ExecutiveManagerLeaves" component={ExecutiveManagerLeavesScreen} />
         <Stack.Screen name="POChangeRequests" component={POChangeRequestsScreen} />
         <Stack.Screen name="POChangeRequestDetail" component={POChangeRequestDetailScreen} />
@@ -313,6 +322,7 @@ function AuthenticatedStack() {
         <Stack.Screen name="WarehouseInventoryItemEdit" component={WarehouseInventoryItemEditScreen} />
         <Stack.Screen name="WarehouseStock" component={WarehouseStockScreen} />
         <Stack.Screen name="WarehouseStockAdd" component={WarehouseStockAddScreen} />
+        <Stack.Screen name="WarehouseStockApprovals" component={WarehouseStockApprovalsScreen} />
         <Stack.Screen name="WarehouseDCAtWarehouse" component={WarehouseDCAtWarehouseScreen} />
         <Stack.Screen name="WarehouseDCAtWarehouseDetail" component={WarehouseDCAtWarehouseDetailScreen} />
         <Stack.Screen name="WarehouseCompletedDC" component={WarehouseCompletedDCScreen} />

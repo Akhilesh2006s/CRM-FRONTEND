@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { apiRequest } from '@/lib/api'
+import { sanitizePhoneInput, validatePhoneDigits } from '@/lib/phone'
 import { toast } from 'sonner'
 
 export default function CreateExecutiveManagerPage() {
@@ -24,13 +25,21 @@ export default function CreateExecutiveManagerPage() {
 
   const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
-    setForm((f) => ({ ...f, [name]: value }))
+    setForm((f) => ({ ...f, [name]: name === 'phone' ? sanitizePhoneInput(value, 15) : value }))
   }
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSubmitting(true)
     setError(null)
+    if (form.phone.trim()) {
+      const phoneCheck = validatePhoneDigits(form.phone, { required: true })
+      if (!phoneCheck.ok) {
+        setError(phoneCheck.message)
+        setSubmitting(false)
+        return
+      }
+    }
     try {
       await apiRequest('/executive-managers/create', {
         method: 'POST',
@@ -116,7 +125,9 @@ export default function CreateExecutiveManagerPage() {
               value={form.phone}
               onChange={onChange}
               className="bg-white"
-              placeholder="Phone number"
+              placeholder="10 to 15 digits"
+              inputMode="numeric"
+              maxLength={15}
             />
           </div>
           <div>

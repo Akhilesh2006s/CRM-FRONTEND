@@ -18,6 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { apiService, getApiUrl } from '../../services/api';
+import { phoneDigitsError, sanitizePhoneDigits } from '../../utils/phone';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebSelect } from '../../ui/WebPrimitives';
 import { useAuth } from '../../context/AuthContext';
@@ -644,6 +645,11 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
   };
 
   const saveDraft = async () => {
+    const mobileError = phoneDigitsError(contactMobile, false);
+    if (mobileError) {
+      Alert.alert('Validation', mobileError);
+      return;
+    }
     setSaving(true);
     try {
       const payload = { ...buildPayload(), status: 'Draft' };
@@ -673,6 +679,11 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
         'Validation',
         'Please complete all required fields: Customer, Sale/DC, Warehouse, Return Date & Type, LR No, Fin Year, at least one product with Return Qty and Reason, and at least one photo. Damaged/Expired returns also require executive remarks.'
       );
+      return;
+    }
+    const mobileError = phoneDigitsError(contactMobile, false);
+    if (mobileError) {
+      Alert.alert('Validation', mobileError);
       return;
     }
     setSaving(true);
@@ -905,7 +916,7 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
           <WebInput style={styles.input} value={contactPerson} onChangeText={setContactPerson} placeholder="Contact person" />
 
           <Text style={formStyles.label}>Contact Mobile</Text>
-          <WebInput style={styles.input} value={contactMobile} onChangeText={setContactMobile} placeholder="Mobile number" />
+          <WebInput style={styles.input} value={contactMobile} onChangeText={(text) => setContactMobile(sanitizePhoneDigits(text))} placeholder="10 to 15 digits" keyboardType="phone-pad" maxLength={15} />
 
           <Text style={formStyles.label}>Address</Text>
           <WebInput style={styles.input} value={address} onChangeText={setAddress} placeholder="Delivery address" />

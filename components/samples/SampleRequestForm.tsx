@@ -19,6 +19,7 @@ import {
 } from '@/lib/sampleRequestFields'
 import { Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { sanitizePhoneInput, validatePhoneDigits } from '@/lib/phone'
 
 type ProductRow = SampleProductLine & { id: string }
 
@@ -168,6 +169,11 @@ export default function SampleRequestForm({ onSuccess }: Props) {
       toast.error('Add at least one product')
       return
     }
+    const mobileCheck = validatePhoneDigits(contactMobile, { required: false })
+    if (!mobileCheck.ok) {
+      toast.error(mobileCheck.message)
+      return
+    }
     for (const row of rows) {
       if (!row.product || row.quantity < 1) {
         toast.error('Fill product name and quantity for all lines')
@@ -274,7 +280,10 @@ export default function SampleRequestForm({ onSuccess }: Props) {
               <Input
                 className="bg-white"
                 value={contactMobile}
-                onChange={(e) => setContactMobile(e.target.value)}
+                onChange={(e) => setContactMobile(sanitizePhoneInput(e.target.value))}
+                inputMode="numeric"
+                maxLength={15}
+                placeholder="10 to 15 digits"
               />
             </div>
             <div className="md:col-span-2">

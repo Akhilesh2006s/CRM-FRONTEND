@@ -20,6 +20,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
+import { phoneDigitsError, sanitizePhoneDigits } from '../../utils/phone';
 import { useAuth } from '../../context/AuthContext';
 import { navigateRoot } from '../../navigation/navigationRef';
 import ScreenShell from '../../ui/ScreenShell';
@@ -310,6 +311,11 @@ function CreateSaleForm({ navigation }: { navigation: any }) {
       setError('School name, contact person, and mobile are required');
       return;
     }
+    const mobileError = phoneDigitsError(form.contact_mobile, true) || phoneDigitsError(form.contact_mobile2, false);
+    if (mobileError) {
+      setError(mobileError);
+      return;
+    }
     const code = form.school_code.trim();
     if (!code) {
       setSchoolCodeError('School Code is required');
@@ -433,7 +439,7 @@ function CreateSaleForm({ navigation }: { navigation: any }) {
       <WebInput
         placeholder="Contact mobile *"
         value={form.contact_mobile}
-        onChangeText={(v) => setField('contact_mobile', v)}
+        onChangeText={(v) => setField('contact_mobile', sanitizePhoneDigits(v))}
         keyboardType="phone-pad"
       />
       <WebInput
@@ -450,7 +456,7 @@ function CreateSaleForm({ navigation }: { navigation: any }) {
       <WebInput
         placeholder="Contact Mobile 2"
         value={form.contact_mobile2}
-        onChangeText={(v) => setField('contact_mobile2', v)}
+        onChangeText={(v) => setField('contact_mobile2', sanitizePhoneDigits(v))}
         keyboardType="phone-pad"
       />
       <WebInput
@@ -917,6 +923,12 @@ function RaiseDCForm({
       }
       if (!contactMobile2.trim()) {
         setErrorMessage('Contact Mobile 2 * is required');
+        scrollRef.current?.scrollTo({ y: 0, animated: true });
+        return false;
+      }
+      const mobile2Error = phoneDigitsError(contactMobile2, true);
+      if (mobile2Error) {
+        setErrorMessage(mobile2Error);
         scrollRef.current?.scrollTo({ y: 0, animated: true });
         return false;
       }
@@ -1466,8 +1478,10 @@ function RaiseDCForm({
               <FormField
                 label="Contact Mobile 2 *"
                 value={contactMobile2}
-                onChangeText={setContactMobile2}
-                placeholder="Enter contact mobile 2"
+                onChangeText={(text) => setContactMobile2(sanitizePhoneDigits(text))}
+                placeholder="10 to 15 digits"
+                maxLength={15}
+                keyboardType="phone-pad"
               />
             </>
           ) : null}
@@ -1581,6 +1595,8 @@ function FormField({
   placeholder,
   editable = true,
   multiline = false,
+  maxLength,
+  keyboardType,
 }: {
   label: string;
   value: string;
@@ -1588,6 +1604,8 @@ function FormField({
   placeholder?: string;
   editable?: boolean;
   multiline?: boolean;
+  maxLength?: number;
+  keyboardType?: 'default' | 'phone-pad' | 'number-pad' | 'email-address';
 }) {
   return (
     <View style={styles.fieldContainer}>
@@ -1600,6 +1618,8 @@ function FormField({
         editable={editable}
         multiline={multiline}
         numberOfLines={multiline ? 4 : 1}
+        maxLength={maxLength}
+        keyboardType={keyboardType}
       />
     </View>
   );

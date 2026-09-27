@@ -13,6 +13,7 @@ import { typography } from '../../theme/typography';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebLabel, WebSelect } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
+import { phoneDigitsError, sanitizePhoneDigits } from '../../utils/phone';
 
 type DcOrderRef = {
   _id?: string;
@@ -217,6 +218,11 @@ export default function StockReturnWarehouseVerifyScreen({ navigation, route }: 
 
   const handleSave = async () => {
     if (!detail || readOnly) return;
+    const mobileError = phoneDigitsError(contactMobile, false);
+    if (mobileError) {
+      Alert.alert('Validation', mobileError);
+      return;
+    }
     setSaving(true);
     try {
       await apiService.put(`/stock-returns/${detail._id}/warehouse-save`, buildPayload());
@@ -233,6 +239,11 @@ export default function StockReturnWarehouseVerifyScreen({ navigation, route }: 
     if (!detail || readOnly) return;
     if (!returnDate) {
       Alert.alert('Validation', 'Return date is required');
+      return;
+    }
+    const mobileError = phoneDigitsError(contactMobile, false);
+    if (mobileError) {
+      Alert.alert('Validation', mobileError);
       return;
     }
     if (!lrNumber.trim()) {
@@ -318,9 +329,11 @@ export default function StockReturnWarehouseVerifyScreen({ navigation, route }: 
           <WebLabel>Contact Mobile</WebLabel>
           <WebInput
             value={contactMobile}
-            onChangeText={setContactMobile}
+            onChangeText={(text) => setContactMobile(sanitizePhoneDigits(text))}
             editable={!readOnly}
             keyboardType="phone-pad"
+            maxLength={15}
+            placeholder="10 to 15 digits"
             style={readOnly ? styles.readonly : undefined}
           />
         </View>

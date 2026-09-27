@@ -11,6 +11,7 @@ import { apiRequest } from '@/lib/api'
 import { toast } from 'sonner'
 import { Pencil } from 'lucide-react'
 import { displayRoleName } from '@/lib/roleLabels'
+import { sanitizePhoneInput, validateStrictIndianMobile } from '@/lib/phone'
 
 type Employee = {
   _id: string
@@ -83,6 +84,11 @@ export default function InactiveEmployeesPage() {
       toast.error('Enter the new employee name and mobile')
       return
     }
+    const mobileCheck = validateStrictIndianMobile(form.mobile)
+    if (!mobileCheck.ok) {
+      toast.error(mobileCheck.message)
+      return
+    }
     setSaving(true)
     try {
       await apiRequest(`/employees/${reactivating._id}`, {
@@ -91,7 +97,7 @@ export default function InactiveEmployeesPage() {
           isActive: true,
           firstName: form.firstName.trim(),
           lastName: form.lastName.trim(),
-          mobile: form.mobile.trim(),
+          mobile: mobileCheck.digits,
           password: form.password || undefined,
         }),
       })
@@ -182,7 +188,7 @@ export default function InactiveEmployeesPage() {
             </div>
             <div>
               <Label>Mobile *</Label>
-              <Input className="mt-1" value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value })} />
+              <Input className="mt-1" value={form.mobile} inputMode="numeric" maxLength={15} placeholder="10 to 15 digits" onChange={(e) => setForm({ ...form, mobile: sanitizePhoneInput(e.target.value) })} />
             </div>
             <div>
               <Label>Password</Label>

@@ -563,7 +563,7 @@ export default function NewSchoolPage() {
             <Label>School code</Label>
             <Input
               className="bg-neutral-100 text-neutral-700"
-              value={form.school_code || 'Auto-generated from state + district on save'}
+              value="Assigned automatically from the pincode, zone, and cluster"
               readOnly
               disabled
             />
@@ -580,7 +580,7 @@ export default function NewSchoolPage() {
               type="tel"
               inputMode="numeric"
               autoComplete="tel"
-              placeholder="10-digit mobile number"
+              placeholder="10 to 15 digits"
               maxLength={15}
               value={form.contact_mobile}
               onChange={onPhoneChange}
@@ -614,7 +614,7 @@ export default function NewSchoolPage() {
               type="tel"
               inputMode="numeric"
               autoComplete="tel"
-              placeholder="10-digit mobile number"
+              placeholder="10 to 15 digits"
               maxLength={15}
               value={form.decision_maker_mobile}
               onChange={onPhoneChange}

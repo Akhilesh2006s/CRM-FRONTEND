@@ -12,6 +12,7 @@ import {
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
+import { phoneDigitsError, sanitizePhoneDigits } from '../../utils/phone';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
@@ -67,6 +68,11 @@ export default function DCEditScreen({ navigation, route }: any) {
 
   const onSubmit = async () => {
     clearMessages();
+    const phoneError = phoneDigitsError(form.customerPhone, false);
+    if (phoneError) {
+      setErrorMessage(phoneError);
+      return;
+    }
     setSaving(true);
     try {
       await apiService.put(`/dc/${id}`, {
@@ -152,8 +158,10 @@ export default function DCEditScreen({ navigation, route }: any) {
             <WebInput
               style={styles.input}
               value={form.customerPhone}
-              onChangeText={(text) => setForm({ ...form, customerPhone: text })}
+              onChangeText={(text) => setForm({ ...form, customerPhone: sanitizePhoneDigits(text) })}
               keyboardType="phone-pad"
+              maxLength={15}
+              placeholder="10 to 15 digits"
             />
           </View>
 

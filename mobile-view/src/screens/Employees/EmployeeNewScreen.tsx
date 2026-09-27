@@ -35,7 +35,7 @@ export default function EmployeeNewScreen({ navigation }: any) {
 
   const roles = [
     'Executive', 'Trainer', 'Finance Manager', 'HR Manager', 'HR Executive', 'Coordinator', 'Senior Coordinator',
-    'Manager', 'Executive Manager', 'Warehouse Executive', 'Warehouse Manager', 'Admin', 'Super Admin',
+    'Manager', 'Executive Manager', 'Regional Manager', 'Regional Head', 'National Head', 'Warehouse Executive', 'Warehouse Manager', 'Admin', 'Super Admin',
   ];
 
   const scrollRef = useRef<ScrollView>(null);
@@ -75,7 +75,7 @@ export default function EmployeeNewScreen({ navigation }: any) {
     loadZonesAndClusters();
   }, []);
 
-  const sanitizeDigits = (value: string, maxDigits = 10) =>
+  const sanitizeDigits = (value: string, maxDigits = 15) =>
     String(value || '').replace(/\D/g, '').slice(0, maxDigits);
 
   const clearMessages = () => {
@@ -84,11 +84,11 @@ export default function EmployeeNewScreen({ navigation }: any) {
   };
 
   const handlePhoneChange = (value: string) => {
-    setForm((f) => ({ ...f, phone: sanitizeDigits(value, 10) }));
+    setForm((f) => ({ ...f, phone: sanitizeDigits(value, 15) }));
   };
 
   const handleMobileChange = (value: string) => {
-    setForm((f) => ({ ...f, mobile: sanitizeDigits(value, 10) }));
+    setForm((f) => ({ ...f, mobile: sanitizeDigits(value, 15) }));
   };
 
   const handlePincodeChange = async (value: string) => {
@@ -131,14 +131,13 @@ export default function EmployeeNewScreen({ navigation }: any) {
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
-    if (!/^[6-9]\d{9}$/.test(form.mobile)) {
-      setErrorMessage('Enter a valid 10-digit mobile number.');
+    if (!/^\d{10,15}$/.test(form.mobile)) {
+      setErrorMessage('Enter a phone number with 10 to 15 digits.');
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
-    // Phone is optional, but if entered it must be exactly 10 digits
-    if (form.phone.trim() && form.phone.length !== 10) {
-      setErrorMessage('Phone must be a 10-digit number.');
+    if (form.phone.trim() && !/^\d{10,15}$/.test(form.phone)) {
+      setErrorMessage('Enter a phone number with 10 to 15 digits.');
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
@@ -223,8 +222,8 @@ export default function EmployeeNewScreen({ navigation }: any) {
         <FormField label="Last Name" value={form.lastName} onChangeText={(text: string) => setForm((f) => ({ ...f, lastName: text }))} placeholder="Last Name" />
         <FormField label="Emp ID / Code" value={form.empCode} onChangeText={(text: string) => setForm((f) => ({ ...f, empCode: text }))} placeholder="Employee ID / Code" />
         <FormField label="Email Id *" value={form.email} onChangeText={(text: string) => setForm((f) => ({ ...f, email: text }))} placeholder="Email" keyboardType="email-address" />
-        <FormField label="Phone" value={form.phone} onChangeText={handlePhoneChange} placeholder="10-digit phone (optional)" keyboardType="phone-pad" maxLength={10} />
-        <FormField label="Mobile *" value={form.mobile} onChangeText={handleMobileChange} placeholder="10-digit mobile" keyboardType="phone-pad" maxLength={10} />
+        <FormField label="Phone" value={form.phone} onChangeText={handlePhoneChange} placeholder="10 to 15 digits (optional)" keyboardType="phone-pad" maxLength={15} />
+        <FormField label="Mobile *" value={form.mobile} onChangeText={handleMobileChange} placeholder="10 to 15 digits" keyboardType="phone-pad" maxLength={15} />
         <View style={styles.textAreaContainer}>
           <Text style={styles.label}>Address 1</Text>
           <WebInput style={styles.textArea} value={form.address1} onChangeText={(text: string) => setForm((f) => ({ ...f, address1: text }))} placeholder="Address 1" multiline numberOfLines={3} />

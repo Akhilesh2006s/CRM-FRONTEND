@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { apiService } from '../../services/api';
+import { phoneDigitsError, sanitizePhoneDigits } from '../../utils/phone';
 import { useAuth } from '../../context/AuthContext';
 import { colors } from '../../theme/colors';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
@@ -316,6 +317,11 @@ export default function LeadsRenewalListScreen() {
       Alert.alert('Validation', 'Contact person and mobile are required');
       return;
     }
+    const mobileError = phoneDigitsError(renewContactMobile, true);
+    if (mobileError) {
+      Alert.alert('Validation', mobileError);
+      return;
+    }
     const rows = renewProducts.filter((r) => r.product_name.trim());
     if (rows.length === 0) {
       Alert.alert('Validation', 'Add at least one product');
@@ -602,10 +608,11 @@ export default function LeadsRenewalListScreen() {
         />
         <WebLabel>Mobile (editable)</WebLabel>
         <WebInput
-          placeholder="Mobile"
           value={renewContactMobile}
-          onChangeText={setRenewContactMobile}
+          onChangeText={(text) => setRenewContactMobile(sanitizePhoneDigits(text))}
           keyboardType="phone-pad"
+          maxLength={15}
+          placeholder="10 to 15 digits"
           editable={!!selectedSchool}
         />
 

@@ -16,6 +16,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
+import { phoneDigitsError, sanitizePhoneDigits } from '../../utils/phone';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebSelect } from '../../ui/WebPrimitives';
 import { useAuth } from '../../context/AuthContext';
@@ -450,6 +451,11 @@ export default function LeadCloseScreen({ navigation, route }: any) {
       showError('School name is required.');
       return;
     }
+    const mobileError = phoneDigitsError(form.contact_mobile, true);
+    if (mobileError) {
+      showError(mobileError);
+      return;
+    }
 
     const actualProductDetails = productDetails.filter((pd) => !pd.isParentRow);
 
@@ -581,7 +587,7 @@ export default function LeadCloseScreen({ navigation, route }: any) {
       <FormField label="School Name *" value={form.school_name} onChangeText={(text: string) => setForm({ ...form, school_name: text })} placeholder="Enter school name" />
       <FormField label="Person 1 *" value={form.contact_person} onChangeText={(text: string) => setForm({ ...form, contact_person: text })} placeholder="Enter contact person" />
       <FormField label="Email 1" value={form.email} onChangeText={(text: string) => setForm({ ...form, email: text })} placeholder="Enter email" keyboardType="email-address" />
-      <FormField label="Mob 1 *" value={form.contact_mobile} onChangeText={(text: string) => setForm({ ...form, contact_mobile: text })} placeholder="Enter mobile" keyboardType="phone-pad" />
+      <FormField label="Mob 1 *" value={form.contact_mobile} onChangeText={(text: string) => setForm({ ...form, contact_mobile: sanitizePhoneDigits(text) })} placeholder="10 to 15 digits" keyboardType="phone-pad" maxLength={15} />
       <FormField label="Decision Maker" value={form.contact_person2} onChangeText={(text: string) => setForm({ ...form, contact_person2: text })} placeholder="Enter decision maker name" />
       <FormField label="Email" value={form.contact_mobile2} onChangeText={(text: string) => setForm({ ...form, contact_mobile2: text })} placeholder="Enter decision maker email" keyboardType="email-address" />
       <View style={styles.fieldContainer}>
@@ -886,7 +892,7 @@ export default function LeadCloseScreen({ navigation, route }: any) {
   );
 }
 
-function FormField({ label, value, onChangeText, placeholder, keyboardType }: any) {
+function FormField({ label, value, onChangeText, placeholder, keyboardType, maxLength }: any) {
   return (
     <View style={styles.fieldContainer}>
       <Text style={styles.label}>{label}</Text>
@@ -895,6 +901,7 @@ function FormField({ label, value, onChangeText, placeholder, keyboardType }: an
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder} keyboardType={keyboardType}
+        maxLength={maxLength}
       />
     </View>
   );

@@ -618,7 +618,7 @@ export default function DCPendingOpenScreen({ navigation, route }: any) {
           <Text style={styles.sectionTitle}>Lead Information</Text>
           <FormField label="School Type" value={order?.school_type || '-'} editable={false} />
           <FormField label="School Name" value={order?.school_name || dc?.customerName || '-'} editable={false} />
-          <FormField label="School Code" value={order?.dc_code || '-'} editable={false} />
+          <FormField label="School Code" value={order?.school_code || order?.dc_code || '-'} editable={false} />
           <FormField label="Contact Person" value={order?.contact_person || '-'} editable={false} />
           <FormField label="Contact Mobile" value={order?.contact_mobile || dc?.customerPhone || '-'} editable={false} />
           <FormField label="Assigned To" value={assignedName} editable={false} />

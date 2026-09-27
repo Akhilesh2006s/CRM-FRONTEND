@@ -23,6 +23,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Pencil, Package, Plus, Upload, X, Search, CreditCard, FileText, PlusCircle, Filter, Calendar, RefreshCw } from 'lucide-react'
 import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
+import { sanitizePhoneInput, validatePhoneDigits } from '@/lib/phone'
 import { useProducts } from '@/hooks/useProducts'
 import { applyPaymentDivisorsToBreakdown } from '@/lib/dcPaymentDivisors'
 import { aggregateInvoicePaymentTerms } from '@/lib/dcInvoiceData'
@@ -96,13 +97,67 @@ type DC = {
   poPhotoUrl?: string
   createdAt?: string
   productDetails?: any[]
+  clientOperations?: {
+    deliveryStatus?: string
+    booksDistributed?: 'Yes' | 'No'
+    programsStarted?: 'Yes' | 'No'
+    programsStartedDate?: string
+    pagesCompleted?: { program: string; pages: number }[]
+  }
   _isConvertedLead?: boolean // Flag to indicate this is a converted lead (saved DcOrder)
+}
+
+type ClientOpsDraft = {
+  deliveryStatus: 'In process' | 'DELIVERED'
+  booksDistributed: '' | 'Yes' | 'No'
+  programsStarted: '' | 'Yes' | 'No'
+  programsStartedDate: string
+  pagesCompleted: { program: string; pages: string }[]
+}
+
+function clientProgramNames(d: DC): string[] {
+  const fromDetails = Array.isArray(d.productDetails)
+    ? Array.from(
+        new Set(
+          d.productDetails
+            .map((p: any) => (p?.product || p?.productName || '').toString().trim())
+            .filter(Boolean)
+        )
+      )
+    : []
+  if (fromDetails.length > 0) return fromDetails
+  const fallback = (d.product || d.saleId?.product || '').toString().trim()
+  return fallback ? [fallback] : []
+}
+
+function dateInputValue(value?: string) {
+  if (!value) return ''
+  const match = String(value).match(/^(\d{4}-\d{2}-\d{2})/)
+  return match ? match[1] : ''
+}
+
+function opsFromDc(d: DC): ClientOpsDraft {
+  const savedPages = new Map(
+    (d.clientOperations?.pagesCompleted || []).map((row) => [row.program, String(row.pages ?? '')])
+  )
+  return {
+    deliveryStatus: d.clientOperations?.deliveryStatus === 'DELIVERED' ? 'DELIVERED' : 'In process',
+    booksDistributed: d.clientOperations?.booksDistributed || '',
+    programsStarted: d.clientOperations?.programsStarted || '',
+    programsStartedDate: dateInputValue(d.clientOperations?.programsStartedDate),
+    pagesCompleted: clientProgramNames(d).map((program) => ({
+      program,
+      pages: savedPages.get(program) || '',
+    })),
+  }
 }
 
 export default function ClientDCPage() {
   const router = useRouter()
   const currentUser = getCurrentUser()
   const [items, setItems] = useState<DC[]>([])
+  const [opsDraft, setOpsDraft] = useState<Record<string, ClientOpsDraft>>({})
+  const [savingOpsId, setSavingOpsId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [selectedDC, setSelectedDC] = useState<DC | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -1293,6 +1348,69 @@ export default function ClientDCPage() {
     })
   }
 
+  const currentOps = (d: DC) => opsDraft[d._id] || opsFromDc(d)
+
+  const patchOps = (d: DC, patch: Partial<ClientOpsDraft>) => {
+    setOpsDraft((prev) => {
+      const base = prev[d._id] || opsFromDc(d)
+      const next = { ...base, ...patch }
+      if (patch.programsStarted && patch.programsStarted !== 'Yes') {
+        next.programsStartedDate = ''
+      }
+      return { ...prev, [d._id]: next }
+    })
+  }
+
+  const saveClientOperations = async (d: DC) => {
+    const ops = currentOps(d)
+    if (ops.programsStarted === 'Yes' && !ops.programsStartedDate) {
+      toast.error('Select the date programs started')
+      return
+    }
+    setSavingOpsId(d._id)
+    try {
+      const clientOperations = {
+        deliveryStatus: ops.deliveryStatus,
+        booksDistributed: ops.booksDistributed || undefined,
+        programsStarted: ops.programsStarted || undefined,
+        programsStartedDate: ops.programsStarted === 'Yes' ? ops.programsStartedDate : undefined,
+        pagesCompleted: ops.pagesCompleted
+          .filter((row) => row.pages !== '')
+          .map((row) => ({ program: row.program, pages: Number(row.pages) })),
+      }
+      const path = d._isConvertedLead ? `/dc-orders/${d._id}` : `/dc/${d._id}`
+      await apiRequest(path, {
+        method: 'PUT',
+        body: JSON.stringify({ clientOperations }),
+      })
+      setItems((prev) =>
+        prev.map((item) =>
+          item._id === d._id
+            ? {
+                ...item,
+                clientOperations: {
+                  ...clientOperations,
+                  booksDistributed: ops.booksDistributed || undefined,
+                  programsStarted: ops.programsStarted || undefined,
+                  programsStartedDate: ops.programsStartedDate || undefined,
+                },
+              }
+            : item
+        )
+      )
+      setOpsDraft((prev) => {
+        const next = { ...prev }
+        delete next[d._id]
+        return next
+      })
+      toast.success('Client operations saved')
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to save client operations')
+    } finally {
+      setSavingOpsId(null)
+    }
+  }
+
   const handleFollowUpStudentTypeContinue = async (dc: DC) => {
     const id = dc._id
     const sel = followUpStudentTypeByDcId[id]
@@ -2176,6 +2294,13 @@ export default function ClientDCPage() {
         setSubmittingEdit(false)
         return
       }
+      const mobileCheck = validatePhoneDigits(editFormData.contact_mobile, { required: false })
+      const mobile2Check = validatePhoneDigits(editFormData.contact_mobile2, { required: false })
+      if (!mobileCheck.ok || !mobile2Check.ok) {
+        toast.error((!mobileCheck.ok ? mobileCheck.message : mobile2Check.message))
+        setSubmittingEdit(false)
+        return
+      }
 
       // Log current editFormData state before preparing payload
       console.log('📝 Current editFormData state:', {
@@ -2812,7 +2937,7 @@ export default function ClientDCPage() {
                   overflowY: 'visible'
                 }}
               >
-                <Table className="min-w-[1200px] w-full">
+                <Table className="min-w-[1680px] w-full">
               <TableHeader>
                 <TableRow className="bg-gradient-to-r from-neutral-50 via-neutral-50 to-neutral-100 border-b-2 border-neutral-200/80 sticky top-0 z-20">
                   <TableHead className="w-[50px] font-bold text-neutral-700 py-4">S.No</TableHead>
@@ -2820,6 +2945,10 @@ export default function ClientDCPage() {
                   <TableHead className="font-bold text-neutral-700 py-4">Client Name</TableHead>
                   <TableHead className="font-bold text-neutral-700 py-4">Phone</TableHead>
                   <TableHead className="font-bold text-neutral-700 py-4">Product</TableHead>
+                  <TableHead className="font-bold text-neutral-700 py-4">Delivery status</TableHead>
+                  <TableHead className="font-bold text-neutral-700 py-4">Books distributed</TableHead>
+                  <TableHead className="font-bold text-neutral-700 py-4">Programs started</TableHead>
+                  <TableHead className="font-bold text-neutral-700 py-4 min-w-[220px]">Pages completed</TableHead>
                   <TableHead className="font-bold text-neutral-700 py-4">Status</TableHead>
                   <TableHead className="font-bold text-neutral-700 py-4">Created Date</TableHead>
                   <TableHead className="font-bold text-neutral-700 py-4">Client Turned Date</TableHead>
@@ -2830,7 +2959,7 @@ export default function ClientDCPage() {
               <TableBody>
                 {filteredItems.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center text-neutral-500 py-4">
+                    <TableCell colSpan={14} className="text-center text-neutral-500 py-4">
                       No clients found matching your search.
                     </TableCell>
                   </TableRow>
@@ -2864,6 +2993,105 @@ export default function ClientDCPage() {
                         <TableCell className="font-semibold text-neutral-900">{customerName}</TableCell>
                         <TableCell className="text-neutral-700">{phone}</TableCell>
                         <TableCell className="max-w-[320px] whitespace-normal break-words text-neutral-700" title={product}>{product}</TableCell>
+                        <TableCell>
+                          {d.clientOperations?.deliveryStatus === 'DELIVERED' ? (
+                            <Input value="DELIVERED" readOnly className="h-8 w-[130px] bg-neutral-100 text-xs font-medium" />
+                          ) : (
+                            <Select
+                              value={currentOps(d).deliveryStatus}
+                              onValueChange={(v) =>
+                                patchOps(d, { deliveryStatus: v as 'In process' | 'DELIVERED' })
+                              }
+                            >
+                              <SelectTrigger className="h-8 w-[130px] bg-white text-xs">
+                                <SelectValue placeholder="In process" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="In process">In process</SelectItem>
+                                <SelectItem value="DELIVERED">DELIVERED</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Select
+                            value={currentOps(d).booksDistributed || undefined}
+                            onValueChange={(v) => patchOps(d, { booksDistributed: v as 'Yes' | 'No' })}
+                          >
+                            <SelectTrigger className="h-8 w-[100px] bg-white text-xs">
+                              <SelectValue placeholder="Yes / No" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Yes">Yes</SelectItem>
+                              <SelectItem value="No">No</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-2 min-w-[150px]">
+                            <Select
+                              value={currentOps(d).programsStarted || undefined}
+                              onValueChange={(v) => patchOps(d, { programsStarted: v as 'Yes' | 'No' })}
+                            >
+                              <SelectTrigger className="h-8 bg-white text-xs">
+                                <SelectValue placeholder="Yes / No" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Yes">Yes</SelectItem>
+                                <SelectItem value="No">No</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {currentOps(d).programsStarted === 'Yes' && (
+                              <Input
+                                type="date"
+                                className="h-8 bg-white text-xs"
+                                value={currentOps(d).programsStartedDate}
+                                onChange={(e) => patchOps(d, { programsStartedDate: e.target.value })}
+                              />
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-2 min-w-[220px]">
+                            {currentOps(d).pagesCompleted.length === 0 ? (
+                              <span className="text-xs text-neutral-400">No programs</span>
+                            ) : (
+                              currentOps(d).pagesCompleted.map((row, pageIdx) => (
+                                <div key={`${row.program}-${pageIdx}`} className="flex items-center gap-2">
+                                  <span className="text-xs text-neutral-700 min-w-0 flex-1 truncate" title={row.program}>
+                                    {row.program}
+                                  </span>
+                                  <Input
+                                    className="h-8 w-16 bg-white text-xs"
+                                    inputMode="numeric"
+                                    placeholder="Pages"
+                                    value={row.pages}
+                                    onChange={(e) => {
+                                      const pages = e.target.value.replace(/\D/g, '')
+                                      setOpsDraft((prev) => {
+                                        const base = prev[d._id] || opsFromDc(d)
+                                        const pagesCompleted = base.pagesCompleted.map((item, i) =>
+                                          i === pageIdx ? { ...item, pages } : item
+                                        )
+                                        return { ...prev, [d._id]: { ...base, pagesCompleted } }
+                                      })
+                                    }}
+                                  />
+                                </div>
+                              ))
+                            )}
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-8"
+                              disabled={savingOpsId === d._id}
+                              onClick={() => saveClientOperations(d)}
+                            >
+                              {savingOpsId === d._id ? 'Saving…' : 'Save'}
+                            </Button>
+                          </div>
+                        </TableCell>
                         <TableCell>
                           <span className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap shadow-sm ${
                             status === 'created' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
@@ -3859,7 +4087,10 @@ export default function ClientDCPage() {
                   <Label>Contact Mobile</Label>
                   <Input
                     value={editFormData.contact_mobile}
-                    onChange={(e) => setEditFormData({ ...editFormData, contact_mobile: e.target.value })}
+                    onChange={(e) => setEditFormData({ ...editFormData, contact_mobile: sanitizePhoneInput(e.target.value) })}
+                    inputMode="numeric"
+                    maxLength={15}
+                    placeholder="10 to 15 digits"
                   />
                 </div>
                 <div>
@@ -3873,7 +4104,10 @@ export default function ClientDCPage() {
                   <Label>Contact Mobile 2</Label>
                   <Input
                     value={editFormData.contact_mobile2}
-                    onChange={(e) => setEditFormData({ ...editFormData, contact_mobile2: e.target.value })}
+                    onChange={(e) => setEditFormData({ ...editFormData, contact_mobile2: sanitizePhoneInput(e.target.value) })}
+                    inputMode="numeric"
+                    maxLength={15}
+                    placeholder="10 to 15 digits"
                   />
                 </div>
                 <div>

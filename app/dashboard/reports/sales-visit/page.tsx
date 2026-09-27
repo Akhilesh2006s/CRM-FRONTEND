@@ -40,6 +40,13 @@ type Visit = {
   leadId?: string | { _id: string }
   dcOrderId?: string | { _id: string }
   executiveId?: { _id: string; name?: string }
+  operations?: {
+    deliveryStatus?: string
+    booksDistributed?: string
+    programsStarted?: string
+    programsStartedDate?: string
+    pagesCompleted?: { program: string; pages: number }[]
+  }
 }
 
 type Employee = {
@@ -506,6 +513,24 @@ export default function SalesVisitReportPage() {
                 <p className="text-xs uppercase tracking-wide text-slate-500">Town</p>
                 <p className="text-slate-800">{getTown(selectedVisit)}</p>
               </div>
+              {selectedVisit.category === 'OPERATIONS' && selectedVisit.operations && (
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Operations</p>
+                  <p className="text-slate-800">Delivery status: {selectedVisit.operations.deliveryStatus || 'DELIVERED'}</p>
+                  <p className="text-slate-800">Books distributed: {selectedVisit.operations.booksDistributed || '-'}</p>
+                  <p className="text-slate-800">
+                    Programs started: {selectedVisit.operations.programsStarted || '-'}
+                    {selectedVisit.operations.programsStarted === 'Yes' && selectedVisit.operations.programsStartedDate
+                      ? ` (${formatVisitDate(selectedVisit.operations.programsStartedDate)})`
+                      : ''}
+                  </p>
+                  {(selectedVisit.operations.pagesCompleted || []).map((row) => (
+                    <p key={row.program} className="text-slate-800">
+                      {row.program}: {row.pages} pages
+                    </p>
+                  ))}
+                </div>
+              )}
               <div>
                 <p className="text-xs uppercase tracking-wide text-slate-500">Full Remarks</p>
                 <p className="text-slate-800 whitespace-pre-wrap">{getVisitRemarks(selectedVisit) || '-'}</p>

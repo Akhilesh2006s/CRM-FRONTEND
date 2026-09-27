@@ -33,6 +33,8 @@ export const RBAC_MODULE_ORDER = [
   'vendor',
   'settings',
   'executive_managers',
+  'hierarchy',
+  'product_managers',
   'samples',
 ] as const
 
@@ -130,6 +132,7 @@ export const RBAC_NAV_MODULES: RbacNavModule[] = [
     pages: [
       { label: 'Inventory Items', href: '/dashboard/warehouse/inventory-items' },
       { label: 'Stock', href: '/dashboard/warehouse/stock' },
+      { label: 'Pending Stock Approvals', href: '/dashboard/warehouse/stock-approvals' },
       { label: 'DC @ Warehouse', href: '/dashboard/warehouse/dc-at-warehouse' },
       { label: 'Completed DC', href: '/dashboard/warehouse/completed-dc' },
       { label: 'Hold DC', href: '/dashboard/warehouse/hold-dc' },
@@ -218,6 +221,19 @@ export const RBAC_NAV_MODULES: RbacNavModule[] = [
     ],
   },
   {
+    module: 'hierarchy',
+    label: MODULE_LABELS.hierarchy,
+    pages: [{ label: 'Assign Hierarchy', href: '/dashboard/hierarchy' }],
+  },
+  {
+    module: 'product_managers',
+    label: MODULE_LABELS.product_managers,
+    pages: [
+      { label: 'Assign Products', href: '/dashboard/product-managers' },
+      { label: 'My Products', href: '/dashboard/product-manager' },
+    ],
+  },
+  {
     module: 'executive_managers',
     label: MODULE_LABELS.executive_managers,
     pages: [
@@ -268,6 +284,9 @@ export function buildRbacSidebarNav(
     if (isSa && mod.module === 'samples') continue
 
     let pages = mod.pages
+    if (isSa && mod.module === 'product_managers') {
+      pages = pages.filter((page) => page.href === '/dashboard/product-managers')
+    }
     // Assign Managers is already under employees module for all RBAC users with permission
 
     const allowed = pagesForUser(user, pages)

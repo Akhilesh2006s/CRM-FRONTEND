@@ -97,6 +97,9 @@ export const HREF_PERMISSION_MAP: Record<string, string> = {
   '/dashboard/settings/backup': 'settings.backup.page.view',
   '/dashboard/settings/expenses': 'settings.expenses.page.view',
   '/dashboard/settings/roles': 'settings.roles.page.view',
+  '/dashboard/hierarchy': 'hierarchy.assign.page.view',
+  '/dashboard/product-managers': 'product_managers.assign.page.view',
+  '/dashboard/product-manager': 'product_managers.workspace.page.view',
   '/dashboard/executive-managers': 'executive_managers.list.page.view',
   '/dashboard/executive-managers/new': 'executive_managers.create.page.view',
   '/dashboard/executive-managers/executives': 'executive_managers.executives.page.view',
@@ -116,6 +119,14 @@ export function permissionForPath(pathname: string): string | null {
       pathname
     )
   ) {
+    return null
+  }
+
+  if (pathname.startsWith('/dashboard/hierarchy/')) {
+    return null
+  }
+
+  if (/^\/dashboard\/product-manager\/[^/]+(?:\/|$)/.test(pathname)) {
     return null
   }
 
@@ -147,6 +158,8 @@ export const MODULE_LABELS: Record<string, string> = {
   products: 'Products',
   settings: 'Settings',
   executive_managers: 'Zonal Managers',
+  hierarchy: 'Hierarchy',
+  product_managers: 'Product Managers',
   samples: 'Samples',
   vendor: 'Vendor',
 }

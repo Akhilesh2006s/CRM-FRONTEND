@@ -19,6 +19,8 @@ import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { navigateRoot } from '../../navigation/navigationRef';
 import { getRoleFlags } from '../../utils/roles';
+import HierarchyDashboardScreen from '../Hierarchy/HierarchyDashboardScreen';
+import ProductManagerScreen from '../ProductManager/ProductManagerScreen';
 import { fmtINR, sumAggAmount, sumAggCount } from '../../utils/format';
 import { DASHBOARD_STAT_ICONS } from '../../config/moduleIcons';
 
@@ -77,7 +79,20 @@ export default function DashboardScreen({ navigation }: { navigation?: any }) {
 
   const showLeaveActions = !flags.isAdmin && !flags.isExecutiveManager;
 
+  const hierarchyLevel = flags.isRegionalManager
+    ? 'regional-manager'
+    : flags.isRegionalHead
+      ? 'regional-head'
+      : flags.isNationalHead
+        ? 'national-head'
+        : null;
+
   const load = useCallback(async () => {
+    if (hierarchyLevel || flags.isManager) {
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
     try {
       const [statsData, trendsData, zonesData] = await Promise.all([
         apiService.get('/dashboard/stats').catch(() => null),
@@ -106,7 +121,7 @@ export default function DashboardScreen({ navigation }: { navigation?: any }) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [flags.isExecutive, flags.isPartner]);
+  }, [flags.isExecutive, flags.isPartner, flags.isManager, hierarchyLevel]);
 
   useEffect(() => {
     load();
@@ -172,6 +187,21 @@ export default function DashboardScreen({ navigation }: { navigation?: any }) {
     executiveAnalytics?.leads?.byPriority?.find((p: any) => p._id === 'Warm')?.count ?? 0;
   const cold =
     executiveAnalytics?.leads?.byPriority?.find((p: any) => p._id === 'Cold')?.count ?? 0;
+
+  if (flags.isManager && user?._id) {
+    return <ProductManagerScreen embedded managerId={user._id} navigation={navigation} />;
+  }
+
+  if (hierarchyLevel && user?._id) {
+    return (
+      <HierarchyDashboardScreen
+        embedded
+        level={hierarchyLevel}
+        personId={user._id}
+        navigation={navigation}
+      />
+    );
+  }
 
   return (
     <View style={styles.container}>

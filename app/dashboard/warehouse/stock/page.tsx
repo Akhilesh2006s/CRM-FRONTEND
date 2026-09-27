@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { apiRequest } from '@/lib/api'
+import { getCurrentUser } from '@/lib/auth'
 import { consolidateStockRows, isInventoryListRow, type ConsolidatedStockRow, type StockSourceItem } from '@/lib/warehouseStockList'
 
 function stockAddHref(row: ConsolidatedStockRow): string {
@@ -55,9 +56,16 @@ export default function WarehouseStock() {
           <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Inventory Qty List</h1>
           <p className="text-neutral-500">Warehouse • Current stock</p>
         </div>
-        <Link href="/dashboard/warehouse/stock/add">
-          <Button className="bg-blue-600 hover:bg-blue-700">Add Item Qty</Button>
-        </Link>
+        <div className="flex gap-2">
+          {(getCurrentUser()?.role === 'Warehouse Manager' || getCurrentUser()?.role === 'Warehouse Executive' || getCurrentUser()?.role === 'Admin' || getCurrentUser()?.role === 'Super Admin') && (
+            <Link href="/dashboard/warehouse/stock-approvals">
+              <Button variant="outline">Pending Stock Approvals</Button>
+            </Link>
+          )}
+          <Link href="/dashboard/warehouse/stock/add">
+            <Button className="bg-blue-600 hover:bg-blue-700">Add Item Qty</Button>
+          </Link>
+        </div>
       </div>
 
       <Card className="p-4 md:p-6 rounded-xl border border-neutral-200">
