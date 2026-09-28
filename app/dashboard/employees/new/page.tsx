@@ -59,7 +59,7 @@ export default function NewEmployeePage() {
   const [uploadingAadhaar, setUploadingAadhaar] = useState(false)
   const [uploadingRefAadhaar, setUploadingRefAadhaar] = useState<number | null>(null)
   const [uploadingLocation, setUploadingLocation] = useState(false)
-  const REFERENCE_RELATIONS = ['Wife', 'Brother', 'Sister', 'Father', 'Mother'] as const
+  const REFERENCE_RELATIONS = ['Wife', 'Husband', 'Brother', 'Sister', 'Father', 'Mother'] as const
   const [tagOptions, setTagOptions] = useState<EmployeeOption[]>([])
   const filteredTagOptions = useMemo(
     () => filterTagOptions(tagOptions, form.role),
@@ -68,6 +68,8 @@ export default function NewEmployeePage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mobileError, setMobileError] = useState<string | null>(null)
+  const [phoneError, setPhoneError] = useState<string | null>(null)
+  const [sameAsPermanent, setSameAsPermanent] = useState(false)
   const [identityErrors, setIdentityErrors] = useState<EmployeeIdentityErrors>({})
   const [loadingPincode, setLoadingPincode] = useState(false)
   const [zones, setZones] = useState<string[]>([])
@@ -122,6 +124,15 @@ export default function NewEmployeePage() {
       const digits = sanitizePhoneInput(value, 15)
       setForm((f) => ({ ...f, [name]: digits }))
       if (name === 'mobile' && mobileError) setMobileError(null)
+      if (name === 'phone' && phoneError) setPhoneError(null)
+      return
+    }
+    if (name === 'permanentAddress') {
+      setForm((f) => ({
+        ...f,
+        permanentAddress: value,
+        ...(sameAsPermanent ? { temporaryAddress: value } : {}),
+      }))
       return
     }
     setForm((f) => ({ ...f, [name]: value }))
@@ -229,6 +240,11 @@ export default function NewEmployeePage() {
     apiRequest<EmployeeOption[]>('/employees?isActive=true')
       .then((data) => setTagOptions(Array.isArray(data) ? data : []))
       .catch(() => setTagOptions([]))
+    apiRequest<{ empCode: string }>('/employees/next-code')
+      .then((data) => {
+        if (data?.empCode) setForm((f) => ({ ...f, empCode: data.empCode }))
+      })
+      .catch(() => {})
   }, [])
 
   const toggleTagged = (empId: string) => {
@@ -245,11 +261,12 @@ export default function NewEmployeePage() {
     setSubmitting(true)
     setError(null)
     setMobileError(null)
+    setPhoneError(null)
     try {
       const identityCheck = validateEmployeeIdentityFields({
         firstName: form.firstName,
         lastName: form.lastName,
-        empCode: form.empCode,
+        empCode: form.empCode || '0001',
       })
       if (!identityCheck.ok) {
         setIdentityErrors(identityCheck.errors)
@@ -264,6 +281,17 @@ export default function NewEmployeePage() {
       }
       setIdentityErrors({})
 
+      const temporaryAddress = sameAsPermanent
+        ? form.permanentAddress
+        : form.temporaryAddress
+
+      if (!form.mobile.trim()) {
+        const message = 'Employee mobile number is required.'
+        setMobileError(message)
+        setError(message)
+        setSubmitting(false)
+        return
+      }
       const mobileCheck = validateStrictIndianMobile(form.mobile)
       if (!mobileCheck.ok) {
         setMobileError(mobileCheck.message)
@@ -271,13 +299,19 @@ export default function NewEmployeePage() {
         setSubmitting(false)
         return
       }
-      if (form.phone.trim()) {
-        const phoneCheck = validateStrictIndianMobile(form.phone)
-        if (!phoneCheck.ok) {
-          setError(phoneCheck.message)
-          setSubmitting(false)
-          return
-        }
+      if (!form.phone.trim()) {
+        const message = 'Company contact number is required.'
+        setPhoneError(message)
+        setError(message)
+        setSubmitting(false)
+        return
+      }
+      const phoneCheck = validateStrictIndianMobile(form.phone)
+      if (!phoneCheck.ok) {
+        setPhoneError('Company contact number must be 10 to 15 digits.')
+        setError('Company contact number must be 10 to 15 digits.')
+        setSubmitting(false)
+        return
       }
 
       // Validate cluster for Executive role
@@ -290,7 +324,12 @@ export default function NewEmployeePage() {
       for (let i = 0; i < 2; i++) {
         const ref = form.references[i]
         if (!REFERENCE_RELATIONS.includes(ref.relation as any)) {
-          setError(`Reference ${i + 1}: select relationship (Wife, Brother, Sister, Father, or Mother)`)
+          setError(`Reference ${i + 1}: select relationship (Wife, Husband, Brother, Sister, Father, or Mother)`)
+          setSubmitting(false)
+          return
+        }
+        if (!ref.name.trim()) {
+          setError(`Reference ${i + 1}: name is required`)
           setSubmitting(false)
           return
         }
@@ -301,18 +340,27 @@ export default function NewEmployeePage() {
           return
         }
         if (!ref.aadhaarUrl.trim()) {
-          setError(`Reference ${i + 1}: Aadhaar upload is required`)
+          setError(`Reference ${i + 1}: Aadhaar PDF is required`)
           setSubmitting(false)
           return
         }
       }
-      if (!form.temporaryAddress.trim()) {
-        setError('Temporary address is required')
+      const refMobiles = form.references.map((r) => {
+        const m = validateStrictIndianMobile(r.mobile)
+        return m.ok ? m.digits : r.mobile.trim()
+      })
+      if (refMobiles[0] && refMobiles[0] === refMobiles[1]) {
+        setError('Reference 1 and Reference 2 cannot have the same mobile number')
         setSubmitting(false)
         return
       }
       if (!form.permanentAddress.trim()) {
         setError('Permanent address is required')
+        setSubmitting(false)
+        return
+      }
+      if (!temporaryAddress.trim()) {
+        setError('Temporary address is required')
         setSubmitting(false)
         return
       }
@@ -332,12 +380,15 @@ export default function NewEmployeePage() {
         firstName: identityCheck.values.firstName,
         lastName: identityCheck.values.lastName,
         empCode: identityCheck.values.empCode,
+        phone: phoneCheck.digits,
         mobile: mobileCheck.digits,
+        temporaryAddress,
+        permanentAddress: form.permanentAddress,
         name:
           `${identityCheck.values.firstName} ${identityCheck.values.lastName}`.trim() ||
           identityCheck.values.firstName ||
           'Executive',
-        address1: form.temporaryAddress,
+        address1: temporaryAddress,
         references: form.references.map((r) => {
           const m = validateStrictIndianMobile(r.mobile)
           return { ...r, mobile: m.ok ? m.digits : r.mobile }
@@ -405,30 +456,38 @@ export default function NewEmployeePage() {
             )}
           </div>
           <div>
-            <Label>Emp ID / Code</Label>
+            <Label>VESPL Code</Label>
             <Input
-              className={`bg-white text-neutral-900 ${identityErrors.empCode ? 'border-red-500' : ''}`}
+              className="bg-neutral-100 text-neutral-900"
               name="empCode"
               value={form.empCode}
-              onChange={onChange}
-              onBlur={onIdentityBlur}
-              placeholder="Employee ID / Code"
-              required
+              readOnly
+              placeholder="0001"
             />
-            {identityErrors.empCode && (
-              <p className="text-xs text-red-600 mt-1">{identityErrors.empCode}</p>
-            )}
+            <p className="text-xs text-neutral-500 mt-1">Assigned automatically as a 4-digit code (0001, 0002, …).</p>
           </div>
           <div>
             <Label>Email Id *</Label>
             <Input className="bg-white text-neutral-900" type="email" name="email" value={form.email} onChange={onChange} placeholder="Email" required />
           </div>
           <div>
-            <Label>Phone (optional)</Label>
-            <Input className="bg-white text-neutral-900" name="phone" value={form.phone} onChange={onChange} placeholder="10 to 15 digits" inputMode="numeric" maxLength={15} />
+            <Label>Contact No (Company) *</Label>
+            <Input
+              className={`bg-white text-neutral-900 ${phoneError ? 'border-red-500' : ''}`}
+              name="phone"
+              value={form.phone}
+              onChange={onChange}
+              placeholder="10 to 15 digits"
+              inputMode="numeric"
+              maxLength={15}
+              required
+            />
+            {phoneError && (
+              <p className="text-xs text-red-600 mt-1">{phoneError}</p>
+            )}
           </div>
           <div>
-            <Label>Mobile *</Label>
+            <Label>Mobile No (Personal) *</Label>
             <Input
               className={`bg-white text-neutral-900 ${mobileError ? 'border-red-500' : ''}`}
               type="tel"
@@ -445,17 +504,6 @@ export default function NewEmployeePage() {
             )}
           </div>
           <div className="md:col-span-2">
-            <Label>Temporary address *</Label>
-            <Textarea
-              className="bg-white text-neutral-900"
-              name="temporaryAddress"
-              value={form.temporaryAddress}
-              onChange={onChange}
-              placeholder="Temporary / current address"
-              required
-            />
-          </div>
-          <div className="md:col-span-2">
             <Label>Permanent address *</Label>
             <Textarea
               className="bg-white text-neutral-900"
@@ -463,6 +511,36 @@ export default function NewEmployeePage() {
               value={form.permanentAddress}
               onChange={onChange}
               placeholder="Permanent address"
+              required
+            />
+          </div>
+          <div className="md:col-span-2 flex items-center gap-2">
+            <input
+              id="sameAsPermanent"
+              type="checkbox"
+              className="h-4 w-4"
+              checked={sameAsPermanent}
+              onChange={(e) => {
+                const checked = e.target.checked
+                setSameAsPermanent(checked)
+                if (checked) {
+                  setForm((f) => ({ ...f, temporaryAddress: f.permanentAddress }))
+                }
+              }}
+            />
+            <Label htmlFor="sameAsPermanent" className="mb-0">
+              Same as permanent address
+            </Label>
+          </div>
+          <div className="md:col-span-2">
+            <Label>Temporary address *</Label>
+            <Textarea
+              className="bg-white text-neutral-900"
+              name="temporaryAddress"
+              value={sameAsPermanent ? form.permanentAddress : form.temporaryAddress}
+              onChange={onChange}
+              placeholder="Temporary / current address"
+              readOnly={sameAsPermanent}
               required
             />
           </div>
@@ -495,7 +573,7 @@ export default function NewEmployeePage() {
                 </Select>
               </div>
               <div>
-                <Label>Name</Label>
+                <Label>Name *</Label>
                 <Input
                   className="bg-white"
                   value={form.references[idx].name}
@@ -507,6 +585,7 @@ export default function NewEmployeePage() {
                     })
                   }
                   placeholder="Reference name"
+                  required
                 />
               </div>
               <div>
@@ -536,10 +615,15 @@ export default function NewEmployeePage() {
                 <Input
                   className="bg-white"
                   type="file"
-                  accept="image/*,.pdf"
+                  accept="application/pdf,.pdf"
                   onChange={async (e) => {
                     const file = e.target.files?.[0]
                     if (!file) return
+                    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+                      setError('Only PDF files are allowed.')
+                      e.target.value = ''
+                      return
+                    }
                     setUploadingRefAadhaar(idx)
                     setError(null)
                     try {
@@ -572,7 +656,7 @@ export default function NewEmployeePage() {
                     ? 'Uploading…'
                     : form.references[idx].aadhaarUrl
                       ? `Uploaded: ${form.references[idx].aadhaarUrl}`
-                      : 'Image or PDF'}
+                      : 'PDF only'}
                 </p>
               </div>
             </div>
@@ -584,10 +668,15 @@ export default function NewEmployeePage() {
             <Input
               className="bg-white"
               type="file"
-              accept="image/*,.pdf"
+              accept="application/pdf,.pdf"
               onChange={async (e) => {
                 const file = e.target.files?.[0]
                 if (!file) return
+                if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+                  setError('Only PDF files are allowed.')
+                  e.target.value = ''
+                  return
+                }
                 setUploadingAadhaar(true)
                 setError(null)
                 try {
@@ -612,7 +701,7 @@ export default function NewEmployeePage() {
               }}
             />
             <p className="text-xs text-neutral-500 mt-1">
-              {uploadingAadhaar ? 'Uploading…' : form.aadhaarUrl ? `Uploaded: ${form.aadhaarUrl}` : 'Image or PDF'}
+              {uploadingAadhaar ? 'Uploading…' : form.aadhaarUrl ? `Uploaded: ${form.aadhaarUrl}` : 'PDF only'}
             </p>
           </div>
           <div>
@@ -620,10 +709,15 @@ export default function NewEmployeePage() {
             <Input
               className="bg-white"
               type="file"
-              accept="image/*"
+              accept="application/pdf,.pdf"
               onChange={async (e) => {
                 const file = e.target.files?.[0]
                 if (!file) return
+                if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+                  setError('Only PDF files are allowed.')
+                  e.target.value = ''
+                  return
+                }
                 setUploadingLocation(true)
                 setError(null)
                 try {
@@ -652,7 +746,7 @@ export default function NewEmployeePage() {
                 ? 'Uploading…'
                 : form.locationPhotoUrl
                   ? `Uploaded: ${form.locationPhotoUrl}`
-                  : 'Photo of location'}
+                  : 'PDF only'}
             </p>
           </div>
 
