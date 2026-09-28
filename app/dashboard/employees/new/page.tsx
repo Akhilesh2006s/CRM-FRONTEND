@@ -963,12 +963,18 @@ export default function NewEmployeePage() {
             <Input className="bg-white text-neutral-900" type="password" name="password" value={form.password} onChange={onChange} required />
           </div>
 
-          {supportsEmployeeTagging(form.role) && (
-            <div className="md:col-span-2">
-              <Label className="mb-2 block">{getTaggingSectionLabel(form.role)}</Label>
-              <p className="text-xs text-neutral-500 mb-2">
-                Tag only the next level: National Head, Regional Head, Regional Manager, Zonal Manager, Coordinators, then BDE.
-              </p>
+          <div className="md:col-span-2">
+            <Label className="mb-2 block">
+              {supportsEmployeeTagging(form.role) ? getTaggingSectionLabel(form.role) : 'Employee tagging'}
+            </Label>
+            <p className="text-xs text-neutral-500 mb-2">
+              {isSingleZoneRole(form.role)
+                ? 'BDE is the last level, so a BDE does not tag anyone. Choose Coordinator or above to tag the next level: National Head → Regional Head → Regional Manager → Zonal Manager → Coordinators → BDE.'
+                : supportsEmployeeTagging(form.role)
+                  ? 'Tag only the next level down.'
+                  : 'This user type is outside the sales hierarchy, so there is no one to tag.'}
+            </p>
+            {supportsEmployeeTagging(form.role) && (
               <div className="max-h-48 overflow-y-auto border rounded p-3 bg-white space-y-2">
                 {filteredTagOptions.length === 0 ? (
                   <p className="text-sm text-neutral-500">No employees at the next level are available to tag</p>
@@ -985,8 +991,8 @@ export default function NewEmployeePage() {
                   ))
                 )}
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {error && <div className="md:col-span-2 text-red-600 text-sm">{error}</div>}
           <div className="md:col-span-2 flex justify-end">
