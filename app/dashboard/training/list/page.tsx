@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Pencil } from 'lucide-react'
 import { apiRequest } from '@/lib/api'
+import { getCurrentUser } from '@/lib/auth'
+import { canApproveTrainerSchools } from '@/lib/trainerSchoolRoles'
 import { toast } from 'sonner'
 
 type Training = {
@@ -24,6 +26,7 @@ type Training = {
   trainingLevel?: string
   remarks?: string
   status: 'Scheduled' | 'Completed' | 'Cancelled'
+  approvalStatus?: 'Pending' | 'Approved' | 'Rejected'
   poImageUrl?: string
 }
 
@@ -43,6 +46,11 @@ export default function TrainingsListPage() {
   const [zones, setZones] = useState<string[]>([])
   const [trainers, setTrainers] = useState<{ _id: string; name: string }[]>([])
   const [employees, setEmployees] = useState<{ _id: string; name: string }[]>([])
+  const [canApprove, setCanApprove] = useState(false)
+
+  useEffect(() => {
+    setCanApprove(canApproveTrainerSchools(getCurrentUser()?.role))
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -97,6 +105,16 @@ export default function TrainingsListPage() {
       window.removeEventListener('focus', handleFocus)
     }
   }, [load])
+
+  const review = async (id: string, decision: 'approve' | 'reject') => {
+    try {
+      await apiRequest(`/training/${id}/approval`, { method: 'PUT', body: JSON.stringify({ decision }) })
+      toast.success(decision === 'approve' ? 'Assignment approved' : 'Assignment rejected')
+      load()
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to update approval')
+    }
+  }
 
   const cancel = async (id: string) => {
     if (!confirm('Cancel this training?')) return
@@ -157,6 +175,7 @@ export default function TrainingsListPage() {
                 <th className="py-2 px-3">Trainer</th>
                 <th className="py-2 px-3">Training Date</th>
                 <th className="py-2 px-3">Status</th>
+                <th className="py-2 px-3">Approval</th>
                 <th className="py-2 px-3">PO Image</th>
                 <th className="py-2 px-3 text-center">Action 1</th>
                 <th className="py-2 px-3 text-center">Action 2</th>
@@ -164,7 +183,7 @@ export default function TrainingsListPage() {
             </thead>
             <tbody>
               {items.length === 0 && (
-                <tr><td colSpan={12} className="py-4 px-3 text-center text-neutral-500">No trainings found</td></tr>
+                <tr><td colSpan={13} className="py-4 px-3 text-center text-neutral-500">No trainings found</td></tr>
               )}
               {items.map((t, idx) => (
                 <tr key={t._id} className="border-b last:border-0">
@@ -184,6 +203,23 @@ export default function TrainingsListPage() {
                     }`}>
                       {t.status}
                     </span>
+                  </td>
+                  <td className="py-2 px-3">
+                    <div className="flex flex-col items-center gap-1">
+                      <span className={`inline-flex px-2 py-1 rounded-full text-xs ${
+                        t.approvalStatus === 'Rejected' ? 'bg-red-100 text-red-700' :
+                        t.approvalStatus === 'Pending' ? 'bg-amber-100 text-amber-800' :
+                        'bg-green-100 text-green-700'
+                      }`}>
+                        {t.approvalStatus || 'Approved'}
+                      </span>
+                      {canApprove && t.approvalStatus === 'Pending' && (
+                        <div className="flex gap-1">
+                          <Button size="sm" onClick={() => review(t._id, 'approve')}>Approve</Button>
+                          <Button size="sm" variant="outline" onClick={() => review(t._id, 'reject')}>Reject</Button>
+                        </div>
+                      )}
+                    </div>
                   </td>
                   <td className="py-2 px-3">
                     {t.poImageUrl ? (

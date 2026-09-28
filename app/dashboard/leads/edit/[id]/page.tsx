@@ -22,7 +22,7 @@ type ProductSelection = {
   name: string
   checked: boolean
   term: string
-  status: 'Hot' | 'Warm' | 'Not Interested' | 'Management Not Met' | 'Visit Again'
+  status: 'Hot' | 'Warm' | 'Not Interested' | 'Yet to Visit' | 'Visit Again'
   strength: string
   unit_price: string
   chance: string
@@ -43,12 +43,12 @@ type SavedProductRow = {
 
 function apiStatusToUi(status?: string): ProductSelection['status'] {
   const s = (status || 'Warm').trim()
-  if (s === 'Not Met Management') return 'Management Not Met'
+  if (s === 'Not Met Management' || s === 'Management Not Met') return 'Yet to Visit'
   if (
     s === 'Hot' ||
     s === 'Warm' ||
     s === 'Not Interested' ||
-    s === 'Management Not Met' ||
+    s === 'Yet to Visit' ||
     s === 'Visit Again'
   ) {
     return s
@@ -826,7 +826,7 @@ export default function EditLeadPage() {
                                   <SelectItem value="Hot">Hot</SelectItem>
                                   <SelectItem value="Warm">Warm</SelectItem>
                                   <SelectItem value="Not Interested">Not Interested</SelectItem>
-                                  <SelectItem value="Management Not Met">Management Not Met</SelectItem>
+                                  <SelectItem value="Yet to Visit">Yet to Visit</SelectItem>
                                   <SelectItem value="Visit Again">Visit Again</SelectItem>
                                 </SelectContent>
                               </Select>
@@ -974,7 +974,7 @@ export default function EditLeadPage() {
                 <SelectItem value="Hot">Hot</SelectItem>
                 <SelectItem value="Warm">Warm</SelectItem>
                 <SelectItem value="Visit Again">Visit Again</SelectItem>
-                <SelectItem value="Not Met Management">Not Met Management</SelectItem>
+                <SelectItem value="Yet to Visit">Yet to Visit</SelectItem>
                 <SelectItem value="Not Interested">Not Interested</SelectItem>
               </SelectContent>
             </Select>

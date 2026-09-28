@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { apiRequest } from '@/lib/api'
+import { getCurrentUser } from '@/lib/auth'
+import { canAssignTrainerSchools } from '@/lib/trainerSchoolRoles'
 import {
   fetchLastCompletedSchedule,
   type LastScheduleInfo,
@@ -39,11 +41,16 @@ type Employee = { _id: string; name: string }
 
 export default function AssignTrainingServicePage() {
   const router = useRouter()
+  const [canAssign, setCanAssign] = useState(false)
   const [schools, setSchools] = useState<School[]>([])
   const [trainers, setTrainers] = useState<Trainer[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    setCanAssign(canAssignTrainerSchools(getCurrentUser()?.role))
+  }, [])
   
   // Filters
   const [filters, setFilters] = useState({
@@ -309,6 +316,10 @@ export default function AssignTrainingServicePage() {
   }
 
   const handleAssignClick = (school: School, type: 'training' | 'service') => {
+    if (!canAssign) {
+      toast.error('Only a Product Manager can assign schools to a trainer.')
+      return
+    }
     setSelectedSchool(school)
     setAssignType(type)
     setAssignForm({
@@ -402,7 +413,7 @@ export default function AssignTrainingServicePage() {
       }
 
       await apiRequest(endpoint, { method: 'POST', body: JSON.stringify(payload) })
-      toast.success(`${assignType === 'training' ? 'Training' : 'Service'} assigned successfully`)
+      toast.success('School assigned. Waiting for coordinator approval.')
       setAssignDialogOpen(false)
       setSelectedSchool(null)
       router.refresh()
@@ -458,6 +469,9 @@ export default function AssignTrainingServicePage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900 mb-2">Existing Schools List</h1>
+        <p className="text-sm text-neutral-600 mb-2">
+          Product Manager assigns each trainer to a school. A Coordinator approves the assignment before the trainer can start.
+        </p>
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-medium text-neutral-700">Existing Schools</h2>
           <Button onClick={exportToExcel}>Export to Excel</Button>
@@ -635,6 +649,7 @@ export default function AssignTrainingServicePage() {
                           size="sm"
                           variant="outline"
                           className="bg-orange-500 text-white hover:bg-orange-600 border-orange-500"
+                          disabled={!canAssign}
                           onClick={() => handleAssignClick(school, 'training')}
                         >
                           Training
@@ -644,6 +659,7 @@ export default function AssignTrainingServicePage() {
                         <Button
                           size="sm"
                           variant="destructive"
+                          disabled={!canAssign}
                           onClick={() => handleAssignClick(school, 'service')}
                         >
                           Service

@@ -4,13 +4,14 @@ const LINE_STATUSES = new Set([
   'Hot',
   'Warm',
   'Visit Again',
+  'Yet to Visit',
   'Not Met Management',
   'Not Interested',
 ])
 
 export function normalizeLeadProductLineStatus(status?: string): string {
   const s = (status || '').trim()
-  if (s === 'Management Not Met') return 'Not Met Management'
+  if (s === 'Management Not Met' || s === 'Not Met Management') return 'Yet to Visit'
   if (LINE_STATUSES.has(s)) return s
   return ''
 }

@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Pencil } from 'lucide-react'
 import { apiRequest } from '@/lib/api'
+import { getCurrentUser } from '@/lib/auth'
+import { canApproveTrainerSchools } from '@/lib/trainerSchoolRoles'
 import { toast } from 'sonner'
 
 type Service = {
@@ -23,6 +25,7 @@ type Service = {
   term?: string
   remarks?: string
   status: 'Scheduled' | 'Completed' | 'Cancelled'
+  approvalStatus?: 'Pending' | 'Approved' | 'Rejected'
   poImageUrl?: string
 }
 
@@ -42,6 +45,11 @@ export default function ServicesListPage() {
   const [zones, setZones] = useState<string[]>([])
   const [trainers, setTrainers] = useState<{ _id: string; name: string }[]>([])
   const [employees, setEmployees] = useState<{ _id: string; name: string }[]>([])
+  const [canApprove, setCanApprove] = useState(false)
+
+  useEffect(() => {
+    setCanApprove(canApproveTrainerSchools(getCurrentUser()?.role))
+  }, [])
 
   useEffect(() => {
     (async () => {
@@ -100,6 +108,16 @@ export default function ServicesListPage() {
     }
   }, [load])
 
+  const review = async (id: string, decision: 'approve' | 'reject') => {
+    try {
+      await apiRequest(`/services/${id}/approval`, { method: 'PUT', body: JSON.stringify({ decision }) })
+      toast.success(decision === 'approve' ? 'Assignment approved' : 'Assignment rejected')
+      load()
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to update approval')
+    }
+  }
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Services List</h1>
@@ -150,13 +168,14 @@ export default function ServicesListPage() {
                 <th className="py-2 px-3">Service Date</th>
                 <th className="py-2 px-3">Remarks</th>
                 <th className="py-2 px-3">Status</th>
+                <th className="py-2 px-3">Approval</th>
                 <th className="py-2 px-3">PO Image</th>
                 <th className="py-2 px-3 text-center">Action</th>
               </tr>
             </thead>
             <tbody>
               {items.length === 0 && (
-                <tr><td colSpan={13} className="py-4 px-3 text-center text-neutral-500">No services found</td></tr>
+                <tr><td colSpan={14} className="py-4 px-3 text-center text-neutral-500">No services found</td></tr>
               )}
               {items.map((s, idx) => (
                 <tr key={s._id} className="border-b last:border-0">
@@ -178,6 +197,23 @@ export default function ServicesListPage() {
                     }`}>
                       {s.status}
                     </span>
+                  </td>
+                  <td className="py-2 px-3">
+                    <div className="flex flex-col items-center gap-1">
+                      <span className={`inline-flex px-2 py-1 rounded-full text-xs ${
+                        s.approvalStatus === 'Rejected' ? 'bg-red-100 text-red-700' :
+                        s.approvalStatus === 'Pending' ? 'bg-amber-100 text-amber-800' :
+                        'bg-green-100 text-green-700'
+                      }`}>
+                        {s.approvalStatus || 'Approved'}
+                      </span>
+                      {canApprove && s.approvalStatus === 'Pending' && (
+                        <div className="flex gap-1">
+                          <Button size="sm" onClick={() => review(s._id, 'approve')}>Approve</Button>
+                          <Button size="sm" variant="outline" onClick={() => review(s._id, 'reject')}>Reject</Button>
+                        </div>
+                      )}
+                    </div>
                   </td>
                   <td className="py-2 px-3">
                     {s.poImageUrl ? (

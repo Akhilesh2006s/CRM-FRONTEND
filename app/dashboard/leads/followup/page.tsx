@@ -59,19 +59,30 @@ type ProductInterested = {
   product_name: string
   term: string
   status: string
+  /** Status already saved on the lead. Follow-up choices are based on this, not the value being edited. */
+  savedStatus: string
   strength: string
   unit_price: string
   chance: string
   not_interested_reason: string
 }
 
+const ALL_FOLLOWUP_STATUSES = ['Hot', 'Warm', 'Visit Again', 'Yet to Visit', 'Not Interested'] as const
+
+function followUpStatusOptions(savedStatus?: string): string[] {
+  const status = normalizeProductLineStatus(savedStatus)
+  if (status === 'Hot') return ['Hot', 'Not Interested']
+  if (status === 'Warm') return ['Warm', 'Hot', 'Not Interested']
+  return [...ALL_FOLLOWUP_STATUSES]
+}
+
 /** Align product-line enums across Lead/DcOrder schemas */
-const DEAL_PRODUCT_STATUS_ORDER = ['Hot', 'Warm', 'Visit Again', 'Not Met Management', 'Not Interested'] as const
+const DEAL_PRODUCT_STATUS_ORDER = ['Hot', 'Warm', 'Visit Again', 'Yet to Visit', 'Not Interested'] as const
 const SCHOOL_LEAD_STATUSES = new Set(['Hot', 'Warm', 'Cold'])
 
 function normalizeProductLineStatus(status?: string): string {
   const s = (status || '').trim()
-  if (s === 'Management Not Met') return 'Not Met Management'
+  if (s === 'Management Not Met' || s === 'Not Met Management') return 'Yet to Visit'
   return s
 }
 
@@ -109,7 +120,7 @@ function displayLeadDealPriority(lead: {
   return 'Warm'
 }
 
-const HISTORY_SNAPSHOT_STATUSES = ['Hot', 'Warm', 'Visit Again', 'Not Met Management', 'Not Interested'] as const
+const HISTORY_SNAPSHOT_STATUSES = ['Hot', 'Warm', 'Visit Again', 'Yet to Visit', 'Not Interested'] as const
 
 /** Build `productsInterested`-shaped rows for synthetic history when API omits snapshots */
 function formatUserDisplayName(user: unknown): string | null {
@@ -420,7 +431,10 @@ export default function FollowupLeadsPage() {
       follow_up_date: '',
       status: displayLeadDealPriority(lead), // Reflects per-product + deal priority
       remarks: '',
-      productsInterested: leadProductsToInterestedRows(lead),
+      productsInterested: leadProductsToInterestedRows(lead).map((row) => {
+        const savedStatus = normalizeProductLineStatus(row.status) || row.status || 'Warm'
+        return { ...row, status: savedStatus, savedStatus }
+      }),
     })
     setUpdateModalOpen(true)
   }
@@ -458,6 +472,19 @@ export default function FollowupLeadsPage() {
     )
     if (selectedProducts.length === 0) {
       toast.error('Add at least one product in Products Interested')
+      return
+    }
+    const illegalMove = selectedProducts.find((p) => {
+      const next = normalizeProductLineStatus(p.status) || p.status
+      return !followUpStatusOptions(p.savedStatus).includes(next)
+    })
+    if (illegalMove) {
+      const from = normalizeProductLineStatus(illegalMove.savedStatus) || illegalMove.savedStatus
+      toast.error(
+        from === 'Hot'
+          ? `"${illegalMove.product_name}" is Hot. It can only stay Hot or become Not Interested.`
+          : `"${illegalMove.product_name}" is Warm. It can stay Warm, become Hot, or become Not Interested.`
+      )
       return
     }
     const incomplete = selectedProducts.find((p) => !isFollowUpProductLineComplete(p))
@@ -695,6 +722,7 @@ export default function FollowupLeadsPage() {
           product_name: '',
           term: 'Term 1',
           status: 'Warm',
+          savedStatus: 'Warm',
           strength: '',
           unit_price: '',
           chance: '',
@@ -1031,11 +1059,9 @@ export default function FollowupLeadsPage() {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="Hot">Hot</SelectItem>
-                              <SelectItem value="Warm">Warm</SelectItem>
-                              <SelectItem value="Visit Again">Visit Again</SelectItem>
-                              <SelectItem value="Not Met Management">Not Met Management</SelectItem>
-                              <SelectItem value="Not Interested">Not Interested</SelectItem>
+                              {followUpStatusOptions(product.savedStatus || product.status).map((status) => (
+                                <SelectItem key={status} value={status}>{status}</SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
                           <Input
@@ -1098,7 +1124,7 @@ export default function FollowupLeadsPage() {
                   </p>
                 )}
                 <p className="text-xs text-neutral-500">
-                  Products are locked. Edit status, unit price, strength, and chance. Not Interested requires a reason.
+                  Products are locked. Hot can only stay Hot or become Not Interested. Warm can stay Warm, become Hot, or become Not Interested. Yet to Visit can change to any status.
                 </p>
               </div>
               
@@ -1205,6 +1231,7 @@ export default function FollowupLeadsPage() {
                         Warm: 'bg-orange-100 text-orange-700 border-orange-200',
                         Cold: 'bg-blue-100 text-blue-700 border-blue-200',
                         'Visit Again': 'bg-yellow-100 text-yellow-700 border-yellow-200',
+                        'Yet to Visit': 'bg-blue-100 text-blue-700 border-blue-200',
                         'Not Met Management': 'bg-blue-100 text-blue-700 border-blue-200',
                         'Not Interested': 'bg-gray-100 text-gray-700 border-gray-200',
                         Dropped: 'bg-gray-100 text-gray-700 border-gray-200',
@@ -1214,6 +1241,7 @@ export default function FollowupLeadsPage() {
                         Warm: 'bg-orange-500 ring-orange-200',
                         Cold: 'bg-blue-500 ring-blue-200',
                         'Visit Again': 'bg-yellow-500 ring-yellow-200',
+                        'Yet to Visit': 'bg-blue-500 ring-blue-200',
                         'Not Met Management': 'bg-blue-500 ring-blue-200',
                         'Not Interested': 'bg-gray-500 ring-gray-200',
                         Dropped: 'bg-gray-500 ring-gray-200',
@@ -1287,7 +1315,7 @@ export default function FollowupLeadsPage() {
                                 </p>
                                 <ul className="space-y-2">
                                   {item.productsInterested.map((row: any, pi: number) => {
-                                    const st = row.status === 'Management Not Met' ? 'Not Met Management' : row.status
+                                    const st = normalizeProductLineStatus(row.status)
                                     const badgeClass =
                                       priorityColors[st as keyof typeof priorityColors] || priorityColors.Warm
                                     return (

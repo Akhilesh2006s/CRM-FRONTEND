@@ -21,12 +21,13 @@ import { normalizeIntegerInput } from '@/lib/numericInput'
 import { toFollowUpDatePayload } from '@/lib/followUpDate'
 import { isBeforeToday } from '@/lib/todayDate'
 import { geocodeSchoolLocation } from '@/lib/geocode'
+import { LEAD_PRODUCT_STATUSES, validateLeadStyleProducts, type LeadProductStatus } from '@/lib/leadProductRules'
 
 type ProductSelection = {
   name: string
   checked: boolean
   term: string
-  status: 'Hot' | 'Warm' | 'Not Interested' | 'Management Not Met' | 'Visit Again'
+  status: LeadProductStatus
   /** Stored as string so empty fields do not show a stuck "0". */
   strength: string
   /** Manual unit price (same as Create Sale Add Products) — product master has no default price. */
@@ -85,7 +86,7 @@ export default function NewSchoolPage() {
           name: p,
           checked: true,
           term: 'Term 1',
-          status: 'Warm' as const,
+          status: '' as const,
           strength: '',
           unit_price: '',
           chance: '',
@@ -184,24 +185,6 @@ export default function NewSchoolPage() {
   const [loadingPincode, setLoadingPincode] = useState(false)
   const [pincodeError, setPincodeError] = useState<string | null>(null)
   const [areas, setAreas] = useState<Array<{ name: string; district: string; block?: string; branchType?: string }>>([])
-  const [zones, setZones] = useState<string[]>([])
-
-  // Load available zones for editable Zone select
-  useEffect(() => {
-    const loadZones = async () => {
-      try {
-        const data = await apiRequest<Array<{ name?: string }>>('/zones')
-        const names = (Array.isArray(data) ? data : [])
-          .map((z) => (z?.name || '').trim())
-          .filter(Boolean)
-        setZones(Array.from(new Set(names)))
-      } catch (err) {
-        console.error('Failed to load zones:', err)
-        setZones([])
-      }
-    }
-    loadZones()
-  }, [])
 
   const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -271,11 +254,17 @@ export default function NewSchoolPage() {
     const updated = [...products]
     updated[index].status = status
 
-    if (status !== 'Hot' && status !== 'Warm') {
+    if (status === 'Not Interested') {
       updated[index].strength = ''
+      updated[index].unit_price = ''
+      updated[index].chance = '0'
+    } else if (status !== 'Hot' && status !== 'Warm') {
+      updated[index].strength = ''
+      updated[index].unit_price = ''
       updated[index].chance = ''
-    }
-    if (status !== 'Not Interested') {
+      updated[index].not_interested_reason = ''
+    } else {
+      if (updated[index].chance === '0') updated[index].chance = ''
       updated[index].not_interested_reason = ''
     }
 
@@ -419,57 +408,14 @@ export default function NewSchoolPage() {
         throw new Error('All products must be included. Please wait for products to load.')
       }
 
-      // Validate per-product rules
-      for (const p of selectedProducts) {
-        const strengthNum = Number(p.strength)
-        const chanceNum = p.chance === '' ? 0 : Number(p.chance)
-        const unitPriceNum = Number(p.unit_price)
-
-        if (p.status === 'Not Interested') {
-          if (!String(p.not_interested_reason || '').trim()) {
-            throw new Error(
-              `Please enter a reason why the school is not interested in "${p.name}".`,
-            )
-          }
-          continue
-        }
-
-        if (
-          !String(p.unit_price || '').trim() ||
-          !Number.isFinite(unitPriceNum) ||
-          unitPriceNum <= 0
-        ) {
-          throw new Error(
-            `Please enter a Unit Price greater than 0 for product "${p.name}".`,
-          )
-        }
-
-        if ((p.status === 'Hot' || p.status === 'Warm') && (!p.strength.trim() || strengthNum <= 0)) {
-          throw new Error(
-            `Please enter strength for product "${p.name}" when status is ${p.status}.`,
-          )
-        }
-
-        if (p.status === 'Hot') {
-          if (chanceNum < 80) {
-            throw new Error(
-              `Chance % for product "${p.name}" must be at least 80% when status is Hot.`,
-            )
-          }
-        } else if (p.status === 'Warm') {
-          if (chanceNum < 20) {
-            throw new Error(
-              `Chance % for product "${p.name}" must be at least 20% when status is Warm.`,
-            )
-          }
-        }
-      }
+      const productError = validateLeadStyleProducts(selectedProducts)
+      if (productError) throw new Error(productError)
 
       const productsPayload = selectedProducts.map((p) => {
         const strengthNum = Number(p.strength) || 0
-        const chanceNum =
-          p.status === 'Hot' || p.status === 'Warm' ? Number(p.chance) || 0 : 0
-        const unitPriceNum = Number(p.unit_price) || 0
+        const chanceNum = p.status === 'Not Interested' ? 0 : p.status === 'Hot' || p.status === 'Warm' ? Number(p.chance) || 0 : 0
+        const unitPriceNum =
+          p.status === 'Hot' || p.status === 'Warm' ? Number(p.unit_price) || 0 : 0
         return {
           product_name: p.name,
           quantity: strengthNum > 0 ? strengthNum : 1,
@@ -660,17 +606,17 @@ export default function NewSchoolPage() {
             <Label>City/Town</Label>
             <Input className="bg-white text-neutral-900" name="region" value={form.region} onChange={onChange} />
           </div>
-          <div>
-            <Label>Landmark {isSuperAdmin ? '' : '(Super Admin only)'}</Label>
-            <Input
-              className={`text-neutral-900 ${isSuperAdmin ? 'bg-white' : 'bg-neutral-100'}`}
-              name="location"
-              value={form.location}
-              onChange={onChange}
-              disabled={!isSuperAdmin}
-              readOnly={!isSuperAdmin}
-            />
-          </div>
+          {isSuperAdmin && (
+            <div>
+              <Label>Landmark</Label>
+              <Input
+                className="bg-white text-neutral-900"
+                name="location"
+                value={form.location}
+                onChange={onChange}
+              />
+            </div>
+          )}
           <div>
             <Label>Area *</Label>
             <Select 
@@ -870,7 +816,7 @@ export default function NewSchoolPage() {
                           <div className="flex flex-col gap-0.5 md:contents">
                             <span className="text-xs text-neutral-500 md:hidden">Status</span>
                             <Select
-                              value={product.status}
+                              value={product.status || undefined}
                               onValueChange={(value) =>
                                 handleProductStatusChange(
                                   index,
@@ -880,16 +826,14 @@ export default function NewSchoolPage() {
                               disabled={!product.checked}
                             >
                               <SelectTrigger className="h-9 text-xs bg-white text-neutral-900 border-neutral-300">
-                                <SelectValue placeholder="Status" />
+                                <SelectValue placeholder="Select" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="Hot">Hot</SelectItem>
-                                <SelectItem value="Warm">Warm</SelectItem>
-                                <SelectItem value="Not Interested">Not Interested</SelectItem>
-                                <SelectItem value="Management Not Met">
-                                  Management Not Met
-                                </SelectItem>
-                                <SelectItem value="Visit Again">Visit Again</SelectItem>
+                                {LEAD_PRODUCT_STATUSES.map((status) => (
+                                  <SelectItem key={status} value={status}>
+                                    {status}
+                                  </SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
                           </div>
@@ -910,7 +854,7 @@ export default function NewSchoolPage() {
                             <Input
                               type="text"
                               inputMode="decimal"
-                              disabled={!product.checked}
+                              disabled={!product.checked || !isHotOrWarm}
                               className="h-9 text-xs bg-white text-neutral-900 border-neutral-300 text-center"
                               placeholder="₹"
                               value={product.unit_price}
@@ -926,7 +870,7 @@ export default function NewSchoolPage() {
                                 disabled={!product.checked || !isHotOrWarm}
                                 className="h-9 text-xs bg-white text-neutral-900 border-neutral-300 text-center flex-1"
                                 placeholder="—"
-                                value={product.chance}
+                                value={product.status === 'Not Interested' ? '0' : product.chance}
                                 onChange={(e) => handleProductChanceChange(index, e.target.value)}
                               />
                               <span className="text-xs text-neutral-500 shrink-0">%</span>
@@ -956,60 +900,11 @@ export default function NewSchoolPage() {
               )}
             </div>
             <p className="text-xs text-neutral-500 mt-2">
-              All products are required. Set Status, Strength, Unit Price, and Chance % for each. Term is set after the lead is closed.
-              Unit Price is required unless status is Not Interested (then a reason is required). Strength is required when status is Hot or Warm.
+              All products are required. Choose a status for each. Strength, Unit Price, and Chance % are required only for Hot and Warm.
+              Hot is 80% to 100%. Warm is 20% or more. Not Interested is 0% and needs a reason.
             </p>
           </div>
 
-          <div>
-            <Label>Zone *</Label>
-            {zones.length > 0 ? (
-              <Select
-                value={form.zone || undefined}
-                onValueChange={(v) =>
-                  setForm((f) => ({
-                    ...f,
-                    zone: v,
-                    cluster: '',
-                    cluster_code: '',
-                  }))
-                }
-              >
-                <SelectTrigger className="bg-white text-neutral-900">
-                  <SelectValue placeholder="Select zone" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(form.zone && !zones.includes(form.zone)
-                    ? [form.zone, ...zones]
-                    : zones
-                  ).map((z) => (
-                    <SelectItem key={z} value={z}>
-                      {z}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <Input
-                className="bg-white text-neutral-900"
-                name="zone"
-                value={form.zone}
-                onChange={onChange}
-                placeholder="Enter zone"
-                required
-              />
-            )}
-          </div>
-          <div>
-            <Label>Cluster Code</Label>
-            <Input
-              className="bg-white text-neutral-900"
-              name="cluster_code"
-              value={form.cluster_code}
-              onChange={onChange}
-              placeholder="Enter cluster code"
-            />
-          </div>
           <div>
             <Label>Follow-up date *</Label>
             <Input 

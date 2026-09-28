@@ -25,13 +25,35 @@ type Employee = {
   role: string
   department?: string
   cluster?: string
+  zone?: string
+  zones?: string[]
   inactiveReason?: string
 }
+
+const availableRoles = [
+  'Executive',
+  'Trainer',
+  'Finance Manager',
+  'HR Manager',
+  'HR Executive',
+  'Coordinator',
+  'Senior Coordinator',
+  'Manager',
+  'Admin',
+  'Super Admin',
+  'Executive Manager',
+  'Regional Manager',
+  'Regional Head',
+  'National Head',
+  'Warehouse Executive',
+  'Warehouse Manager',
+]
 
 export default function ActiveEmployeesPage() {
   const [items, setItems] = useState<Employee[]>([])
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
+  const [roleFilter, setRoleFilter] = useState('')
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null)
   const [editForm, setEditForm] = useState({
@@ -42,7 +64,10 @@ export default function ActiveEmployeesPage() {
     role: '',
     department: '',
     cluster: '',
+    zone: '',
   })
+  const [zoneOptions, setZoneOptions] = useState<string[]>([])
+  const [clustersByZone, setClustersByZone] = useState<Record<string, string[]>>({})
   const [saving, setSaving] = useState(false)
   
   // Get current user to check role
@@ -54,7 +79,44 @@ export default function ActiveEmployeesPage() {
     ? !hasPermission('employees.active.edit') && !hasPermission('employees.active.delete')
     : isCoordinator || isSeniorCoordinator
   
-  const availableRoles = ['Executive', 'Trainer', 'Finance Manager', 'HR Manager', 'HR Executive', 'Coordinator', 'Senior Coordinator', 'Manager', 'Admin', 'Super Admin', 'Executive Manager', 'Regional Manager', 'Regional Head', 'National Head']
+  const loadZones = async () => {
+    try {
+      const [pairsRaw, zonesRaw, clustersRaw] = await Promise.all([
+        apiRequest<{ zone?: string; cluster?: string }[]>('/zones-clusters').catch(() => []),
+        apiRequest<{ name?: string }[]>('/zones').catch(() => []),
+        apiRequest<{ name?: string; zone?: string; zoneId?: { name?: string } | string }[]>('/clusters').catch(() => []),
+      ])
+      const pairs = Array.isArray(pairsRaw) ? pairsRaw : []
+      const zoneDocs = Array.isArray(zonesRaw) ? zonesRaw : []
+      const clusterDocs = Array.isArray(clustersRaw) ? clustersRaw : []
+      const zoneMap: Record<string, string[]> = {}
+      const addCluster = (zone: string, cluster: string) => {
+        const z = zone.trim()
+        const c = cluster.trim()
+        if (!z || !c) return
+        if (!zoneMap[z]) zoneMap[z] = []
+        if (!zoneMap[z].includes(c)) zoneMap[z].push(c)
+      }
+      pairs.forEach((row) => addCluster(row.zone || '', row.cluster || ''))
+      clusterDocs.forEach((row) => {
+        const zoneName =
+          row.zone ||
+          (row.zoneId && typeof row.zoneId === 'object' ? row.zoneId.name : '') ||
+          ''
+        addCluster(zoneName, row.name || '')
+      })
+      const zoneNames = [
+        ...new Set([
+          ...Object.keys(zoneMap),
+          ...zoneDocs.map((z) => (z.name || '').trim()).filter(Boolean),
+        ]),
+      ].sort((a, b) => a.localeCompare(b))
+      setZoneOptions(zoneNames)
+      setClustersByZone(zoneMap)
+    } catch (e) {
+      console.error('Failed to load zones and clusters', e)
+    }
+  }
 
   const load = async () => {
     setLoading(true)
@@ -66,7 +128,10 @@ export default function ActiveEmployeesPage() {
     }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    loadZones()
+  }, [])
 
   const resetPassword = async (id: string, name: string) => {
     if (!confirm(`Reset password for ${name} to "Password123"?`)) return
@@ -79,8 +144,14 @@ export default function ActiveEmployeesPage() {
     }
   }
 
-  const openEditDialog = (employee: Employee) => {
+  const openEditDialog = async (employee: Employee) => {
     setEditingEmployee(employee)
+    setEditDialogOpen(true)
+    const savedZones = Array.isArray(employee.zones) && employee.zones.length
+      ? employee.zones
+      : employee.zone
+        ? [employee.zone]
+        : []
     setEditForm({
       name: employee.name || '',
       email: employee.email || '',
@@ -89,8 +160,25 @@ export default function ActiveEmployeesPage() {
       role: employee.role || '',
       department: employee.department || '',
       cluster: employee.cluster || '',
+      zone: savedZones[0] || '',
     })
-    setEditDialogOpen(true)
+    try {
+      const full = await apiRequest<Employee>(`/employees/${employee._id}`)
+      const zones = Array.isArray(full.zones) && full.zones.length ? full.zones : full.zone ? [full.zone] : savedZones
+      setEditingEmployee(full)
+      setEditForm({
+        name: full.name || '',
+        email: full.email || '',
+        phone: full.phone && full.phone !== '0' ? full.phone : '',
+        mobile: full.mobile || '',
+        role: full.role || '',
+        department: full.department || '',
+        cluster: full.cluster || '',
+        zone: zones[0] || '',
+      })
+    } catch (e) {
+      console.error('Failed to load employee details', e)
+    }
   }
 
   const handleSaveEdit = async () => {
@@ -131,8 +219,10 @@ export default function ActiveEmployeesPage() {
           phone: editForm.phone || editForm.mobile || '',
           mobile: editForm.mobile || editForm.phone || '',
           role: editForm.role,
-          department: editForm.department || undefined,
-          cluster: editForm.cluster || undefined,
+          department: editForm.department || '',
+          zone: editForm.zone || '',
+          zones: editForm.zone ? [editForm.zone] : [],
+          cluster: editForm.role === 'Executive' ? editForm.cluster || '' : '',
         }),
       })
       toast.success('Employee updated successfully')
@@ -162,18 +252,44 @@ export default function ActiveEmployeesPage() {
     }
   }
 
-  const filtered = items.filter(e =>
-    e.name.toLowerCase().includes(q.toLowerCase()) ||
-    e.email.toLowerCase().includes(q.toLowerCase()) ||
-    (e.phone || '').includes(q) ||
-    (e.mobile || '').includes(q) ||
-    (e.cluster || '').toLowerCase().includes(q.toLowerCase())
+  const roleOptions = Array.from(
+    new Map(availableRoles.map((role) => [displayRoleName(role), role])).keys()
   )
+  const isBdeView = roleFilter === 'BDE'
+  const filtered = !roleFilter
+    ? []
+    : items
+        .filter((e) => displayRoleName(e.role) === roleFilter)
+        .filter((e) =>
+          e.name.toLowerCase().includes(q.toLowerCase()) ||
+          e.email.toLowerCase().includes(q.toLowerCase()) ||
+          (e.phone || '').includes(q) ||
+          (e.mobile || '').includes(q) ||
+          (e.cluster || '').toLowerCase().includes(q.toLowerCase()) ||
+          (e.zone || '').toLowerCase().includes(q.toLowerCase()) ||
+          (e.zones || []).some((z) => z.toLowerCase().includes(q.toLowerCase()))
+        )
+        .sort((a, b) => a.name.localeCompare(b.name))
+
+  const zoneLabel = (e: Employee) => {
+    const list = Array.isArray(e.zones) && e.zones.length ? e.zones : e.zone ? [e.zone] : []
+    return list.filter(Boolean).join(', ') || '-'
+  }
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Employees List</h1>
       <div className="flex gap-2">
+        <Select value={roleFilter || undefined} onValueChange={setRoleFilter}>
+          <SelectTrigger className="w-56 bg-white text-neutral-900">
+            <SelectValue placeholder="Select role" />
+          </SelectTrigger>
+          <SelectContent>
+            {roleOptions.map((role) => (
+              <SelectItem key={role} value={role}>{role}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Input placeholder="Search name/email/mobile/cluster" value={q} onChange={(e) => setQ(e.target.value)} />
         <Button onClick={load}>Refresh</Button>
       </div>
@@ -186,7 +302,8 @@ export default function ActiveEmployeesPage() {
               <th className="py-2 px-3">Mobile</th>
               <th className="py-2 px-3">Role</th>
               <th className="py-2 px-3">Department</th>
-              <th className="py-2 px-3">Cluster</th>
+              <th className="py-2 px-3">Zone</th>
+              {isBdeView && <th className="py-2 px-3">Cluster</th>}
               {!shouldHideAction && <th className="py-2 px-3">Action</th>}
             </tr>
           </thead>
@@ -198,7 +315,8 @@ export default function ActiveEmployeesPage() {
                 <td className="py-2 px-3 text-center">{displayMobile(e)}</td>
                 <td className="py-2 px-3 text-center">{displayRoleName(e.role)}</td>
                 <td className="py-2 px-3 text-center">{e.department || '-'}</td>
-                <td className="py-2 px-3 text-center">{e.cluster || '-'}</td>
+                <td className="py-2 px-3 text-center">{zoneLabel(e)}</td>
+                {isBdeView && <td className="py-2 px-3 text-center">{e.cluster || '-'}</td>}
                 {!shouldHideAction && (
                   <td className="py-2 px-3 text-right">
                     <div className="flex gap-2 justify-end">
@@ -223,12 +341,13 @@ export default function ActiveEmployeesPage() {
             ))}
           </tbody>
         </table>
-        {!loading && filtered.length === 0 && <div className="p-4 text-neutral-500">No active employees</div>}
+        {!loading && !roleFilter && <div className="p-4 text-neutral-500">Select a role to see employees</div>}
+        {!loading && roleFilter && filtered.length === 0 && <div className="p-4 text-neutral-500">No employees for this role</div>}
       </Card>
 
       {/* Edit Employee Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Employee</DialogTitle>
             <DialogDescription>
@@ -289,14 +408,31 @@ export default function ActiveEmployeesPage() {
             
             <div>
               <Label htmlFor="edit-role">Role *</Label>
-              <Select value={editForm.role} onValueChange={(v) => setEditForm({ ...editForm, role: v })}>
-                <SelectTrigger className="mt-1">
+              <Select value={editForm.role} onValueChange={(v) => setEditForm({ ...editForm, role: v, cluster: v === 'Executive' ? editForm.cluster : '' })}>
+                <SelectTrigger className="mt-1 w-full">
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-[200] max-h-60">
                   {availableRoles.map(role => (
                     <SelectItem key={role} value={role}>{displayRoleName(role)}</SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Zone</Label>
+              <Select value={editForm.zone || undefined} onValueChange={(zone) => setEditForm({ ...editForm, zone, cluster: '' })}>
+                <SelectTrigger className="mt-1 w-full">
+                  <SelectValue placeholder="Select zone" />
+                </SelectTrigger>
+                <SelectContent className="z-[200] max-h-60">
+                  {zoneOptions.map((zone) => (
+                    <SelectItem key={zone} value={zone}>{zone}</SelectItem>
+                  ))}
+                  {editForm.zone && !zoneOptions.includes(editForm.zone) && (
+                    <SelectItem value={editForm.zone}>{editForm.zone}</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -313,14 +449,24 @@ export default function ActiveEmployeesPage() {
             </div>
             
             <div>
-              <Label htmlFor="edit-cluster">Cluster</Label>
-              <Input
-                id="edit-cluster"
-                value={editForm.cluster}
-                onChange={(e) => setEditForm({ ...editForm, cluster: e.target.value })}
-                placeholder="Enter cluster"
-                className="mt-1"
-              />
+              <Label>Cluster</Label>
+              {editForm.role === 'Executive' ? (
+                <Select value={editForm.cluster || undefined} onValueChange={(cluster) => setEditForm({ ...editForm, cluster })}>
+                  <SelectTrigger className="mt-1 w-full">
+                    <SelectValue placeholder="Select cluster" />
+                  </SelectTrigger>
+                  <SelectContent className="z-[200] max-h-60">
+                    {(clustersByZone[editForm.zone] || []).map((cluster) => (
+                      <SelectItem key={cluster} value={cluster}>{cluster}</SelectItem>
+                    ))}
+                    {editForm.cluster && !(clustersByZone[editForm.zone] || []).includes(editForm.cluster) && (
+                      <SelectItem value={editForm.cluster}>{editForm.cluster}</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input value={editForm.cluster} readOnly placeholder="Cluster is set for BDE" className="mt-1 bg-neutral-50" />
+              )}
             </div>
           </div>
           

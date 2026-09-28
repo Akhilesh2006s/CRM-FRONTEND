@@ -46,6 +46,7 @@ export default function NewEmployeePage() {
     zone: '',
     zones: [] as string[],
     cluster: '',
+    department: '',
     district: '',
     city: '',
     pincode: '',
@@ -961,6 +962,16 @@ export default function NewEmployeePage() {
           <div>
             <Label>Password *</Label>
             <Input className="bg-white text-neutral-900" type="password" name="password" value={form.password} onChange={onChange} required />
+          </div>
+          <div>
+            <Label>Department</Label>
+            <Input
+              className="bg-white text-neutral-900"
+              name="department"
+              value={form.department}
+              onChange={onChange}
+              placeholder="Department"
+            />
           </div>
 
           <div className="md:col-span-2">
