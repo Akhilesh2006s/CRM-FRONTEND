@@ -20,6 +20,7 @@ import {
   GraduationCap,
   CheckCircle2,
   Clock,
+  FileSpreadsheet,
 } from 'lucide-react'
 
 type SalesReportData = {
@@ -40,6 +41,7 @@ const REPORT_LINKS = [
   { href: '/dashboard/reports/returns', label: 'Returns Report', description: 'BDE and warehouse returns', icon: RefreshCw },
   { href: '/dashboard/reports/expenses', label: 'All Expenses Report', description: 'Approved and pending expenses', icon: Receipt },
   { href: '/dashboard/reports/training-service', label: 'Training & Service Report', description: 'Assigned trainings and services', icon: GraduationCap },
+  { href: '/dashboard/reports/operational', label: 'Operational Reports', description: 'Collections, PO/DC, school status, master lists, schedules, and ledger', icon: FileSpreadsheet },
 ]
 
 function formatInr(value: number) {

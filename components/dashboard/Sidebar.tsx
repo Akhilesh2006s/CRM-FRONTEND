@@ -296,6 +296,7 @@ const NAV: NavItem[] = [
       { label: 'Returns Report', href: '/dashboard/reports/returns' },
       { label: 'All Expenses Report', href: '/dashboard/reports/expenses' },
       { label: 'Training & Service Report', href: '/dashboard/reports/training-service' },
+      { label: 'Operational Reports', href: '/dashboard/reports/operational' },
     ],
   },
   {
@@ -872,7 +873,7 @@ export function Sidebar() {
         }
         // Filter Reports menu items to only show: Leads, DC, Returns, All Expenses for Coordinator
         if (item.label === 'Reports' && item.children) {
-          const allowedReportItems = ['Leads Report', 'DC Report', 'Returns Report', 'All Expenses Report']
+          const allowedReportItems = ['Operational Reports', 'Leads Report', 'DC Report', 'Returns Report', 'All Expenses Report']
           return {
             ...item,
             children: item.children.filter(child => 
