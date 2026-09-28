@@ -10,6 +10,7 @@ type School = {
   schoolCode: string
   zone: string
   cluster: string
+  zonalManager: string
   city: string
   contactPerson: string
   contactMobile: string
@@ -122,7 +123,7 @@ export default function ProductManagerDashboard({ managerId }: { managerId: stri
     const rows = data?.schools || []
     if (!needle) return rows
     return rows.filter((row) =>
-      [row.schoolName, row.schoolCode, row.zone, row.bdeName, ...row.products.map((item) => item.name)]
+      [row.schoolName, row.schoolCode, row.zone, row.cluster, row.zonalManager, row.bdeName, ...row.products.map((item) => item.name)]
         .join(' ')
         .toLowerCase()
         .includes(needle)
@@ -184,15 +185,17 @@ export default function ProductManagerDashboard({ managerId }: { managerId: stri
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search school, code, zone, BDE, or product"
+            placeholder="Search school, code, zone, cluster, zonal manager, BDE, or product"
             className="mb-4 w-full rounded-md border border-neutral-200 px-3 py-2 text-sm"
           />
           <table className="w-full text-left text-sm">
             <thead className="text-neutral-500">
               <tr>
                 <th className="py-2 pr-3">School</th>
-                <th className="py-2 pr-3">Product</th>
                 <th className="py-2 pr-3">Zone</th>
+                <th className="py-2 pr-3">Cluster</th>
+                <th className="py-2 pr-3">Zonal Manager</th>
+                <th className="py-2 pr-3">Product</th>
                 <th className="py-2 pr-3">BDE</th>
                 <th className="py-2 pr-3">Contact</th>
                 <th className="py-2">Delivery</th>
@@ -205,10 +208,12 @@ export default function ProductManagerDashboard({ managerId }: { managerId: stri
                     <div className="font-medium">{row.schoolName || '—'}</div>
                     <div className="text-xs text-neutral-500">{row.schoolCode || row.city || ''}</div>
                   </td>
+                  <td className="py-2 pr-3">{row.zone || '—'}</td>
+                  <td className="py-2 pr-3">{row.cluster || '—'}</td>
+                  <td className="py-2 pr-3">{row.zonalManager || '—'}</td>
                   <td className="py-2 pr-3">
                     {row.products.map((item) => `${item.name} (${item.relationship})`).join(', ') || '—'}
                   </td>
-                  <td className="py-2 pr-3">{row.zone || '—'}</td>
                   <td className="py-2 pr-3">
                     <div>{row.bdeName || '—'}</div>
                     <div className="text-xs text-neutral-500">{row.bdePhone || row.bdeEmail}</div>
@@ -222,7 +227,7 @@ export default function ProductManagerDashboard({ managerId }: { managerId: stri
               ))}
               {schools.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-6 text-neutral-500">No schools for the assigned products.</td>
+                  <td colSpan={8} className="py-6 text-neutral-500">No schools for the assigned products.</td>
                 </tr>
               ) : null}
             </tbody>
@@ -351,7 +356,7 @@ export default function ProductManagerDashboard({ managerId }: { managerId: stri
               ))}
               {data.trainers.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-6 text-neutral-500">No trainer activity for the assigned products.</td>
+                  <td colSpan={7} className="py-6 text-neutral-500">No trainers.</td>
                 </tr>
               ) : null}
             </tbody>

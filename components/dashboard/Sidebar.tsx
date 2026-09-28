@@ -954,6 +954,13 @@ export function Sidebar() {
         href: '/dashboard/training/trainer/completed',
       },
       {
+        label: 'Training',
+        icon: GraduationCap,
+        children: [
+          { label: 'Training Request', href: '/dashboard/training/request', icon: PlusCircle },
+        ],
+      },
+      {
         label: 'Expense',
         icon: Calculator,
         children: [
@@ -1070,7 +1077,7 @@ export function Sidebar() {
   }
 
   // Keep role-specific Executive Manager / Executive / HR Manager nav intact (do not replace with RBAC catalog).
-  if (rbacActive && permissionsReady && !isExecutiveManager && !isEmployee && !isHrManager && !isHrExecutive && !isHierarchyRole && !isManager) {
+  if (rbacActive && permissionsReady && !isExecutiveManager && !isEmployee && !isHrManager && !isHrExecutive && !isHierarchyRole && !isManager && !isTrainer) {
     const baseNav = finalNav.length > 0 ? finalNav : NAV
     const catalogHrefs = rbacCatalogHrefs()
     const fromPermissions = rbacBuiltToNavItems(buildRbacSidebarNav(permUser))

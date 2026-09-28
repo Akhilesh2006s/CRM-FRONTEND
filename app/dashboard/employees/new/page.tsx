@@ -19,6 +19,7 @@ import {
 } from '@/lib/employeeTagging'
 import { sanitizePhoneInput, validateStrictIndianMobile } from '@/lib/phone'
 import { displayRoleName } from '@/lib/roleLabels'
+import { useProducts } from '@/hooks/useProducts'
 import {
   validateEmployeeFirstName,
   validateEmployeeLastName,
@@ -28,6 +29,8 @@ import {
 } from '@/lib/employeeFormValidation'
 
 type EmployeeOption = { _id: string; name: string; role: string }
+type ProductSchool = { schoolName: string; schoolCode: string; zone: string; cluster: string; zonalManager: string; contactPerson: string }
+type ProductSchoolsResponse = { schools: ProductSchool[] }
 
 export default function NewEmployeePage() {
   const router = useRouter()
@@ -75,6 +78,10 @@ export default function NewEmployeePage() {
   const [sameAsPermanent, setSameAsPermanent] = useState(false)
   const [identityErrors, setIdentityErrors] = useState<EmployeeIdentityErrors>({})
   const [loadingPincode, setLoadingPincode] = useState(false)
+  const { products: productOptions, loading: productsLoading } = useProducts()
+  const [productId, setProductId] = useState('')
+  const [productSchools, setProductSchools] = useState<ProductSchool[]>([])
+  const [loadingProductSchools, setLoadingProductSchools] = useState(false)
   const [zones, setZones] = useState<string[]>([])
   const [clustersByZone, setClustersByZone] = useState<Record<string, string[]>>({})
 
@@ -111,6 +118,30 @@ export default function NewEmployeePage() {
       console.error('Failed to load zones & clusters', e)
     }
   }
+
+  useEffect(() => {
+    if (form.role !== 'Manager' || !productId) {
+      setProductSchools([])
+      return
+    }
+    let cancelled = false
+    setLoadingProductSchools(true)
+    apiRequest(
+      `/product-manager/products/${productId}/schools`
+    )
+      .then((data: ProductSchoolsResponse) => {
+        if (!cancelled) setProductSchools(Array.isArray(data?.schools) ? data.schools : [])
+      })
+      .catch(() => {
+        if (!cancelled) setProductSchools([])
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingProductSchools(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [form.role, productId])
 
   const clearIdentityError = (field: keyof EmployeeIdentityErrors) => {
     setIdentityErrors((prev) => {
@@ -403,6 +434,11 @@ export default function NewEmployeePage() {
         setSubmitting(false)
         return
       }
+      if (form.role === 'Manager' && !productId) {
+        setError('Select the product for this Product Manager')
+        setSubmitting(false)
+        return
+      }
       
       const payload: any = {
         ...form,
@@ -431,6 +467,9 @@ export default function NewEmployeePage() {
       }
       if (!supportsEmployeeTagging(form.role)) {
         delete payload.taggedEmployeeIds
+      }
+      if (form.role === 'Manager') {
+        payload.assignedProductIds = [productId]
       }
       await apiRequest('/employees/create', {
         method: 'POST',
@@ -910,7 +949,8 @@ export default function NewEmployeePage() {
             <Label>User Type *</Label>
             <Select
               value={form.role}
-              onValueChange={(v) =>
+              onValueChange={(v) => {
+                if (v !== 'Manager') setProductId('')
                 setForm((f) => {
                   const allowed = new Set(filterTagOptions(tagOptions, v).map((e) => e._id))
                   const single = isSingleZoneRole(v)
@@ -934,7 +974,7 @@ export default function NewEmployeePage() {
                       : [],
                   }
                 })
-              }
+              }}
             >
               <SelectTrigger className="bg-white text-neutral-900">
                 <SelectValue placeholder="Select Option" />
@@ -959,6 +999,52 @@ export default function NewEmployeePage() {
               </SelectContent>
             </Select>
           </div>
+          {form.role === 'Manager' && (
+            <div className="md:col-span-2 space-y-3">
+              <div>
+                <Label>Product *</Label>
+                <Select value={productId || undefined} onValueChange={setProductId}>
+                  <SelectTrigger className="bg-white text-neutral-900">
+                    <SelectValue placeholder={productsLoading ? 'Loading products…' : 'Select product'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {productOptions.map((product) => (
+                      <SelectItem key={product._id} value={product._id}>
+                        {product.productName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-neutral-500 mt-1">
+                  This Product Manager will see only the clients who asked for this product.
+                </p>
+              </div>
+              {productId && (
+                <div className="rounded border bg-white p-3">
+                  <p className="text-sm font-medium text-neutral-800 mb-2">
+                    Clients who asked for {productOptions.find((p) => p._id === productId)?.productName || 'this product'}
+                  </p>
+                  {loadingProductSchools ? (
+                    <p className="text-sm text-neutral-500">Loading clients…</p>
+                  ) : productSchools.length === 0 ? (
+                    <p className="text-sm text-neutral-500">No client has asked for this product yet.</p>
+                  ) : (
+                    <ul className="max-h-48 overflow-y-auto divide-y text-sm">
+                      {productSchools.map((school) => (
+                        <li key={`${school.schoolCode}-${school.schoolName}`} className="py-2">
+                          <span className="font-medium">{school.schoolName}</span>
+                          {school.schoolCode ? <span className="text-neutral-500"> · {school.schoolCode}</span> : null}
+                          <span className="text-neutral-500"> · Zone: {school.zone || '—'}</span>
+                          <span className="text-neutral-500"> · Cluster: {school.cluster || '—'}</span>
+                          <span className="text-neutral-500"> · Zonal Manager: {school.zonalManager || '—'}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           <div>
             <Label>Password *</Label>
             <Input className="bg-white text-neutral-900" type="password" name="password" value={form.password} onChange={onChange} required />

@@ -104,7 +104,7 @@ export default function TrainingRequestsReviewPage() {
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Training Requests</h1>
-          <p className="text-sm text-neutral-600 mt-1">Approve or reject training requests raised by BDEs.</p>
+          <p className="text-sm text-neutral-600 mt-1">Approve or reject training requests raised by BDEs and trainers.</p>
         </div>
         <div className="w-full sm:w-48">
           <Label>Status</Label>
@@ -129,7 +129,7 @@ export default function TrainingRequestsReviewPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-neutral-100 border-b">
-                <th className="py-2 px-3 text-left">BDE</th>
+                <th className="py-2 px-3 text-left">Requested by</th>
                 <th className="py-2 px-3 text-left">School</th>
                 <th className="py-2 px-3 text-left">Subject</th>
                 <th className="py-2 px-3 text-left">Preferred date</th>

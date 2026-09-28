@@ -11,6 +11,9 @@ type Dashboard = {
   schools: Array<{
     schoolName: string;
     schoolCode: string;
+    zone: string;
+    cluster: string;
+    zonalManager: string;
     products: Array<{ name: string; relationship: string }>;
     bdeName: string;
     deliveryStatus: string;
@@ -61,6 +64,9 @@ export default function ProductManagerScreen({ embedded, managerId }: { embedded
       {(data.schools || []).map((school) => (
         <View key={`${school.schoolCode}-${school.schoolName}`} style={styles.card}>
           <Text style={styles.cardTitle}>{school.schoolName}</Text>
+          <Text style={styles.meta}>
+            Zone: {school.zone || '—'} · Cluster: {school.cluster || '—'} · Zonal Manager: {school.zonalManager || '—'}
+          </Text>
           <Text style={styles.meta}>
             {(school.products || []).map((item) => `${item.name} (${item.relationship})`).join(', ')}
           </Text>

@@ -133,6 +133,14 @@ export function canAccessPath(
     return canAccessExecutiveManagerWorkspace(user, pathname)
   }
 
+  // Trainer raises a training request the same way a BDE does.
+  if (
+    user.role === 'Trainer' &&
+    (pathname === '/dashboard/training/request' || pathname.startsWith('/dashboard/training/request/'))
+  ) {
+    return true
+  }
+
   // BDE logs OPERATIONS visits from Clients → Visits
   if (
     user.role === 'Executive' &&
