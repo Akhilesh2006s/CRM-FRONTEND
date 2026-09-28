@@ -10,6 +10,12 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { apiRequest } from '@/lib/api'
 import { displayRoleName } from '@/lib/roleLabels'
+import {
+  filterTagOptions,
+  getTaggingSectionLabel,
+  isSingleZoneRole,
+  supportsEmployeeTagging,
+} from '@/lib/employeeTagging'
 import { toast } from 'sonner'
 import { sanitizePhoneInput, validateStrictIndianMobile } from '@/lib/phone'
 import {
@@ -19,8 +25,6 @@ import {
   validateEmployeeIdentityFields,
   type EmployeeIdentityErrors,
 } from '@/lib/employeeFormValidation'
-
-const TAGGING_ROLES = ['Executive', 'Coordinator', 'Senior Coordinator', 'Finance Manager', 'Warehouse Manager']
 
 type EmployeeOption = { _id: string; name: string; role: string }
 
@@ -39,6 +43,7 @@ export default function EditEmployeePage() {
     address1: '',
     state: '',
     zone: '',
+    zones: [] as string[],
     cluster: '',
     district: '',
     city: '',
@@ -95,7 +100,12 @@ export default function EditEmployeePage() {
           mobile: emp.mobile || emp.phone || '',
           address1: emp.address1 || '',
           state: emp.state || '',
-          zone: emp.zone || '',
+          zone: emp.zone || (Array.isArray(emp.zones) ? emp.zones[0] : '') || '',
+          zones: Array.isArray(emp.zones) && emp.zones.length
+            ? emp.zones
+            : emp.zone
+              ? [emp.zone]
+              : [],
           cluster: emp.cluster || '',
           district: emp.district || '',
           city: emp.city || '',
@@ -224,7 +234,17 @@ export default function EditEmployeePage() {
         }
       }
 
-      if (form.role === 'Executive' && !form.cluster?.trim()) {
+      const selectedZones = isSingleZoneRole(form.role)
+        ? form.zone.trim()
+          ? [form.zone.trim()]
+          : []
+        : form.zones.map((z) => z.trim()).filter(Boolean)
+      if (selectedZones.length === 0) {
+        setError(isSingleZoneRole(form.role) ? 'Zone is required for BDE' : 'Select at least one zone')
+        setSubmitting(false)
+        return
+      }
+      if (isSingleZoneRole(form.role) && !form.cluster?.trim()) {
         setError('Cluster is required for BDE role')
         setSubmitting(false)
         return
@@ -237,9 +257,15 @@ export default function EditEmployeePage() {
         name: `${identityCheck.values.firstName} ${identityCheck.values.lastName}`.trim(),
         phone: form.phone || form.mobile,
         mobile: form.mobile,
+        zone: selectedZones[0],
+        zones: selectedZones,
+        taggedEmployeeIds: supportsEmployeeTagging(form.role)
+          ? form.taggedEmployeeIds.filter((id) =>
+              filterTagOptions(tagOptions, form.role).some((e) => e._id === id)
+            )
+          : [],
       }
       if (form.role !== 'Executive') delete payload.cluster
-      if (!TAGGING_ROLES.includes(form.role)) payload.taggedEmployeeIds = []
       await apiRequest(`/employees/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
       toast.success('Employee updated')
       router.push('/dashboard/employees/active')
@@ -321,17 +347,41 @@ export default function EditEmployeePage() {
             <Label>PinCode</Label>
             <Input className="bg-white text-neutral-900" name="pincode" value={form.pincode} onChange={onChange} />
           </div>
-          <div>
-            <Label>Zone *</Label>
-            <Select value={form.zone} onValueChange={(zone) => setForm((f) => ({ ...f, zone, cluster: '' }))}>
-              <SelectTrigger className="bg-white text-neutral-900"><SelectValue placeholder="Select Zone" /></SelectTrigger>
-              <SelectContent>
-                {zones.map((z) => <SelectItem key={z} value={z}>{z}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          {form.role === 'Executive' && (
+          {isSingleZoneRole(form.role) ? (
             <div>
+              <Label>Zone *</Label>
+              <Select value={form.zone} onValueChange={(zone) => setForm((f) => ({ ...f, zone, zones: zone ? [zone] : [], cluster: '' }))}>
+                <SelectTrigger className="bg-white text-neutral-900"><SelectValue placeholder="Select Zone" /></SelectTrigger>
+                <SelectContent>
+                  {zones.map((z) => <SelectItem key={z} value={z}>{z}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
+            <div className="md:col-span-2">
+              <Label>Zones *</Label>
+              <p className="text-xs text-neutral-500 mb-2">Select one or more zones. Only BDE is limited to a single zone.</p>
+              <div className="max-h-40 overflow-y-auto border rounded p-3 bg-white space-y-2">
+                {zones.map((z) => (
+                  <label key={z} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={form.zones.includes(z)}
+                      onChange={() =>
+                        setForm((f) => {
+                          const next = f.zones.includes(z) ? f.zones.filter((name) => name !== z) : [...f.zones, z]
+                          return { ...f, zones: next, zone: next[0] || '' }
+                        })
+                      }
+                    />
+                    {z}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+          {form.role === 'Executive' && (
+            <div className="md:col-span-2">
               <Label>Cluster *</Label>
               <Select value={form.cluster} onValueChange={(cluster) => setForm((f) => ({ ...f, cluster }))}>
                 <SelectTrigger className="bg-white text-neutral-900"><SelectValue placeholder="Select Cluster" /></SelectTrigger>
@@ -355,7 +405,19 @@ export default function EditEmployeePage() {
           </div>
           <div>
             <Label>User Type *</Label>
-            <Select value={form.role} onValueChange={(v) => setForm((f) => ({ ...f, role: v, cluster: v === 'Executive' ? f.cluster : '' }))}>
+            <Select value={form.role} onValueChange={(v) => setForm((f) => {
+              const single = isSingleZoneRole(v)
+              const nextZones = single ? (f.zone ? [f.zone] : f.zones.slice(0, 1)) : (f.zones.length ? f.zones : f.zone ? [f.zone] : [])
+              const allowed = new Set(filterTagOptions(tagOptions, v).map((e) => e._id))
+              return {
+                ...f,
+                role: v,
+                zone: nextZones[0] || '',
+                zones: nextZones,
+                cluster: single ? f.cluster : '',
+                taggedEmployeeIds: f.taggedEmployeeIds.filter((id) => allowed.has(id)),
+              }
+            })}>
               <SelectTrigger className="bg-white text-neutral-900"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {['Executive', 'Trainer', 'Finance Manager', 'HR Manager', 'HR Executive', 'Coordinator', 'Senior Coordinator', 'Manager', 'Executive Manager', 'Regional Manager', 'Regional Head', 'National Head', 'Warehouse Executive', 'Warehouse Manager', 'Admin', 'Super Admin'].map((r) => (
@@ -365,14 +427,17 @@ export default function EditEmployeePage() {
             </Select>
           </div>
 
-          {TAGGING_ROLES.includes(form.role) && (
+          {supportsEmployeeTagging(form.role) && (
             <div className="md:col-span-2">
-              <Label className="mb-2 block">Employee tagging</Label>
+              <Label className="mb-2 block">{getTaggingSectionLabel(form.role)}</Label>
+              <p className="text-xs text-neutral-500 mb-2">
+                Tag only the next level: National Head, Regional Head, Regional Manager, Zonal Manager, Coordinators, then BDE.
+              </p>
               <div className="max-h-48 overflow-y-auto border rounded p-3 bg-white space-y-2">
-                {tagOptions.length === 0 ? (
-                  <p className="text-sm text-neutral-500">No employees available to tag</p>
+                {filterTagOptions(tagOptions, form.role).length === 0 ? (
+                  <p className="text-sm text-neutral-500">No employees at the next level are available to tag</p>
                 ) : (
-                  tagOptions.map((e) => (
+                  filterTagOptions(tagOptions, form.role).map((e) => (
                     <label key={e._id} className="flex items-center gap-2 text-sm">
                       <input
                         type="checkbox"

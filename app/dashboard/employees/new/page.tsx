@@ -14,6 +14,7 @@ import { toast } from 'sonner'
 import {
   filterTagOptions,
   getTaggingSectionLabel,
+  isSingleZoneRole,
   supportsEmployeeTagging,
 } from '@/lib/employeeTagging'
 import { sanitizePhoneInput, validateStrictIndianMobile } from '@/lib/phone'
@@ -43,6 +44,7 @@ export default function NewEmployeePage() {
     permanentAddress: '',
     state: '',
     zone: '',
+    zones: [] as string[],
     cluster: '',
     district: '',
     city: '',
@@ -207,14 +209,22 @@ export default function NewEmployeePage() {
         }>(`/location/resolve?pincode=${pincode}`)
 
         if (response.success) {
-          setForm((f) => ({
-            ...f,
-            state: response.state || f.state,
-            district: response.district || f.district,
-            city: response.city || response.town || f.city,
-            zone: response.zone || f.zone,
-            cluster: response.cluster || (response.zone ? '' : f.cluster),
-          }))
+          setForm((f) => {
+            const zone = response.zone || f.zone
+            const zones =
+              isSingleZoneRole(f.role) || !zone || f.zones.includes(zone)
+                ? f.zones
+                : [...f.zones, zone]
+            return {
+              ...f,
+              state: response.state || f.state,
+              district: response.district || f.district,
+              city: response.city || response.town || f.city,
+              zone,
+              zones,
+              cluster: response.cluster || (response.zone ? '' : f.cluster),
+            }
+          })
         }
       } catch (err) {
         // On failure, keep pincode but allow manual override later if needed
@@ -246,6 +256,15 @@ export default function NewEmployeePage() {
       })
       .catch(() => {})
   }, [])
+
+  const toggleZone = (zoneName: string) => {
+    setForm((f) => {
+      const zones = f.zones.includes(zoneName)
+        ? f.zones.filter((z) => z !== zoneName)
+        : [...f.zones, zoneName]
+      return { ...f, zones, zone: zones[0] || '' }
+    })
+  }
 
   const toggleTagged = (empId: string) => {
     setForm((f) => ({
@@ -314,8 +333,17 @@ export default function NewEmployeePage() {
         return
       }
 
-      // Validate cluster for Executive role
-      if (form.role === 'Executive' && !form.cluster?.trim()) {
+      const selectedZones = isSingleZoneRole(form.role)
+        ? form.zone.trim()
+          ? [form.zone.trim()]
+          : []
+        : form.zones.map((z) => z.trim()).filter(Boolean)
+      if (selectedZones.length === 0) {
+        setError(isSingleZoneRole(form.role) ? 'Zone is required for BDE' : 'Select at least one zone')
+        setSubmitting(false)
+        return
+      }
+      if (isSingleZoneRole(form.role) && !form.cluster?.trim()) {
         setError('Cluster is required for BDE role')
         setSubmitting(false)
         return
@@ -384,6 +412,8 @@ export default function NewEmployeePage() {
         mobile: mobileCheck.digits,
         temporaryAddress,
         permanentAddress: form.permanentAddress,
+        zone: selectedZones[0],
+        zones: selectedZones,
         name:
           `${identityCheck.values.firstName} ${identityCheck.values.lastName}`.trim() ||
           identityCheck.values.firstName ||
@@ -456,7 +486,8 @@ export default function NewEmployeePage() {
             )}
           </div>
           <div>
-            <Label>VESPL Code</Label>
+            <Label>Emp ID</Label>
+            <p className="text-xs text-neutral-500 mb-1">VESPL (code)</p>
             <Input
               className="bg-neutral-100 text-neutral-900"
               name="empCode"
@@ -464,7 +495,6 @@ export default function NewEmployeePage() {
               readOnly
               placeholder="0001"
             />
-            <p className="text-xs text-neutral-500 mt-1">Assigned automatically as a 4-digit code (0001, 0002, …).</p>
           </div>
           <div>
             <Label>Email Id *</Label>
@@ -543,6 +573,94 @@ export default function NewEmployeePage() {
               readOnly={sameAsPermanent}
               required
             />
+          </div>
+
+          <div className="md:col-span-2 text-lg font-semibold mb-2 mt-4">Documents *</div>
+          <div>
+            <Label>Aadhaar upload *</Label>
+            <Input
+              className="bg-white"
+              type="file"
+              accept="application/pdf,.pdf"
+              onChange={async (e) => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+                  setError('Only PDF files are allowed.')
+                  e.target.value = ''
+                  return
+                }
+                setUploadingAadhaar(true)
+                setError(null)
+                try {
+                  const fd = new FormData()
+                  fd.append('file', file)
+                  fd.append('kind', 'aadhaar')
+                  const token = localStorage.getItem('authToken')
+                  const { apiUrl } = await import('@/lib/api')
+                  const res = await fetch(apiUrl('/employees/upload'), {
+                    method: 'POST',
+                    headers: token ? { Authorization: `Bearer ${token}` } : {},
+                    body: fd,
+                  })
+                  const data = await res.json()
+                  if (!res.ok) throw new Error(data?.message || 'Upload failed')
+                  setForm((f) => ({ ...f, aadhaarUrl: data.url }))
+                } catch (err: any) {
+                  setError(err?.message || 'Aadhaar upload failed')
+                } finally {
+                  setUploadingAadhaar(false)
+                }
+              }}
+            />
+            <p className="text-xs text-neutral-500 mt-1">
+              {uploadingAadhaar ? 'Uploading…' : form.aadhaarUrl ? `Uploaded: ${form.aadhaarUrl}` : 'PDF only'}
+            </p>
+          </div>
+          <div>
+            <Label>Location upload *</Label>
+            <Input
+              className="bg-white"
+              type="file"
+              accept="application/pdf,.pdf"
+              onChange={async (e) => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+                  setError('Only PDF files are allowed.')
+                  e.target.value = ''
+                  return
+                }
+                setUploadingLocation(true)
+                setError(null)
+                try {
+                  const fd = new FormData()
+                  fd.append('file', file)
+                  fd.append('kind', 'location')
+                  const token = localStorage.getItem('authToken')
+                  const { apiUrl } = await import('@/lib/api')
+                  const res = await fetch(apiUrl('/employees/upload'), {
+                    method: 'POST',
+                    headers: token ? { Authorization: `Bearer ${token}` } : {},
+                    body: fd,
+                  })
+                  const data = await res.json()
+                  if (!res.ok) throw new Error(data?.message || 'Upload failed')
+                  setForm((f) => ({ ...f, locationPhotoUrl: data.url }))
+                } catch (err: any) {
+                  setError(err?.message || 'Location upload failed')
+                } finally {
+                  setUploadingLocation(false)
+                }
+              }}
+            />
+            <p className="text-xs text-neutral-500 mt-1">
+              {uploadingLocation
+                ? 'Uploading…'
+                : form.locationPhotoUrl
+                  ? `Uploaded: ${form.locationPhotoUrl}`
+                  : 'PDF only'}
+            </p>
           </div>
 
           <div className="md:col-span-2 text-lg font-semibold mb-2 mt-4">References *</div>
@@ -662,94 +780,6 @@ export default function NewEmployeePage() {
             </div>
           ))}
 
-          <div className="md:col-span-2 text-lg font-semibold mb-2 mt-4">Documents *</div>
-          <div>
-            <Label>Aadhaar upload *</Label>
-            <Input
-              className="bg-white"
-              type="file"
-              accept="application/pdf,.pdf"
-              onChange={async (e) => {
-                const file = e.target.files?.[0]
-                if (!file) return
-                if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-                  setError('Only PDF files are allowed.')
-                  e.target.value = ''
-                  return
-                }
-                setUploadingAadhaar(true)
-                setError(null)
-                try {
-                  const fd = new FormData()
-                  fd.append('file', file)
-                  fd.append('kind', 'aadhaar')
-                  const token = localStorage.getItem('authToken')
-                  const { apiUrl } = await import('@/lib/api')
-                  const res = await fetch(apiUrl('/employees/upload'), {
-                    method: 'POST',
-                    headers: token ? { Authorization: `Bearer ${token}` } : {},
-                    body: fd,
-                  })
-                  const data = await res.json()
-                  if (!res.ok) throw new Error(data?.message || 'Upload failed')
-                  setForm((f) => ({ ...f, aadhaarUrl: data.url }))
-                } catch (err: any) {
-                  setError(err?.message || 'Aadhaar upload failed')
-                } finally {
-                  setUploadingAadhaar(false)
-                }
-              }}
-            />
-            <p className="text-xs text-neutral-500 mt-1">
-              {uploadingAadhaar ? 'Uploading…' : form.aadhaarUrl ? `Uploaded: ${form.aadhaarUrl}` : 'PDF only'}
-            </p>
-          </div>
-          <div>
-            <Label>Location upload *</Label>
-            <Input
-              className="bg-white"
-              type="file"
-              accept="application/pdf,.pdf"
-              onChange={async (e) => {
-                const file = e.target.files?.[0]
-                if (!file) return
-                if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-                  setError('Only PDF files are allowed.')
-                  e.target.value = ''
-                  return
-                }
-                setUploadingLocation(true)
-                setError(null)
-                try {
-                  const fd = new FormData()
-                  fd.append('file', file)
-                  fd.append('kind', 'location')
-                  const token = localStorage.getItem('authToken')
-                  const { apiUrl } = await import('@/lib/api')
-                  const res = await fetch(apiUrl('/employees/upload'), {
-                    method: 'POST',
-                    headers: token ? { Authorization: `Bearer ${token}` } : {},
-                    body: fd,
-                  })
-                  const data = await res.json()
-                  if (!res.ok) throw new Error(data?.message || 'Upload failed')
-                  setForm((f) => ({ ...f, locationPhotoUrl: data.url }))
-                } catch (err: any) {
-                  setError(err?.message || 'Location upload failed')
-                } finally {
-                  setUploadingLocation(false)
-                }
-              }}
-            />
-            <p className="text-xs text-neutral-500 mt-1">
-              {uploadingLocation
-                ? 'Uploading…'
-                : form.locationPhotoUrl
-                  ? `Uploaded: ${form.locationPhotoUrl}`
-                  : 'PDF only'}
-            </p>
-          </div>
-
           <div className="md:col-span-2 text-lg font-semibold mb-2 mt-4">Location & User Type</div>
 
           <div>
@@ -763,33 +793,58 @@ export default function NewEmployeePage() {
               required
             />
           </div>
-          <div>
-            <Label>Zone *</Label>
-            <Select
-              value={form.zone}
-              onValueChange={(zone) =>
-                setForm((f) => ({
-                  ...f,
-                  zone,
-                  // Reset cluster when zone changes
-                  cluster: '',
-                }))
-              }
-            >
-              <SelectTrigger className="bg-white text-neutral-900">
-                <SelectValue placeholder="Select Zone" />
-              </SelectTrigger>
-              <SelectContent>
-                {zones.map((z) => (
-                  <SelectItem key={z} value={z}>
-                    {z}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {form.role === 'Executive' && (
+          {isSingleZoneRole(form.role) ? (
             <div>
+              <Label>Zone *</Label>
+              <Select
+                value={form.zone}
+                onValueChange={(zone) =>
+                  setForm((f) => ({
+                    ...f,
+                    zone,
+                    zones: zone ? [zone] : [],
+                    cluster: '',
+                  }))
+                }
+              >
+                <SelectTrigger className="bg-white text-neutral-900">
+                  <SelectValue placeholder="Select Zone" />
+                </SelectTrigger>
+                <SelectContent>
+                  {zones.map((z) => (
+                    <SelectItem key={z} value={z}>
+                      {z}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
+            <div className="md:col-span-2">
+              <Label>Zones *</Label>
+              <p className="text-xs text-neutral-500 mb-2">
+                Select one or more zones. Only BDE is limited to a single zone.
+              </p>
+              <div className="max-h-40 overflow-y-auto border rounded p-3 bg-white space-y-2">
+                {zones.length === 0 ? (
+                  <p className="text-sm text-neutral-500">No zones available</p>
+                ) : (
+                  zones.map((z) => (
+                    <label key={z} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={form.zones.includes(z)}
+                        onChange={() => toggleZone(z)}
+                      />
+                      {z}
+                    </label>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+          {form.role === 'Executive' && (
+            <div className="md:col-span-2">
               <Label>Cluster *</Label>
               <Select
                 value={form.cluster}
@@ -857,10 +912,22 @@ export default function NewEmployeePage() {
               onValueChange={(v) =>
                 setForm((f) => {
                   const allowed = new Set(filterTagOptions(tagOptions, v).map((e) => e._id))
+                  const single = isSingleZoneRole(v)
+                  const zones = single
+                    ? f.zone
+                      ? [f.zone]
+                      : f.zones.slice(0, 1)
+                    : f.zones.length
+                      ? f.zones
+                      : f.zone
+                        ? [f.zone]
+                        : []
                   return {
                     ...f,
                     role: v,
-                    cluster: v === 'Executive' ? f.cluster : '',
+                    zone: zones[0] || '',
+                    zones,
+                    cluster: single ? f.cluster : '',
                     taggedEmployeeIds: supportsEmployeeTagging(v)
                       ? f.taggedEmployeeIds.filter((id) => allowed.has(id))
                       : [],
@@ -900,17 +967,11 @@ export default function NewEmployeePage() {
             <div className="md:col-span-2">
               <Label className="mb-2 block">{getTaggingSectionLabel(form.role)}</Label>
               <p className="text-xs text-neutral-500 mb-2">
-                {form.role === 'Executive Manager' || form.role === 'Manager'
-                  ? 'Select BDEs assigned to this role.'
-                  : 'Select employees to tag under this role.'}
+                Tag only the next level: National Head, Regional Head, Regional Manager, Zonal Manager, Coordinators, then BDE.
               </p>
               <div className="max-h-48 overflow-y-auto border rounded p-3 bg-white space-y-2">
                 {filteredTagOptions.length === 0 ? (
-                  <p className="text-sm text-neutral-500">
-                    {form.role === 'Executive Manager' || form.role === 'Manager'
-                      ? 'No active BDEs available to tag'
-                      : 'No employees available to tag'}
-                  </p>
+                  <p className="text-sm text-neutral-500">No employees at the next level are available to tag</p>
                 ) : (
                   filteredTagOptions.map((e) => (
                     <label key={e._id} className="flex items-center gap-2 text-sm">
