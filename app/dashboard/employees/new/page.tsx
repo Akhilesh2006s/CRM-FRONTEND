@@ -42,6 +42,10 @@ export default function NewEmployeePage() {
     password: '',
     phone: '',
     mobile: '',
+    dateOfBirth: '',
+    passportPhotoUrl: '',
+    onboardingChecklist: [] as string[],
+    onboardingOtherNote: '',
     address1: '',
     temporaryAddress: '',
     permanentAddress: '',
@@ -54,6 +58,7 @@ export default function NewEmployeePage() {
     city: '',
     pincode: '',
     role: 'Executive',
+    designation: '',
     taggedEmployeeIds: [] as string[],
     references: [
       { relation: '', name: '', mobile: '', aadhaarUrl: '' },
@@ -65,6 +70,19 @@ export default function NewEmployeePage() {
   const [uploadingAadhaar, setUploadingAadhaar] = useState(false)
   const [uploadingRefAadhaar, setUploadingRefAadhaar] = useState<number | null>(null)
   const [uploadingLocation, setUploadingLocation] = useState(false)
+  const [uploadingPassport, setUploadingPassport] = useState(false)
+  const ONBOARDING_ITEMS = [
+    'App Training',
+    'Account Session',
+    'Product Training',
+    'Visiting cards',
+    'Id cards',
+    'Sim',
+    'Training Manuals',
+    'Marketing Kit (BDE)',
+    'Laptop',
+    'Others',
+  ]
   const REFERENCE_RELATIONS = ['Wife', 'Husband', 'Brother', 'Sister', 'Father', 'Mother'] as const
   const [tagOptions, setTagOptions] = useState<EmployeeOption[]>([])
   const filteredTagOptions = useMemo(
@@ -364,13 +382,36 @@ export default function NewEmployeePage() {
         setSubmitting(false)
         return
       }
+      if (phoneCheck.digits === mobileCheck.digits) {
+        const message = 'Official contact number and personal mobile number cannot be the same.'
+        setPhoneError(message)
+        setError(message)
+        setSubmitting(false)
+        return
+      }
+      if (!form.dateOfBirth) {
+        setError('Date of birth is required')
+        setSubmitting(false)
+        return
+      }
+      if (!form.passportPhotoUrl.trim()) {
+        setError('Passport size photo PDF is required')
+        setSubmitting(false)
+        return
+      }
+
+      if (form.role === 'Office Team' && !form.designation.trim()) {
+        setError('Enter the designation')
+        setSubmitting(false)
+        return
+      }
 
       const selectedZones = isSingleZoneRole(form.role)
         ? form.zone.trim()
           ? [form.zone.trim()]
           : []
         : form.zones.map((z) => z.trim()).filter(Boolean)
-      if (selectedZones.length === 0) {
+      if (form.role !== 'Office Team' && selectedZones.length === 0) {
         setError(isSingleZoneRole(form.role) ? 'Zone is required for BDE' : 'Select at least one zone')
         setSubmitting(false)
         return
@@ -475,12 +516,15 @@ export default function NewEmployeePage() {
         method: 'POST',
         body: JSON.stringify(payload),
       })
-      if (getCurrentUser()?.role === 'HR Executive') {
-        toast.success('Employee request sent to the HR Manager. They are added only after approval.')
-        router.push('/dashboard/employees/requests')
-      } else {
+      if (getCurrentUser()?.role === 'Super Admin') {
         toast.success('Employee added.')
         router.push('/dashboard/employees/active')
+      } else if (getCurrentUser()?.role === 'HR Executive' || getCurrentUser()?.role === 'HR Manager') {
+        toast.success('Employee saved. They can log in after the HR Manager and their head both approve.')
+        router.push('/dashboard/employees/requests')
+      } else {
+        toast.success('Employee saved. They can log in after the HR Manager and their head both approve.')
+        router.push('/dashboard/employees/verification')
       }
     } catch (err: any) {
       setError(err?.message || 'Failed to create employee')
@@ -539,6 +583,10 @@ export default function NewEmployeePage() {
           <div>
             <Label>Email Id *</Label>
             <Input className="bg-white text-neutral-900" type="email" name="email" value={form.email} onChange={onChange} placeholder="Email" required />
+          </div>
+          <div>
+            <Label>Date of birth *</Label>
+            <Input className="bg-white text-neutral-900" type="date" name="dateOfBirth" value={form.dateOfBirth} onChange={onChange} required />
           </div>
           <div>
             <Label>Contact No (Company) *</Label>
@@ -700,6 +748,47 @@ export default function NewEmployeePage() {
                 : form.locationPhotoUrl
                   ? `Uploaded: ${form.locationPhotoUrl}`
                   : 'PDF only'}
+            </p>
+          </div>
+          <div>
+            <Label>Passport size photo (PDF) *</Label>
+            <Input
+              className="bg-white"
+              type="file"
+              accept="application/pdf,.pdf"
+              onChange={async (e) => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+                  setError('Only PDF files are allowed.')
+                  e.target.value = ''
+                  return
+                }
+                setUploadingPassport(true)
+                setError(null)
+                try {
+                  const fd = new FormData()
+                  fd.append('file', file)
+                  fd.append('kind', 'passport')
+                  const token = localStorage.getItem('authToken')
+                  const { apiUrl } = await import('@/lib/api')
+                  const res = await fetch(apiUrl('/employees/upload'), {
+                    method: 'POST',
+                    headers: token ? { Authorization: `Bearer ${token}` } : {},
+                    body: fd,
+                  })
+                  const data = await res.json()
+                  if (!res.ok) throw new Error(data?.message || 'Upload failed')
+                  setForm((f) => ({ ...f, passportPhotoUrl: data.url }))
+                } catch (err: any) {
+                  setError(err?.message || 'Passport photo upload failed')
+                } finally {
+                  setUploadingPassport(false)
+                }
+              }}
+            />
+            <p className="text-xs text-neutral-500 mt-1">
+              {uploadingPassport ? 'Uploading…' : form.passportPhotoUrl ? `Uploaded: ${form.passportPhotoUrl}` : 'PDF only'}
             </p>
           </div>
 
@@ -995,10 +1084,24 @@ export default function NewEmployeePage() {
                 <SelectItem value="Warehouse Executive">Warehouse Executive</SelectItem>
                 <SelectItem value="Warehouse Manager">Warehouse Manager</SelectItem>
                 <SelectItem value="Admin">Admin</SelectItem>
+                <SelectItem value="Office Team">Office Team</SelectItem>
                 <SelectItem value="Super Admin">Super Admin</SelectItem>
               </SelectContent>
             </Select>
           </div>
+          {form.role === 'Office Team' && (
+            <div>
+              <Label>Designation *</Label>
+              <Input
+                className="bg-white text-neutral-900"
+                name="designation"
+                value={form.designation}
+                onChange={onChange}
+                placeholder="Enter designation"
+                required
+              />
+            </div>
+          )}
           {form.role === 'Manager' && (
             <div className="md:col-span-2 space-y-3">
               <div>
@@ -1092,6 +1195,37 @@ export default function NewEmployeePage() {
           </div>
 
           {error && <div className="md:col-span-2 text-red-600 text-sm">{error}</div>}
+          <div className="md:col-span-2">
+              <div className="text-lg font-semibold mb-2">Onboarding checklist</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 border rounded p-3 bg-white">
+                {ONBOARDING_ITEMS.map((item) => (
+                  <label key={item} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={form.onboardingChecklist.includes(item)}
+                      onChange={() => {
+                        setForm((f) => ({
+                          ...f,
+                          onboardingChecklist: f.onboardingChecklist.includes(item)
+                            ? f.onboardingChecklist.filter((value) => value !== item)
+                            : [...f.onboardingChecklist, item],
+                        }))
+                      }}
+                    />
+                    {item}
+                  </label>
+                ))}
+              </div>
+              {form.onboardingChecklist.includes('Others') && (
+                <Input
+                  className="bg-white text-neutral-900 mt-2"
+                  name="onboardingOtherNote"
+                  value={form.onboardingOtherNote}
+                  onChange={onChange}
+                  placeholder="Others"
+                />
+              )}
+          </div>
           <div className="md:col-span-2 flex justify-end">
             <Button type="submit" disabled={submitting}>{submitting ? 'Submitting…' : 'Submit'}</Button>
           </div>

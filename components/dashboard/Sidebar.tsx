@@ -696,6 +696,7 @@ export function Sidebar() {
   const isPartner = user?.role === 'Partner'
   const isHrManager = user?.role === 'HR Manager'
   const isHrExecutive = user?.role === 'HR Executive'
+  const isOfficeTeam = user?.role === 'Office Team'
 
   // Executive leave items are included in the Executive sidebar as Leave Management
   let finalNav: NavItem[] = []
@@ -711,6 +712,7 @@ export function Sidebar() {
           { label: 'Active Employees', href: '/dashboard/employees/active' },
           { label: 'Inactive Employees', href: '/dashboard/employees/inactive' },
           { label: 'Employee Verification', href: '/dashboard/employees/verification' },
+          { label: 'Attendance', href: '/dashboard/employees/attendance' },
           { label: 'Salary', href: '/dashboard/employees/salary' },
           { label: 'Pay Slips', href: '/dashboard/employees/payslips' },
           { label: 'Employee History', href: '/dashboard/employees/history' },
@@ -929,6 +931,7 @@ export function Sidebar() {
         icon: CalendarCheck2,
         href: `/dashboard/executive-managers/${user?._id || ''}/leaves`,
       },
+      { label: 'Attendance', icon: Clock, href: '/dashboard/employees/attendance' },
       { label: 'Sign out', icon: LogOut, href: '/auth/login' },
     ]
   } else if (isHierarchyRole) {
@@ -938,6 +941,7 @@ export function Sidebar() {
       `/dashboard/hierarchy/national-head/${user?._id || ''}`
     finalNav = [
       { label: 'My Dashboard', icon: LayoutDashboard, href: home },
+      { label: 'Attendance', icon: Clock, href: '/dashboard/employees/attendance' },
       {
         label: 'Settings',
         icon: Settings,
@@ -1027,6 +1031,34 @@ export function Sidebar() {
       },
       { label: 'Sign out', icon: LogOut, href: '/auth/login' },
     ]
+  } else if (isOfficeTeam) {
+    finalNav = [
+      { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
+      { label: 'Attendance', icon: Clock, href: '/dashboard/attendance' },
+      {
+        label: 'Leave Management',
+        icon: CalendarCheck2,
+        children: [
+          { label: 'Leave Request', href: '/dashboard/leaves/request', icon: PlusCircle },
+          { label: 'My Leaves', href: '/dashboard/leaves/approved', icon: CheckCircle2 },
+        ],
+      },
+      {
+        label: 'Expenses',
+        icon: Calculator,
+        children: [
+          { label: 'Create Expense', href: '/dashboard/expenses/create', icon: PlusCircle },
+          { label: 'My Expenses', href: '/dashboard/expenses/my', icon: FileText },
+        ],
+      },
+      { label: 'Payslips', icon: FileText, href: '/dashboard/payslips' },
+      {
+        label: 'Settings',
+        icon: Settings,
+        children: [{ label: 'Change Password', href: '/dashboard/settings/password' }],
+      },
+      { label: 'Sign out', icon: LogOut, href: '/auth/login' },
+    ]
   } else if (isPartner) {
     // For Partner role: Dashboard + Stocks + DCs (assigned products only)
     finalNav = [
@@ -1078,7 +1110,7 @@ export function Sidebar() {
   }
 
   // Keep role-specific Executive Manager / Executive / HR Manager nav intact (do not replace with RBAC catalog).
-  if (rbacActive && permissionsReady && !isExecutiveManager && !isEmployee && !isHrManager && !isHrExecutive && !isHierarchyRole && !isManager && !isTrainer) {
+  if (rbacActive && permissionsReady && !isExecutiveManager && !isEmployee && !isHrManager && !isHrExecutive && !isHierarchyRole && !isManager && !isTrainer && !isOfficeTeam) {
     const baseNav = finalNav.length > 0 ? finalNav : NAV
     const catalogHrefs = rbacCatalogHrefs()
     const fromPermissions = rbacBuiltToNavItems(buildRbacSidebarNav(permUser))

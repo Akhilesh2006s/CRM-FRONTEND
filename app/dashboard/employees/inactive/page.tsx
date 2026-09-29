@@ -15,6 +15,9 @@ import { sanitizePhoneInput, validateStrictIndianMobile } from '@/lib/phone'
 
 type Employee = {
   _id: string
+  empCode?: string
+  offboardingStatus?: string
+  offboardingChecklist?: string[]
   name: string
   email: string
   phone?: string
@@ -130,6 +133,7 @@ export default function InactiveEmployeesPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="text-neutral-600 border-b bg-neutral-50">
+              <th className="py-2 px-3 text-left">Employee code</th>
               <th className="py-2 px-3 text-left">Name</th>
               <th className="py-2 px-3 text-left">Email</th>
               <th className="py-2 px-3">Mobile</th>
@@ -143,12 +147,18 @@ export default function InactiveEmployeesPage() {
             {!loading &&
               filtered.map((e) => (
                 <tr key={e._id} className="border-b last:border-0">
+                  <td className="py-2 px-3">{e.empCode || '-'}</td>
                   <td className="py-2 px-3">{e.seatVacant ? 'Vacant' : e.name}</td>
                   <td className="py-2 px-3">{e.email}</td>
                   <td className="py-2 px-3 text-center">{displayMobile(e)}</td>
                   <td className="py-2 px-3 text-center">{displayRoleName(e.role)}</td>
                   <td className="py-2 px-3 text-center">{e.zone || '-'}</td>
-                  <td className="py-2 px-3 text-center">{reasonLabel(e.inactiveReason)}</td>
+                  <td className="py-2 px-3 text-center">
+                    <div>{e.offboardingStatus || reasonLabel(e.inactiveReason)}</div>
+                    {Array.isArray(e.offboardingChecklist) && e.offboardingChecklist.length > 0 && (
+                      <div className="text-xs text-neutral-500 mt-1">{e.offboardingChecklist.join(', ')}</div>
+                    )}
+                  </td>
                   <td className="py-2 px-3 text-right">
                     <div className="flex gap-2 justify-end">
                       <Button size="sm" variant="outline" onClick={() => router.push(`/dashboard/employees/edit/${e._id}`)}>

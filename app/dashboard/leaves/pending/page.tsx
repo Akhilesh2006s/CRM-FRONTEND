@@ -23,6 +23,7 @@ type Leave = {
   employeeId: {
     _id?: string
     name?: string
+    empCode?: string
     executiveManagerId?: { _id?: string; name?: string } | string
   } | string | null
   reason?: string
@@ -150,6 +151,7 @@ export default function AdminPendingLeavesPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-sky-50/70 border-b text-neutral-700">
+                <th className="py-2 px-3 text-left">Employee code</th>
                 <th className="py-2 px-3 text-left">Employee</th>
                 {!isExecutiveManager && <th className="py-2 px-3 text-left">Manager</th>}
                 <th className="py-2 px-3 text-left">Leave Type</th>
@@ -163,7 +165,7 @@ export default function AdminPendingLeavesPage() {
               {items.length === 0 && (
                 <tr>
                   <td
-                    colSpan={isExecutiveManager ? 6 : 7}
+                    colSpan={isExecutiveManager ? 7 : 8}
                     className="py-4 px-3 text-center text-neutral-500"
                   >
                     No pending leaves
@@ -172,6 +174,7 @@ export default function AdminPendingLeavesPage() {
               )}
               {items.map((l) => (
                 <tr key={l._id} className="border-b last:border-0">
+                  <td className="py-2 px-3">{typeof l.employeeId === 'object' && l.employeeId ? l.employeeId.empCode || '—' : '—'}</td>
                   <td className="py-2 px-3">{getEmployeeName(l)}</td>
                   {!isExecutiveManager && (
                     <td className="py-2 px-3 text-sm text-neutral-600">{getManagerName(l)}</td>

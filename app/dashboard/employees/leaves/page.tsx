@@ -8,7 +8,7 @@ import { apiRequest } from '@/lib/api'
 
 type Leave = {
   _id: string
-  employeeId: { _id: string; name: string } | string
+  employeeId: { _id: string; name: string; empCode?: string } | string
   reason?: string
   status: string
   startDate: string
@@ -49,6 +49,7 @@ export default function PendingLeavesPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="text-neutral-600 border-b bg-neutral-50">
+              <th className="py-2 px-3 text-left">Employee code</th>
               <th className="py-2 px-3 text-left">Employee</th>
               <th className="py-2 px-3 text-left">Reason</th>
               <th className="py-2 px-3">From</th>
@@ -60,6 +61,7 @@ export default function PendingLeavesPage() {
           <tbody>
             {!loading && filtered.map((l) => (
               <tr key={l._id} className="border-b last:border-0">
+                <td className="py-2 px-3">{typeof l.employeeId === 'string' ? '-' : (l.employeeId?.empCode || '-')}</td>
                 <td className="py-2 px-3">{typeof l.employeeId === 'string' ? l.employeeId : l.employeeId?.name}</td>
                 <td className="py-2 px-3">{l.reason || '-'}</td>
                 <td className="py-2 px-3 text-center">{new Date(l.startDate).toLocaleDateString()}</td>

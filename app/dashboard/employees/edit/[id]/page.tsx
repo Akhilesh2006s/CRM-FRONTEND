@@ -49,6 +49,7 @@ export default function EditEmployeePage() {
     city: '',
     pincode: '',
     role: 'Executive',
+    designation: '',
     taggedEmployeeIds: [] as string[],
   })
   const [loading, setLoading] = useState(true)
@@ -111,6 +112,7 @@ export default function EditEmployeePage() {
           city: emp.city || '',
           pincode: emp.pincode || '',
           role: emp.role || 'Executive',
+          designation: emp.designation || '',
           taggedEmployeeIds: (emp.taggedEmployeeIds || []).map((x: any) => String(x._id || x)),
         })
         setTagOptions(Array.isArray(employees) ? employees.filter((e) => e._id !== id) : [])
@@ -239,7 +241,12 @@ export default function EditEmployeePage() {
           ? [form.zone.trim()]
           : []
         : form.zones.map((z) => z.trim()).filter(Boolean)
-      if (selectedZones.length === 0) {
+      if (form.role === 'Office Team' && !form.designation.trim()) {
+        setError('Enter the designation')
+        setSubmitting(false)
+        return
+      }
+      if (form.role !== 'Office Team' && selectedZones.length === 0) {
         setError(isSingleZoneRole(form.role) ? 'Zone is required for BDE' : 'Select at least one zone')
         setSubmitting(false)
         return
@@ -420,12 +427,18 @@ export default function EditEmployeePage() {
             })}>
               <SelectTrigger className="bg-white text-neutral-900"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {['Executive', 'Trainer', 'Finance Manager', 'HR Manager', 'HR Executive', 'Coordinator', 'Senior Coordinator', 'Manager', 'Executive Manager', 'Regional Manager', 'Regional Head', 'National Head', 'Warehouse Executive', 'Warehouse Manager', 'Admin', 'Super Admin'].map((r) => (
+                {['Executive', 'Trainer', 'Finance Manager', 'HR Manager', 'HR Executive', 'Coordinator', 'Senior Coordinator', 'Manager', 'Executive Manager', 'Regional Manager', 'Regional Head', 'National Head', 'Warehouse Executive', 'Warehouse Manager', 'Office Team', 'Admin', 'Super Admin'].map((r) => (
                   <SelectItem key={r} value={r}>{displayRoleName(r)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
+          {form.role === 'Office Team' && (
+            <div>
+              <Label>Designation *</Label>
+              <Input className="bg-white text-neutral-900" name="designation" value={form.designation} onChange={onChange} placeholder="Enter designation" required />
+            </div>
+          )}
 
           {supportsEmployeeTagging(form.role) && (
             <div className="md:col-span-2">

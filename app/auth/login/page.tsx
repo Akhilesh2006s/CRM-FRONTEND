@@ -135,7 +135,7 @@ export default function LoginPage() {
               </motion.h1>
               <form onSubmit={onSubmit} className="space-y-5">
                 <div className="space-y-2">
-                  <Label htmlFor="mobile" className="text-gray-300">Mobile number or email</Label>
+                  <Label htmlFor="mobile" className="text-gray-300">Official company number or email</Label>
                   <Input
                     id="mobile"
                     type="text"
@@ -143,7 +143,7 @@ export default function LoginPage() {
                     value={mobile}
                     onChange={(e) => setMobile(e.target.value)}
                     required
-                    placeholder="Mobile number or email"
+                    placeholder="Official company number or email"
                     className="bg-neutral-800 border-neutral-700 text-white placeholder:text-neutral-400"
                   />
                 </div>

@@ -54,6 +54,8 @@ const DEFAULT_STAT_HREFS: (string | null)[] = [
   '/dashboard/training/services',
 ]
 
+const HR_ROLES = new Set(['HR Manager', 'HR Executive'])
+
 const ROLES_WITHOUT_CLIENTS = new Set([
   'Manager',
   'Warehouse Executive',
@@ -303,6 +305,8 @@ export default function DashboardPage() {
   const [executiveAnalytics, setExecutiveAnalytics] = useState<any>(null)
   const [executiveLoading, setExecutiveLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState<any>(null)
+  const [needsPassportPhoto, setNeedsPassportPhoto] = useState(false)
+  const [uploadingPassport, setUploadingPassport] = useState(false)
 
   // compute KPIs for the teal chart
   const salesArr = trends && trends.length ? trends.map(t => t.revenue) : [0]
@@ -322,6 +326,11 @@ export default function DashboardPage() {
   useEffect(() => {
     const user = getCurrentUser()
     setCurrentUser(user)
+    if (user?._id) {
+      apiRequest<{ passportPhotoUrl?: string }>('/auth/me')
+        .then((me) => setNeedsPassportPhoto(!String(me?.passportPhotoUrl || '').trim()))
+        .catch(() => setNeedsPassportPhoto(false))
+    }
     const segment = user?.role ? HIERARCHY_HOME[user.role] : undefined
     if (user?._id && segment) {
       router.replace(`/dashboard/hierarchy/${segment}/${user._id}`)
@@ -338,10 +347,11 @@ export default function DashboardPage() {
     }
   }, [hideLeadsOnDashboard, activeTab])
 
-  // Stat cards for Super Admin exclude Active Leads (index 0) so the grid has no gaps.
+  // Schools KPI is index 2. HR does not use schools.
   const visibleStatEntries = STAT_CONFIG
     .map((stat, index) => ({ stat, index }))
     .filter(({ index }) => !(hideLeadsOnDashboard && index === 0))
+    .filter(({ index }) => !(HR_ROLES.has(currentUser?.role) && index === 2))
 
   const fetchExecutiveAnalytics = async () => {
     setExecutiveLoading(true)
@@ -491,6 +501,39 @@ export default function DashboardPage() {
     )
   }
 
+  if (currentUser?.role === 'Office Team') {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-neutral-900">Office Team</h1>
+          <p className="text-sm text-neutral-600 mt-1">Attendance, leave, expenses, and pay slips</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Link href="/dashboard/attendance" className="block">
+            <Card className="p-5 border border-sky-200 bg-sky-50">
+              <div className="text-sm font-semibold text-sky-900">Attendance</div>
+            </Card>
+          </Link>
+          <Link href="/dashboard/leaves/request" className="block">
+            <Card className="p-5 border border-emerald-200 bg-emerald-50">
+              <div className="text-sm font-semibold text-emerald-900">Leave Management</div>
+            </Card>
+          </Link>
+          <Link href="/dashboard/expenses/my" className="block">
+            <Card className="p-5 border border-amber-200 bg-amber-50">
+              <div className="text-sm font-semibold text-amber-900">Expenses</div>
+            </Card>
+          </Link>
+          <Link href="/dashboard/payslips" className="block">
+            <Card className="p-5 border border-violet-200 bg-violet-50">
+              <div className="text-sm font-semibold text-violet-900">Payslips</div>
+            </Card>
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
   // Vendor gets dedicated dashboard with product/DC/stock insights
   if (currentUser?.role === 'Vendor' || currentUser?.role === 'Partner') {
     return (
@@ -525,7 +568,64 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      {needsPassportPhoto && (
+        <Card className="p-4 border border-amber-300 bg-amber-50">
+          <div className="text-sm font-semibold text-neutral-900">Passport size photo</div>
+          <p className="text-sm text-neutral-600 mt-1">Upload your passport size photo as a PDF.</p>
+          <Input
+            className="bg-white mt-3 max-w-md"
+            type="file"
+            accept="application/pdf,.pdf"
+            disabled={uploadingPassport}
+            onChange={async (event) => {
+              const file = event.target.files?.[0]
+              event.target.value = ''
+              if (!file) return
+              setUploadingPassport(true)
+              try {
+                const fd = new FormData()
+                fd.append('file', file)
+                fd.append('kind', 'passport')
+                const token = localStorage.getItem('authToken')
+                const { apiUrl } = await import('@/lib/api')
+                const res = await fetch(apiUrl('/employees/upload'), {
+                  method: 'POST',
+                  headers: token ? { Authorization: `Bearer ${token}` } : {},
+                  body: fd,
+                })
+                const data = await res.json()
+                if (!res.ok) throw new Error(data?.message || 'Upload failed')
+                await apiRequest('/hr/me/passport-photo', {
+                  method: 'PUT',
+                  body: JSON.stringify({ passportPhotoUrl: data.url }),
+                })
+                setNeedsPassportPhoto(false)
+              } catch (err: unknown) {
+                console.error(err)
+              } finally {
+                setUploadingPassport(false)
+              }
+            }}
+          />
+        </Card>
+      )}
       {/* Premium Stat Cards - Minimal, elegant design */}
+      {HR_ROLES.has(currentUser?.role) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Link href="/dashboard/employees/attendance" className="block">
+            <Card className="p-5 bg-gradient-to-br from-sky-50 to-sky-100 border-2 border-sky-200 shadow-lg">
+              <div className="text-xs font-semibold text-sky-700 mb-1 uppercase">Attendance</div>
+              <div className="text-sm text-sky-900">Open attendance for every employee</div>
+            </Card>
+          </Link>
+          <Link href="/dashboard/leaves/pending" className="block">
+            <Card className="p-5 bg-gradient-to-br from-emerald-50 to-emerald-100 border-2 border-emerald-200 shadow-lg">
+              <div className="text-xs font-semibold text-emerald-700 mb-1 uppercase">Leaves</div>
+              <div className="text-sm text-emerald-900">Open pending leave requests</div>
+            </Card>
+          </Link>
+        </div>
+      )}
       <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 ${hideLeadsOnDashboard ? 'lg:grid-cols-3' : 'lg:grid-cols-4'}`}>
         {visibleStatEntries.map(({ stat, index: i }) => {
           const colors = cardColorMap[stat.accent]

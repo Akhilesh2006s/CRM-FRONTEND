@@ -18,6 +18,7 @@ type Approval = {
 
 type Employee = {
   _id: string
+  empCode?: string
   name: string
   email: string
   role: string
@@ -115,8 +116,8 @@ export default function EmployeeVerificationPage() {
         </h1>
         <p className="text-sm text-neutral-600 mt-1">
           {isHr
-            ? 'Review and approve or reject new employee applications. Your approval is required before the employee is fully verified.'
-            : 'HR Manager and Zonal Manager (and Training Heads for trainers) must all approve before the employee is fully verified.'}
+            ? 'The HR Manager and the employee’s head must both approve. The employee joins Active Employees and can log in only after both approvals.'
+            : 'Approve as the employee’s head. The employee can log in only after you and the HR Manager have both approved.'}
         </p>
       </div>
 
@@ -136,7 +137,7 @@ export default function EmployeeVerificationPage() {
           >
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
-                <h2 className="text-lg font-semibold">{emp.name}</h2>
+                <h2 className="text-lg font-semibold">{emp.empCode ? `${emp.empCode} · ${emp.name}` : emp.name}</h2>
                 <p className="text-sm text-neutral-600">
                   {displayRoleName(emp.role)} · {emp.email}
                   {emp.zone ? ` · Zone: ${emp.zone}` : ''}

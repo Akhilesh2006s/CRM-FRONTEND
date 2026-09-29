@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { apiRequest } from '@/lib/api'
+import { apiRequest, resolveUploadUrl } from '@/lib/api'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,6 +10,8 @@ import { toast } from 'sonner'
 
 type Slip = {
   employeeId: string
+  empCode?: string
+  pdfUrl?: string
   name: string
   email: string
   role?: string
@@ -77,6 +79,7 @@ export default function PaySlipsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-neutral-100">
+                <th className="py-2 px-3 text-left">Employee code</th>
                 <th className="py-2 px-3 text-left">Employee</th>
                 <th className="py-2 px-3 text-left">Yearly</th>
                 <th className="py-2 px-3 text-left">Take-home</th>
@@ -86,6 +89,7 @@ export default function PaySlipsPage() {
             <tbody>
               {rows.map((row) => (
                 <tr key={row.employeeId} className="border-t">
+                  <td className="py-2 px-3">{row.empCode || '—'}</td>
                   <td className="py-2 px-3">
                     <div className="font-medium">{row.name}</div>
                     <div className="text-xs text-neutral-500">{row.email}</div>
@@ -93,9 +97,50 @@ export default function PaySlipsPage() {
                   <td className="py-2 px-3">{row.yearlySalary}</td>
                   <td className="py-2 px-3">{row.monthlyTakeHome}</td>
                   <td className="py-2 px-3 text-right">
-                    <Button size="sm" variant="outline" onClick={() => void downloadSlip(row.employeeId, row.month).catch((err) => toast.error(err.message))}>
-                      Download
-                    </Button>
+                    <div className="flex justify-end gap-2">
+                      <label className="inline-flex">
+                        <input
+                          type="file"
+                          accept="application/pdf,.pdf"
+                          className="hidden"
+                          onChange={async (event) => {
+                            const file = event.target.files?.[0]
+                            event.target.value = ''
+                            if (!file) return
+                            try {
+                              const fd = new FormData()
+                              fd.append('file', file)
+                              fd.append('kind', 'payslip')
+                              const token = localStorage.getItem('authToken')
+                              const { apiUrl } = await import('@/lib/api')
+                              const res = await fetch(apiUrl('/employees/upload'), {
+                                method: 'POST',
+                                headers: token ? { Authorization: `Bearer ${token}` } : {},
+                                body: fd,
+                              })
+                              const data = await res.json()
+                              if (!res.ok) throw new Error(data?.message || 'Upload failed')
+                              await apiRequest(`/hr/payslips/${row.employeeId}`, {
+                                method: 'POST',
+                                body: JSON.stringify({ month: row.month, pdfUrl: data.url }),
+                              })
+                              toast.success('Pay slip PDF uploaded')
+                              void load(month)
+                            } catch (err: unknown) {
+                              toast.error(err instanceof Error ? err.message : 'Upload failed')
+                            }
+                          }}
+                        />
+                        <span className="inline-flex h-8 items-center rounded-md border px-3 text-xs cursor-pointer">Upload PDF</span>
+                      </label>
+                      {row.pdfUrl ? (
+                        <a className="inline-flex h-8 items-center text-xs text-sky-700" href={resolveUploadUrl(row.pdfUrl)} target="_blank" rel="noreferrer">View PDF</a>
+                      ) : (
+                        <Button size="sm" variant="outline" onClick={() => void downloadSlip(row.employeeId, row.month).catch((err) => toast.error(err.message))}>
+                          Download
+                        </Button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

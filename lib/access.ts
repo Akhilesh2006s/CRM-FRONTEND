@@ -149,6 +149,25 @@ export function canAccessPath(
     return true
   }
 
+  if (
+    user.role === 'Office Team' &&
+    (pathname === '/dashboard' ||
+      pathname === '/dashboard/attendance' ||
+      pathname.startsWith('/dashboard/attendance/') ||
+      pathname === '/dashboard/leaves/request' ||
+      pathname === '/dashboard/leaves/approved' ||
+      pathname.startsWith('/dashboard/leaves/request/') ||
+      pathname.startsWith('/dashboard/leaves/approved/') ||
+      pathname === '/dashboard/expenses/create' ||
+      pathname === '/dashboard/expenses/my' ||
+      pathname.startsWith('/dashboard/expenses/create/') ||
+      pathname.startsWith('/dashboard/expenses/my/') ||
+      pathname === '/dashboard/payslips' ||
+      pathname.startsWith('/dashboard/settings/password'))
+  ) {
+    return true
+  }
+
   // HR Manager always has employee directory + verification + leave access
   if (
     (user.role === 'HR Manager' || user.role === 'HR Executive') &&

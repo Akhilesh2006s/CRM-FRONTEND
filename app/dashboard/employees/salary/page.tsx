@@ -9,6 +9,7 @@ import { toast } from 'sonner'
 
 type Employee = {
   _id: string
+  empCode?: string
   name?: string
   email?: string
   role?: string
@@ -78,6 +79,7 @@ export default function SalaryPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-neutral-100">
+                <th className="py-2 px-3 text-left">Employee code</th>
                 <th className="py-2 px-3 text-left">Employee</th>
                 <th className="py-2 px-3 text-left">Role</th>
                 <th className="py-2 px-3 text-left">Yearly salary</th>
@@ -88,6 +90,7 @@ export default function SalaryPage() {
             <tbody>
               {rows.map((row) => (
                 <tr key={row._id} className="border-t">
+                  <td className="py-2 px-3">{row.empCode || '—'}</td>
                   <td className="py-2 px-3">
                     <div className="font-medium">{row.name || '—'}</div>
                     <div className="text-xs text-neutral-500">{row.email}</div>

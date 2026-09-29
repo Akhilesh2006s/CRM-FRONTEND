@@ -9,6 +9,7 @@ import { toast } from 'sonner'
 
 type RequestRow = {
   _id: string
+  empCode?: string
   name?: string
   email?: string
   role?: string
@@ -66,7 +67,7 @@ export default function EmployeeRequestsPage() {
       <div>
         <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Employee Requests</h1>
         <p className="text-sm text-neutral-600 mt-1">
-          HR Executive additions stay here until the HR Manager approves them. Super Admin can also approve.
+          A new employee stays here until the HR Manager approves. Their head must approve as well before they appear in Active Employees and can log in.
         </p>
       </div>
       <Card className="p-0 overflow-x-auto">
@@ -76,6 +77,7 @@ export default function EmployeeRequestsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-neutral-100">
+                <th className="py-2 px-3 text-left">Employee code</th>
                 <th className="py-2 px-3 text-left">Name</th>
                 <th className="py-2 px-3 text-left">Email</th>
                 <th className="py-2 px-3 text-left">Role</th>
@@ -86,6 +88,7 @@ export default function EmployeeRequestsPage() {
             <tbody>
               {rows.map((row) => (
                 <tr key={row._id} className="border-t">
+                  <td className="py-2 px-3">{row.empCode || '—'}</td>
                   <td className="py-2 px-3">{row.name || '—'}</td>
                   <td className="py-2 px-3">{row.email || '—'}</td>
                   <td className="py-2 px-3">{row.role || '—'}</td>

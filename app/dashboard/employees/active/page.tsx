@@ -18,6 +18,7 @@ import { displayRoleName } from '@/lib/roleLabels'
 
 type Employee = {
   _id: string
+  empCode?: string
   name: string
   email: string
   phone?: string
@@ -47,6 +48,7 @@ const availableRoles = [
   'National Head',
   'Warehouse Executive',
   'Warehouse Manager',
+  'Office Team',
 ]
 
 export default function ActiveEmployeesPage() {
@@ -69,14 +71,25 @@ export default function ActiveEmployeesPage() {
   const [zoneOptions, setZoneOptions] = useState<string[]>([])
   const [clustersByZone, setClustersByZone] = useState<Record<string, string[]>>({})
   const [saving, setSaving] = useState(false)
+  const OFFBOARDING_ITEMS = [
+    'Sim card',
+    'ID card',
+    'Marketing kit',
+    'F&F (Full Financial Settlements)',
+    'Document (Certificate if taken) Return',
+    'Laptop if we given',
+  ]
+  const [offboarding, setOffboarding] = useState<{ id: string; name: string; status: string; checklist: string[] } | null>(null)
   
   // Get current user to check role
   const currentUser = getCurrentUser()
   const { rbacActive, hasPermission } = usePermissions()
   const isCoordinator = currentUser?.role === 'Coordinator'
   const isSeniorCoordinator = currentUser?.role === 'Senior Coordinator'
+  const isHrManager = currentUser?.role === 'HR Manager'
+  const canDeactivate = isHrManager || !rbacActive || hasPermission('employees.active.delete')
   const shouldHideAction = rbacActive
-    ? !hasPermission('employees.active.edit') && !hasPermission('employees.active.delete')
+    ? !hasPermission('employees.active.edit') && !hasPermission('employees.active.delete') && !isHrManager
     : isCoordinator || isSeniorCoordinator
   
   const loadZones = async () => {
@@ -238,14 +251,23 @@ export default function ActiveEmployeesPage() {
 
   const displayMobile = (e: Employee) => e.mobile || (e.phone && e.phone !== '0' ? e.phone : '') || '-'
 
-  const deactivate = async (id: string, name: string) => {
-    if (!confirm(`Deactivate ${name}? Their personal details will be removed. Leads and clients stay on this login.`)) return
+  const deactivate = async () => {
+    if (!offboarding?.status) {
+      toast.error('Select an offboarding status')
+      return
+    }
     try {
-      await apiRequest(`/employees/${id}`, {
+      await apiRequest(`/employees/${offboarding.id}`, {
         method: 'PUT',
-        body: JSON.stringify({ isActive: false, inactiveReason: 'manual' }),
+        body: JSON.stringify({
+          isActive: false,
+          inactiveReason: 'manual',
+          offboardingStatus: offboarding.status,
+          offboardingChecklist: offboarding.checklist,
+        }),
       })
-      toast.success(`${name} deactivated`)
+      toast.success(`${offboarding.name} marked ${offboarding.status}`)
+      setOffboarding(null)
       load()
     } catch (e: any) {
       toast.error(e?.message || 'Failed to deactivate')
@@ -297,6 +319,7 @@ export default function ActiveEmployeesPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="text-neutral-600 border-b bg-neutral-50">
+              <th className="py-2 px-3 text-left">Employee code</th>
               <th className="py-2 px-3 text-left">Name</th>
               <th className="py-2 px-3 text-left">Email</th>
               <th className="py-2 px-3">Mobile</th>
@@ -310,6 +333,7 @@ export default function ActiveEmployeesPage() {
           <tbody>
             {!loading && filtered.map((e) => (
               <tr key={e._id} className="border-b last:border-0">
+                <td className="py-2 px-3">{e.empCode || '-'}</td>
                 <td className="py-2 px-3">{e.name}</td>
                 <td className="py-2 px-3">{e.email}</td>
                 <td className="py-2 px-3 text-center">{displayMobile(e)}</td>
@@ -329,11 +353,11 @@ export default function ActiveEmployeesPage() {
                           Reset Password
                         </Button>
                       </Can>
-                      <Can permission="employees.active.delete">
-                        <Button size="sm" variant="outline" className="text-amber-700 border-amber-300" onClick={() => deactivate(e._id, e.name)}>
+                      {canDeactivate && (
+                        <Button size="sm" variant="outline" className="text-amber-700 border-amber-300" onClick={() => setOffboarding({ id: e._id, name: e.name, status: '', checklist: [] })}>
                           Deactivate
                         </Button>
-                      </Can>
+                      )}
                     </div>
                   </td>
                 )}
@@ -477,6 +501,52 @@ export default function ActiveEmployeesPage() {
             <Button onClick={handleSaveEdit} disabled={saving}>
               {saving ? 'Saving...' : 'Save Changes'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(offboarding)} onOpenChange={(open) => !open && setOffboarding(null)}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>Offboarding status</DialogTitle>
+            <DialogDescription>
+              {offboarding?.name} leaves the active list. Choose how they are leaving.
+            </DialogDescription>
+          </DialogHeader>
+          <Select value={offboarding?.status || undefined} onValueChange={(status) => setOffboarding((current) => current ? { ...current, status } : current)}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select status" />
+            </SelectTrigger>
+            <SelectContent>
+              {['Termination', 'Notice Period', 'Resignation', 'Abscond'].map((status) => (
+                <SelectItem key={status} value={status}>{status}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-neutral-800">Offboarding checklist</p>
+            {OFFBOARDING_ITEMS.map((item) => (
+              <label key={item} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={Boolean(offboarding?.checklist.includes(item))}
+                  onChange={() => {
+                    setOffboarding((current) => {
+                      if (!current) return current
+                      const checklist = current.checklist.includes(item)
+                        ? current.checklist.filter((value) => value !== item)
+                        : [...current.checklist, item]
+                      return { ...current, checklist }
+                    })
+                  }}
+                />
+                {item}
+              </label>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOffboarding(null)}>Cancel</Button>
+            <Button onClick={() => void deactivate()}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

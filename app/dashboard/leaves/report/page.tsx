@@ -20,6 +20,7 @@ type Leave = {
   _id: string
   employeeId: {
     name?: string
+    empCode?: string
     executiveManagerId?: { name?: string } | string
   } | string
   status: 'Pending' | 'Approved' | 'Rejected'
@@ -236,6 +237,7 @@ export default function LeavesReportPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-sky-50/70 border-b text-neutral-700">
+                  <th className="py-2 px-3 text-left">Employee code</th>
                   <th className="py-2 px-3 text-left">Employee</th>
                   <th className="py-2 px-3 text-left">Manager</th>
                   <th className="py-2 px-3">Status</th>
@@ -257,6 +259,7 @@ export default function LeavesReportPage() {
                 )}
                 {filteredLeaves.map((l) => (
                   <tr key={l._id} className="border-b last:border-0">
+                    <td className="py-2 px-3">{typeof l.employeeId === 'object' && l.employeeId ? l.employeeId.empCode || '—' : '—'}</td>
                     <td className="py-2 px-3">{employeeName(l)}</td>
                     <td className="py-2 px-3 text-sm text-neutral-600">{managerName(l)}</td>
                     <td className="py-2 px-3 text-center">{l.status}</td>

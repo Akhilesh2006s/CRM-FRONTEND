@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { apiRequest } from '@/lib/api'
+import { apiRequest, resolveUploadUrl } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -11,6 +11,7 @@ type Slip = {
   month: string
   yearlySalary: number
   monthlyTakeHome: number
+  pdfUrl?: string
   name?: string
 }
 
@@ -47,7 +48,7 @@ export default function MyPaySlipsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">My Pay Slips</h1>
-        <p className="text-sm text-neutral-600 mt-1">Download the pay slips generated for your login.</p>
+        <p className="text-sm text-neutral-600 mt-1">Your last 3 months of pay slips.</p>
       </div>
       <Card className="p-0 overflow-x-auto">
         {loading && <p className="p-4 text-sm">Loading…</p>}
@@ -69,9 +70,13 @@ export default function MyPaySlipsPage() {
                   <td className="py-2 px-3">{row.yearlySalary}</td>
                   <td className="py-2 px-3">{row.monthlyTakeHome}</td>
                   <td className="py-2 px-3 text-right">
-                    <Button size="sm" variant="outline" onClick={() => void download(row.month).catch((err) => toast.error(err.message))}>
-                      Download
-                    </Button>
+                    {row.pdfUrl ? (
+                      <a className="text-sm text-sky-700" href={resolveUploadUrl(row.pdfUrl)} target="_blank" rel="noreferrer">View PDF</a>
+                    ) : (
+                      <Button size="sm" variant="outline" onClick={() => void download(row.month).catch((err) => toast.error(err.message))}>
+                        Download
+                      </Button>
+                    )}
                   </td>
                 </tr>
               ))}
