@@ -44,6 +44,8 @@ type Lead = {
   remarks?: string
   school_type?: string
   isChain?: boolean
+  assignedToId?: string
+  assignedToName?: string
   products?: Array<{
     product_name?: string
     product?: string
@@ -123,6 +125,18 @@ function displayLeadDealPriority(lead: {
 const HISTORY_SNAPSHOT_STATUSES = ['Hot', 'Warm', 'Visit Again', 'Yet to Visit', 'Not Interested'] as const
 
 /** Build `productsInterested`-shaped rows for synthetic history when API omits snapshots */
+function assigneeFromRecord(record: any): { id: string; name: string } {
+  const candidates = [record?.assigned_to, record?.managed_by, record?.createdBy]
+  for (const value of candidates) {
+    if (!value) continue
+    if (typeof value === 'string' && value.trim()) return { id: value.trim(), name: '' }
+    if (typeof value === 'object' && value._id) {
+      return { id: String(value._id), name: String(value.name || '').trim() }
+    }
+  }
+  return { id: '', name: '' }
+}
+
 function formatUserDisplayName(user: unknown): string | null {
   if (!user || typeof user !== 'object') return null
   const u = user as { name?: string; firstName?: string; lastName?: string; email?: string }
@@ -187,6 +201,9 @@ export default function FollowupLeadsPage() {
   const [zone, setZone] = useState('')
   const [schoolName, setSchoolName] = useState('')
   const [contactMobile, setContactMobile] = useState('')
+  const [employeeFilter, setEmployeeFilter] = useState('')
+  const [bdeOptions, setBdeOptions] = useState<{ _id: string; name: string }[]>([])
+  const seesAllFollowups = currentUser?.role === 'Super Admin' || Boolean(currentUser?.isSuperAdmin)
   
   // Update Lead Modal
   const [updateModalOpen, setUpdateModalOpen] = useState(false)
@@ -210,7 +227,31 @@ export default function FollowupLeadsPage() {
 
   useEffect(() => {
     applyFilters()
-  }, [allLeads, zone, schoolName, contactMobile, currentPage])
+  }, [allLeads, zone, schoolName, contactMobile, employeeFilter, currentPage])
+
+  useEffect(() => {
+    if (!seesAllFollowups) return
+    const roles = ['Executive', 'Sales BDE', 'Employee']
+    Promise.all(
+      roles.map((role) =>
+        apiRequest<any[]>(`/employees?isActive=true&role=${encodeURIComponent(role)}`).catch(() => [])
+      )
+    ).then((batches) => {
+      const seen = new Set<string>()
+      const list: { _id: string; name: string }[] = []
+      for (const batch of batches) {
+        for (const user of Array.isArray(batch) ? batch : []) {
+          const id = String(user?._id || user?.id || '')
+          const name = String(user?.name || '').trim()
+          if (!id || !name || seen.has(id)) continue
+          seen.add(id)
+          list.push({ _id: id, name })
+        }
+      }
+      list.sort((a, b) => a.name.localeCompare(b.name))
+      setBdeOptions(list)
+    })
+  }, [seesAllFollowups])
 
   const loadLeads = async () => {
     setLoading(true)
@@ -230,14 +271,18 @@ export default function FollowupLeadsPage() {
         return
       }
 
-      // Fetch ALL leads assigned to current employee (not paginated) - we'll paginate after filtering
-      // Use Promise.all for parallel requests
+      const leadsQuery = seesAllFollowups
+        ? '/leads?pipeline=followup&limit=500'
+        : `/leads?employee=${currentUser._id}&pipeline=followup&limit=500`
+      const ordersQuery = seesAllFollowups
+        ? '/dc-orders?pipeline=followup&limit=500'
+        : `/dc-orders?assigned_to=${currentUser._id}&pipeline=followup&limit=500`
       const [leadsResponse, dcOrdersResponse] = await Promise.all([
-        apiRequest<any>(`/leads?employee=${currentUser._id}&pipeline=followup&limit=500`).catch(err => {
+        apiRequest<any>(leadsQuery).catch(err => {
           console.warn('Failed to fetch leads:', err)
           return { data: [], pagination: null }
         }),
-        apiRequest<any>(`/dc-orders?assigned_to=${currentUser._id}&pipeline=followup&limit=500`).catch(err => {
+        apiRequest<any>(ordersQuery).catch(err => {
           console.warn('Failed to fetch dc-orders:', err)
           return { data: [], pagination: null }
         })
@@ -277,9 +322,12 @@ export default function FollowupLeadsPage() {
           }
         }
         
+        const assignee = assigneeFromRecord(lead)
         return {
           ...lead,
           school_code: schoolCode,
+          assignedToId: assignee.id,
+          assignedToName: assignee.name,
         }
       })
       
@@ -287,6 +335,7 @@ export default function FollowupLeadsPage() {
       const leadsFromOrders: Lead[] = dcOrders
         .filter((order: any) => isOpenFollowUpStatus(order.status))
         .map((order: any) => {
+          const assignee = assigneeFromRecord(order)
           const mapped: Lead = {
           _id: order._id,
           school_name: order.school_name,
@@ -305,6 +354,8 @@ export default function FollowupLeadsPage() {
           lead_status: order.lead_status,
           priority: order.priority,
           isChain: order.isChain === true,
+          assignedToId: assignee.id,
+          assignedToName: assignee.name,
           }
           return mapped
         })
@@ -355,6 +406,7 @@ export default function FollowupLeadsPage() {
     if (zone && zone !== 'all') filtered = filtered.filter(l => l.zone?.toLowerCase().includes(zone.toLowerCase()))
     if (contactMobile) filtered = filtered.filter(l => l.contact_mobile?.includes(contactMobile))
     if (schoolName) filtered = filtered.filter(l => l.school_name?.toLowerCase().includes(schoolName.toLowerCase()))
+    if (employeeFilter) filtered = filtered.filter(l => l.assignedToId === employeeFilter)
 
     // Sort by createdAt descending so latest leads appear on top
     filtered.sort((a, b) => {
@@ -516,20 +568,23 @@ export default function FollowupLeadsPage() {
     try {
       // All fields are required, so include them all
       const validProducts = selectedProducts
-        .map((p) => ({
+        .map((p) => {
+          const priced = p.status === 'Hot' || p.status === 'Warm'
+          return {
           product_name: p.product_name.trim(),
           term: p.term || 'Term 1',
           status: normalizeLeadProductLineStatus(p.status) || p.status || 'Warm',
-          strength: Number(p.strength) || 0,
-          chance: Number(p.chance) || 0,
+          strength: priced ? Number(p.strength) || 0 : 0,
+          chance: priced ? Number(p.chance) || 0 : 0,
           important: false,
-          quantity: Number(p.strength) || 1,
-          unit_price: Number(p.unit_price) || 0,
+          quantity: priced ? Number(p.strength) || 1 : 1,
+          unit_price: priced ? Number(p.unit_price) || 0 : 0,
           not_interested_reason:
             p.status === 'Not Interested'
               ? String(p.not_interested_reason || '').trim()
               : '',
-        }))
+          }
+        })
 
       const derivedPriority = deriveLeadPriorityFromDealProducts(validProducts)
       const schoolLeadStatus = (selectedLead.lead_status || '').trim()
@@ -760,13 +815,33 @@ export default function FollowupLeadsPage() {
         </Link>
         <div>
           <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Followup Leads</h1>
-          <p className="text-sm text-neutral-600 mt-1">View and manage your followup leads</p>
+          <p className="text-sm text-neutral-600 mt-1">
+            {currentUser?.role === 'Super Admin' || currentUser?.isSuperAdmin
+              ? 'All follow-up leads across BDEs'
+              : 'View and manage your followup leads'}
+          </p>
         </div>
       </div>
 
       <Card className="p-4">
         {/* Filters */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          {seesAllFollowups && (
+            <div>
+              <label className="text-sm font-medium text-neutral-700 mb-1 block">BDE</label>
+              <Select value={employeeFilter || undefined} onValueChange={(v) => setEmployeeFilter(v === 'all' ? '' : v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All BDEs" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All BDEs</SelectItem>
+                  {bdeOptions.map((employee) => (
+                    <SelectItem key={employee._id} value={employee._id}>{employee.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div>
             <label className="text-sm font-medium text-neutral-700 mb-1 block">Zone</label>
             <Select value={zone || undefined} onValueChange={(v) => setZone(v === 'all' ? '' : v)}>
@@ -851,6 +926,11 @@ export default function FollowupLeadsPage() {
                           {lead.school_name || 'Unnamed School'}
                         </h3>
                       </div>
+                      {seesAllFollowups && (lead.assignedToName || lead.assignedToId) && (
+                        <p className="text-sm text-neutral-600">
+                          BDE: {lead.assignedToName || bdeOptions.find((employee) => employee._id === lead.assignedToId)?.name || 'Assigned'}
+                        </p>
+                      )}
                       {lead.location && (
                         <div className="flex items-center gap-1 text-sm text-neutral-600">
                           <MapPin className="w-4 h-4 text-orange-500" />
@@ -1053,7 +1133,24 @@ export default function FollowupLeadsPage() {
                           </Select>
                           <Select
                             value={product.status}
-                            onValueChange={(v) => updateInterestedProduct(index, 'status', v)}
+                            onValueChange={(v) => {
+                              setUpdateForm((prev) => ({
+                                ...prev,
+                                productsInterested: prev.productsInterested.map((item, i) => {
+                                  if (i !== index) return item
+                                  const next = { ...item, status: v }
+                                  if (v !== 'Hot' && v !== 'Warm') {
+                                    next.strength = ''
+                                    next.unit_price = ''
+                                    next.chance = v === 'Not Interested' ? '0' : ''
+                                  } else if (next.chance === '0') {
+                                    next.chance = ''
+                                  }
+                                  if (v !== 'Not Interested') next.not_interested_reason = ''
+                                  return next
+                                }),
+                              }))
+                            }}
                           >
                             <SelectTrigger className="h-9">
                               <SelectValue />
@@ -1081,7 +1178,7 @@ export default function FollowupLeadsPage() {
                             className="h-9 text-center bg-white"
                             placeholder="₹"
                             value={product.unit_price}
-                            disabled={product.status === 'Not Interested'}
+                            disabled={product.status !== 'Hot' && product.status !== 'Warm'}
                             onChange={(e) =>
                               updateInterestedProduct(index, 'unit_price', e.target.value)
                             }
@@ -1263,9 +1360,11 @@ export default function FollowupLeadsPage() {
                                   <span className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">
                                     {formatDateTime(item.updatedAt)}
                                   </span>
-                                  <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${priorityColors[leadStatus as keyof typeof priorityColors] || priorityColors.Hot}`}>
-                                    {leadStatus}
-                                  </span>
+                                  {leadStatus && leadStatus !== 'Cold' ? (
+                                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${priorityColors[leadStatus as keyof typeof priorityColors] || priorityColors.Hot}`}>
+                                      {leadStatus}
+                                    </span>
+                                  ) : null}
                                 </div>
                                 {(() => {
                                   const updatedByName = resolveHistoryUpdatedByName(item, historyLead ?? undefined)
@@ -1327,15 +1426,17 @@ export default function FollowupLeadsPage() {
                                           <span className="text-sm font-medium text-neutral-900 truncate block">
                                             {row.product_name || 'Product'}
                                           </span>
-                                          <span className="text-xs text-neutral-500">
-                                            {[
-                                              row.term ? row.term : null,
+                                          {(() => {
+                                            const detail = [
                                               Number(row.strength) > 0 ? `Strength ${row.strength}` : null,
                                               Number(row.chance) > 0 ? `${row.chance}% chance` : null,
                                             ]
                                               .filter(Boolean)
-                                              .join(' · ') || '—'}
-                                          </span>
+                                              .join(' · ')
+                                            return detail ? (
+                                              <span className="text-xs text-neutral-500">{detail}</span>
+                                            ) : null
+                                          })()}
                                         </div>
                                         <span
                                           className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-semibold border ${badgeClass}`}

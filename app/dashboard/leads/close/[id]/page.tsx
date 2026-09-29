@@ -21,6 +21,7 @@ import {
 import { useCloseLeadProductConfig } from '@/hooks/useCloseLeadProductConfig'
 import { CloseLeadProductConfig } from '@/components/leads/CloseLeadProductConfig'
 import { sanitizePhoneInput, validatePhoneDigits } from '@/lib/phone'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 type Lead = {
   _id: string
@@ -30,6 +31,7 @@ type Lead = {
   contact_mobile?: string
   contact_person2?: string
   contact_mobile2?: string
+  financial_contact_designation?: string
   email?: string
   address?: string
   location?: string
@@ -37,6 +39,7 @@ type Lead = {
   strength?: number
   branches?: number
   decision_maker?: string
+  assigned_to?: string | { _id?: string; name?: string }
   products?: any[] | string
   priority?: string
   remarks?: string
@@ -55,7 +58,11 @@ export default function CloseLeadPage() {
   const params = useParams()
   const leadId = params.id as string
   const currentUser = getCurrentUser()
+  const isSuperAdmin = currentUser?.role === 'Super Admin' || Boolean((currentUser as { isSuperAdmin?: boolean })?.isSuperAdmin)
   const currentAcademicYear = getCurrentAcademicYear()
+  const [employees, setEmployees] = useState<{ _id: string; name: string }[]>([])
+  const [assignedEmployeeId, setAssignedEmployeeId] = useState('')
+  const [assignedEmployeeName, setAssignedEmployeeName] = useState('')
   
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -67,6 +74,7 @@ export default function CloseLeadPage() {
   const [form, setForm] = useState({
     contact_person2: '',
     contact_mobile2: '',
+    financial_contact_designation: '',
     delivery_date: '',
     year: currentAcademicYear,
   })
@@ -94,6 +102,7 @@ export default function CloseLeadPage() {
     getDefaultLevel,
     getProductCategories,
     hasProductCategories,
+    getProductSpecs,
     validateProducts,
     buildDcOrderProducts,
   } = productConfig
@@ -103,6 +112,30 @@ export default function CloseLeadPage() {
       loadLead()
     }
   }, [leadId])
+
+  useEffect(() => {
+    if (!isSuperAdmin) return
+    const roles = ['Executive', 'Sales BDE', 'Employee']
+    Promise.all(
+      roles.map((role) =>
+        apiRequest<any[]>(`/employees?isActive=true&role=${encodeURIComponent(role)}`).catch(() => [])
+      )
+    ).then((batches) => {
+      const seen = new Set<string>()
+      const list: { _id: string; name: string }[] = []
+      for (const batch of batches) {
+        for (const user of Array.isArray(batch) ? batch : []) {
+          const id = String(user?._id || user?.id || '')
+          const name = String(user?.name || '').trim()
+          if (!id || !name || seen.has(id)) continue
+          seen.add(id)
+          list.push({ _id: id, name })
+        }
+      }
+      list.sort((a, b) => a.name.localeCompare(b.name))
+      setEmployees(list)
+    })
+  }, [isSuperAdmin])
 
   const loadLead = async () => {
     setLoading(true)
@@ -133,11 +166,16 @@ export default function CloseLeadPage() {
         const todayYmd = new Date().toISOString().split('T')[0]
         const deliveryDate =
           estimatedYmd && estimatedYmd !== followUpYmd ? estimatedYmd : todayYmd
+        const assigned = leadData.assigned_to
+        const assignedId = assigned && typeof assigned === 'object' ? assigned._id : assigned
+        if (assignedId) setAssignedEmployeeId(String(assignedId))
+        if (assigned && typeof assigned === 'object' && assigned.name) setAssignedEmployeeName(String(assigned.name))
         setForm({
-          contact_person2: leadData.decision_maker || leadData.contact_person2 || leadData.contact_person || '',
+          contact_person2: leadData.contact_person2 || leadData.decision_maker || '',
           contact_mobile2: leadData.contact_mobile2 || '',
-                delivery_date: deliveryDate,
-                year: currentAcademicYear,
+          financial_contact_designation: leadData.financial_contact_designation || '',
+          delivery_date: deliveryDate,
+          year: currentAcademicYear,
         })
         
         // Pre-fill selected products and product details - normalize product names to match availableProducts
@@ -300,11 +338,11 @@ export default function CloseLeadPage() {
               price: savedUnitPrice || 0,
               total: (savedStrength || 0) * (savedUnitPrice || 0),
               level: productData?.level || getDefaultLevel(product),
-              specs: 'CW',
+              specs: getProductSpecs(product)[0] || '',
               isParentRow: true,
               sameRateForAllClasses: false,
               selectedSubjects: [],
-              selectedSpecs: ['CW'],
+              selectedSpecs: getProductSpecs(product).slice(0, 1),
               selectedDeliverables: productData?.deliverables || [],
               selectedCategories: hasProductCategories(product) 
                 ? getProductCategories(product) 
@@ -500,7 +538,10 @@ export default function CloseLeadPage() {
       }
     }
 
-    const assignedEmployeeId = currentUser._id
+    const closingEmployeeId = isSuperAdmin ? assignedEmployeeId : currentUser._id
+    if (!closingEmployeeId) {
+      throw new Error('Select the BDE this close is assigned to.')
+    }
     const isDcOrder = isDcOrderRecord
 
     const updatePayload: any = {
@@ -510,12 +551,12 @@ export default function CloseLeadPage() {
       email: lead?.email || undefined,
       contact_person2: form.contact_person2 || undefined,
       contact_mobile2: form.contact_mobile2 || undefined,
-      decision_maker: form.contact_person2 || undefined,
+      financial_contact_designation: form.financial_contact_designation || undefined,
       estimated_delivery_date: form.delivery_date
         ? new Date(form.delivery_date).toISOString()
         : undefined,
       year: currentAcademicYear,
-      assigned_to: assignedEmployeeId,
+      assigned_to: closingEmployeeId,
       products: buildDcOrderProducts(),
     }
 
@@ -564,7 +605,7 @@ export default function CloseLeadPage() {
               priority: lead?.priority || updated.priority || 'Hot',
               year: currentAcademicYear,
               status: 'Closed',
-              createdBy: assignedEmployeeId,
+              createdBy: closingEmployeeId,
             }),
           })
         }
@@ -588,7 +629,7 @@ export default function CloseLeadPage() {
       dcRemarks: `Lead converted to client - ${lead?.school_name}`,
       dcCategory: lead?.school_type === 'Existing' ? 'Existing School' : 'New School',
       requestedQuantity: totalQuantity,
-      employeeId: assignedEmployeeId,
+      employeeId: closingEmployeeId,
       productDetails: dcProductDetails,
       status: 'created',
     }
@@ -760,6 +801,24 @@ export default function CloseLeadPage() {
 
       <Card className="p-6">
         <div className="space-y-6">
+          {isSuperAdmin && (
+            <div>
+              <Label className="text-sm font-semibold text-neutral-700">Assign to (BDE) *</Label>
+              <Select value={assignedEmployeeId || undefined} onValueChange={setAssignedEmployeeId}>
+                <SelectTrigger className="mt-1 bg-white text-neutral-900">
+                  <SelectValue placeholder={employees.length === 0 ? 'No BDEs found' : 'Select BDE'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {(assignedEmployeeId && !employees.some((employee) => employee._id === assignedEmployeeId)
+                    ? [{ _id: assignedEmployeeId, name: assignedEmployeeName || 'Assigned BDE' }, ...employees]
+                    : employees
+                  ).map((e) => (
+                    <SelectItem key={e._id} value={e._id}>{e.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           {/* School Name */}
           <div>
             <Label className="text-sm font-semibold text-neutral-700">School Name</Label>
@@ -804,26 +863,34 @@ export default function CloseLeadPage() {
             />
           </div>
 
-          {/* Decision Maker Name */}
           <div>
-            <Label className="text-sm font-semibold text-neutral-700">Decision Maker Name</Label>
+            <Label className="text-sm font-semibold text-neutral-700">Financial contact person</Label>
             <Input
               value={form.contact_person2}
               onChange={(e) => setForm({ ...form, contact_person2: e.target.value })}
-              placeholder="Enter decision maker name"
+              placeholder="Enter financial contact name"
               className="mt-1"
             />
           </div>
 
-          {/* Decision Maker Mobile Number */}
           <div>
-            <Label className="text-sm font-semibold text-neutral-700">Decision Maker Mobile Number</Label>
+            <Label className="text-sm font-semibold text-neutral-700">Financial contact mobile</Label>
             <Input
               value={form.contact_mobile2}
               onChange={(e) => setForm({ ...form, contact_mobile2: sanitizePhoneInput(e.target.value) })}
               inputMode="numeric"
               maxLength={15}
               placeholder="10 to 15 digits"
+              className="mt-1"
+            />
+          </div>
+
+          <div>
+            <Label className="text-sm font-semibold text-neutral-700">Financial contact designation</Label>
+            <Input
+              value={form.financial_contact_designation}
+              onChange={(e) => setForm({ ...form, financial_contact_designation: e.target.value })}
+              placeholder="e.g. Accountant"
               className="mt-1"
             />
           </div>

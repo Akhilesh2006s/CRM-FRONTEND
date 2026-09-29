@@ -23,8 +23,7 @@ import { Package, PlusCircle, X, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   SELECTABLE_CLOSE_CLASSES,
-  CLOSE_SPEC_CHOICES,
-  closeSpecChoiceKey,
+  specsFromCatalog,
   getLineClassSelections,
   computeLineDisplayTotal,
   computeProductDetailsDisplayQuantity,
@@ -276,12 +275,8 @@ function CloseLeadProductConfigView({
                         const productSubjects = getProductSubjects(line.product)
                         const hasSubjects = hasProductSubjects(line.product)
                         const selectedSubjects = line.selectedSubjects || []
-                        const catalogSpecs = getProductSpecs(line.product)
-                        const productSpecs = catalogSpecs
-                        const selectedSpecs = line.selectedSpecs || []
-                        const specChoice = closeSpecChoiceKey(
-                          line.specsTouched || selectedSpecs.length > 0 ? selectedSpecs : ['CW']
-                        )
+                        const productSpecs = getProductSpecs(line.product)
+                        const selectedSpecs = specsFromCatalog(productSpecs, line.selectedSpecs)
                         const productLevels = getProductLevels(line.product)
                         const selectedLevels = line.selectedLevels || []
                         const productCategories = getProductCategories(line.product)
@@ -407,33 +402,45 @@ function CloseLeadProductConfigView({
                                 )}
                               </div>
 
+                              {productSpecs.length > 0 && (
                               <div className="space-y-2 border-t pt-2">
                                 <Label className="text-xs font-semibold">Select Specs:</Label>
                                 <div className="flex flex-wrap gap-4">
-                                  {CLOSE_SPEC_CHOICES.map((choice) => (
-                                    <div key={choice.key} className="flex items-center space-x-1">
+                                  {productSpecs.map((spec) => (
+                                    <div key={spec} className="flex items-center space-x-1">
                                       <Checkbox
                                         className="border-neutral-400"
-                                        id={`spec-visible-${line.id}-${choice.key}`}
-                                        checked={specChoice === choice.key}
+                                        id={`spec-visible-${line.id}-${spec}`}
+                                        checked={selectedSpecs.some(
+                                          (item) => item.toLowerCase() === spec.toLowerCase()
+                                        )}
                                         onCheckedChange={(checked) => {
-                                          if (!checked) return
+                                          const next = checked
+                                            ? [...selectedSpecs, spec]
+                                            : selectedSpecs.filter(
+                                                (item) => item.toLowerCase() !== spec.toLowerCase()
+                                              )
+                                          if (next.length === 0) {
+                                            toast.error('Select at least one spec')
+                                            return
+                                          }
                                           updateProductSectionLine(section.id, line.id, {
-                                            selectedSpecs: [...choice.specs],
+                                            selectedSpecs: next,
                                             specsTouched: true,
                                           })
                                         }}
                                       />
                                       <Label
-                                        htmlFor={`spec-visible-${line.id}-${choice.key}`}
+                                        htmlFor={`spec-visible-${line.id}-${spec}`}
                                         className="text-xs cursor-pointer"
                                       >
-                                        {choice.label}
+                                        {spec}
                                       </Label>
                                     </div>
                                   ))}
                                 </div>
                               </div>
+                              )}
 
                               {productLevels.length > 0 && (
                                 <div className="space-y-2 border-t pt-2">

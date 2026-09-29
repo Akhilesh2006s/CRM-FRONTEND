@@ -81,7 +81,7 @@ function getStatHref(role: string | undefined, index: number): string | null {
   const r = role || ''
 
   if (index === 0) {
-    if (r === 'Executive') return '/dashboard/leads/followup'
+    if (r === 'Executive' || r === 'Super Admin') return '/dashboard/leads/followup'
     if (ROLES_WITHOUT_CLIENTS.has(r) && r !== 'Coordinator' && r !== 'Senior Coordinator') {
       if (r === 'Manager') return '/dashboard/reports/leads'
       return null
@@ -330,8 +330,7 @@ export default function DashboardPage() {
     }
   }, [router])
 
-  // Super Admin dashboard has no Leads section; other roles keep Leads UI/fetches.
-  const hideLeadsOnDashboard = currentUser?.role === 'Super Admin'
+  const hideLeadsOnDashboard = false
 
   useEffect(() => {
     if (hideLeadsOnDashboard && activeTab === 'leads') {
@@ -470,9 +469,7 @@ export default function DashboardPage() {
     }
 
     fetchDashboardData()
-    if (currentUser.role !== 'Super Admin') {
-      fetchLeadsAnalytics() // Initial load without date filter
-    }
+    fetchLeadsAnalytics()
     if (currentUser.role === 'Executive') {
       fetchExecutiveAnalytics()
     } else {
@@ -481,9 +478,7 @@ export default function DashboardPage() {
   }, [currentUser])
 
   const handleSearch = () => {
-    if (currentUser?.role !== 'Super Admin') {
-      fetchLeadsAnalytics()
-    }
+    fetchLeadsAnalytics()
     if (currentUser?.role === 'Executive') {
       fetchExecutiveAnalytics()
     }

@@ -102,6 +102,7 @@ type DC = {
     booksDistributed?: 'Yes' | 'No'
     programsStarted?: 'Yes' | 'No'
     programsStartedDate?: string
+    trainingStatus?: 'Completed' | 'Not completed'
     pagesCompleted?: { program: string; pages: number }[]
   }
   _isConvertedLead?: boolean // Flag to indicate this is a converted lead (saved DcOrder)
@@ -112,6 +113,7 @@ type ClientOpsDraft = {
   booksDistributed: '' | 'Yes' | 'No'
   programsStarted: '' | 'Yes' | 'No'
   programsStartedDate: string
+  trainingStatus: '' | 'Completed' | 'Not completed'
   pagesCompleted: { program: string; pages: string }[]
 }
 
@@ -145,6 +147,7 @@ function opsFromDc(d: DC): ClientOpsDraft {
     booksDistributed: d.clientOperations?.booksDistributed || '',
     programsStarted: d.clientOperations?.programsStarted || '',
     programsStartedDate: dateInputValue(d.clientOperations?.programsStartedDate),
+    trainingStatus: d.clientOperations?.trainingStatus || '',
     pagesCompleted: clientProgramNames(d).map((program) => ({
       program,
       pages: savedPages.get(program) || '',
@@ -1374,6 +1377,7 @@ export default function ClientDCPage() {
         booksDistributed: ops.booksDistributed || undefined,
         programsStarted: ops.programsStarted || undefined,
         programsStartedDate: ops.programsStarted === 'Yes' ? ops.programsStartedDate : undefined,
+        trainingStatus: ops.trainingStatus || undefined,
         pagesCompleted: ops.pagesCompleted
           .filter((row) => row.pages !== '')
           .map((row) => ({ program: row.program, pages: Number(row.pages) })),
@@ -1393,6 +1397,7 @@ export default function ClientDCPage() {
                   booksDistributed: ops.booksDistributed || undefined,
                   programsStarted: ops.programsStarted || undefined,
                   programsStartedDate: ops.programsStartedDate || undefined,
+                  trainingStatus: ops.trainingStatus || undefined,
                 },
               }
             : item
@@ -2948,6 +2953,7 @@ export default function ClientDCPage() {
                   <TableHead className="font-bold text-neutral-700 py-4">Delivery status</TableHead>
                   <TableHead className="font-bold text-neutral-700 py-4">Books distributed</TableHead>
                   <TableHead className="font-bold text-neutral-700 py-4">Programs started</TableHead>
+                  <TableHead className="font-bold text-neutral-700 py-4">Training</TableHead>
                   <TableHead className="font-bold text-neutral-700 py-4 min-w-[220px]">Pages completed</TableHead>
                   <TableHead className="font-bold text-neutral-700 py-4">Status</TableHead>
                   <TableHead className="font-bold text-neutral-700 py-4">Created Date</TableHead>
@@ -2959,7 +2965,7 @@ export default function ClientDCPage() {
               <TableBody>
                 {filteredItems.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={14} className="text-center text-neutral-500 py-4">
+                    <TableCell colSpan={15} className="text-center text-neutral-500 py-4">
                       No clients found matching your search.
                     </TableCell>
                   </TableRow>
@@ -3052,6 +3058,22 @@ export default function ClientDCPage() {
                           </div>
                         </TableCell>
                         <TableCell>
+                          <Select
+                            value={currentOps(d).trainingStatus || undefined}
+                            onValueChange={(v) =>
+                              patchOps(d, { trainingStatus: v as 'Completed' | 'Not completed' })
+                            }
+                          >
+                            <SelectTrigger className="h-8 w-[150px] bg-white text-xs">
+                              <SelectValue placeholder="Select" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Completed">Completed</SelectItem>
+                              <SelectItem value="Not completed">Not completed</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
                           <div className="flex flex-col gap-2 min-w-[220px]">
                             {currentOps(d).pagesCompleted.length === 0 ? (
                               <span className="text-xs text-neutral-400">No programs</span>
@@ -3129,7 +3151,7 @@ export default function ClientDCPage() {
                                 setViewingPoOpen(true)
                               }}
                             >
-                              View DC
+                              View PO
                             </Button>
                           ) : (
                             <span className="text-sm text-neutral-400">-</span>
@@ -3170,7 +3192,7 @@ export default function ClientDCPage() {
                               className="bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg"
                             >
                               <Package className="w-4 h-4 mr-2" />
-                              Request DC
+                              Upload DC
                             </Button>
                               )}
                               {awaitingManagerApproval && (

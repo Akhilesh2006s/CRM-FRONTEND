@@ -3,6 +3,7 @@ const ROLE_LABELS: Record<string, string> = {
   'Executive Manager': 'Zonal Manager',
   Manager: 'Product Manager',
   Executive: 'BDE',
+  'Sales BDE': 'BDE',
   Employee: 'BDE',
 }
 

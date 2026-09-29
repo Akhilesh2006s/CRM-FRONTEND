@@ -1,15 +1,15 @@
 import { computeBucketAmount, type CalculationType } from '@/lib/paymentDivisor'
 import { normalizeProductTerm, termFromLevelLabel, type ProductTerm } from '@/lib/productTerm'
 
-/** Add Products spec choices. Exactly one of these can be selected. */
-export const CLOSE_SPEC_CHOICES = [
-  { key: 'cw', label: 'CW', specs: ['CW'] },
-  { key: 'both', label: 'CW and HW', specs: ['CW', 'HW'] },
-] as const
-
-export function closeSpecChoiceKey(specs: string[] | undefined): 'cw' | 'both' {
-  const selected = new Set((specs || []).map((s) => String(s || '').trim().toUpperCase()))
-  return selected.has('CW') && selected.has('HW') ? 'both' : 'cw'
+/** Keep only specs that exist on the product. Falls back to the first catalog spec. */
+export function specsFromCatalog(catalogSpecs: string[], selected: string[] | undefined): string[] {
+  const catalog = catalogSpecs.map((s) => String(s || '').trim()).filter(Boolean)
+  if (catalog.length === 0) return []
+  const picked = (selected || [])
+    .map((s) => catalog.find((c) => c.toLowerCase() === String(s || '').trim().toLowerCase()))
+    .filter((s): s is string => Boolean(s))
+  const unique = [...new Set(picked)]
+  return unique.length > 0 ? unique : [catalog[0]]
 }
 
 export type GroupProductOpts = {
@@ -612,6 +612,8 @@ export function classSelectionBounds(selections: ClassStrengthSelection[]): {
 
 export type ExpandSectionsCtx = {
   hasProductSubjects: (product: string) => boolean
+  hasProductSpecs?: (product: string) => boolean
+  getProductSpecs?: (product: string) => string[]
   getProductCategories: (product: string) => string[]
   hasProductCategories: (product: string) => boolean
   schoolType?: string
@@ -654,12 +656,12 @@ export function expandSectionsToProductDetails(
           }) || skuCategories[0] || ''
         : enrollmentDefault
 
-      const selectedSpecs = line.specsTouched
-        ? line.selectedSpecs || []
-        : (line.selectedSpecs || []).length > 0
-          ? line.selectedSpecs || []
-          : ['CW']
-      const specsToUse = selectedSpecs.length > 0 ? selectedSpecs : ['CW']
+      const catalogSpecs = ctx.getProductSpecs ? ctx.getProductSpecs(line.product) : []
+      const productHasSpecs = catalogSpecs.length > 0
+      const selectedSpecs = productHasSpecs
+        ? specsFromCatalog(catalogSpecs, line.selectedSpecs)
+        : []
+      const specsToUse = productHasSpecs ? selectedSpecs : ['']
 
       const parentRow: ProductDetailRow = {
         id: line.parentRowId,

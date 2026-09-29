@@ -10,6 +10,7 @@ import {
   type GroupProductOpts,
   categoryValueFromRow,
   expandSectionsToProductDetails,
+  specsFromCatalog,
   getLineClassSelections,
   groupProductDetailsByProductAndClass,
   lineHasValidClassSelections,
@@ -50,6 +51,7 @@ export function useCloseLeadProductConfig(options: UseCloseLeadProductConfigOpti
     getProductLevels,
     getDefaultLevel,
     getProductSpecs,
+    hasProductSpecs,
     getProductSubjects,
     hasProductSubjects,
     getProductCategories,
@@ -68,6 +70,8 @@ export function useCloseLeadProductConfig(options: UseCloseLeadProductConfigOpti
     setProductDetails((prev) =>
       expandSectionsToProductDetails(productSections, {
         hasProductSubjects,
+        hasProductSpecs,
+        getProductSpecs,
         getProductCategories,
         hasProductCategories,
         schoolType,
@@ -250,7 +254,7 @@ export function useCloseLeadProductConfig(options: UseCloseLeadProductConfigOpti
                 : [],
           classSelections: [],
           sameStrengthForAllClasses: false,
-          selectedSpecs: ['CW'],
+          selectedSpecs: getProductSpecs(product).slice(0, 1),
           selectedSubjects: [],
           selectedDeliverables: [],
           selectedCategories: undefined,
@@ -335,8 +339,10 @@ export function useCloseLeadProductConfig(options: UseCloseLeadProductConfigOpti
         const updatedParent = { ...parentRow, fromClass, toClass }
         return [...otherParentRows, updatedParent, ...otherChildRows]
       }
-      const selectedSpecs = parentRow.selectedSpecs || []
-      const specsToUse = selectedSpecs.length > 0 ? selectedSpecs : ['Regular']
+      const catalogSpecs = getProductSpecs(parentRow.product)
+      const specsToUse = catalogSpecs.length > 0
+        ? specsFromCatalog(catalogSpecs, parentRow.selectedSpecs)
+        : ['']
       const selectedSubjects = parentRow.selectedSubjects || []
       const hasSubjects = hasProductSubjects(parentRow.product) && selectedSubjects.length > 0
       const subjectsToUse = hasSubjects ? selectedSubjects : [undefined]
@@ -704,6 +710,7 @@ export function useCloseLeadProductConfig(options: UseCloseLeadProductConfigOpti
     getProductLevels,
     getDefaultLevel,
     getProductSpecs,
+    hasProductSpecs,
     getProductSubjects,
     hasProductSubjects,
     getProductCategories,

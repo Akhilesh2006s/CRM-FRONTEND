@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { apiRequest } from '@/lib/api'
 import { toast } from 'sonner'
 import { Eye, Users } from 'lucide-react'
+import { displayRoleName } from '@/lib/roleLabels'
 
 export type HierarchyLevel = 'regional-manager' | 'regional-head' | 'national-head'
 
@@ -25,6 +26,17 @@ type Metrics = {
   leavesByStatus?: Record<string, number>
 }
 
+type SchoolRow = { schoolName: string; schoolCode: string }
+type ClusterRow = { name: string; schools: SchoolRow[] }
+type ZoneRow = { name: string; clusters: ClusterRow[] }
+type EmployeeRow = {
+  _id: string
+  name: string
+  role: string
+  zone: string
+  cluster?: string
+  zones: ZoneRow[]
+}
 type Report = {
   _id: string
   name: string
@@ -34,14 +46,8 @@ type Report = {
   department?: string
   kind: 'zonal-manager' | 'regional-manager' | 'regional-head' | 'national-head'
   metrics?: Metrics
-  members?: Array<{
-    _id: string
-    name: string
-    email: string
-    phone?: string
-    kind: Report['kind']
-    metrics?: Metrics
-  }>
+  members?: Report[]
+  employees?: EmployeeRow[]
 }
 
 type Activity = {
@@ -98,6 +104,92 @@ function formatWhen(value?: string) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ''
   return date.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+function EmployeeTerritory({ employees }: { employees?: EmployeeRow[] }) {
+  if (!employees?.length) return null
+  const zones = new Map<string, ZoneRow>()
+  for (const employee of employees) {
+    for (const zone of employee.zones || []) {
+      if (!zones.has(zone.name)) zones.set(zone.name, zone)
+    }
+  }
+  return (
+    <div className="space-y-3">
+      <div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Employees</div>
+        <ul className="mt-1 space-y-1">
+          {employees.map((employee) => (
+            <li key={employee._id} className="text-sm text-neutral-800">
+              <span className="font-medium">{employee.name}</span>
+              <span className="text-neutral-500">
+                {' '}
+                · {displayRoleName(employee.role) || 'Employee'}
+                {employee.zone ? ` · Zone ${employee.zone}` : ' · No zone'}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      {[...zones.values()].map((zone) => (
+        <div key={zone.name} className="rounded-md border border-neutral-100 bg-neutral-50 p-3">
+          <div className="text-sm font-semibold text-neutral-900">Zone {zone.name}</div>
+          {zone.clusters.length === 0 ? (
+            <p className="mt-1 text-xs text-neutral-500">No clusters in this zone.</p>
+          ) : (
+            <ul className="mt-2 space-y-1">
+              {zone.clusters.map((cluster) => (
+                <li key={`${zone.name}-${cluster.name}`} className="text-xs text-neutral-600">
+                  <span className="font-medium text-neutral-800">Cluster {cluster.name}</span>
+                  {cluster.schools.length > 0 ? (
+                    <span>
+                      {' '}
+                      ·{' '}
+                      {cluster.schools
+                        .map((school) =>
+                          school.schoolCode ? `${school.schoolName} (${school.schoolCode})` : school.schoolName
+                        )
+                        .join(', ')}
+                    </span>
+                  ) : (
+                    <span> · No schools</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function Downline({ people }: { people?: Report[] }) {
+  if (!people?.length) return null
+  return (
+    <div className="border-t border-neutral-100 pt-3 space-y-3">
+      {people.map((member) => (
+        <div key={member._id} className="space-y-2">
+          <div className="flex items-center justify-between gap-2 text-sm">
+            <div>
+              <div className="font-medium text-neutral-800">{member.name}</div>
+              <div className="text-neutral-500">
+                {member.kind === 'regional-manager' ? 'Regional Manager' : member.kind === 'regional-head' ? 'Regional Head' : 'Zonal Manager'}
+                {' · '}
+                {member.metrics?.employees || 0} employees · {member.metrics?.leads || 0} leads ·{' '}
+                {member.metrics?.dcs || 0} DCs · {member.metrics?.sales || 0} sales
+              </div>
+            </div>
+            <Link href={reportHref(member.kind, member._id)} className="text-blue-700 shrink-0">
+              View
+            </Link>
+          </div>
+          {member.members && member.members.length > 0 ? <Downline people={member.members} /> : null}
+          <EmployeeTerritory employees={member.employees} />
+        </div>
+      ))}
+    </div>
+  )
 }
 
 function StatusLine({ label, counts }: { label: string; counts?: Record<string, number> }) {
@@ -273,24 +365,8 @@ export default function HierarchyDashboard({
                   <span>{report.metrics?.sales || 0} sales</span>
                   <span>{report.metrics?.leaves || 0} leaves</span>
                 </div>
-                {report.members && report.members.length > 0 ? (
-                  <div className="border-t border-neutral-100 pt-3 space-y-2">
-                    {report.members.map((member) => (
-                      <div key={member._id} className="flex items-center justify-between gap-2 text-sm">
-                        <div>
-                          <div className="font-medium text-neutral-800">{member.name}</div>
-                          <div className="text-neutral-500">
-                            {member.metrics?.employees || 0} employees · {member.metrics?.leads || 0} leads ·{' '}
-                            {member.metrics?.dcs || 0} DCs · {member.metrics?.sales || 0} sales
-                          </div>
-                        </div>
-                        <Link href={reportHref(member.kind, member._id)} className="text-blue-700 shrink-0">
-                          View
-                        </Link>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
+                <Downline people={report.members} />
+                <EmployeeTerritory employees={report.employees} />
               </Card>
             ))}
           </div>

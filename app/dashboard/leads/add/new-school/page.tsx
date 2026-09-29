@@ -70,8 +70,10 @@ export default function NewSchoolPage() {
     average_fee: '',
     follow_up_date: '',
     cluster_code: '',
+    assigned_to: '',
   })
-  const isSuperAdmin = currentUser?.role === 'Super Admin'
+  const isSuperAdmin = currentUser?.role === 'Super Admin' || Boolean(currentUser?.isSuperAdmin)
+  const [bdeOptions, setBdeOptions] = useState<{ _id: string; name: string; zone?: string; cluster?: string }[]>([])
   const [clustersForZone, setClustersForZone] = useState<string[]>([])
   const [geocoding, setGeocoding] = useState(false)
   
@@ -96,9 +98,39 @@ export default function NewSchoolPage() {
     }
   }, [availableProducts])
 
+  useEffect(() => {
+    if (!isSuperAdmin) return
+    const roles = ['Executive', 'Sales BDE', 'Employee']
+    Promise.all(
+      roles.map((role) =>
+        apiRequest<any[]>(`/employees?isActive=true&role=${encodeURIComponent(role)}`).catch(() => [])
+      )
+    ).then((batches) => {
+      const seen = new Set<string>()
+      const list: { _id: string; name: string; zone?: string; cluster?: string }[] = []
+      for (const batch of batches) {
+        for (const user of Array.isArray(batch) ? batch : []) {
+          const id = String(user?._id || user?.id || '')
+          const name = String(user?.name || '').trim()
+          if (!id || !name || seen.has(id)) continue
+          seen.add(id)
+          list.push({
+            _id: id,
+            name,
+            zone: user.assignedCity || user.zone || '',
+            cluster: user.cluster || '',
+          })
+        }
+      }
+      list.sort((a, b) => a.name.localeCompare(b.name))
+      setBdeOptions(list)
+    })
+  }, [isSuperAdmin])
+
   // Auto-fill zone + cluster from employee
   useEffect(() => {
     const loadUserZone = async () => {
+      if (isSuperAdmin) return
       if (currentUser?._id) {
         try {
           const userProfile = await apiRequest<{
@@ -308,6 +340,11 @@ export default function NewSchoolPage() {
     setError(null)
     
     // Validate required fields
+    if (isSuperAdmin && !form.assigned_to) {
+      setError('Select the BDE this school is assigned to')
+      setSubmitting(false)
+      return
+    }
     if (!form.contact_person?.trim()) {
       setError('School contact person name is required')
       setSubmitting(false)
@@ -347,7 +384,7 @@ export default function NewSchoolPage() {
     }
     const decisionMobileCheck = validateIndianMobile(
       form.decision_maker_mobile,
-      'Decision Maker Mobile Number'
+      'Financial contact mobile'
     )
     if (!decisionMobileCheck.ok) {
       setError(decisionMobileCheck.message)
@@ -439,7 +476,6 @@ export default function NewSchoolPage() {
         contact_person2: form.decision_maker_name || undefined,
         contact_mobile2: decisionMobileCheck.digits,
         financial_contact_designation: form.financial_contact_designation.trim(),
-        decision_maker: form.decision_maker_name || undefined,
         location: form.location || undefined,
         address: form.address || undefined,
         pincode: form.pincode || undefined,
@@ -461,7 +497,7 @@ export default function NewSchoolPage() {
         email: form.email,
         products: productsPayload,
         follow_up_date: toFollowUpDatePayload(form.follow_up_date),
-        assigned_to: currentUser?._id,
+        assigned_to: isSuperAdmin ? form.assigned_to : currentUser?._id,
         cluster_code: form.cluster || form.cluster_code || undefined,
       }
       
@@ -501,6 +537,33 @@ export default function NewSchoolPage() {
 
       <Card className="p-4 md:p-6 bg-neutral-50 border border-neutral-200 text-neutral-900">
         <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {isSuperAdmin && (
+            <div>
+              <Label>Assign to (BDE) *</Label>
+              <Select
+                value={form.assigned_to || undefined}
+                onValueChange={(v) => {
+                  const employee = bdeOptions.find((option) => option._id === v)
+                  setForm((f) => ({
+                    ...f,
+                    assigned_to: v,
+                    zone: employee?.zone || f.zone,
+                    cluster: employee?.cluster || f.cluster,
+                    cluster_code: employee?.cluster || f.cluster_code,
+                  }))
+                }}
+              >
+                <SelectTrigger className="bg-white text-neutral-900">
+                  <SelectValue placeholder={bdeOptions.length === 0 ? 'No BDEs found' : 'Select BDE'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {bdeOptions.map((employee) => (
+                    <SelectItem key={employee._id} value={employee._id}>{employee.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div>
             <Label>School name *</Label>
             <Input className="bg-white text-neutral-900" name="school_name" value={form.school_name} onChange={onChange} required />

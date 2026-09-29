@@ -93,15 +93,15 @@ export function isFollowUpProductLineComplete(row: LeadProductInterestedRow): bo
     return Boolean(String(row.not_interested_reason || '').trim())
   }
 
+  if (row.status !== 'Hot' && row.status !== 'Warm') return true
+
   const unitPrice = Number(row.unit_price) || 0
   if (unitPrice <= 0) return false
 
   const strength = Number(row.strength) || 0
   const chance = Number(row.chance) || 0
-  if (row.status === 'Hot' || row.status === 'Warm') {
-    if (strength <= 0 || chance <= 0) return false
-    if (row.status === 'Hot' && chance < 80) return false
-    if (row.status === 'Warm' && chance < 20) return false
-  }
+  if (strength <= 0 || chance <= 0) return false
+  if (row.status === 'Hot' && chance < 80) return false
+  if (row.status === 'Warm' && chance < 20) return false
   return true
 }

@@ -269,7 +269,7 @@ export default function EditLeadPage() {
           contact_person: lead.contact_person || '',
           contact_mobile: lead.contact_mobile || '',
           email: lead.email || '',
-          decision_maker_name: lead.decision_maker || lead.contact_person2 || '',
+          decision_maker_name: lead.contact_person2 || lead.decision_maker || '',
           decision_maker_mobile: lead.contact_mobile2 || '',
           location: lead.location || '',
           city: lead.city || '',
@@ -413,7 +413,8 @@ export default function EditLeadPage() {
     updated[index].status = status
     if (status !== 'Hot' && status !== 'Warm') {
       updated[index].strength = ''
-      updated[index].chance = ''
+      updated[index].unit_price = ''
+      updated[index].chance = status === 'Not Interested' ? '0' : ''
     }
     if (status !== 'Not Interested') {
       updated[index].not_interested_reason = ''
@@ -556,9 +557,8 @@ export default function EditLeadPage() {
         school_type: form.school_type || undefined,
         contact_person: form.contact_person,
         contact_mobile: form.contact_mobile,
-        contact_person2: form.decision_maker_name || undefined, // Mapped for backend compatibility
-        contact_mobile2: form.decision_maker_mobile || undefined, // Mapped for backend compatibility
-        decision_maker: form.decision_maker_name || undefined,
+        contact_person2: form.decision_maker_name || undefined,
+        contact_mobile2: form.decision_maker_mobile || undefined,
         location: form.location, // Landmark
         address: form.address || undefined,
         pincode: form.pincode || undefined,
@@ -585,12 +585,12 @@ export default function EditLeadPage() {
       
       // Validate required fields
       if (!form.decision_maker_name || !form.decision_maker_name.trim()) {
-        setError('Decision Maker Name is required')
+        setError('Financial contact person name is required')
         setSubmitting(false)
         return
       }
       if (!form.decision_maker_mobile || !form.decision_maker_mobile.trim()) {
-        setError('Decision Maker Mobile Number is required')
+        setError('Financial contact mobile is required')
         setSubmitting(false)
         return
       }
@@ -691,11 +691,11 @@ export default function EditLeadPage() {
             <Input className="bg-white text-neutral-900" type="email" name="email" value={form.email} onChange={onChange} />
           </div>
           <div>
-            <Label>Decision Maker Name *</Label>
+            <Label>Financial contact person *</Label>
             <Input className="bg-white text-neutral-900" name="decision_maker_name" value={form.decision_maker_name} onChange={onChange} required />
           </div>
           <div>
-            <Label>Decision Maker Mobile Number *</Label>
+            <Label>Financial contact mobile *</Label>
             <Input className="bg-white text-neutral-900" name="decision_maker_mobile" value={form.decision_maker_mobile} onChange={onChange} inputMode="numeric" maxLength={15} placeholder="10 to 15 digits" required />
           </div>
           <div>
@@ -848,7 +848,7 @@ export default function EditLeadPage() {
                                 <Input
                                   type="text"
                                   inputMode="decimal"
-                                  disabled={product.status === 'Not Interested'}
+                                  disabled={!isHotOrWarm}
                                   className="h-11 bg-white text-neutral-900 border-neutral-300"
                                   placeholder="₹"
                                   value={product.unit_price}

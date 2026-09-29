@@ -1094,7 +1094,7 @@ export function Sidebar() {
     finalNav = applyExecutiveSidebarOrder(finalNav)
   }
 
-  // Super Admin: hide operational Leads menu (Add/Renewal/Followup). Keep Reports → Leads.
+  // Super Admin keeps BDE lead work: Add Lead and Followup Leads.
   // Also remove Executive Managers section and place Assign Managers under Users / Employees.
   // Remove Samples. Bottom order: Reports → Products → Vendor → Settings → Sign out.
   // Keep Clients → All Created DCs (Create Sale lands there after Deal + DC).
@@ -1109,15 +1109,26 @@ export function Sidebar() {
     })
   }
   if (isSuperAdminNav) {
-    finalNav = finalNav.filter((item) => {
-      if (item.label === 'Samples' || item.label === 'Employee Sample') return false
-      if (item.label !== 'Leads') return true
-      const children = item.children || []
-      const isOperationalLeads =
-        children.length > 0 &&
-        children.every((c) => (c.href || '').startsWith('/dashboard/leads'))
-      return !isOperationalLeads
-    })
+    finalNav = finalNav.filter((item) => item.label !== 'Samples' && item.label !== 'Employee Sample')
+    const hasFollowup = finalNav.some((item) =>
+      item.children?.some((child) => child.href === '/dashboard/leads/followup')
+    )
+    if (!hasFollowup) {
+      const leadsItem: NavItem = {
+        label: 'Leads',
+        icon: TrendingUp,
+        children: [
+          { label: 'Add Lead', href: '/dashboard/leads/add', icon: PlusCircle },
+          { label: 'Followup Leads', href: '/dashboard/leads/followup', icon: Phone },
+        ],
+      }
+      const dashboardIndex = finalNav.findIndex((item) => item.label === 'Dashboard' || item.href === '/dashboard')
+      finalNav = [
+        ...finalNav.slice(0, dashboardIndex + 1),
+        leadsItem,
+        ...finalNav.slice(dashboardIndex + 1),
+      ]
+    }
     finalNav = applySuperAdminTrainingNav(finalNav)
     finalNav = applySuperAdminExecutiveManagersNav(finalNav)
     finalNav = applyVendorSectionNav(finalNav)
