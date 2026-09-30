@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { usePermissions } from '@/components/permissions/PermissionsProvider'
 import { toast } from 'sonner'
+import { formatEmployeeCode } from '@/lib/employeeCode'
 
 type RequestRow = {
   _id: string
@@ -88,7 +89,7 @@ export default function EmployeeRequestsPage() {
             <tbody>
               {rows.map((row) => (
                 <tr key={row._id} className="border-t">
-                  <td className="py-2 px-3">{row.empCode || '—'}</td>
+                  <td className="py-2 px-3">{formatEmployeeCode(row.empCode)}</td>
                   <td className="py-2 px-3">{row.name || '—'}</td>
                   <td className="py-2 px-3">{row.email || '—'}</td>
                   <td className="py-2 px-3">{row.role || '—'}</td>

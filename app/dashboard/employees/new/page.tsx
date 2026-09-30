@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { apiRequest } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
@@ -42,6 +43,7 @@ export default function NewEmployeePage() {
     password: '',
     phone: '',
     mobile: '',
+    hasEmployeeRelationship: null as boolean | null,
     dateOfBirth: '',
     dateOfJoining: '',
     passportPhotoUrl: '',
@@ -384,7 +386,7 @@ export default function NewEmployeePage() {
       const identityCheck = validateEmployeeIdentityFields({
         firstName: form.firstName,
         lastName: form.lastName,
-        empCode: form.empCode || '0001',
+        empCode: form.empCode || 'VESPL0001',
       })
       if (!identityCheck.ok) {
         setIdentityErrors(identityCheck.errors)
@@ -435,6 +437,11 @@ export default function NewEmployeePage() {
         const message = 'Official contact number and personal mobile number cannot be the same.'
         setPhoneError(message)
         setError(message)
+        setSubmitting(false)
+        return
+      }
+      if (form.hasEmployeeRelationship === null) {
+        setError('Select Yes or No for the employee relationship declaration')
         setSubmitting(false)
         return
       }
@@ -635,7 +642,6 @@ export default function NewEmployeePage() {
           </div>
           <div>
             <Label>Emp ID</Label>
-            <p className="text-xs text-neutral-500 mb-1">VESPL (code)</p>
             <Input
               className="bg-neutral-100 text-neutral-900"
               name="empCode"
@@ -751,6 +757,43 @@ export default function NewEmployeePage() {
               <p className="text-xs text-red-600 mt-1">{mobileError}</p>
             )}
           </div>
+          <fieldset className="md:col-span-2 rounded-lg border border-neutral-200 bg-white p-4">
+            <legend className="px-1 text-base font-semibold text-neutral-900">
+              Employee Relationship Declaration *
+            </legend>
+            <p className="mt-1 text-sm text-neutral-700">
+              Do you have any relatives, family members, or personal connections currently employed by Viswam EduTech Solutions Pvt. Ltd.?
+            </p>
+            <RadioGroup
+              className="mt-4 flex flex-wrap gap-6"
+              value={
+                form.hasEmployeeRelationship === null
+                  ? undefined
+                  : form.hasEmployeeRelationship
+                    ? 'yes'
+                    : 'no'
+              }
+              onValueChange={(value) =>
+                setForm((current) => ({
+                  ...current,
+                  hasEmployeeRelationship: value === 'yes',
+                }))
+              }
+            >
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="yes" id="employee-relationship-yes" />
+                <Label htmlFor="employee-relationship-yes" className="cursor-pointer font-normal">
+                  Yes
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="no" id="employee-relationship-no" />
+                <Label htmlFor="employee-relationship-no" className="cursor-pointer font-normal">
+                  No
+                </Label>
+              </div>
+            </RadioGroup>
+          </fieldset>
           <div className="md:col-span-2">
             <Label>Permanent address *</Label>
             <Textarea

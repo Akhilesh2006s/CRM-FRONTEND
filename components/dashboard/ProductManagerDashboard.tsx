@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { apiRequest } from '@/lib/api'
+import { formatEmployeeCode } from '@/lib/employeeCode'
 
 type Product = { _id: string; name: string; levels?: string[] }
 type School = {
@@ -244,7 +245,7 @@ export default function ProductManagerDashboard({ managerId }: { managerId: stri
                   <div className="font-medium">{bde.name}</div>
                   <div className="text-sm text-neutral-500">{bde.email}{bde.phone ? ` · ${bde.phone}` : ''}</div>
                 </div>
-                <div className="text-sm text-neutral-500">{bde.isActive ? 'Active' : 'Inactive'}{bde.empCode ? ` · ${bde.empCode}` : ''}</div>
+                <div className="text-sm text-neutral-500">{bde.isActive ? 'Active' : 'Inactive'}{bde.empCode ? ` · ${formatEmployeeCode(bde.empCode)}` : ''}</div>
               </div>
               <div className="mt-2 text-sm text-neutral-600">
                 {[bde.zone, bde.cluster, bde.city, bde.state, bde.department].filter(Boolean).join(' · ') || 'No area on file'}

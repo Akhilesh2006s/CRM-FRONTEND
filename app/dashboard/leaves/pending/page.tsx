@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { leaveTypeLabel } from '@/lib/leaveTypes'
+import { formatEmployeeCode } from '@/lib/employeeCode'
 
 type Leave = {
   _id: string
@@ -174,7 +175,7 @@ export default function AdminPendingLeavesPage() {
               )}
               {items.map((l) => (
                 <tr key={l._id} className="border-b last:border-0">
-                  <td className="py-2 px-3">{typeof l.employeeId === 'object' && l.employeeId ? l.employeeId.empCode || '—' : '—'}</td>
+                  <td className="py-2 px-3">{formatEmployeeCode(typeof l.employeeId === 'object' && l.employeeId ? l.employeeId.empCode : undefined)}</td>
                   <td className="py-2 px-3">{getEmployeeName(l)}</td>
                   {!isExecutiveManager && (
                     <td className="py-2 px-3 text-sm text-neutral-600">{getManagerName(l)}</td>

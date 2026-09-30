@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { apiRequest } from '@/lib/api'
+import { formatEmployeeCode } from '@/lib/employeeCode'
 
 type Leave = {
   _id: string
@@ -61,7 +62,7 @@ export default function PendingLeavesPage() {
           <tbody>
             {!loading && filtered.map((l) => (
               <tr key={l._id} className="border-b last:border-0">
-                <td className="py-2 px-3">{typeof l.employeeId === 'string' ? '-' : (l.employeeId?.empCode || '-')}</td>
+                <td className="py-2 px-3">{formatEmployeeCode(typeof l.employeeId === 'string' ? undefined : l.employeeId?.empCode, '-')}</td>
                 <td className="py-2 px-3">{typeof l.employeeId === 'string' ? l.employeeId : l.employeeId?.name}</td>
                 <td className="py-2 px-3">{l.reason || '-'}</td>
                 <td className="py-2 px-3 text-center">{new Date(l.startDate).toLocaleDateString()}</td>

@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
+import { formatEmployeeCode } from '@/lib/employeeCode'
 
 type Employee = {
   _id: string
@@ -90,7 +91,7 @@ export default function SalaryPage() {
             <tbody>
               {rows.map((row) => (
                 <tr key={row._id} className="border-t">
-                  <td className="py-2 px-3">{row.empCode || '—'}</td>
+                  <td className="py-2 px-3">{formatEmployeeCode(row.empCode)}</td>
                   <td className="py-2 px-3">
                     <div className="font-medium">{row.name || '—'}</div>
                     <div className="text-xs text-neutral-500">{row.email}</div>

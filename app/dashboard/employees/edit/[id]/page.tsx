@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { apiRequest } from '@/lib/api'
 import { displayRoleName } from '@/lib/roleLabels'
+import { formatEmployeeCode } from '@/lib/employeeCode'
 import {
   filterTagOptions,
   getTaggingSectionLabel,
@@ -104,7 +105,7 @@ export default function EditEmployeePage() {
         setForm({
           firstName,
           lastName,
-          empCode: emp.empCode || '',
+          empCode: emp.empCode ? formatEmployeeCode(emp.empCode, '') : '',
           email: emp.email || '',
           phone: emp.phone && emp.phone !== '0' ? emp.phone : '',
           mobile: emp.mobile || emp.phone || '',

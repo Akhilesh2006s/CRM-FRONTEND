@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { apiRequest } from '@/lib/api'
 import { displayRoleName } from '@/lib/roleLabels'
+import { formatEmployeeCode } from '@/lib/employeeCode'
 
 type RosterRow = {
   _id: string
@@ -67,7 +68,7 @@ export default function AttendanceRosterPage() {
                 const employee = typeof row.employeeId === 'object' && row.employeeId ? row.employeeId : null
                 return (
                   <tr key={row._id} className="border-t">
-                    <td className="py-2 px-3">{employee?.empCode || '—'}</td>
+                    <td className="py-2 px-3">{formatEmployeeCode(employee?.empCode)}</td>
                     <td className="py-2 px-3">{employee?.name || '—'}</td>
                     <td className="py-2 px-3">{employee?.role ? displayRoleName(employee.role) : '—'}</td>
                     <td className="py-2 px-3">{employee?.zone || '—'}</td>

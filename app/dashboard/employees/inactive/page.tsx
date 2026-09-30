@@ -12,6 +12,7 @@ import { toast } from 'sonner'
 import { Pencil } from 'lucide-react'
 import { displayRoleName } from '@/lib/roleLabels'
 import { sanitizePhoneInput, validateStrictIndianMobile } from '@/lib/phone'
+import { formatEmployeeCode } from '@/lib/employeeCode'
 
 type Employee = {
   _id: string
@@ -147,7 +148,7 @@ export default function InactiveEmployeesPage() {
             {!loading &&
               filtered.map((e) => (
                 <tr key={e._id} className="border-b last:border-0">
-                  <td className="py-2 px-3">{e.empCode || '-'}</td>
+                  <td className="py-2 px-3">{formatEmployeeCode(e.empCode, '-')}</td>
                   <td className="py-2 px-3">{e.seatVacant ? 'Vacant' : e.name}</td>
                   <td className="py-2 px-3">{e.email}</td>
                   <td className="py-2 px-3 text-center">{displayMobile(e)}</td>

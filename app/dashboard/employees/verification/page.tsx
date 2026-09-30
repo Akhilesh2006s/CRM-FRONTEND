@@ -8,6 +8,7 @@ import { apiRequest, resolveUploadUrl } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
 import { displayRoleName } from '@/lib/roleLabels'
 import { toast } from 'sonner'
+import { formatEmployeeCode } from '@/lib/employeeCode'
 
 type Approval = {
   roleKey: string
@@ -137,7 +138,7 @@ export default function EmployeeVerificationPage() {
           >
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
-                <h2 className="text-lg font-semibold">{emp.empCode ? `${emp.empCode} · ${emp.name}` : emp.name}</h2>
+                <h2 className="text-lg font-semibold">{emp.empCode ? `${formatEmployeeCode(emp.empCode)} · ${emp.name}` : emp.name}</h2>
                 <p className="text-sm text-neutral-600">
                   {displayRoleName(emp.role)} · {emp.email}
                   {emp.zone ? ` · Zone: ${emp.zone}` : ''}

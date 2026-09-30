@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { leaveTypeLabel } from '@/lib/leaveTypes'
+import { formatEmployeeCode } from '@/lib/employeeCode'
 
 type Leave = {
   _id: string
@@ -119,7 +120,7 @@ export default function LeavesReportPage() {
     return typeof l.employeeId === 'string' ? l.employeeId : l.employeeId?.name || 'Unknown'
   }
 
-  const employeeCode = (l: Leave) => employeeRecord(l)?.empCode?.trim() || '—'
+  const employeeCode = (l: Leave) => formatEmployeeCode(employeeRecord(l)?.empCode)
 
   const designationOf = (l: Leave) => {
     const person = employeeRecord(l)

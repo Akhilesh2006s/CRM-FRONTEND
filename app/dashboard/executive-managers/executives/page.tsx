@@ -5,6 +5,7 @@ import { apiRequest } from '@/lib/api'
 import { Card } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { toast } from 'sonner'
+import { formatEmployeeCode } from '@/lib/employeeCode'
 
 type Executive = {
   _id: string
@@ -100,7 +101,7 @@ export default function ExecutivesPage() {
                   <TableCell>{executive.email}</TableCell>
                   <TableCell>{executive.phone || '-'}</TableCell>
                   <TableCell>{executive.mobile || '-'}</TableCell>
-                  <TableCell>{executive.empCode || '-'}</TableCell>
+                  <TableCell>{formatEmployeeCode(executive.empCode, '-')}</TableCell>
                   <TableCell>{executive.department || '-'}</TableCell>
                   <TableCell>{executive.assignedState || '-'}</TableCell>
                   <TableCell>{executive.assignedCity || '-'}</TableCell>
