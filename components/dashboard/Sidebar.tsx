@@ -543,13 +543,14 @@ function applyExecutiveSidebarOrder(nav: NavItem[]): NavItem[] {
     byLabel.delete('My Leaves')
   }
 
-  // Executive Clients: only My Clients + Term-Wise DC (no Create Sale / Closed Sales / etc.)
+  // Executive Clients: client work, including renewals (no Create Sale / Closed Sales / etc.)
   byLabel.set('Clients', {
     label: 'Clients',
     icon: Users,
     children: [
       { label: 'My Clients', href: '/dashboard/dc/client-dc', icon: Users },
       { label: 'Create DC / Main DCs', href: '/dashboard/dc/grid', icon: PlusCircle },
+      { label: 'Renewal', href: '/dashboard/leads/renewal', icon: RefreshCw },
       { label: 'Term-Wise DC', href: '/dashboard/dc/client-dc/term-wise', icon: FileText },
     ],
   })
@@ -743,6 +744,7 @@ export function Sidebar() {
         icon: Users,
         children: [
           { label: 'My Clients', href: '/dashboard/dc/client-dc', icon: Users },
+          { label: 'Renewal', href: '/dashboard/leads/renewal', icon: RefreshCw },
           { label: 'Term-Wise DC', href: '/dashboard/dc/client-dc/term-wise', icon: FileText },
         ],
       },

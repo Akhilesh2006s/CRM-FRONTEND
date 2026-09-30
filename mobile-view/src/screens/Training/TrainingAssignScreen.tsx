@@ -409,7 +409,7 @@ export default function TrainingAssignScreen({ navigation }: any) {
         a.click();
         URL.revokeObjectURL(url);
         Alert.alert('Export complete', 'CSV downloaded.');
-        return;
+      return;
       }
 
       const dir = documentDirectory;
@@ -467,9 +467,9 @@ export default function TrainingAssignScreen({ navigation }: any) {
       });
       const d = new Date(latest.completionDate || latest.trainingDate || latest.serviceDate || '');
       const dateStr = d.toLocaleDateString('en-IN', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
       });
       const extra = [latest.subject, latest.term].filter(Boolean).join(' · ');
       setLastScheduleLabel(extra ? `${dateStr} (${extra})` : dateStr);
@@ -586,10 +586,10 @@ export default function TrainingAssignScreen({ navigation }: any) {
         </TouchableOpacity>
       }
     >
-      <ScrollView
+        <ScrollView
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
-        keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -601,9 +601,9 @@ export default function TrainingAssignScreen({ navigation }: any) {
         }
       >
         {successMessage ? (
-          <MessageBanner
-            type="success"
-            message={successMessage}
+            <MessageBanner
+              type="success"
+              message={successMessage}
             onDismiss={() => setSuccessMessage(null)}
             actionLabel="View list"
             onAction={() =>
@@ -805,10 +805,10 @@ export default function TrainingAssignScreen({ navigation }: any) {
                 value={assignForm.remarks}
                 onChangeText={(v) => setAssignForm((f) => ({ ...f, remarks: v }))}
                 placeholder="Optional notes"
-                multiline
+            multiline
                 style={{ minHeight: 72, textAlignVertical: 'top' }}
-              />
-            </ScrollView>
+          />
+        </ScrollView>
             <View style={styles.modalFooter}>
               <WebButton title="Cancel" variant="outline" onPress={() => setAssignOpen(false)} disabled={submitting} />
               <WebButton
@@ -816,10 +816,10 @@ export default function TrainingAssignScreen({ navigation }: any) {
                 onPress={submitAssign}
                 loading={submitting}
               />
-            </View>
+      </View>
           </View>
-        </View>
-      </Modal>
+          </View>
+        </Modal>
     </ScreenShell>
   );
 }

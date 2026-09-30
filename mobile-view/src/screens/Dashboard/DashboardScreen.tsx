@@ -229,7 +229,7 @@ export default function DashboardScreen({ navigation }: { navigation?: any }) {
           {showAttendance ? (
             <View style={styles.block}>
               <AttendanceCard />
-            </View>
+              </View>
           ) : null}
 
           {flags.isAdmin ? (
@@ -256,7 +256,7 @@ export default function DashboardScreen({ navigation }: { navigation?: any }) {
               <Text style={styles.sectionHeading}>Quick actions</Text>
               <View style={styles.quickRow}>
                 {EM_QUICK.map((q) => (
-                  <TouchableOpacity
+        <TouchableOpacity
                     key={q.screen}
                     style={[styles.quickCard, { backgroundColor: q.bg }]}
                     onPress={() =>
@@ -271,9 +271,9 @@ export default function DashboardScreen({ navigation }: { navigation?: any }) {
                     <PremiumIcon name={q.ion} color={q.color} bg="#FFFFFF" size={20} />
                     <Text style={styles.quickLabel}>{q.label}</Text>
                     <Ionicons name="chevron-forward" size={16} color={q.color} style={styles.quickChevron} />
-                  </TouchableOpacity>
+        </TouchableOpacity>
                 ))}
-              </View>
+            </View>
             </>
           ) : null}
 
@@ -297,7 +297,7 @@ export default function DashboardScreen({ navigation }: { navigation?: any }) {
                 <Text style={styles.leaveSub}>View leave history</Text>
                 <Ionicons name="chevron-forward" size={18} color="#0D9488" style={styles.cardChevron} />
         </TouchableOpacity>
-            </View>
+      </View>
           ) : null}
 
           <Text style={styles.sectionHeading}>Overview</Text>
@@ -391,7 +391,7 @@ export default function DashboardScreen({ navigation }: { navigation?: any }) {
             />
           ) : null}
 
-        <TouchableOpacity
+          <TouchableOpacity 
             style={styles.workCta}
             onPress={() => navigation?.navigate?.('Menu')}
           >
@@ -400,9 +400,9 @@ export default function DashboardScreen({ navigation }: { navigation?: any }) {
               <View style={styles.workCtaText}>
                 <Text style={styles.workCtaTitle}>Open Menu</Text>
                 <Text style={styles.workCtaSub}>All modules (Leads, DC, Warehouse, Reports…)</Text>
-              </View>
+            </View>
               <Ionicons name="chevron-forward" size={22} color="#FFFFFF" />
-              </View>
+        </View>
         </TouchableOpacity>
       </ScrollView>
       )}
