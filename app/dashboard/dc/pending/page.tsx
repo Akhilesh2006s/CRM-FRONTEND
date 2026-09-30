@@ -110,6 +110,8 @@ type DC = {
   adminReviewedAt?: string
   sentToManagerAt?: string
   createdAt?: string
+  zonalApprovalStatus?: 'pending' | 'approved'
+  zonalApprovedAt?: string
 }
 
 type ProductRow = {
@@ -146,11 +148,10 @@ export default function PendingDCPage() {
   const [saving, setSaving] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   
-  // Get current user to check role
   const currentUser = getCurrentUser()
-  const isCoordinator = currentUser?.role === 'Coordinator'
-  const isSeniorCoordinator = currentUser?.role === 'Senior Coordinator'
-  const isAdmin = currentUser?.role === 'Admin' || currentUser?.role === 'Super Admin'
+  const isExecutiveManager = currentUser?.role === 'Executive Manager'
+  const isSuperAdmin = currentUser?.role === 'Super Admin' || currentUser?.isSuperAdmin
+  const canSubmitToWarehouse = isExecutiveManager || isSuperAdmin
   
   // DC Details form fields
   const [financeRemarks, setFinanceRemarks] = useState('')
@@ -1301,7 +1302,7 @@ export default function PendingDCPage() {
               >
                 {saving ? 'Saving...' : 'Save'}
               </Button>
-              {(isSeniorCoordinator || isAdmin) && (
+              {canSubmitToWarehouse && (
                 <Button
                   className="bg-red-600 hover:bg-red-700 text-white"
                   onClick={handleSubmitToWarehouse}

@@ -253,6 +253,7 @@ export default function EditExpensePage() {
               <Input
                 id="date"
                 type="date"
+                allowPastDates
                 value={form.date}
                 onChange={(e) => setForm({ ...form, date: e.target.value })}
                 required

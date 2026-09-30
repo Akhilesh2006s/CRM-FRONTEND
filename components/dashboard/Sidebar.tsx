@@ -916,6 +916,7 @@ export function Sidebar() {
         label: 'Clients',
         icon: Truck,
         children: [
+          { label: 'Pending DC', href: '/dashboard/dc/pending', icon: Clock },
           { label: 'PO Edit Request', href: '/dashboard/clients/closed-sales', icon: CheckCircle2 },
         ],
       },

@@ -194,12 +194,16 @@ export async function apiRequest<T>(
         const data = await res.json();
         message = data?.error || data?.message || message;
         details = data?.details || null;
+        if (Array.isArray(data?.shortages)) {
+          details = data.shortages;
+        }
       } catch (_) {}
 
-      const errorMessage = details ? `${message}\n\n${details}` : message;
+      const errorMessage = details && !Array.isArray(details) ? `${message}\n\n${details}` : message;
       const error = new Error(errorMessage);
       (error as any).status = res.status;
       (error as any).details = details;
+      if (Array.isArray(details)) (error as any).shortages = details;
       throw error;
     }
 

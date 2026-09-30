@@ -193,6 +193,11 @@ export default function ClosedSalesPage() {
   const [selectedDeal, setSelectedDeal] = useState<DcOrder | null>(null)
   const [openRaiseDCDialog, setOpenRaiseDCDialog] = useState(false)
   const [openLocationDialog, setOpenLocationDialog] = useState(false)
+  const [stockSlip, setStockSlip] = useState<{
+    message: string
+    school: string
+    shortages: Array<{ label?: string; requiredQty?: number; availableQty?: number; shortQty?: number }>
+  } | null>(null)
   const [openPOPhotoDialog, setOpenPOPhotoDialog] = useState(false)
   const [selectedPOPhotoUrl, setSelectedPOPhotoUrl] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -218,10 +223,9 @@ export default function ClosedSalesPage() {
   const isSuperAdmin = checkIsSuperAdmin(currentUser as any)
   const isCoordinator = currentUser?.role === 'Coordinator'
   const isEmployee = currentUser?.role === 'Executive'
-  const isAdmin = currentUser?.role === 'Admin'
-  // Employees can request DC, Coordinators/Admins can approve or send to senior
+  // BDE requests the DC. Coordinator accepts it into Pending DC. Super Admin can do the same.
   const canRequestDC = isEmployee
-  const canApproveDC = isSuperAdmin || isCoordinator || isAdmin
+  const canApproveDC = isSuperAdmin || isCoordinator
   // This Closed Sales form only: Contact Person 2 + Contact Mobile 2 are mandatory
   // (does not affect Create Sale or other pages).
   const requireContact2 = true
@@ -1179,7 +1183,7 @@ export default function ClosedSalesPage() {
         }),
       })
 
-      alert('DC request submitted successfully! Coordinator/Admin will review and approve it.')
+      alert('DC request submitted successfully! The Coordinator will review and accept it.')
       setOpenRaiseDCDialog(false)
       // Reload to refresh the list
       load()
@@ -1190,153 +1194,7 @@ export default function ClosedSalesPage() {
     }
   }
 
-  // Coordinator/Admin accepts DC request and creates/updates DC (but keeps it in Closed Sales for later updates)
-  const handleAcceptDC = async () => {
-    if (!selectedDeal) return
-
-    if (!validateDcDetailsFields()) {
-      return
-    }
-
-    setSaving(true)
-    try {
-      // Get DC request data from DcOrder (or use current form data if it's an accepted request being updated)
-      const dcRequestData = (selectedDeal as any).dcRequestData || {}
-      
-      // Use current form values (already validated) — do not fall back to empty request data
-      const finalDcDate = String(dcDate).trim()
-      const finalDcRemarks = dcRemarks.trim() || undefined
-      const finalDcCategory = String(dcCategory).trim()
-      const finalDcNotes = dcNotes || dcRequestData.dcNotes || undefined
-      
-      // Determine product details: form rows first, then latest PO snapshot (incl. pending add).
-      let finalProductDetails: any[] = []
-      if (productRows.length > 0) {
-        finalProductDetails = productRows.map(row => ({
-        product: row.product,
-        class: row.class,
-        category: row.category,
-        productCategory: row.productCategory || undefined,
-        productName: row.productName || row.product || '',
-        specs: row.specs || 'Regular',
-        subject: row.subject || undefined,
-          strength: Number(row.strength) || 0,
-          quantity: Number(row.quantity) || 0,
-          level: row.level && String(row.level).trim() !== '-' ? String(row.level).trim() : '',
-          term: row.term || 'Term 1',
-          unit_price: Number(row.unit_price) || Number(row.price) || 0,
-          price: Number(row.unit_price) || Number(row.price) || 0,
-          total:
-            (Number(row.quantity) || 0) *
-            (Number(row.unit_price) || Number(row.price) || 0),
-          closeLeadDestination: CLOSE_LEAD_DESTINATION.MY_CLIENT,
-        }))
-      } else {
-        const fallbackLines = resolveClosedSalesProductLines(
-          selectedDeal,
-          isTermWiseDcRecord(existingDC) ? undefined : existingDC
-        )
-        if (fallbackLines.length > 0) {
-          finalProductDetails = fallbackLines.map((p: any) => ({
-            product: p.product_name || p.product || p.productName || 'Abacus',
-            class: p.class || '1',
-            category: p.category || (selectedDeal?.school_type === 'Existing' ? 'Old Students' : 'new Students'),
-            productCategory: p.productCategory || undefined,
-            productName: p.product_name || p.product || p.productName || 'Abacus',
-            specs: p.specs || 'Regular',
-            subject: p.subject || undefined,
-            strength: Number(p.strength) || Number(p.quantity) || 0,
-            quantity: Number(p.quantity) || Number(p.strength) || 0,
-            level: p.level && String(p.level).trim() !== '-' ? String(p.level).trim() : '',
-            term: p.term || 'Term 1',
-            unit_price: Number(p.unit_price) || Number(p.price) || 0,
-            price: Number(p.unit_price) || Number(p.price) || 0,
-            total:
-              (Number(p.quantity) || Number(p.strength) || 0) *
-              (Number(p.unit_price) || Number(p.price) || 0),
-            closeLeadDestination: CLOSE_LEAD_DESTINATION.MY_CLIENT,
-          }))
-        }
-      }
-      
-      const finalRequestedQuantity = finalProductDetails.length > 0
-        ? finalProductDetails.reduce((sum: number, p: any) => sum + (Number(p.quantity) || 0), 0)
-        : 1
-      
-      // Prepare payload to create/update DC.
-      // Accept must keep the sale on Closed Sales for later Update / Send to Senior.
-      // Do NOT default to pending_dc (that is only for Send to Senior / Submit to Manager).
-      const raisePayload: any = {
-        dcOrderId: selectedDeal._id,
-        dcDate: finalDcDate,
-        dcRemarks: finalDcRemarks,
-        dcCategory: finalDcCategory,
-        requestedQuantity: finalRequestedQuantity,
-        productDetails: finalProductDetails,
-        status: 'created',
-      }
-
-      // Include employeeId from request data or deal
-      if (dcRequestData.employeeId) {
-        raisePayload.employeeId = dcRequestData.employeeId
-      } else if (selectedDeal.assigned_to) {
-        const employeeId = typeof selectedDeal.assigned_to === 'object' 
-          ? selectedDeal.assigned_to._id 
-          : selectedDeal.assigned_to
-        if (employeeId) {
-          raisePayload.employeeId = employeeId
-        }
-      }
-
-      let dc: DC
-      
-      // If DC exists, update it; otherwise create new one
-      if (existingDC && !isTermWiseDcRecord(existingDC)) {
-        // Update existing My Clients DC
-        await apiRequest(`/dc/${existingDC._id}`, {
-          method: 'PUT',
-          body: JSON.stringify(raisePayload),
-        })
-        dc = existingDC
-      } else {
-        // Create new DC
-        dc = await apiRequest<DC>(`/dc/raise`, {
-          method: 'POST',
-          body: JSON.stringify(raisePayload),
-        })
-      }
-
-      // Update DcOrder to Saved DC. Do not use status `saved` — that is My Clients.
-      // Saved DC page loads GET /dc-orders?status=dc_approved. Keep DC document as `created`.
-      await apiRequest(`/dc-orders/${selectedDeal._id}`, {
-          method: 'PUT',
-          body: JSON.stringify({
-          status: 'dc_approved',
-          workflowStage: 'ClosedSales',
-          ...closedSalesContact2Payload(),
-          dcRequestData: {
-            dcDate: finalDcDate,
-            dcRemarks: finalDcRemarks,
-            dcNotes: finalDcNotes,
-            dcCategory: finalDcCategory,
-            requestedQuantity: finalRequestedQuantity,
-            productDetails: finalProductDetails,
-            employeeId: raisePayload.employeeId,
-          },
-        }),
-      })
-
-      alert('DC request accepted! It will appear in Saved DC. From there, send it to Senior Coordinator (Pending DC).')
-      setOpenRaiseDCDialog(false)
-      load()
-    } catch (e: any) {
-      alert(e?.message || 'Failed to accept DC request')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  // Coordinator/Admin sends DC request to Senior Coordinator (Pending DC)
+  // Coordinator accepts the DC from Closed Sales into Pending DC. The Zonal Manager submits it to the warehouse.
   const handleSendToSeniorCoordinator = async () => {
     if (!selectedDeal) return
 
@@ -1346,7 +1204,7 @@ export default function ClosedSalesPage() {
 
     // Validate that all product fields are filled
     if (productRows.length === 0) {
-      alert('Please add at least one product before sending to Senior Coordinator')
+      alert('Please add at least one product before accepting')
       return
     }
 
@@ -1452,11 +1310,20 @@ export default function ClosedSalesPage() {
         }),
       })
 
-      alert('DC request sent to Senior Coordinator! It will appear in Pending DC list.')
+      alert('DC accepted. It is now in Pending DC for the Zonal Manager.')
       setOpenRaiseDCDialog(false)
       load()
     } catch (e: any) {
-      alert(e?.message || 'Failed to send to Senior Coordinator')
+      const shortages = Array.isArray(e?.shortages) ? e.shortages : []
+      if (shortages.length > 0) {
+        setStockSlip({
+          message: e?.message || 'Stock is short. Restock, print, and approve before accepting this DC.',
+          school: selectedDeal?.school_name || 'School',
+          shortages,
+        })
+      } else {
+        alert(e?.message || 'Failed to accept DC')
+      }
     } finally {
       setSaving(false)
     }
@@ -1794,13 +1661,11 @@ export default function ClosedSalesPage() {
               }
             </DialogTitle>
             <DialogDescription className="text-slate-600 text-sm mt-1">
-              {selectedDeal?.status === 'dc_requested' 
-                ? 'Review DC request from employee. You can accept it (to update later) or send to Senior Coordinator.'
-                : selectedDeal?.status === 'dc_accepted'
-                ? 'Update DC details. You can save changes or submit to Senior Coordinator.'
+              {selectedDeal?.status === 'dc_requested' || selectedDeal?.status === 'dc_accepted'
+                ? 'Review the DC and accept it. It then goes to Pending DC for the Zonal Manager.'
                 : canRequestDC 
-                  ? 'Fill in DC details and submit request for Coordinator/Admin approval'
-                  : 'Fill in DC details and submit to Manager'}
+                  ? 'Fill in DC details and submit the request for the Coordinator.'
+                  : 'Fill in DC details and accept the DC into Pending DC.'}
             </DialogDescription>
           </DialogHeader>
           {selectedDeal ? (
@@ -2485,67 +2350,14 @@ export default function ClosedSalesPage() {
                     </Button>
                   )}
                   
-                  {/* Coordinator/Admin: Show "Accept" and "Send to Senior Coordinator" buttons for DC requests */}
-                  {canApproveDC && selectedDeal?.status === 'dc_requested' && (
-                    <>
-                      <Button
-                    variant="outline"
-                        className="border-green-600 text-green-700 hover:bg-green-50 shadow-sm"
-                        onClick={handleAcceptDC}
-                        disabled={saving || submitting}
-                      >
-                        {saving ? 'Processing...' : 'Accept'}
-                  </Button>
-                      <Button
-                        className="bg-slate-700 hover:bg-slate-800 text-white shadow-sm"
-                        onClick={handleSendToSeniorCoordinator}
-                        disabled={submitting || saving}
-                      >
-                        {submitting ? 'Sending...' : 'Send to Senior Coordinator'}
-                      </Button>
-                    </>
-                  )}
-                  
-                  {/* Coordinator/Admin: Show "Update" and "Send to Senior Coordinator" buttons for accepted DCs */}
-                  {canApproveDC && selectedDeal?.status === 'dc_accepted' && (
-                    <>
-                  <Button
-                    variant="default"
-                        className="!bg-blue-600 hover:!bg-blue-700 !text-white !shadow-sm !from-blue-600 !to-blue-700 hover:!from-blue-700 hover:!to-blue-800"
-                        onClick={handleAcceptDC}
-                    disabled={saving || submitting}
-                  >
-                        {saving ? 'Updating...' : 'Update DC'}
-                  </Button>
-                  <Button
-                    className="bg-slate-700 hover:bg-slate-800 text-white shadow-sm"
-                        onClick={handleSendToSeniorCoordinator}
-                    disabled={submitting || saving}
-                  >
-                        {submitting ? 'Sending...' : 'Send to Senior Coordinator'}
-                  </Button>
-                    </>
-                  )}
-                  
-                  {/* Coordinator/Admin: Show "Accept" and "Send to Senior Coordinator" buttons for other deals (not requested yet) */}
-                  {canApproveDC && selectedDeal?.status !== 'dc_requested' && selectedDeal?.status !== 'dc_accepted' && (
-                    <>
-                  <Button
-                    variant="outline"
-                        className="border-green-600 text-green-700 hover:bg-green-50 shadow-sm"
-                        onClick={handleAcceptDC}
-                    disabled={saving || submitting}
-                  >
-                        {saving ? 'Processing...' : 'Accept'}
-                  </Button>
-                  <Button
-                    className="bg-slate-700 hover:bg-slate-800 text-white shadow-sm"
-                        onClick={handleSendToSeniorCoordinator}
-                    disabled={submitting || saving}
-                  >
-                        {submitting ? 'Sending...' : 'Send to Senior Coordinator'}
-                  </Button>
-                    </>
+                  {canApproveDC && (
+                    <Button
+                      className="bg-green-700 hover:bg-green-800 text-white shadow-sm"
+                      onClick={handleSendToSeniorCoordinator}
+                      disabled={saving || submitting}
+                    >
+                      {saving ? 'Accepting...' : 'Accept'}
+                    </Button>
                   )}
                 </div>
               </DialogFooter>
@@ -2555,6 +2367,46 @@ export default function ClosedSalesPage() {
               <p>Loading deal details...</p>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!stockSlip} onOpenChange={(open) => { if (!open) setStockSlip(null) }}>
+        <DialogContent className="sm:max-w-[560px] bg-white">
+          <DialogHeader>
+            <DialogTitle>Stock is short</DialogTitle>
+            <DialogDescription>
+              {stockSlip?.school}. Inventory was not deducted. Restock these items, print this slip, and wait for Warehouse Manager approval. Then accept the DC again.
+            </DialogDescription>
+          </DialogHeader>
+          <div id="dc-stock-slip" className="space-y-2 text-sm">
+            {(stockSlip?.shortages || []).map((row, index) => (
+              <div key={`${row.label}-${index}`} className="flex justify-between gap-3 border-b py-2">
+                <span>{row.label || 'Product'}</span>
+                <span className="text-neutral-600">
+                  Need {row.requiredQty ?? 0}, available {row.availableQty ?? 0}, short {row.shortQty ?? Math.max(0, (row.requiredQty || 0) - (row.availableQty || 0))}
+                </span>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setStockSlip(null)}>Close</Button>
+            <Button
+              type="button"
+              onClick={() => {
+                const lines = (stockSlip?.shortages || [])
+                  .map((row) => `<tr><td>${row.label || 'Product'}</td><td>${row.requiredQty ?? 0}</td><td>${row.availableQty ?? 0}</td><td>${row.shortQty ?? ''}</td></tr>`)
+                  .join('')
+                const popup = window.open('', '_blank', 'noopener,noreferrer,width=720,height=640')
+                if (!popup) return
+                popup.document.write(`<html><head><title>DC restock</title></head><body><h1>Restock before DC</h1><p>${stockSlip?.school || ''}</p><table border="1" cellpadding="6"><tr><th>Product</th><th>Required</th><th>Available</th><th>Short</th></tr>${lines}</table><p>Print this slip. Warehouse Manager approval adds the stock. Accept the DC after that.</p></body></html>`)
+                popup.document.close()
+                popup.focus()
+                popup.print()
+              }}
+            >
+              Print
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

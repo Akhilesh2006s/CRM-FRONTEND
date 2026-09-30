@@ -100,6 +100,9 @@ type DC = {
   clientOperations?: {
     deliveryStatus?: string
     booksDistributed?: 'Yes' | 'No'
+    booksClientVerified?: 'Yes' | 'No'
+    booksClientVerifiedNote?: string
+    clusterPoint?: string
     programsStarted?: 'Yes' | 'No'
     programsStartedDate?: string
     trainingStatus?: 'Completed' | 'Not completed'
@@ -111,6 +114,9 @@ type DC = {
 type ClientOpsDraft = {
   deliveryStatus: 'In process' | 'DELIVERED'
   booksDistributed: '' | 'Yes' | 'No'
+  booksClientVerified: '' | 'Yes' | 'No'
+  booksClientVerifiedNote: string
+  clusterPoint: string
   programsStarted: '' | 'Yes' | 'No'
   programsStartedDate: string
   trainingStatus: '' | 'Completed' | 'Not completed'
@@ -145,6 +151,9 @@ function opsFromDc(d: DC): ClientOpsDraft {
   return {
     deliveryStatus: d.clientOperations?.deliveryStatus === 'DELIVERED' ? 'DELIVERED' : 'In process',
     booksDistributed: d.clientOperations?.booksDistributed || '',
+    booksClientVerified: d.clientOperations?.booksClientVerified || '',
+    booksClientVerifiedNote: d.clientOperations?.booksClientVerifiedNote || '',
+    clusterPoint: d.clientOperations?.clusterPoint || '',
     programsStarted: d.clientOperations?.programsStarted || '',
     programsStartedDate: dateInputValue(d.clientOperations?.programsStartedDate),
     trainingStatus: d.clientOperations?.trainingStatus || '',
@@ -1370,11 +1379,24 @@ export default function ClientDCPage() {
       toast.error('Select the date programs started')
       return
     }
+    if (d.status === 'completed') {
+      if (!ops.clusterPoint.trim()) {
+        toast.error('Enter the cluster point after the DC is completed')
+        return
+      }
+      if (ops.booksClientVerified !== 'Yes' && ops.booksClientVerified !== 'No') {
+        toast.error('Record whether the client verified that the books were given')
+        return
+      }
+    }
     setSavingOpsId(d._id)
     try {
       const clientOperations = {
         deliveryStatus: ops.deliveryStatus,
         booksDistributed: ops.booksDistributed || undefined,
+        booksClientVerified: ops.booksClientVerified || undefined,
+        booksClientVerifiedNote: ops.booksClientVerifiedNote || undefined,
+        clusterPoint: ops.clusterPoint || undefined,
         programsStarted: ops.programsStarted || undefined,
         programsStartedDate: ops.programsStarted === 'Yes' ? ops.programsStartedDate : undefined,
         trainingStatus: ops.trainingStatus || undefined,
@@ -2952,6 +2974,8 @@ export default function ClientDCPage() {
                   <TableHead className="font-bold text-neutral-700 py-4">Product</TableHead>
                   <TableHead className="font-bold text-neutral-700 py-4">Delivery status</TableHead>
                   <TableHead className="font-bold text-neutral-700 py-4">Books distributed</TableHead>
+                  <TableHead className="font-bold text-neutral-700 py-4">Cluster point</TableHead>
+                  <TableHead className="font-bold text-neutral-700 py-4">Client verified books</TableHead>
                   <TableHead className="font-bold text-neutral-700 py-4">Programs started</TableHead>
                   <TableHead className="font-bold text-neutral-700 py-4">Training</TableHead>
                   <TableHead className="font-bold text-neutral-700 py-4 min-w-[220px]">Pages completed</TableHead>
@@ -3032,6 +3056,36 @@ export default function ClientDCPage() {
                               <SelectItem value="No">No</SelectItem>
                             </SelectContent>
                           </Select>
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            className="h-8 w-[140px] bg-white text-xs"
+                            placeholder={d.status === 'completed' ? 'Required' : 'Cluster point'}
+                            value={currentOps(d).clusterPoint}
+                            onChange={(e) => patchOps(d, { clusterPoint: e.target.value })}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-2 min-w-[140px]">
+                            <Select
+                              value={currentOps(d).booksClientVerified || undefined}
+                              onValueChange={(v) => patchOps(d, { booksClientVerified: v as 'Yes' | 'No' })}
+                            >
+                              <SelectTrigger className="h-8 bg-white text-xs">
+                                <SelectValue placeholder="Client verified" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Yes">Yes</SelectItem>
+                                <SelectItem value="No">No</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Input
+                              className="h-8 bg-white text-xs"
+                              placeholder="Verification note"
+                              value={currentOps(d).booksClientVerifiedNote}
+                              onChange={(e) => patchOps(d, { booksClientVerifiedNote: e.target.value })}
+                            />
+                          </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-col gap-2 min-w-[150px]">

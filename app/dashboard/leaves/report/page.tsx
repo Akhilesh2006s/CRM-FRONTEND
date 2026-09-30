@@ -21,6 +21,9 @@ type Leave = {
   employeeId: {
     name?: string
     empCode?: string
+    role?: string
+    designation?: string
+    department?: string
     executiveManagerId?: { name?: string } | string
   } | string
   status: 'Pending' | 'Approved' | 'Rejected'
@@ -108,10 +111,23 @@ export default function LeavesReportPage() {
     )
   }, [items, date, statusFilter, month])
 
+  const employeeRecord = (l: Leave) =>
+    l.employeeId && typeof l.employeeId === 'object' ? l.employeeId : null
+
   const employeeName = (l: Leave) => {
     if (!l.employeeId) return 'Unknown'
     return typeof l.employeeId === 'string' ? l.employeeId : l.employeeId?.name || 'Unknown'
   }
+
+  const employeeCode = (l: Leave) => employeeRecord(l)?.empCode?.trim() || '—'
+
+  const designationOf = (l: Leave) => {
+    const person = employeeRecord(l)
+    if (!person) return '—'
+    return person.designation?.trim() || person.role?.trim() || '—'
+  }
+
+  const departmentOf = (l: Leave) => employeeRecord(l)?.department?.trim() || '—'
 
   const managerName = (l: Leave) => {
     if (!l.employeeId || typeof l.employeeId === 'string') return '—'
@@ -239,6 +255,8 @@ export default function LeavesReportPage() {
                 <tr className="bg-sky-50/70 border-b text-neutral-700">
                   <th className="py-2 px-3 text-left">Employee code</th>
                   <th className="py-2 px-3 text-left">Employee</th>
+                  <th className="py-2 px-3 text-left">Designation</th>
+                  <th className="py-2 px-3 text-left">Department</th>
                   <th className="py-2 px-3 text-left">Manager</th>
                   <th className="py-2 px-3">Status</th>
                   <th className="py-2 px-3 text-left">Leave Type</th>
@@ -252,15 +270,17 @@ export default function LeavesReportPage() {
               <tbody>
                 {filteredLeaves.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="py-4 px-3 text-center text-neutral-500">
+                    <td colSpan={12} className="py-4 px-3 text-center text-neutral-500">
                       No leaves match filters
                     </td>
                   </tr>
                 )}
                 {filteredLeaves.map((l) => (
                   <tr key={l._id} className="border-b last:border-0">
-                    <td className="py-2 px-3">{typeof l.employeeId === 'object' && l.employeeId ? l.employeeId.empCode || '—' : '—'}</td>
+                    <td className="py-2 px-3">{employeeCode(l)}</td>
                     <td className="py-2 px-3">{employeeName(l)}</td>
+                    <td className="py-2 px-3">{designationOf(l)}</td>
+                    <td className="py-2 px-3">{departmentOf(l)}</td>
                     <td className="py-2 px-3 text-sm text-neutral-600">{managerName(l)}</td>
                     <td className="py-2 px-3 text-center">{l.status}</td>
                     <td className="py-2 px-3">{leaveTypeLabel(l.leaveType)}</td>
