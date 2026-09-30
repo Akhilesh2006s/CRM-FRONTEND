@@ -305,8 +305,6 @@ export default function DashboardPage() {
   const [executiveAnalytics, setExecutiveAnalytics] = useState<any>(null)
   const [executiveLoading, setExecutiveLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState<any>(null)
-  const [needsPassportPhoto, setNeedsPassportPhoto] = useState(false)
-  const [uploadingPassport, setUploadingPassport] = useState(false)
 
   // compute KPIs for the teal chart
   const salesArr = trends && trends.length ? trends.map(t => t.revenue) : [0]
@@ -326,11 +324,6 @@ export default function DashboardPage() {
   useEffect(() => {
     const user = getCurrentUser()
     setCurrentUser(user)
-    if (user?._id) {
-      apiRequest<{ passportPhotoUrl?: string }>('/auth/me')
-        .then((me) => setNeedsPassportPhoto(!String(me?.passportPhotoUrl || '').trim()))
-        .catch(() => setNeedsPassportPhoto(false))
-    }
     const segment = user?.role ? HIERARCHY_HOME[user.role] : undefined
     if (user?._id && segment) {
       router.replace(`/dashboard/hierarchy/${segment}/${user._id}`)
@@ -568,47 +561,6 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      {needsPassportPhoto && (
-        <Card className="p-4 border border-amber-300 bg-amber-50">
-          <div className="text-sm font-semibold text-neutral-900">Passport size photo</div>
-          <p className="text-sm text-neutral-600 mt-1">Upload your passport size photo as a PDF.</p>
-          <Input
-            className="bg-white mt-3 max-w-md"
-            type="file"
-            accept="application/pdf,.pdf"
-            disabled={uploadingPassport}
-            onChange={async (event) => {
-              const file = event.target.files?.[0]
-              event.target.value = ''
-              if (!file) return
-              setUploadingPassport(true)
-              try {
-                const fd = new FormData()
-                fd.append('file', file)
-                fd.append('kind', 'passport')
-                const token = localStorage.getItem('authToken')
-                const { apiUrl } = await import('@/lib/api')
-                const res = await fetch(apiUrl('/employees/upload'), {
-                  method: 'POST',
-                  headers: token ? { Authorization: `Bearer ${token}` } : {},
-                  body: fd,
-                })
-                const data = await res.json()
-                if (!res.ok) throw new Error(data?.message || 'Upload failed')
-                await apiRequest('/hr/me/passport-photo', {
-                  method: 'PUT',
-                  body: JSON.stringify({ passportPhotoUrl: data.url }),
-                })
-                setNeedsPassportPhoto(false)
-              } catch (err: unknown) {
-                console.error(err)
-              } finally {
-                setUploadingPassport(false)
-              }
-            }}
-          />
-        </Card>
-      )}
       {/* Premium Stat Cards - Minimal, elegant design */}
       {HR_ROLES.has(currentUser?.role) && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

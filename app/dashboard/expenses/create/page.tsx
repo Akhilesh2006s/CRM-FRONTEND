@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { apiRequest, LOCAL_API_BASE_URL } from '@/lib/api'
+import { apiRequest, apiUrl } from '@/lib/api'
 import { toast } from 'sonner'
 
 type DC = {
@@ -179,7 +179,7 @@ export default function CreateExpensePage() {
           headers["Authorization"] = `Bearer ${token}`
         }
 
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || LOCAL_API_BASE_URL}/api/expenses/create`, {
+        const res = await fetch(apiUrl('/expenses/create'), {
           method: 'POST',
           headers,
           body: formData,
