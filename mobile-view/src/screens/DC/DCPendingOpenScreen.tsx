@@ -242,9 +242,9 @@ export default function DCPendingOpenScreen({ navigation, route }: any) {
   const [productRows, setProductRows] = useState<ProductRow[]>([]);
 
   const isSeniorCoordinator = user?.role === 'Senior Coordinator';
-  const isAdmin = user?.role === 'Admin' || user?.role === 'Super Admin';
+  const isSuperAdmin = user?.role === 'Super Admin';
   const isTermWiseDc = fromTermWise || dc?.status === 'scheduled_for_later';
-  const canSubmitToWarehouse = !isTermWiseDc && (isSeniorCoordinator || isAdmin);
+  const canSubmitToWarehouse = !isTermWiseDc && (isSeniorCoordinator || isSuperAdmin);
 
   useEffect(() => {
     if (fromTermWise && dcId) {

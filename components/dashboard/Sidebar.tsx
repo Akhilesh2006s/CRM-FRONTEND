@@ -918,7 +918,6 @@ export function Sidebar() {
         label: 'Clients',
         icon: Truck,
         children: [
-          { label: 'Pending DC', href: '/dashboard/dc/pending', icon: Clock },
           { label: 'PO Edit Request', href: '/dashboard/clients/closed-sales', icon: CheckCircle2 },
         ],
       },
@@ -1177,6 +1176,18 @@ export function Sidebar() {
     })
   } else if (user?.role === 'Admin' || permUser?.role === 'Admin') {
     finalNav = applyVendorSectionNav(finalNav)
+  }
+
+  // Pending DC is an operational queue owned by the Senior Coordinator.
+  // Super Admin retains the normal system-wide override.
+  if (!isSuperAdminNav && !isSeniorCoordinator) {
+    finalNav = finalNav.map((item) => {
+      if (!item.children) return item
+      const children = item.children.filter(
+        (child) => child.href !== '/dashboard/dc/pending'
+      )
+      return children.length === item.children.length ? item : { ...item, children }
+    })
   }
 
   const navReady = mounted && (!rbacActive || permissionsReady)

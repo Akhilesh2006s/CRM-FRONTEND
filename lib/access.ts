@@ -18,7 +18,6 @@ const EXECUTIVE_MANAGER_WORKSPACE_ROUTES = [
   '/dashboard/executive-managers/executives',
   '/dashboard/expenses/executive-manager-pending',
   '/dashboard/clients/closed-sales',
-  '/dashboard/dc/pending',
 ]
 
 function canAccessExecutiveManagerOwnRoute(
@@ -95,6 +94,9 @@ export function canAccessPath(
   if (options?.loading) return true
   if (!user) return false
   if (isSuperAdmin(user)) return true
+  if (pathname === '/dashboard/dc/pending' || pathname.startsWith('/dashboard/dc/pending/')) {
+    return user.role === 'Senior Coordinator'
+  }
   if (user.role === 'Manager') {
     return (
       pathname === '/dashboard' ||

@@ -149,9 +149,9 @@ export default function PendingDCPage() {
   const [submitting, setSubmitting] = useState(false)
   
   const currentUser = getCurrentUser()
-  const isExecutiveManager = currentUser?.role === 'Executive Manager'
+  const isSeniorCoordinator = currentUser?.role === 'Senior Coordinator'
   const isSuperAdmin = currentUser?.role === 'Super Admin' || currentUser?.isSuperAdmin
-  const canSubmitToWarehouse = isExecutiveManager || isSuperAdmin
+  const canSubmitToWarehouse = isSeniorCoordinator || isSuperAdmin
   
   // DC Details form fields
   const [financeRemarks, setFinanceRemarks] = useState('')
@@ -804,10 +804,10 @@ export default function PendingDCPage() {
                 </div>
                 <div>
                   <Label>School Code</Label>
-                  <Input 
-                    value={selectedDC.dcOrderId?.school_code || selectedDC.dcOrderId?.dc_code || ''} 
-                    disabled 
-                    className="bg-gray-100 text-gray-900" 
+                  <Input
+                    value={selectedDC.dcOrderId?.school_code || selectedDC.dcOrderId?.dc_code || ''}
+                    disabled
+                    className="bg-gray-100 text-gray-900"
                     placeholder="School Code"
                   />
                 </div>

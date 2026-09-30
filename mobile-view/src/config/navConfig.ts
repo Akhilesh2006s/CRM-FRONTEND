@@ -220,9 +220,11 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
     const clientsChildren: NavLink[] = [
       { label: 'Closed Sales', screen: 'DCClosed' },
       { label: 'Saved DC', screen: 'DCSaved' },
-      { label: 'Pending DC', screen: 'DCPending' },
       { label: 'EMP DC', screen: 'DCEmp' },
     ];
+    if (isSeniorCoordinator) {
+      clientsChildren.splice(2, 0, { label: 'Pending DC', screen: 'DCPending' });
+    }
     if (!isManager) {
       clientsChildren.unshift({ label: 'Create Sale', screen: 'DCCreateSale' });
     }
@@ -312,7 +314,7 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
         { label: 'All Created DCs', screen: 'DCAdminMy', icon: '📋' },
         { label: 'Closed Sales', screen: 'DCClosed', icon: '✅' },
         { label: 'Saved DC', screen: 'DCSaved', icon: '💾' },
-        { label: 'Pending DC', screen: 'DCPending', icon: '⏳' },
+        ...(isSuperAdmin ? [{ label: 'Pending DC', screen: 'DCPending', icon: '⏳' }] : []),
         { label: 'EMP DC', screen: 'DCEmp', icon: '👤' },
       ],
     },
