@@ -170,8 +170,17 @@ export default function NewEmployeePage() {
     })
   }
 
+  const todayDate = () => {
+    const now = new Date()
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  }
+
   const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
+    if (name === 'dateOfBirth' && value && value > todayDate()) {
+      setError('Date of birth cannot be a future date')
+      return
+    }
     if (name === 'mobile' || name === 'phone') {
       const digits = sanitizePhoneInput(value, 15)
       setForm((f) => ({ ...f, [name]: digits }))
@@ -394,6 +403,11 @@ export default function NewEmployeePage() {
         setSubmitting(false)
         return
       }
+      if (form.dateOfBirth > todayDate()) {
+        setError('Date of birth cannot be a future date')
+        setSubmitting(false)
+        return
+      }
       if (!form.passportPhotoUrl.trim()) {
         setError('Passport size photo PDF is required')
         setSubmitting(false)
@@ -586,7 +600,7 @@ export default function NewEmployeePage() {
           </div>
           <div>
             <Label>Date of birth *</Label>
-            <Input className="bg-white text-neutral-900" type="date" name="dateOfBirth" value={form.dateOfBirth} onChange={onChange} required />
+            <Input className="bg-white text-neutral-900" type="date" name="dateOfBirth" value={form.dateOfBirth} max={todayDate()} onChange={onChange} required />
           </div>
           <div>
             <Label>Contact No (Company) *</Label>
