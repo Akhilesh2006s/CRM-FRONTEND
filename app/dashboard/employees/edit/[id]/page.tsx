@@ -50,6 +50,7 @@ export default function EditEmployeePage() {
     pincode: '',
     role: 'Executive',
     designation: '',
+    dateOfJoining: '',
     taggedEmployeeIds: [] as string[],
   })
   const [loading, setLoading] = useState(true)
@@ -59,6 +60,14 @@ export default function EditEmployeePage() {
   const [zones, setZones] = useState<string[]>([])
   const [clustersByZone, setClustersByZone] = useState<Record<string, string[]>>({})
   const [tagOptions, setTagOptions] = useState<EmployeeOption[]>([])
+  const [dojParts, setDojParts] = useState({ day: '', month: '', year: '' })
+  const dojYearNow = new Date().getFullYear()
+  const dojYears = Array.from({ length: dojYearNow - 1939 }, (_, index) => String(dojYearNow - index))
+  const dojMonths = [
+    ['01', 'Jan'], ['02', 'Feb'], ['03', 'Mar'], ['04', 'Apr'],
+    ['05', 'May'], ['06', 'Jun'], ['07', 'Jul'], ['08', 'Aug'],
+    ['09', 'Sep'], ['10', 'Oct'], ['11', 'Nov'], ['12', 'Dec'],
+  ] as const
 
   const loadZones = async () => {
     const [pairsRaw, zonesRaw] = await Promise.all([
@@ -113,9 +122,19 @@ export default function EditEmployeePage() {
           pincode: emp.pincode || '',
           role: emp.role || 'Executive',
           designation: emp.designation || '',
+          dateOfJoining: '',
           taggedEmployeeIds: (emp.taggedEmployeeIds || []).map((x: any) => String(x._id || x)),
         })
         setTagOptions(Array.isArray(employees) ? employees.filter((e) => e._id !== id) : [])
+        if (emp.dateOfJoining) {
+          const parsed = new Date(emp.dateOfJoining)
+          if (!Number.isNaN(parsed.getTime())) {
+            const iso = `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`
+            const [year, month, day] = iso.split('-')
+            setDojParts({ day, month, year })
+            setForm((current) => ({ ...current, dateOfJoining: iso }))
+          }
+        }
       } catch (e: any) {
         toast.error(e?.message || 'Failed to load employee')
       } finally {
@@ -273,6 +292,16 @@ export default function EditEmployeePage() {
           : [],
       }
       if (form.role !== 'Executive') delete payload.cluster
+      if (!form.dateOfJoining) delete payload.dateOfJoining
+      else {
+        const today = new Date()
+        const todayText = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+        if (form.dateOfJoining > todayText) {
+          setError('Date of joining cannot be a future date')
+          setSubmitting(false)
+          return
+        }
+      }
       await apiRequest(`/employees/${id}`, { method: 'PUT', body: JSON.stringify(payload) })
       toast.success('Employee updated')
       router.push('/dashboard/employees/active')
@@ -335,6 +364,47 @@ export default function EditEmployeePage() {
           <div>
             <Label>Email Id *</Label>
             <Input className="bg-white text-neutral-900" type="email" name="email" value={form.email} onChange={onChange} required />
+          </div>
+          <div>
+            <Label>Date of joining</Label>
+            <div className="grid grid-cols-3 gap-2">
+              <Select value={dojParts.day || undefined} onValueChange={(day) => {
+                const next = { ...dojParts, day }
+                setDojParts(next)
+                if (next.day && next.month && next.year) setForm((current) => ({ ...current, dateOfJoining: `${next.year}-${next.month}-${next.day}` }))
+              }}>
+                <SelectTrigger className="bg-white text-neutral-900"><SelectValue placeholder="Day" /></SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 31 }, (_, index) => String(index + 1).padStart(2, '0')).map((day) => (
+                    <SelectItem key={day} value={day}>{Number(day)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={dojParts.month || undefined} onValueChange={(month) => {
+                const next = { ...dojParts, month }
+                setDojParts(next)
+                if (next.day && next.month && next.year) setForm((current) => ({ ...current, dateOfJoining: `${next.year}-${next.month}-${next.day}` }))
+              }}>
+                <SelectTrigger className="bg-white text-neutral-900"><SelectValue placeholder="Month" /></SelectTrigger>
+                <SelectContent>
+                  {dojMonths.map(([value, label]) => (
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={dojParts.year || undefined} onValueChange={(year) => {
+                const next = { ...dojParts, year }
+                setDojParts(next)
+                if (next.day && next.month && next.year) setForm((current) => ({ ...current, dateOfJoining: `${next.year}-${next.month}-${next.day}` }))
+              }}>
+                <SelectTrigger className="bg-white text-neutral-900"><SelectValue placeholder="Year" /></SelectTrigger>
+                <SelectContent>
+                  {dojYears.map((year) => (
+                    <SelectItem key={year} value={year}>{year}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <div>
             <Label>Phone (optional)</Label>

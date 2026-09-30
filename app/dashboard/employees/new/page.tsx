@@ -43,6 +43,7 @@ export default function NewEmployeePage() {
     phone: '',
     mobile: '',
     dateOfBirth: '',
+    dateOfJoining: '',
     passportPhotoUrl: '',
     onboardingChecklist: [] as string[],
     onboardingOtherNote: '',
@@ -174,13 +175,52 @@ export default function NewEmployeePage() {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   }
+  const dobYearNow = new Date().getFullYear()
+  const dobYears = Array.from({ length: dobYearNow - 1939 }, (_, index) => String(dobYearNow - index))
+  const dobMonths = [
+    ['01', 'Jan'], ['02', 'Feb'], ['03', 'Mar'], ['04', 'Apr'],
+    ['05', 'May'], ['06', 'Jun'], ['07', 'Jul'], ['08', 'Aug'],
+    ['09', 'Sep'], ['10', 'Oct'], ['11', 'Nov'], ['12', 'Dec'],
+  ] as const
+  const [dobParts, setDobParts] = useState({ day: '', month: '', year: '' })
+  const [dojParts, setDojParts] = useState({ day: '', month: '', year: '' })
+
+  const applyDateParts = (
+    field: 'dateOfBirth' | 'dateOfJoining',
+    next: { day: string; month: string; year: string },
+    setParts: (value: { day: string; month: string; year: string }) => void,
+    invalidMessage: string,
+  ) => {
+    setParts(next)
+    if (!next.day || !next.month || !next.year) {
+      setForm((current) => ({ ...current, [field]: '' }))
+      return
+    }
+    const iso = `${next.year}-${next.month}-${next.day}`
+    const parsed = new Date(`${iso}T00:00:00`)
+    const real =
+      parsed.getFullYear() === Number(next.year) &&
+      parsed.getMonth() + 1 === Number(next.month) &&
+      parsed.getDate() === Number(next.day)
+    if (!real || iso > todayDate()) {
+      setForm((current) => ({ ...current, [field]: '' }))
+      setError(invalidMessage)
+      return
+    }
+    setError(null)
+    setForm((current) => ({ ...current, [field]: iso }))
+  }
+
+  const applyDob = (next: { day: string; month: string; year: string }) => {
+    applyDateParts('dateOfBirth', next, setDobParts, 'Date of birth must be a past date')
+  }
+
+  const applyDoj = (next: { day: string; month: string; year: string }) => {
+    applyDateParts('dateOfJoining', next, setDojParts, 'Date of joining must be a past date')
+  }
 
   const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
-    if (name === 'dateOfBirth' && value && value > todayDate()) {
-      setError('Date of birth cannot be a future date')
-      return
-    }
     if (name === 'mobile' || name === 'phone') {
       const digits = sanitizePhoneInput(value, 15)
       setForm((f) => ({ ...f, [name]: digits }))
@@ -408,6 +448,16 @@ export default function NewEmployeePage() {
         setSubmitting(false)
         return
       }
+      if (!form.dateOfJoining) {
+        setError('Date of joining is required')
+        setSubmitting(false)
+        return
+      }
+      if (form.dateOfJoining > todayDate()) {
+        setError('Date of joining cannot be a future date')
+        setSubmitting(false)
+        return
+      }
       if (!form.passportPhotoUrl.trim()) {
         setError('Passport size photo PDF is required')
         setSubmitting(false)
@@ -600,7 +650,73 @@ export default function NewEmployeePage() {
           </div>
           <div>
             <Label>Date of birth *</Label>
-            <Input className="bg-white text-neutral-900" type="date" name="dateOfBirth" value={form.dateOfBirth} max={todayDate()} onChange={onChange} required />
+            <div className="grid grid-cols-3 gap-2">
+              <Select value={dobParts.day || undefined} onValueChange={(day) => applyDob({ ...dobParts, day })}>
+                <SelectTrigger className="bg-white text-neutral-900">
+                  <SelectValue placeholder="Day" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 31 }, (_, index) => String(index + 1).padStart(2, '0')).map((day) => (
+                    <SelectItem key={day} value={day}>{Number(day)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={dobParts.month || undefined} onValueChange={(month) => applyDob({ ...dobParts, month })}>
+                <SelectTrigger className="bg-white text-neutral-900">
+                  <SelectValue placeholder="Month" />
+                </SelectTrigger>
+                <SelectContent>
+                  {dobMonths.map(([value, label]) => (
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={dobParts.year || undefined} onValueChange={(year) => applyDob({ ...dobParts, year })}>
+                <SelectTrigger className="bg-white text-neutral-900">
+                  <SelectValue placeholder="Year" />
+                </SelectTrigger>
+                <SelectContent>
+                  {dobYears.map((year) => (
+                    <SelectItem key={year} value={year}>{year}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div>
+            <Label>Date of joining *</Label>
+            <div className="grid grid-cols-3 gap-2">
+              <Select value={dojParts.day || undefined} onValueChange={(day) => applyDoj({ ...dojParts, day })}>
+                <SelectTrigger className="bg-white text-neutral-900">
+                  <SelectValue placeholder="Day" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 31 }, (_, index) => String(index + 1).padStart(2, '0')).map((day) => (
+                    <SelectItem key={day} value={day}>{Number(day)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={dojParts.month || undefined} onValueChange={(month) => applyDoj({ ...dojParts, month })}>
+                <SelectTrigger className="bg-white text-neutral-900">
+                  <SelectValue placeholder="Month" />
+                </SelectTrigger>
+                <SelectContent>
+                  {dobMonths.map(([value, label]) => (
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={dojParts.year || undefined} onValueChange={(year) => applyDoj({ ...dojParts, year })}>
+                <SelectTrigger className="bg-white text-neutral-900">
+                  <SelectValue placeholder="Year" />
+                </SelectTrigger>
+                <SelectContent>
+                  {dobYears.map((year) => (
+                    <SelectItem key={year} value={year}>{year}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <div>
             <Label>Contact No (Company) *</Label>
