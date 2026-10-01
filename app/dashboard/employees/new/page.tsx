@@ -29,7 +29,12 @@ import {
   type EmployeeIdentityErrors,
 } from '@/lib/employeeFormValidation'
 
-type EmployeeOption = { _id: string; name: string; role: string }
+type EmployeeOption = {
+  _id: string
+  name: string
+  role: string
+  assignedProductIds?: Array<string | { _id?: string }>
+}
 type ProductSchool = { schoolName: string; schoolCode: string; zone: string; cluster: string; zonalManager: string; contactPerson: string }
 type ProductSchoolsResponse = { schools: ProductSchool[] }
 
@@ -44,6 +49,7 @@ export default function NewEmployeePage() {
     phone: '',
     mobile: '',
     hasEmployeeRelationship: null as boolean | null,
+    employeeRelationshipDetails: { fullName: '', department: '', designation: '' },
     dateOfBirth: '',
     dateOfJoining: '',
     passportPhotoUrl: '',
@@ -62,6 +68,8 @@ export default function NewEmployeePage() {
     pincode: '',
     role: 'Executive',
     designation: '',
+    trainerProducts: [] as string[],
+    verticalManagerId: '',
     taggedEmployeeIds: [] as string[],
     references: [
       { relation: '', name: '', mobile: '', aadhaarUrl: '' },
@@ -105,6 +113,24 @@ export default function NewEmployeePage() {
   const [loadingProductSchools, setLoadingProductSchools] = useState(false)
   const [zones, setZones] = useState<string[]>([])
   const [clustersByZone, setClustersByZone] = useState<Record<string, string[]>>({})
+  const productHeads = useMemo(
+    () => tagOptions.filter((employee) => employee.role === 'Manager'),
+    [tagOptions]
+  )
+  const eligibleProductHeads = useMemo(() => {
+    const selectedIds = productOptions
+      .filter((product) => form.trainerProducts.includes(product.productName))
+      .map((product) => product._id)
+    if (!selectedIds.length) return productHeads
+    return productHeads.filter((head) => {
+      const assigned = new Set(
+        (head.assignedProductIds || []).map((value) =>
+          typeof value === 'string' ? value : String(value?._id || '')
+        )
+      )
+      return selectedIds.every((id) => assigned.has(id))
+    })
+  }, [form.trainerProducts, productHeads, productOptions])
 
   const loadZones = async () => {
     try {
@@ -147,10 +173,10 @@ export default function NewEmployeePage() {
     }
     let cancelled = false
     setLoadingProductSchools(true)
-    apiRequest(
+    apiRequest<ProductSchoolsResponse>(
       `/product-manager/products/${productId}/schools`
     )
-      .then((data: ProductSchoolsResponse) => {
+      .then((data) => {
         if (!cancelled) setProductSchools(Array.isArray(data?.schools) ? data.schools : [])
       })
       .catch(() => {
@@ -445,6 +471,14 @@ export default function NewEmployeePage() {
         setSubmitting(false)
         return
       }
+      if (form.hasEmployeeRelationship) {
+        const relationship = form.employeeRelationshipDetails
+        if (!relationship.fullName.trim() || !relationship.department.trim() || !relationship.designation.trim()) {
+          setError('Enter the full name, department, and designation of the employee connection')
+          setSubmitting(false)
+          return
+        }
+      }
       if (!form.dateOfBirth) {
         setError('Date of birth is required')
         setSubmitting(false)
@@ -550,6 +584,18 @@ export default function NewEmployeePage() {
         setError('Select the product for this Product Manager')
         setSubmitting(false)
         return
+      }
+      if (form.role === 'Trainer') {
+        if (!form.trainerProducts.length) {
+          setError('Select at least one product for this Trainer')
+          setSubmitting(false)
+          return
+        }
+        if (!form.verticalManagerId) {
+          setError('Select the Product Head for this Trainer')
+          setSubmitting(false)
+          return
+        }
       }
       
       const payload: any = {
@@ -777,6 +823,9 @@ export default function NewEmployeePage() {
                 setForm((current) => ({
                   ...current,
                   hasEmployeeRelationship: value === 'yes',
+                  ...(value === 'no'
+                    ? { employeeRelationshipDetails: { fullName: '', department: '', designation: '' } }
+                    : {}),
                 }))
               }
             >
@@ -793,6 +842,64 @@ export default function NewEmployeePage() {
                 </Label>
               </div>
             </RadioGroup>
+            {form.hasEmployeeRelationship === true && (
+              <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div>
+                  <Label htmlFor="relationship-full-name">Full Name *</Label>
+                  <Input
+                    id="relationship-full-name"
+                    className="mt-1 bg-white text-neutral-900"
+                    value={form.employeeRelationshipDetails.fullName}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        employeeRelationshipDetails: {
+                          ...current.employeeRelationshipDetails,
+                          fullName: event.target.value,
+                        },
+                      }))
+                    }
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="relationship-department">Department *</Label>
+                  <Input
+                    id="relationship-department"
+                    className="mt-1 bg-white text-neutral-900"
+                    value={form.employeeRelationshipDetails.department}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        employeeRelationshipDetails: {
+                          ...current.employeeRelationshipDetails,
+                          department: event.target.value,
+                        },
+                      }))
+                    }
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="relationship-designation">Designation *</Label>
+                  <Input
+                    id="relationship-designation"
+                    className="mt-1 bg-white text-neutral-900"
+                    value={form.employeeRelationshipDetails.designation}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        employeeRelationshipDetails: {
+                          ...current.employeeRelationshipDetails,
+                          designation: event.target.value,
+                        },
+                      }))
+                    }
+                    required
+                  />
+                </div>
+              </div>
+            )}
           </fieldset>
           <div className="md:col-span-2">
             <Label>Permanent address *</Label>
@@ -1231,6 +1338,8 @@ export default function NewEmployeePage() {
                     zone: zones[0] || '',
                     zones,
                     cluster: single ? f.cluster : '',
+                    trainerProducts: v === 'Trainer' ? f.trainerProducts : [],
+                    verticalManagerId: v === 'Trainer' ? f.verticalManagerId : '',
                     taggedEmployeeIds: supportsEmployeeTagging(v)
                       ? f.taggedEmployeeIds.filter((id) => allowed.has(id))
                       : [],
@@ -1319,6 +1428,60 @@ export default function NewEmployeePage() {
                   )}
                 </div>
               )}
+            </div>
+          )}
+          {form.role === 'Trainer' && (
+            <div className="md:col-span-2 space-y-4 rounded-lg border border-neutral-200 bg-white p-4">
+              <div>
+                <Label>Trainer Products *</Label>
+                <p className="mt-1 text-xs text-neutral-500">
+                  Select every product this trainer can handle. The Product Head dashboard will show only matching trainers.
+                </p>
+                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {productOptions.map((product) => (
+                    <label key={product._id} className="flex items-center gap-2 rounded border p-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={form.trainerProducts.includes(product.productName)}
+                        onChange={() =>
+                          setForm((current) => {
+                            const selected = current.trainerProducts.includes(product.productName)
+                              ? current.trainerProducts.filter((name) => name !== product.productName)
+                              : [...current.trainerProducts, product.productName]
+                            return { ...current, trainerProducts: selected, verticalManagerId: '' }
+                          })
+                        }
+                      />
+                      {product.productName}
+                    </label>
+                  ))}
+                </div>
+                {!productsLoading && productOptions.length === 0 && (
+                  <p className="mt-2 text-sm text-amber-700">No active products are available.</p>
+                )}
+              </div>
+              <div>
+                <Label>Product Head *</Label>
+                <Select
+                  value={form.verticalManagerId || undefined}
+                  onValueChange={(value) => setForm((current) => ({ ...current, verticalManagerId: value }))}
+                  disabled={!form.trainerProducts.length || eligibleProductHeads.length === 0}
+                >
+                  <SelectTrigger className="bg-white text-neutral-900">
+                    <SelectValue placeholder="Select Product Head" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {eligibleProductHeads.map((head) => (
+                      <SelectItem key={head._id} value={head._id}>{head.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {form.trainerProducts.length > 0 && eligibleProductHeads.length === 0 && (
+                  <p className="mt-1 text-xs text-amber-700">
+                    Assign the selected product(s) to a Product Head first.
+                  </p>
+                )}
+              </div>
             </div>
           )}
           <div>

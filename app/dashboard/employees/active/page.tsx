@@ -250,7 +250,8 @@ export default function ActiveEmployeesPage() {
     }
   }
 
-  const displayMobile = (e: Employee) => e.mobile || (e.phone && e.phone !== '0' ? e.phone : '') || '-'
+  const displayCompanyNumber = (e: Employee) =>
+    (e.phone && e.phone !== '0' ? e.phone : '') || '-'
 
   const deactivate = async () => {
     if (!offboarding?.status) {
@@ -279,15 +280,12 @@ export default function ActiveEmployeesPage() {
     new Map(availableRoles.map((role) => [displayRoleName(role), role])).keys()
   )
   const isBdeView = roleFilter === 'BDE'
-  const filtered = !roleFilter
-    ? []
-    : items
-        .filter((e) => displayRoleName(e.role) === roleFilter)
+  const filtered = items
+        .filter((e) => !roleFilter || displayRoleName(e.role) === roleFilter)
         .filter((e) =>
           e.name.toLowerCase().includes(q.toLowerCase()) ||
           e.email.toLowerCase().includes(q.toLowerCase()) ||
           (e.phone || '').includes(q) ||
-          (e.mobile || '').includes(q) ||
           (e.cluster || '').toLowerCase().includes(q.toLowerCase()) ||
           (e.zone || '').toLowerCase().includes(q.toLowerCase()) ||
           (e.zones || []).some((z) => z.toLowerCase().includes(q.toLowerCase()))
@@ -303,17 +301,21 @@ export default function ActiveEmployeesPage() {
     <div className="space-y-6">
       <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Employees List</h1>
       <div className="flex gap-2">
-        <Select value={roleFilter || undefined} onValueChange={setRoleFilter}>
+        <Select
+          value={roleFilter || '__all__'}
+          onValueChange={(value) => setRoleFilter(value === '__all__' ? '' : value)}
+        >
           <SelectTrigger className="w-56 bg-white text-neutral-900">
-            <SelectValue placeholder="Select role" />
+            <SelectValue placeholder="All roles" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="__all__">All roles</SelectItem>
             {roleOptions.map((role) => (
               <SelectItem key={role} value={role}>{role}</SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <Input placeholder="Search name/email/mobile/cluster" value={q} onChange={(e) => setQ(e.target.value)} />
+        <Input placeholder="Search name/email/company number/cluster" value={q} onChange={(e) => setQ(e.target.value)} />
         <Button onClick={load}>Refresh</Button>
       </div>
       <Card className="p-0 overflow-x-auto">
@@ -323,7 +325,7 @@ export default function ActiveEmployeesPage() {
               <th className="py-2 px-3 text-left">Employee code</th>
               <th className="py-2 px-3 text-left">Name</th>
               <th className="py-2 px-3 text-left">Email</th>
-              <th className="py-2 px-3">Mobile</th>
+              <th className="py-2 px-3">Company Contact No</th>
               <th className="py-2 px-3">Role</th>
               <th className="py-2 px-3">Department</th>
               <th className="py-2 px-3">Zone</th>
@@ -337,7 +339,7 @@ export default function ActiveEmployeesPage() {
                 <td className="py-2 px-3">{formatEmployeeCode(e.empCode, '-')}</td>
                 <td className="py-2 px-3">{e.name}</td>
                 <td className="py-2 px-3">{e.email}</td>
-                <td className="py-2 px-3 text-center">{displayMobile(e)}</td>
+                <td className="py-2 px-3 text-center">{displayCompanyNumber(e)}</td>
                 <td className="py-2 px-3 text-center">{displayRoleName(e.role)}</td>
                 <td className="py-2 px-3 text-center">{e.department || '-'}</td>
                 <td className="py-2 px-3 text-center">{zoneLabel(e)}</td>
@@ -366,8 +368,11 @@ export default function ActiveEmployeesPage() {
             ))}
           </tbody>
         </table>
-        {!loading && !roleFilter && <div className="p-4 text-neutral-500">Select a role to see employees</div>}
-        {!loading && roleFilter && filtered.length === 0 && <div className="p-4 text-neutral-500">No employees for this role</div>}
+        {!loading && filtered.length === 0 && (
+          <div className="p-4 text-neutral-500">
+            {roleFilter ? 'No employees for this role' : 'No active employees'}
+          </div>
+        )}
       </Card>
 
       {/* Edit Employee Dialog */}

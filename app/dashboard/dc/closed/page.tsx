@@ -1194,7 +1194,7 @@ export default function ClosedSalesPage() {
     }
   }
 
-  // Coordinator accepts the DC from Closed Sales into Pending DC. The Zonal Manager submits it to the warehouse.
+  // Coordinator accepts the DC from Closed Sales into Pending DC. The Senior Coordinator submits it to the warehouse.
   const handleSendToSeniorCoordinator = async () => {
     if (!selectedDeal) return
 
@@ -1310,7 +1310,7 @@ export default function ClosedSalesPage() {
         }),
       })
 
-      alert('DC accepted. It is now in Pending DC for the Zonal Manager.')
+      alert('DC accepted. It is now in Pending DC for the Senior Coordinator.')
       setOpenRaiseDCDialog(false)
       load()
     } catch (e: any) {
@@ -1662,7 +1662,7 @@ export default function ClosedSalesPage() {
             </DialogTitle>
             <DialogDescription className="text-slate-600 text-sm mt-1">
               {selectedDeal?.status === 'dc_requested' || selectedDeal?.status === 'dc_accepted'
-                ? 'Review the DC and accept it. It then goes to Pending DC for the Zonal Manager.'
+                ? 'Review the DC and accept it. It then goes to Pending DC for the Senior Coordinator.'
                 : canRequestDC 
                   ? 'Fill in DC details and submit the request for the Coordinator.'
                   : 'Fill in DC details and accept the DC into Pending DC.'}
@@ -1705,7 +1705,7 @@ export default function ClosedSalesPage() {
                   <div>
                     <Label className="text-sm font-medium mb-2 block">School Code</Label>
                     <Input 
-                      value={selectedDeal.school_code || selectedDeal.dc_code || ''} 
+                      value={selectedDeal.school_code || selectedDeal.dc_code || ''}
                       disabled 
                       className="bg-slate-50 text-slate-900 border-slate-200 h-11 text-sm" 
                       placeholder="School Code"

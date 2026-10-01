@@ -41,7 +41,7 @@ export default function EmployeesActiveScreen({ navigation }: any) {
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await apiService.get<Employee[]>('/employees?isActive=true');
+      const data = await apiService.get('/employees?isActive=true') as Employee[];
       setItems(Array.isArray(data) ? data : []);
     } catch (error: any) {
       showAlert('Error', error.message || 'Failed to load employees');
@@ -109,7 +109,6 @@ export default function EmployeesActiveScreen({ navigation }: any) {
       e.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       e.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (e.phone || '').includes(searchQuery) ||
-      (e.mobile || '').includes(searchQuery) ||
       (e.zone || '').toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
@@ -126,7 +125,7 @@ export default function EmployeesActiveScreen({ navigation }: any) {
           style={styles.searchInput}
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholder="Search name/email/phone"
+          placeholder="Search name/email/company number"
         />
         <TouchableOpacity style={styles.refreshButton} onPress={loadData}>
           <Text style={styles.refreshButtonText}>Refresh</Text>
@@ -157,7 +156,7 @@ export default function EmployeesActiveScreen({ navigation }: any) {
 
               <View style={styles.cardBody}>
                 <InfoRow label="Email" value={e.email || '-'} />
-                <InfoRow label="Mobile" value={e.mobile || e.phone || '-'} />
+                <InfoRow label="Company Contact No" value={(e.phone && e.phone !== '0') ? e.phone : '-'} />
                 <InfoRow label="Role" value={e.role || '-'} />
                 <InfoRow label="Department" value={e.department || '-'} />
                 <InfoRow label="Cluster" value={e.cluster || '-'} />

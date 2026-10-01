@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner'
 import { apiRequest } from '@/lib/api'
 import { INDIAN_STATES } from '@/lib/indianStatesCities'
+import { useProducts } from '@/hooks/useProducts'
 import {
   sanitizeTrainerMobileInput,
   validateTrainerMobile,
@@ -19,10 +20,15 @@ import {
   validateTrainerContactFields,
 } from '@/lib/trainerFormValidation'
 
-const TRAINER_CATEGORIES = ['Abacus', 'Vedic Maths', 'ECC', 'IIT']
+type ProductHead = {
+  _id: string
+  name: string
+  assignedProductIds?: Array<string | { _id?: string }>
+}
 
 export default function AddTrainerPage() {
   const router = useRouter()
+  const { products, loading: productsLoading } = useProducts()
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -36,7 +42,7 @@ export default function AddTrainerPage() {
     address1: '',
     verticalManagerId: '',
   })
-  const [managers, setManagers] = useState<{ _id: string; name: string }[]>([])
+  const [managers, setManagers] = useState<ProductHead[]>([])
   const [zoneManagerName, setZoneManagerName] = useState('')
   const [zoneManagerByName, setZoneManagerByName] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
@@ -54,12 +60,12 @@ export default function AddTrainerPage() {
         const [pairsRaw, zonesRaw, managersRaw] = await Promise.all([
           apiRequest<{ zone?: string; cluster?: string }[]>('/zones-clusters').catch(() => []),
           apiRequest<{ name?: string; managerId?: { name?: string } | string }[]>('/zones').catch(() => []),
-          apiRequest<{ _id: string; name: string }[]>('/executive-managers').catch(() => []),
+          apiRequest<ProductHead[]>('/employees?isActive=true&role=Manager').catch(() => []),
         ])
         const pairs = Array.isArray(pairsRaw) ? pairsRaw : []
         const zoneDocs = Array.isArray(zonesRaw) ? zonesRaw : []
-        const zonalManagers = Array.isArray(managersRaw) ? managersRaw : []
-        setManagers(zonalManagers.filter((m) => Boolean(m?._id)))
+        const productHeads = Array.isArray(managersRaw) ? managersRaw : []
+        setManagers(productHeads.filter((m) => Boolean(m?._id)))
         const zoneMap: Record<string, string[]> = {}
         pairs.forEach((zc) => {
           const zone = (zc.zone || '').trim()
@@ -96,6 +102,20 @@ export default function AddTrainerPage() {
   const clusterList = useMemo(() => {
     return form.zone ? clustersByZone[form.zone] || [] : []
   }, [form.zone, clustersByZone])
+  const eligibleProductHeads = useMemo(() => {
+    const selectedIds = products
+      .filter((product) => form.trainerProducts.includes(product.productName))
+      .map((product) => product._id)
+    if (!selectedIds.length) return managers
+    return managers.filter((manager) => {
+      const assigned = new Set(
+        (manager.assignedProductIds || []).map((value) =>
+          typeof value === 'string' ? value : String(value?._id || '')
+        )
+      )
+      return selectedIds.every((id) => assigned.has(id))
+    })
+  }, [form.trainerProducts, managers, products])
 
   const checkMobileDuplicate = async (mobile: string) => {
     const formatCheck = validateTrainerMobile(mobile)
@@ -159,6 +179,10 @@ export default function AddTrainerPage() {
       toast.error('Please select at least one product')
       return
     }
+    if (!form.verticalManagerId) {
+      toast.error('Please select the Product Head')
+      return
+    }
     setSubmitting(true)
     try {
       await apiRequest('/trainers/create', {
@@ -185,7 +209,11 @@ export default function AddTrainerPage() {
 
   const addProductCategory = (value: string) => {
     if (!value || form.trainerProducts.includes(value)) return
-    setForm((f) => ({ ...f, trainerProducts: [...f.trainerProducts, value] }))
+    setForm((f) => ({
+      ...f,
+      trainerProducts: [...f.trainerProducts, value],
+      verticalManagerId: '',
+    }))
   }
 
   const removeProductCategory = (p: string) => {
@@ -319,22 +347,28 @@ export default function AddTrainerPage() {
             )}
           </div>
           <div>
-            <Label>Vertical Manager (second manager)</Label>
+            <Label>Product Head *</Label>
             <Select
               value={form.verticalManagerId || undefined}
               onValueChange={(v) => setForm((f) => ({ ...f, verticalManagerId: v }))}
+              disabled={!form.trainerProducts.length || eligibleProductHeads.length === 0}
             >
               <SelectTrigger className="bg-white text-neutral-900">
-                <SelectValue placeholder="Select vertical manager" />
+                <SelectValue placeholder="Select Product Head" />
               </SelectTrigger>
               <SelectContent>
-                {managers.map((m) => (
+                {eligibleProductHeads.map((m) => (
                   <SelectItem key={m._id} value={m._id}>
                     {m.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {form.trainerProducts.length > 0 && eligibleProductHeads.length === 0 && (
+              <p className="mt-1 text-xs text-amber-700">
+                Assign the selected product(s) to a Product Head first.
+              </p>
+            )}
           </div>
           <div>
             <Label htmlFor="trainer-cluster">Cluster</Label>
@@ -368,14 +402,16 @@ export default function AddTrainerPage() {
             <Textarea className="bg-white text-neutral-900" value={form.address1} onChange={(e)=>setForm(f=>({...f,address1:e.target.value}))} />
           </div>
           <div className="md:col-span-2 space-y-2">
-            <Label>Product Category *</Label>
+            <Label>Products *</Label>
             <Select onValueChange={addProductCategory}>
               <SelectTrigger className="bg-white text-neutral-900 max-w-md">
-                <SelectValue placeholder="Select product category to add" />
+                <SelectValue placeholder={productsLoading ? 'Loading products…' : 'Select product to add'} />
               </SelectTrigger>
               <SelectContent>
-                {TRAINER_CATEGORIES.filter((c) => !form.trainerProducts.includes(c)).map((c) => (
-                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                {products.map((product) => product.productName)
+                  .filter((name) => !form.trainerProducts.includes(name))
+                  .map((name) => (
+                  <SelectItem key={name} value={name}>{name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -384,7 +420,15 @@ export default function AddTrainerPage() {
                 {form.trainerProducts.map((p) => (
                   <span key={p} className="inline-flex items-center gap-1 rounded-full bg-neutral-200 px-3 py-1 text-sm">
                     {p}
-                    <button type="button" className="text-neutral-600 hover:text-red-600" onClick={() => removeProductCategory(p)} aria-label={`Remove ${p}`}>×</button>
+                    <button
+                      type="button"
+                      className="text-neutral-600 hover:text-red-600"
+                      onClick={() => {
+                        removeProductCategory(p)
+                        setForm((current) => ({ ...current, verticalManagerId: '' }))
+                      }}
+                      aria-label={`Remove ${p}`}
+                    >×</button>
                   </span>
                 ))}
               </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
@@ -8,7 +8,8 @@ import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebSelect } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 
-import { TRAINER_CATEGORIES } from '../../constants/trainerCategories';
+type ProductOption = { _id: string; productName: string };
+type ProductHead = { _id: string; name: string; assignedProductIds?: Array<string | { _id?: string }> };
 
 export default function TrainersNewScreen({ navigation }: any) {
   const [form, setForm] = useState({
@@ -24,9 +25,12 @@ export default function TrainersNewScreen({ navigation }: any) {
     trainerVedicLevels: '',
     trainerLevels: '',
     trainerType: 'Employee',
+    verticalManagerId: '',
   });
   const [zones, setZones] = useState<string[]>([]);
   const [clustersByZone, setClustersByZone] = useState<Record<string, string[]>>({});
+  const [products, setProducts] = useState<ProductOption[]>([]);
+  const [productHeads, setProductHeads] = useState<ProductHead[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -36,9 +40,11 @@ export default function TrainersNewScreen({ navigation }: any) {
   useEffect(() => {
     (async () => {
       try {
-        const [pairsRaw, zonesRaw] = await Promise.all([
-          apiService.get<any[]>('/zones-clusters').catch(() => []),
-          apiService.get<any[]>('/zones').catch(() => []),
+        const [pairsRaw, zonesRaw, productsRaw, productHeadsRaw] = await Promise.all([
+          apiService.get('/zones-clusters').catch(() => []),
+          apiService.get('/zones').catch(() => []),
+          apiService.get('/products/active').catch(() => []),
+          apiService.get('/employees?isActive=true&role=Manager').catch(() => []),
         ]);
         const pairs = Array.isArray(pairsRaw) ? pairsRaw : [];
         const zoneDocs = Array.isArray(zonesRaw) ? zonesRaw : [];
@@ -53,23 +59,41 @@ export default function TrainersNewScreen({ navigation }: any) {
         const zoneNames = zoneDocs.map((z: any) => (z.name || '').trim()).filter(Boolean);
         setZones([...new Set([...Object.keys(zoneMap), ...zoneNames])].sort());
         setClustersByZone(zoneMap);
+        setProducts(Array.isArray(productsRaw) ? productsRaw : []);
+        setProductHeads(Array.isArray(productHeadsRaw) ? productHeadsRaw : []);
       } catch {
         /* zones optional */
       }
     })();
   }, []);
 
+  const eligibleProductHeads = useMemo(() => {
+    const selectedIds = products
+      .filter((product) => form.trainerProducts.includes(product.productName))
+      .map((product) => product._id);
+    return productHeads.filter((head) => {
+      const assigned = new Set(
+        (head.assignedProductIds || []).map((value) =>
+          typeof value === 'string' ? value : String(value?._id || ''),
+        ),
+      );
+      return selectedIds.every((id) => assigned.has(id));
+    });
+  }, [form.trainerProducts, productHeads, products]);
+
   const addProductCategory = (value: string) => {
     if (!value || form.trainerProducts.includes(value)) return;
-    setForm((f) => ({ ...f, trainerProducts: [...f.trainerProducts, value] }));
+    setForm((f) => ({ ...f, trainerProducts: [...f.trainerProducts, value], verticalManagerId: '' }));
     setCategoryPickerKey((k) => k + 1);
   };
 
   const removeProductCategory = (p: string) => {
-    setForm((f) => ({ ...f, trainerProducts: f.trainerProducts.filter((x) => x !== p) }));
+    setForm((f) => ({ ...f, trainerProducts: f.trainerProducts.filter((x) => x !== p), verticalManagerId: '' }));
   };
 
-  const availableCategories = TRAINER_CATEGORIES.filter((c) => !form.trainerProducts.includes(c));
+  const availableCategories = products
+    .map((product) => product.productName)
+    .filter((name) => !form.trainerProducts.includes(name));
 
   const handleSubmit = async () => {
     setSuccessMessage(null);
@@ -84,7 +108,11 @@ export default function TrainersNewScreen({ navigation }: any) {
       return;
     }
     if (form.trainerProducts.length === 0) {
-      setErrorMessage('Select at least one product category');
+      setErrorMessage('Select at least one product');
+      return;
+    }
+    if (!form.verticalManagerId) {
+      setErrorMessage('Select the Product Head');
       return;
     }
     setSubmitting(true);
@@ -104,6 +132,7 @@ export default function TrainersNewScreen({ navigation }: any) {
         trainerVedicLevels: '',
         trainerLevels: '',
         trainerType: 'Employee',
+        verticalManagerId: '',
       });
     } catch (error: any) {
       setErrorMessage(error.message || 'Failed to create trainer');
@@ -161,15 +190,15 @@ export default function TrainersNewScreen({ navigation }: any) {
 
         <FormField label="Address" value={form.address1} onChangeText={(t: string) => setForm((f) => ({ ...f, address1: t }))} multiline />
 
-        <Text style={styles.sectionTitle}>Product Category *</Text>
+        <Text style={styles.sectionTitle}>Products *</Text>
         {availableCategories.length > 0 && (
           <WebSelect
             key={`cat-${categoryPickerKey}`}
-            label="Add category"
+            label="Add product"
             value=""
             onValueChange={addProductCategory}
             items={availableCategories.map((c) => ({ label: c, value: c }))}
-            placeholder="Select product category"
+            placeholder="Select product"
           />
         )}
         <View style={styles.checkboxRow}>
@@ -180,7 +209,18 @@ export default function TrainersNewScreen({ navigation }: any) {
           ))}
         </View>
         {form.trainerProducts.length === 0 && (
-          <Text style={styles.hint}>No categories selected</Text>
+          <Text style={styles.hint}>No products selected</Text>
+        )}
+        <WebSelect
+          label="Product Head *"
+          value={form.verticalManagerId}
+          onValueChange={(verticalManagerId) => setForm((current) => ({ ...current, verticalManagerId }))}
+          items={eligibleProductHeads.map((head) => ({ label: head.name, value: head._id }))}
+          placeholder="Select Product Head"
+          disabled={!form.trainerProducts.length || eligibleProductHeads.length === 0}
+        />
+        {form.trainerProducts.length > 0 && eligibleProductHeads.length === 0 && (
+          <Text style={styles.hint}>Assign the selected product(s) to a Product Head first.</Text>
         )}
 
         {form.trainerProducts.includes('Abacus') && (
