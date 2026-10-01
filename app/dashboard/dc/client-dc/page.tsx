@@ -87,6 +87,8 @@ type DC = {
     products?: any
     status?: string // Status of the DcOrder (e.g., 'saved' for closed leads)
     school_type?: string // 'Existing' for renewal leads, otherwise 'New School'
+    transport_name?: string
+    transport_location?: string
     createdAt?: string // Date when lead was turned to client
     pendingEdit?: { status?: string }
   }
@@ -95,6 +97,19 @@ type DC = {
   product?: string
   status?: string
   poPhotoUrl?: string
+  transport?: string
+  transportArea?: string
+  lrNo?: string
+  lrDate?: string
+  deliveryStatus?: string
+  workflow?: {
+    stage?: string
+    label?: string
+    nextActorRole?: string
+    nextAction?: string
+    rawStatus?: string | null
+    warehouseStage?: string | null
+  }
   createdAt?: string
   productDetails?: any[]
   clientOperations?: {
@@ -107,6 +122,17 @@ type DC = {
     programsStartedDate?: string
     trainingStatus?: 'Completed' | 'Not completed'
     pagesCompleted?: { program: string; pages: number }[]
+  }
+  deliveryClosure?: {
+    status?: 'pending' | 'received' | 'partial' | 'claimed'
+    receivedByName?: string
+    receivedByRole?: string
+    receivedByContact?: string
+    receivedAt?: string
+    receivedQuantity?: number
+    shortageQuantity?: number
+    claimStatus?: 'none' | 'open' | 'resolved'
+    claimNote?: string
   }
   _isConvertedLead?: boolean // Flag to indicate this is a converted lead (saved DcOrder)
 }
@@ -121,6 +147,17 @@ type ClientOpsDraft = {
   programsStartedDate: string
   trainingStatus: '' | 'Completed' | 'Not completed'
   pagesCompleted: { program: string; pages: string }[]
+}
+
+type DeliveryClosureDraft = {
+  status: 'pending' | 'received' | 'partial' | 'claimed'
+  receivedByName: string
+  receivedByRole: string
+  receivedByContact: string
+  receivedQuantity: string
+  shortageQuantity: string
+  claimStatus: 'none' | 'open' | 'resolved'
+  claimNote: string
 }
 
 function clientProgramNames(d: DC): string[] {
@@ -164,12 +201,28 @@ function opsFromDc(d: DC): ClientOpsDraft {
   }
 }
 
+function closureFromDc(d: DC): DeliveryClosureDraft {
+  const closure = d.deliveryClosure || {}
+  return {
+    status: closure.status || 'pending',
+    receivedByName: closure.receivedByName || '',
+    receivedByRole: closure.receivedByRole || '',
+    receivedByContact: closure.receivedByContact || '',
+    receivedQuantity: closure.receivedQuantity === undefined ? '' : String(closure.receivedQuantity),
+    shortageQuantity: closure.shortageQuantity === undefined ? '' : String(closure.shortageQuantity),
+    claimStatus: closure.claimStatus || 'none',
+    claimNote: closure.claimNote || '',
+  }
+}
+
 export default function ClientDCPage() {
   const router = useRouter()
   const currentUser = getCurrentUser()
   const [items, setItems] = useState<DC[]>([])
   const [opsDraft, setOpsDraft] = useState<Record<string, ClientOpsDraft>>({})
+  const [closureDraft, setClosureDraft] = useState<Record<string, DeliveryClosureDraft>>({})
   const [savingOpsId, setSavingOpsId] = useState<string | null>(null)
+  const [savingClosureId, setSavingClosureId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [selectedDC, setSelectedDC] = useState<DC | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -1435,6 +1488,80 @@ export default function ClientDCPage() {
       toast.error(e?.message || 'Failed to save client operations')
     } finally {
       setSavingOpsId(null)
+    }
+  }
+
+  const currentClosure = (d: DC) => closureDraft[d._id] || closureFromDc(d)
+
+  const patchClosure = (d: DC, patch: Partial<DeliveryClosureDraft>) => {
+    setClosureDraft((prev) => {
+      const base = prev[d._id] || closureFromDc(d)
+      return { ...prev, [d._id]: { ...base, ...patch } }
+    })
+  }
+
+  const saveDeliveryClosure = async (d: DC) => {
+    const closure = currentClosure(d)
+    const workflowStage = d.workflow?.stage
+    const canConfirmReceipt =
+      String(d.status || '').toLowerCase() === 'completed' ||
+      workflowStage === 'delivery_confirmation' ||
+      workflowStage === 'billing'
+
+    if (!canConfirmReceipt) {
+      toast.error('Receipt confirmation becomes available after the DC is dispatched')
+      return
+    }
+    if (closure.status !== 'pending' && !closure.receivedByName.trim()) {
+      toast.error('Enter the name of the person who received the books')
+      return
+    }
+
+    const receivedQuantity = closure.receivedQuantity.trim() === ''
+      ? undefined
+      : Number(closure.receivedQuantity)
+    const shortageQuantity = closure.shortageQuantity.trim() === ''
+      ? undefined
+      : Number(closure.shortageQuantity)
+    if (receivedQuantity !== undefined && (!Number.isFinite(receivedQuantity) || receivedQuantity < 0)) {
+      toast.error('Received quantity must be a non-negative number')
+      return
+    }
+    if (shortageQuantity !== undefined && (!Number.isFinite(shortageQuantity) || shortageQuantity < 0)) {
+      toast.error('Shortage quantity must be a non-negative number')
+      return
+    }
+
+    setSavingClosureId(d._id)
+    try {
+      const deliveryClosure = {
+        status: closure.status,
+        receivedByName: closure.receivedByName.trim() || undefined,
+        receivedByRole: closure.receivedByRole.trim() || undefined,
+        receivedByContact: closure.receivedByContact.trim() || undefined,
+        receivedQuantity,
+        shortageQuantity,
+        claimStatus: closure.claimStatus,
+        claimNote: closure.claimNote.trim() || undefined,
+      }
+      const path = d._isConvertedLead ? `/dc-orders/${d._id}` : `/dc/${d._id}`
+      await apiRequest(path, {
+        method: 'PUT',
+        body: JSON.stringify({ deliveryClosure }),
+      })
+      setItems((prev) =>
+        prev.map((item) => (item._id === d._id ? { ...item, deliveryClosure } : item))
+      )
+      setClosureDraft((prev) => {
+        const next = { ...prev }
+        delete next[d._id]
+        return next
+      })
+      toast.success('Delivery receipt and claim details saved')
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to save delivery closure')
+    } finally {
+      setSavingClosureId(null)
     }
   }
 
@@ -2964,7 +3091,7 @@ export default function ClientDCPage() {
                   overflowY: 'visible'
                 }}
               >
-                <Table className="min-w-[1680px] w-full">
+                <Table className="min-w-[2320px] w-full">
               <TableHeader>
                 <TableRow className="bg-gradient-to-r from-neutral-50 via-neutral-50 to-neutral-100 border-b-2 border-neutral-200/80 sticky top-0 z-20">
                   <TableHead className="w-[50px] font-bold text-neutral-700 py-4">S.No</TableHead>
@@ -2972,7 +3099,10 @@ export default function ClientDCPage() {
                   <TableHead className="font-bold text-neutral-700 py-4">Client Name</TableHead>
                   <TableHead className="font-bold text-neutral-700 py-4">Phone</TableHead>
                   <TableHead className="font-bold text-neutral-700 py-4">Product</TableHead>
+                  <TableHead className="font-bold text-neutral-700 py-4 min-w-[220px]">Workflow / next action</TableHead>
+                  <TableHead className="font-bold text-neutral-700 py-4 min-w-[180px]">Transport / LR</TableHead>
                   <TableHead className="font-bold text-neutral-700 py-4">Delivery status</TableHead>
+                  <TableHead className="font-bold text-neutral-700 py-4 min-w-[260px]">Receipt / claims</TableHead>
                   <TableHead className="font-bold text-neutral-700 py-4">Books distributed</TableHead>
                   <TableHead className="font-bold text-neutral-700 py-4">Cluster point</TableHead>
                   <TableHead className="font-bold text-neutral-700 py-4">Client verified books</TableHead>
@@ -2989,7 +3119,7 @@ export default function ClientDCPage() {
               <TableBody>
                 {filteredItems.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={15} className="text-center text-neutral-500 py-4">
+                    <TableCell colSpan={20} className="text-center text-neutral-500 py-4">
                       No clients found matching your search.
                     </TableCell>
                   </TableRow>
@@ -3006,6 +3136,15 @@ export default function ClientDCPage() {
                         : d.status || 'created'
                     const awaitingManagerApproval = dcsWithPendingEditRequests.has(d._id)
                     const status = awaitingManagerApproval ? 'sent_to_manager' : rawStatus
+                    const workflow = d.workflow || {}
+                    const linkedOrder = typeof d.dcOrderId === 'object' ? d.dcOrderId : undefined
+                    const transportName = d.transport || linkedOrder?.transport_name || '-'
+                    const transportArea = d.transportArea || linkedOrder?.transport_location || ''
+                    const closure = currentClosure(d)
+                    const receiptReady =
+                      String(d.status || '').toLowerCase() === 'completed' ||
+                      workflow.stage === 'delivery_confirmation' ||
+                      workflow.stage === 'billing'
                     const createdDate = d.createdAt ? new Date(d.createdAt).toLocaleDateString() : '-'
                     // Client turned date: use dcOrderId.createdAt for converted leads, otherwise use createdAt
                     const turnedDate = (typeof d.dcOrderId === 'object' && d.dcOrderId?.createdAt)
@@ -3024,6 +3163,34 @@ export default function ClientDCPage() {
                         <TableCell className="text-neutral-700">{phone}</TableCell>
                         <TableCell className="max-w-[320px] whitespace-normal break-words text-neutral-700" title={product}>{product}</TableCell>
                         <TableCell>
+                          <div className="flex flex-col gap-1 min-w-[210px]">
+                            <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 w-fit">
+                              {workflow.label || status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                            </span>
+                            <span className="text-xs font-medium text-neutral-700">
+                              Next: {workflow.nextActorRole || 'BDE'}
+                            </span>
+                            {workflow.nextAction && (
+                              <span className="text-xs text-neutral-500 whitespace-normal">
+                                {workflow.nextAction}
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-1 min-w-[170px] text-xs">
+                            <span className="font-medium text-neutral-700">{transportName}</span>
+                            {transportArea && <span className="text-neutral-500">{transportArea}</span>}
+                            {d.lrNo && <span className="text-neutral-600">LR: {d.lrNo}</span>}
+                            {d.lrDate && (
+                              <span className="text-neutral-500">
+                                {new Date(d.lrDate).toLocaleDateString()}
+                              </span>
+                            )}
+                            {!d.lrNo && <span className="text-amber-600">LR pending</span>}
+                          </div>
+                        </TableCell>
+                        <TableCell>
                           {d.clientOperations?.deliveryStatus === 'DELIVERED' ? (
                             <Input value="DELIVERED" readOnly className="h-8 w-[130px] bg-neutral-100 text-xs font-medium" />
                           ) : (
@@ -3041,6 +3208,103 @@ export default function ClientDCPage() {
                                 <SelectItem value="DELIVERED">DELIVERED</SelectItem>
                               </SelectContent>
                             </Select>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {!receiptReady ? (
+                            <span className="text-xs text-neutral-400">Available after dispatch</span>
+                          ) : (
+                            <div className="flex flex-col gap-2 min-w-[250px]">
+                              <Select
+                                value={closure.status}
+                                onValueChange={(v) =>
+                                  patchClosure(d, { status: v as DeliveryClosureDraft['status'] })
+                                }
+                              >
+                                <SelectTrigger className="h-8 bg-white text-xs">
+                                  <SelectValue placeholder="Receipt status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="pending">Pending receipt</SelectItem>
+                                  <SelectItem value="received">Received in full</SelectItem>
+                                  <SelectItem value="partial">Partially received</SelectItem>
+                                  <SelectItem value="claimed">Claim raised</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              {closure.status !== 'pending' && (
+                                <>
+                                  <Input
+                                    className="h-8 bg-white text-xs"
+                                    placeholder="Received by (name)"
+                                    value={closure.receivedByName}
+                                    onChange={(e) => patchClosure(d, { receivedByName: e.target.value })}
+                                  />
+                                  <div className="flex gap-2">
+                                    <Input
+                                      className="h-8 bg-white text-xs"
+                                      placeholder="Role"
+                                      value={closure.receivedByRole}
+                                      onChange={(e) => patchClosure(d, { receivedByRole: e.target.value })}
+                                    />
+                                    <Input
+                                      className="h-8 bg-white text-xs"
+                                      placeholder="Contact"
+                                      value={closure.receivedByContact}
+                                      onChange={(e) => patchClosure(d, { receivedByContact: e.target.value })}
+                                    />
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <Input
+                                      className="h-8 bg-white text-xs"
+                                      inputMode="numeric"
+                                      placeholder="Received qty"
+                                      value={closure.receivedQuantity}
+                                      onChange={(e) => patchClosure(d, { receivedQuantity: e.target.value.replace(/[^\d.]/g, '') })}
+                                    />
+                                    <Input
+                                      className="h-8 bg-white text-xs"
+                                      inputMode="numeric"
+                                      placeholder="Shortage qty"
+                                      value={closure.shortageQuantity}
+                                      onChange={(e) => patchClosure(d, { shortageQuantity: e.target.value.replace(/[^\d.]/g, '') })}
+                                    />
+                                  </div>
+                                  <Select
+                                    value={closure.claimStatus}
+                                    onValueChange={(v) =>
+                                      patchClosure(d, { claimStatus: v as DeliveryClosureDraft['claimStatus'] })
+                                    }
+                                  >
+                                    <SelectTrigger className="h-8 bg-white text-xs">
+                                      <SelectValue placeholder="Claim status" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="none">No claim</SelectItem>
+                                      <SelectItem value="open">Claim open</SelectItem>
+                                      <SelectItem value="resolved">Claim resolved</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  {(closure.claimStatus === 'open' || closure.status === 'claimed') && (
+                                    <Input
+                                      className="h-8 bg-white text-xs"
+                                      placeholder="Shortage / claim note"
+                                      value={closure.claimNote}
+                                      onChange={(e) => patchClosure(d, { claimNote: e.target.value })}
+                                    />
+                                  )}
+                                </>
+                              )}
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-8"
+                                disabled={savingClosureId === d._id}
+                                onClick={() => saveDeliveryClosure(d)}
+                              >
+                                {savingClosureId === d._id ? 'Saving…' : 'Save receipt'}
+                              </Button>
+                            </div>
                           )}
                         </TableCell>
                         <TableCell>
