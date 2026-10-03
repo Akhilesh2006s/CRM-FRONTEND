@@ -83,12 +83,12 @@ export default function TrainersNewScreen({ navigation }: any) {
 
   const addProductCategory = (value: string) => {
     if (!value || form.trainerProducts.includes(value)) return;
-    setForm((f) => ({ ...f, trainerProducts: [...f.trainerProducts, value], verticalManagerId: '' }));
+    setForm((f) => ({ ...f, trainerProducts: [...f.trainerProducts, value] }));
     setCategoryPickerKey((k) => k + 1);
   };
 
   const removeProductCategory = (p: string) => {
-    setForm((f) => ({ ...f, trainerProducts: f.trainerProducts.filter((x) => x !== p), verticalManagerId: '' }));
+    setForm((f) => ({ ...f, trainerProducts: f.trainerProducts.filter((x) => x !== p) }));
   };
 
   const availableCategories = products

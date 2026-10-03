@@ -212,7 +212,6 @@ export default function AddTrainerPage() {
     setForm((f) => ({
       ...f,
       trainerProducts: [...f.trainerProducts, value],
-      verticalManagerId: '',
     }))
   }
 
@@ -423,10 +422,7 @@ export default function AddTrainerPage() {
                     <button
                       type="button"
                       className="text-neutral-600 hover:text-red-600"
-                      onClick={() => {
-                        removeProductCategory(p)
-                        setForm((current) => ({ ...current, verticalManagerId: '' }))
-                      }}
+                      onClick={() => removeProductCategory(p)}
                       aria-label={`Remove ${p}`}
                     >×</button>
                   </span>

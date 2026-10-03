@@ -516,7 +516,7 @@ export default function NewEmployeePage() {
           ? [form.zone.trim()]
           : []
         : form.zones.map((z) => z.trim()).filter(Boolean)
-      if (form.role !== 'Office Team' && selectedZones.length === 0) {
+      if (!['Office Team', 'Manager'].includes(form.role) && selectedZones.length === 0) {
         setError(isSingleZoneRole(form.role) ? 'Zone is required for BDE' : 'Select at least one zone')
         setSubmitting(false)
         return
@@ -1202,7 +1202,11 @@ export default function NewEmployeePage() {
               required
             />
           </div>
-          {isSingleZoneRole(form.role) ? (
+          {form.role === 'Manager' ? (
+            <div className="md:col-span-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+              Zone selection is not required for a Product Manager. The assigned product controls which schools appear, across all zones.
+            </div>
+          ) : isSingleZoneRole(form.role) ? (
             <div>
               <Label>Zone *</Label>
               <Select
@@ -1323,19 +1327,22 @@ export default function NewEmployeePage() {
                 setForm((f) => {
                   const allowed = new Set(filterTagOptions(tagOptions, v).map((e) => e._id))
                   const single = isSingleZoneRole(v)
-                  const zones = single
-                    ? f.zone
-                      ? [f.zone]
-                      : f.zones.slice(0, 1)
-                    : f.zones.length
-                      ? f.zones
-                      : f.zone
+                  const zoneOptional = v === 'Manager' || v === 'Office Team'
+                  const zones = zoneOptional
+                    ? []
+                    : single
+                      ? f.zone
                         ? [f.zone]
-                        : []
+                        : f.zones.slice(0, 1)
+                      : f.zones.length
+                        ? f.zones
+                        : f.zone
+                          ? [f.zone]
+                          : []
                   return {
                     ...f,
                     role: v,
-                    zone: zones[0] || '',
+                    zone: zoneOptional ? '' : zones[0] || '',
                     zones,
                     cluster: single ? f.cluster : '',
                     trainerProducts: v === 'Trainer' ? f.trainerProducts : [],
@@ -1448,7 +1455,7 @@ export default function NewEmployeePage() {
                             const selected = current.trainerProducts.includes(product.productName)
                               ? current.trainerProducts.filter((name) => name !== product.productName)
                               : [...current.trainerProducts, product.productName]
-                            return { ...current, trainerProducts: selected, verticalManagerId: '' }
+                            return { ...current, trainerProducts: selected }
                           })
                         }
                       />
