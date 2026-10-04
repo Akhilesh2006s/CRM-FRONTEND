@@ -131,19 +131,27 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
   if (isExecutive || role === 'Sales BDE') {
     return [
       {
-        title: 'Leads',
+        title: 'DC',
         items: [
-          { label: 'Add Lead', screen: 'LeadAdd' },
-          { label: 'Followup Leads', screen: 'LeadFollowup' },
-          { label: 'My Leads', screen: 'LeadsList' },
-          { label: 'School Visits', screen: 'SchoolVisits' },
+          { label: 'Create Sale', screen: 'DCCreateSale' },
+          { label: 'Emp DC', screen: 'DCEmp' },
         ],
       },
       {
         title: 'Clients',
         items: [
           { label: 'My Clients', screen: 'DCClient' },
+          { label: 'Renewal', screen: 'LeadsRenewalList' },
           { label: 'Term-Wise DC', screen: 'DCTermWise' },
+        ],
+      },
+      {
+        title: 'Leads',
+        items: [
+          { label: 'Add Lead', screen: 'LeadAdd' },
+          { label: 'Followup Leads', screen: 'LeadFollowup' },
+          { label: 'My Leads', screen: 'LeadsList' },
+          { label: 'School Visits', screen: 'SchoolVisits' },
         ],
       },
       {

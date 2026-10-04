@@ -515,8 +515,9 @@ function applyVendorSectionNav(nav: NavItem[]): NavItem[] {
 function applyExecutiveSidebarOrder(nav: NavItem[]): NavItem[] {
   const preferred = [
     'Dashboard',
-    'Leads',
+    'DC',
     'Clients',
+    'Leads',
     'Leave Management',
     'Stock Returns',
     'Payments',
@@ -543,13 +544,23 @@ function applyExecutiveSidebarOrder(nav: NavItem[]): NavItem[] {
     byLabel.delete('My Leaves')
   }
 
-  // Executive Clients: client work, including renewals (no Create Sale / Closed Sales / etc.)
+  // Executive DC: only BDE-owned actions. Closed Sales belongs to Coordinator and
+  // Pending DC belongs to Senior Coordinator, so those queues stay hidden here.
+  byLabel.set('DC', {
+    label: 'DC',
+    icon: Truck,
+    children: [
+      { label: 'Create Sale', href: '/dashboard/dc/create', icon: PlusCircle },
+      { label: 'Emp DC', href: '/dashboard/dc/emp', icon: UserCircle2 },
+    ],
+  })
+
+  // Executive Clients: client work, including renewals.
   byLabel.set('Clients', {
     label: 'Clients',
     icon: Users,
     children: [
       { label: 'My Clients', href: '/dashboard/dc/client-dc', icon: Users },
-      { label: 'Create DC / Main DCs', href: '/dashboard/dc/grid', icon: PlusCircle },
       { label: 'Renewal', href: '/dashboard/leads/renewal', icon: RefreshCw },
       { label: 'Term-Wise DC', href: '/dashboard/dc/client-dc/term-wise', icon: FileText },
     ],
@@ -631,7 +642,7 @@ function extractExtraNavItems(
 
 /** Merge extras into same-label sections so React keys stay unique and toggles work. */
 function mergeNavExtras(base: NavItem[], extras: NavItem[]): NavItem[] {
-  const result = base.map((item) => ({
+  const result: NavItem[] = base.map((item) => ({
     ...item,
     children: item.children ? [...item.children] : undefined,
   }))
@@ -1123,7 +1134,7 @@ export function Sidebar() {
     ]
   }
 
-  // Executive: enforce sidebar order (Clients ▾ with My Clients + Term-Wise DC).
+  // Executive: enforce DC, Clients, and Leads naming/grouping.
   if (isEmployee || isExecutive) {
     finalNav = applyExecutiveSidebarOrder(finalNav)
   }

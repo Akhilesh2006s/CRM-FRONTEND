@@ -97,6 +97,15 @@ export function canAccessPath(
   if (pathname === '/dashboard/dc/pending' || pathname.startsWith('/dashboard/dc/pending/')) {
     return user.role === 'Senior Coordinator'
   }
+  if (
+    (user.role === 'Executive' || user.role === 'Sales BDE') &&
+    (pathname === '/dashboard/dc/create' ||
+      pathname.startsWith('/dashboard/dc/create/') ||
+      pathname === '/dashboard/dc/emp' ||
+      pathname.startsWith('/dashboard/dc/emp/'))
+  ) {
+    return true
+  }
   if (user.role === 'Manager') {
     return (
       pathname === '/dashboard' ||
