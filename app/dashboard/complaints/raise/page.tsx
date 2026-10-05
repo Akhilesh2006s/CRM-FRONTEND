@@ -70,7 +70,7 @@ export default function RaiseComplaintPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Raise Complaint</h1>
-        <p className="text-sm text-neutral-600 mt-1">Send a complaint to the coordinator.</p>
+        <p className="text-sm text-neutral-600 mt-1">Any employee can raise a complaint for coordinator review.</p>
       </div>
 
       <Card className="p-4 md:p-6 max-w-3xl">

@@ -94,6 +94,14 @@ export function canAccessPath(
   if (options?.loading) return true
   if (!user) return false
   if (isSuperAdmin(user)) return true
+  // Every authenticated employee may raise and view their own complaints.
+  if (pathname === '/dashboard/complaints/raise' || pathname.startsWith('/dashboard/complaints/raise/')) {
+    return true
+  }
+  // Every authenticated employee may raise and view their own complaints.
+  if (pathname === '/dashboard/complaints/raise' || pathname.startsWith('/dashboard/complaints/raise/')) {
+    return true
+  }
   if (pathname === '/dashboard/dc/pending' || pathname.startsWith('/dashboard/dc/pending/')) {
     return user.role === 'Senior Coordinator'
   }

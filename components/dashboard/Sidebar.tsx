@@ -84,6 +84,38 @@ type NavItem = {
   children?: { label: string; href: string; icon?: any; adminOnly?: boolean }[]
 }
 
+function ensureRaiseComplaintNav(nav: NavItem[]): NavItem[] {
+  const href = '/dashboard/complaints/raise'
+  const alreadyIncluded = nav.some(
+    (item) => item.href === href || item.children?.some((child) => child.href === href)
+  )
+  if (alreadyIncluded) return nav
+
+  const complaintsIndex = nav.findIndex((item) => item.label === 'Complaints')
+  if (complaintsIndex >= 0 && nav[complaintsIndex].children) {
+    return nav.map((item, index) =>
+      index === complaintsIndex
+        ? {
+            ...item,
+            children: [
+              { label: 'Raise a Ticket', href, icon: PlusCircle },
+              ...(item.children || []),
+            ],
+          }
+        : item
+    )
+  }
+
+  const item: NavItem = {
+    label: 'Raise a Ticket (Complaints)',
+    icon: AlertCircle,
+    href,
+  }
+  const insertAt = nav.findIndex((entry) => entry.label === 'Settings' || entry.label === 'Sign out')
+  if (insertAt < 0) return [...nav, item]
+  return [...nav.slice(0, insertAt), item, ...nav.slice(insertAt)]
+}
+
 function HoverTooltip({ item, pathname, onClose }: { item: NavItem; pathname: string | null; onClose: () => void }) {
   const tooltipRef = useRef<HTMLDivElement>(null)
   const [position, setPosition] = useState({ top: 0, left: 64 })
@@ -1213,6 +1245,9 @@ export function Sidebar() {
       return children.length === item.children.length ? item : { ...item, children }
     })
   }
+
+  // Complaint raising is available to every authenticated role.
+  finalNav = ensureRaiseComplaintNav(finalNav)
 
   const navReady = mounted && (!rbacActive || permissionsReady)
 
