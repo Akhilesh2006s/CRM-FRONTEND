@@ -185,6 +185,11 @@ export function canAccessPath(
     (user.role === 'HR Manager' || user.role === 'HR Executive') &&
     (pathname.startsWith('/dashboard/employees') ||
       pathname.startsWith('/dashboard/leaves') ||
+      pathname === '/dashboard/expenses/create' ||
+      pathname === '/dashboard/expenses/my' ||
+      pathname.startsWith('/dashboard/expenses/create/') ||
+      pathname.startsWith('/dashboard/expenses/my/') ||
+      pathname === '/dashboard/complaints/raise' ||
       pathname === '/dashboard' ||
       pathname.startsWith('/dashboard/settings/password'))
   ) {

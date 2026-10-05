@@ -36,7 +36,7 @@ export default function LoginScreen() {
   const handleLogin = async () => {
     setError(null);
     if (!mobile || !password) {
-      setError('Please enter mobile number or email and password');
+      setError('Please enter your official company number and password');
       return;
     }
 
@@ -132,15 +132,15 @@ export default function LoginScreen() {
                 <View style={styles.inputContainer}>
                   <View style={styles.labelRow}>
                     <Ionicons name="person-outline" size={16} color={colors.textSecondary} />
-                    <Text style={styles.inputLabel}>Mobile number or email</Text>
+                    <Text style={styles.inputLabel}>Official Company Number</Text>
                   </View>
                   <TextInput
                     style={styles.input}
-                    placeholder="Mobile number or email"
+                    placeholder="Official Company Number"
                     placeholderTextColor={colors.textMuted}
                     value={mobile}
-                    onChangeText={setMobile}
-                    keyboardType="default"
+                    onChangeText={(value) => setMobile(value.replace(/\D/g, '').slice(0, 15))}
+                    keyboardType="phone-pad"
                     autoCapitalize="none"
                     autoComplete="username"
                     onSubmitEditing={handleLogin}

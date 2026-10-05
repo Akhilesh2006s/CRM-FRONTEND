@@ -741,6 +741,19 @@ export function Sidebar() {
         ],
       },
       {
+        label: 'Expenses',
+        icon: Calculator,
+        children: [
+          { label: 'Create Expense', href: '/dashboard/expenses/create', icon: PlusCircle },
+          { label: 'My Expenses', href: '/dashboard/expenses/my', icon: FileText },
+        ],
+      },
+      {
+        label: 'Raise a Ticket (Complaints)',
+        icon: AlertCircle,
+        href: '/dashboard/complaints/raise',
+      },
+      {
         label: 'Settings',
         icon: Settings,
         children: [{ label: 'Change Password', href: '/dashboard/settings/password' }],

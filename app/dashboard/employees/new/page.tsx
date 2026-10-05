@@ -37,6 +37,8 @@ type EmployeeOption = {
 }
 type ProductSchool = { schoolName: string; schoolCode: string; zone: string; cluster: string; zonalManager: string; contactPerson: string }
 type ProductSchoolsResponse = { schools: ProductSchool[] }
+const MULTI_ZONE_ROLES = ['Executive Manager', 'Trainer', 'Coordinator', 'Senior Coordinator']
+const roleUsesZones = (role: string) => isSingleZoneRole(role) || MULTI_ZONE_ROLES.includes(role)
 
 export default function NewEmployeePage() {
   const router = useRouter()
@@ -49,7 +51,7 @@ export default function NewEmployeePage() {
     phone: '',
     mobile: '',
     hasEmployeeRelationship: null as boolean | null,
-    employeeRelationshipDetails: { fullName: '', department: '', designation: '' },
+    employeeRelationshipDetails: { fullName: '', relationship: '', department: '', designation: '' },
     dateOfBirth: '',
     dateOfJoining: '',
     passportPhotoUrl: '',
@@ -473,8 +475,8 @@ export default function NewEmployeePage() {
       }
       if (form.hasEmployeeRelationship) {
         const relationship = form.employeeRelationshipDetails
-        if (!relationship.fullName.trim() || !relationship.department.trim() || !relationship.designation.trim()) {
-          setError('Enter the full name, department, and designation of the employee connection')
+        if (!relationship.fullName.trim() || !relationship.relationship.trim() || !relationship.department.trim() || !relationship.designation.trim()) {
+          setError('Enter the full name, relationship, department, and designation of the employee connection')
           setSubmitting(false)
           return
         }
@@ -511,12 +513,14 @@ export default function NewEmployeePage() {
         return
       }
 
-      const selectedZones = isSingleZoneRole(form.role)
+      const selectedZones = !roleUsesZones(form.role)
+        ? []
+        : isSingleZoneRole(form.role)
         ? form.zone.trim()
           ? [form.zone.trim()]
           : []
         : form.zones.map((z) => z.trim()).filter(Boolean)
-      if (!['Office Team', 'Manager'].includes(form.role) && selectedZones.length === 0) {
+      if (roleUsesZones(form.role) && selectedZones.length === 0) {
         setError(isSingleZoneRole(form.role) ? 'Zone is required for BDE' : 'Select at least one zone')
         setSubmitting(false)
         return
@@ -596,6 +600,11 @@ export default function NewEmployeePage() {
           setSubmitting(false)
           return
         }
+      }
+      if (form.onboardingChecklist.length < 2) {
+        setError('Select at least two onboarding checklist items')
+        setSubmitting(false)
+        return
       }
       
       const payload: any = {
@@ -811,7 +820,7 @@ export default function NewEmployeePage() {
               Do you have any relatives, family members, or personal connections currently employed by Viswam EduTech Solutions Pvt. Ltd.?
             </p>
             <RadioGroup
-              className="mt-4 flex flex-wrap gap-6"
+              className="mt-4 grid max-w-md grid-cols-2 gap-3"
               value={
                 form.hasEmployeeRelationship === null
                   ? undefined
@@ -824,26 +833,36 @@ export default function NewEmployeePage() {
                   ...current,
                   hasEmployeeRelationship: value === 'yes',
                   ...(value === 'no'
-                    ? { employeeRelationshipDetails: { fullName: '', department: '', designation: '' } }
+                    ? { employeeRelationshipDetails: { fullName: '', relationship: '', department: '', designation: '' } }
                     : {}),
                 }))
               }
             >
-              <div className="flex items-center gap-2">
+              <Label
+                htmlFor="employee-relationship-yes"
+                className={`flex cursor-pointer items-center justify-center gap-3 rounded-lg border-2 px-5 py-3 text-base font-semibold transition ${
+                  form.hasEmployeeRelationship === true
+                    ? 'border-blue-600 bg-blue-50 text-blue-800 shadow-sm'
+                    : 'border-neutral-300 bg-white text-neutral-700 hover:border-blue-300'
+                }`}
+              >
                 <RadioGroupItem value="yes" id="employee-relationship-yes" />
-                <Label htmlFor="employee-relationship-yes" className="cursor-pointer font-normal">
-                  Yes
-                </Label>
-              </div>
-              <div className="flex items-center gap-2">
+                Yes
+              </Label>
+              <Label
+                htmlFor="employee-relationship-no"
+                className={`flex cursor-pointer items-center justify-center gap-3 rounded-lg border-2 px-5 py-3 text-base font-semibold transition ${
+                  form.hasEmployeeRelationship === false
+                    ? 'border-blue-600 bg-blue-50 text-blue-800 shadow-sm'
+                    : 'border-neutral-300 bg-white text-neutral-700 hover:border-blue-300'
+                }`}
+              >
                 <RadioGroupItem value="no" id="employee-relationship-no" />
-                <Label htmlFor="employee-relationship-no" className="cursor-pointer font-normal">
-                  No
-                </Label>
-              </div>
+                No
+              </Label>
             </RadioGroup>
             {form.hasEmployeeRelationship === true && (
-              <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
                   <Label htmlFor="relationship-full-name">Full Name *</Label>
                   <Input
@@ -859,6 +878,25 @@ export default function NewEmployeePage() {
                         },
                       }))
                     }
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="relationship-type">Relationship *</Label>
+                  <Input
+                    id="relationship-type"
+                    className="mt-1 bg-white text-neutral-900"
+                    value={form.employeeRelationshipDetails.relationship}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        employeeRelationshipDetails: {
+                          ...current.employeeRelationshipDetails,
+                          relationship: event.target.value,
+                        },
+                      }))
+                    }
+                    placeholder="e.g. Brother, spouse, friend"
                     required
                   />
                 </div>
@@ -1202,11 +1240,7 @@ export default function NewEmployeePage() {
               required
             />
           </div>
-          {form.role === 'Manager' ? (
-            <div className="md:col-span-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
-              Zone selection is not required for a Product Manager. The assigned product controls which schools appear, across all zones.
-            </div>
-          ) : isSingleZoneRole(form.role) ? (
+          {!roleUsesZones(form.role) ? null : isSingleZoneRole(form.role) ? (
             <div>
               <Label>Zone *</Label>
               <Select
@@ -1327,8 +1361,8 @@ export default function NewEmployeePage() {
                 setForm((f) => {
                   const allowed = new Set(filterTagOptions(tagOptions, v).map((e) => e._id))
                   const single = isSingleZoneRole(v)
-                  const zoneOptional = v === 'Manager' || v === 'Office Team'
-                  const zones = zoneOptional
+                  const usesZones = roleUsesZones(v)
+                  const zones = !usesZones
                     ? []
                     : single
                       ? f.zone
@@ -1342,7 +1376,7 @@ export default function NewEmployeePage() {
                   return {
                     ...f,
                     role: v,
-                    zone: zoneOptional ? '' : zones[0] || '',
+                    zone: usesZones ? zones[0] || '' : '',
                     zones,
                     cluster: single ? f.cluster : '',
                     trainerProducts: v === 'Trainer' ? f.trainerProducts : [],
@@ -1539,7 +1573,8 @@ export default function NewEmployeePage() {
 
           {error && <div className="md:col-span-2 text-red-600 text-sm">{error}</div>}
           <div className="md:col-span-2">
-              <div className="text-lg font-semibold mb-2">Onboarding checklist</div>
+              <div className="text-lg font-semibold mb-1">Onboarding checklist *</div>
+              <p className="mb-2 text-xs text-neutral-600">Select at least two items.</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2 border rounded p-3 bg-white">
                 {ONBOARDING_ITEMS.map((item) => (
                   <label key={item} className="flex items-center gap-2 text-sm">

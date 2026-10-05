@@ -13,7 +13,7 @@ type AuthResponse = {
 export async function login(mobile: string, password: string) {
   const data = await apiRequest<AuthResponse>('/auth/login', {
     method: 'POST',
-    body: JSON.stringify({ mobile, email: mobile, password }),
+    body: JSON.stringify({ mobile, password }),
   })
   if (typeof window !== 'undefined') {
     localStorage.setItem('authToken', data.token)

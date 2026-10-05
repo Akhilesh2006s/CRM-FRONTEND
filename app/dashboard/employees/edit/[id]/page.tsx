@@ -28,6 +28,12 @@ import {
 } from '@/lib/employeeFormValidation'
 
 type EmployeeOption = { _id: string; name: string; role: string }
+const MULTI_ZONE_ROLES = ['Executive Manager', 'Trainer', 'Coordinator', 'Senior Coordinator']
+const roleUsesZones = (role: string) => isSingleZoneRole(role) || MULTI_ZONE_ROLES.includes(role)
+const ONBOARDING_ITEMS = [
+  'App Training', 'Account Session', 'Product Training', 'Visiting cards', 'Id cards',
+  'Sim', 'Training Manuals', 'Marketing Kit (BDE)', 'Laptop', 'Others',
+]
 
 export default function EditEmployeePage() {
   const router = useRouter()
@@ -52,6 +58,8 @@ export default function EditEmployeePage() {
     role: 'Executive',
     designation: '',
     dateOfJoining: '',
+    onboardingChecklist: [] as string[],
+    onboardingOtherNote: '',
     taggedEmployeeIds: [] as string[],
   })
   const [loading, setLoading] = useState(true)
@@ -124,6 +132,8 @@ export default function EditEmployeePage() {
           role: emp.role || 'Executive',
           designation: emp.designation || '',
           dateOfJoining: '',
+          onboardingChecklist: Array.isArray(emp.onboardingChecklist) ? emp.onboardingChecklist : [],
+          onboardingOtherNote: emp.onboardingOtherNote || '',
           taggedEmployeeIds: (emp.taggedEmployeeIds || []).map((x: any) => String(x._id || x)),
         })
         setTagOptions(Array.isArray(employees) ? employees.filter((e) => e._id !== id) : [])
@@ -256,7 +266,9 @@ export default function EditEmployeePage() {
         }
       }
 
-      const selectedZones = isSingleZoneRole(form.role)
+      const selectedZones = !roleUsesZones(form.role)
+        ? []
+        : isSingleZoneRole(form.role)
         ? form.zone.trim()
           ? [form.zone.trim()]
           : []
@@ -266,13 +278,18 @@ export default function EditEmployeePage() {
         setSubmitting(false)
         return
       }
-      if (form.role !== 'Office Team' && selectedZones.length === 0) {
+      if (roleUsesZones(form.role) && selectedZones.length === 0) {
         setError(isSingleZoneRole(form.role) ? 'Zone is required for BDE' : 'Select at least one zone')
         setSubmitting(false)
         return
       }
       if (isSingleZoneRole(form.role) && !form.cluster?.trim()) {
         setError('Cluster is required for BDE role')
+        setSubmitting(false)
+        return
+      }
+      if (form.onboardingChecklist.length < 2) {
+        setError('Select at least two onboarding checklist items')
         setSubmitting(false)
         return
       }
@@ -425,7 +442,7 @@ export default function EditEmployeePage() {
             <Label>PinCode</Label>
             <Input className="bg-white text-neutral-900" name="pincode" value={form.pincode} onChange={onChange} />
           </div>
-          {isSingleZoneRole(form.role) ? (
+          {!roleUsesZones(form.role) ? null : isSingleZoneRole(form.role) ? (
             <div>
               <Label>Zone *</Label>
               <Select value={form.zone} onValueChange={(zone) => setForm((f) => ({ ...f, zone, zones: zone ? [zone] : [], cluster: '' }))}>
@@ -485,7 +502,8 @@ export default function EditEmployeePage() {
             <Label>User Type *</Label>
             <Select value={form.role} onValueChange={(v) => setForm((f) => {
               const single = isSingleZoneRole(v)
-              const nextZones = single ? (f.zone ? [f.zone] : f.zones.slice(0, 1)) : (f.zones.length ? f.zones : f.zone ? [f.zone] : [])
+              const usesZones = roleUsesZones(v)
+              const nextZones = !usesZones ? [] : single ? (f.zone ? [f.zone] : f.zones.slice(0, 1)) : (f.zones.length ? f.zones : f.zone ? [f.zone] : [])
               const allowed = new Set(filterTagOptions(tagOptions, v).map((e) => e._id))
               return {
                 ...f,
@@ -535,6 +553,37 @@ export default function EditEmployeePage() {
               </div>
             </div>
           )}
+
+          <div className="md:col-span-2">
+            <div className="mb-1 text-lg font-semibold">Onboarding checklist *</div>
+            <p className="mb-2 text-xs text-neutral-600">View or update the checklist. At least two items must remain selected.</p>
+            <div className="grid grid-cols-1 gap-2 rounded border bg-white p-3 md:grid-cols-2">
+              {ONBOARDING_ITEMS.map((item) => (
+                <label key={item} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={form.onboardingChecklist.includes(item)}
+                    onChange={() => setForm((current) => ({
+                      ...current,
+                      onboardingChecklist: current.onboardingChecklist.includes(item)
+                        ? current.onboardingChecklist.filter((value) => value !== item)
+                        : [...current.onboardingChecklist, item],
+                    }))}
+                  />
+                  {item}
+                </label>
+              ))}
+            </div>
+            {form.onboardingChecklist.includes('Others') && (
+              <Input
+                className="mt-2 bg-white text-neutral-900"
+                name="onboardingOtherNote"
+                value={form.onboardingOtherNote}
+                onChange={onChange}
+                placeholder="Other onboarding item"
+              />
+            )}
+          </div>
 
           {error && <div className="md:col-span-2 text-red-600 text-sm">{error}</div>}
           <div className="md:col-span-2 flex justify-end gap-2">

@@ -59,7 +59,7 @@ export default function LoginPage() {
   async function requestOtp(e: React.FormEvent) {
     e.preventDefault()
     if (!forgotId.trim()) {
-      toast.error('Enter mobile or email')
+      toast.error('Enter your official company number')
       return
     }
     setForgotLoading(true)
@@ -135,15 +135,16 @@ export default function LoginPage() {
               </motion.h1>
               <form onSubmit={onSubmit} className="space-y-5">
                 <div className="space-y-2">
-                  <Label htmlFor="mobile" className="text-gray-300">Official company number or email</Label>
+                  <Label htmlFor="mobile" className="text-gray-300">Official Company Number</Label>
                   <Input
                     id="mobile"
-                    type="text"
+                    type="tel"
+                    inputMode="numeric"
                     autoComplete="username"
                     value={mobile}
-                    onChange={(e) => setMobile(e.target.value)}
+                    onChange={(e) => setMobile(e.target.value.replace(/\D/g, '').slice(0, 15))}
                     required
-                    placeholder="Official company number or email"
+                    placeholder="Official Company Number"
                     className="bg-neutral-800 border-neutral-700 text-white placeholder:text-neutral-400"
                   />
                 </div>

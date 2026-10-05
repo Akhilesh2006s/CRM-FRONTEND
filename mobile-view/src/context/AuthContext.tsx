@@ -72,7 +72,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       const response = await apiService.post('/auth/login', {
         mobile,
-        email: mobile,
         password,
         deviceId,
       });

@@ -9,6 +9,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { displayRoleName } from '@/lib/roleLabels'
 import { toast } from 'sonner'
 import { formatEmployeeCode } from '@/lib/employeeCode'
+import Link from 'next/link'
 
 type Approval = {
   roleKey: string
@@ -22,6 +23,12 @@ type Employee = {
   empCode?: string
   name: string
   email: string
+  phone?: string
+  mobile?: string
+  department?: string
+  designation?: string
+  dateOfBirth?: string
+  dateOfJoining?: string
   role: string
   zone?: string
   cluster?: string
@@ -33,13 +40,18 @@ type Employee = {
   verificationStatus?: string
   approvals?: Approval[]
   executiveManagerId?: { name?: string } | string | null
+  verticalManagerId?: { name?: string } | string | null
+  onboardingChecklist?: string[]
+  onboardingOtherNote?: string
+  hasEmployeeRelationship?: boolean | null
+  employeeRelationshipDetails?: { fullName?: string; relationship?: string; department?: string; designation?: string }
 }
 
 const ROLE_LABELS: Record<string, string> = {
   hr_manager: 'HR Manager',
   zonal_manager: 'Zonal Manager',
   training_head: 'Training Head',
-  vertical_manager: 'Vertical Manager',
+  vertical_manager: 'Product Head',
 }
 
 export default function EmployeeVerificationPage() {
@@ -54,8 +66,7 @@ export default function EmployeeVerificationPage() {
   const [acting, setActing] = useState<string | null>(null)
 
   const canActOn = (roleKey: string) => {
-    if (isAdmin) return true
-    if (isHr) return roleKey === 'hr_manager'
+    if (isAdmin || isHr) return true
     if (
       currentUser?.role === 'Executive Manager' ||
       currentUser?.role === 'Manager'
@@ -90,6 +101,10 @@ export default function EmployeeVerificationPage() {
     roleKey: string,
     decision: 'approve' | 'reject'
   ) => {
+    if (decision === 'reject' && !String(notes[employeeId] || '').trim()) {
+      toast.error('A rejection note is required')
+      return
+    }
     setActing(`${employeeId}-${roleKey}-${decision}`)
     try {
       await apiRequest(`/employees/${employeeId}/approvals`, {
@@ -148,9 +163,18 @@ export default function EmployeeVerificationPage() {
               <span className="text-xs uppercase tracking-wide px-2 py-1 rounded bg-amber-100 text-amber-800">
                 {emp.verificationStatus || 'pending'}
               </span>
+              {(isAdmin || isHr) && (
+                <Button asChild size="sm" variant="outline">
+                  <Link href={`/dashboard/employees/edit/${emp._id}`}>Edit employee</Link>
+                </Button>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+              <div><p className="font-medium">Official company number</p><p className="text-neutral-700">{emp.phone || '—'}</p></div>
+              <div><p className="font-medium">Personal mobile</p><p className="text-neutral-700">{emp.mobile || '—'}</p></div>
+              <div><p className="font-medium">Department / Designation</p><p className="text-neutral-700">{[emp.department, emp.designation].filter(Boolean).join(' · ') || '—'}</p></div>
+              <div><p className="font-medium">Joining date</p><p className="text-neutral-700">{emp.dateOfJoining ? new Date(emp.dateOfJoining).toLocaleDateString() : '—'}</p></div>
               <div>
                 <p className="font-medium">Temporary address</p>
                 <p className="text-neutral-700">{emp.temporaryAddress || '—'}</p>
@@ -188,6 +212,23 @@ export default function EmployeeVerificationPage() {
                 ) : (
                   '—'
                 )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
+              <div>
+                <p className="font-medium">Onboarding checklist</p>
+                <p className="text-neutral-700">{emp.onboardingChecklist?.length ? emp.onboardingChecklist.join(', ') : '—'}</p>
+                {emp.onboardingOtherNote ? <p className="text-neutral-500">Other: {emp.onboardingOtherNote}</p> : null}
+              </div>
+              <div>
+                <p className="font-medium">Employee relationship declaration</p>
+                <p className="text-neutral-700">{emp.hasEmployeeRelationship === true ? 'Yes' : emp.hasEmployeeRelationship === false ? 'No' : '—'}</p>
+                {emp.hasEmployeeRelationship && emp.employeeRelationshipDetails ? (
+                  <p className="text-neutral-600">
+                    {[emp.employeeRelationshipDetails.fullName, emp.employeeRelationshipDetails.relationship, emp.employeeRelationshipDetails.department, emp.employeeRelationshipDetails.designation].filter(Boolean).join(' · ')}
+                  </p>
+                ) : null}
               </div>
             </div>
 
@@ -262,7 +303,7 @@ export default function EmployeeVerificationPage() {
             <div>
               <Textarea
                 className="bg-white"
-                placeholder="Optional note for approve/reject"
+                placeholder="Approval note (required when rejecting)"
                 value={notes[emp._id] || ''}
                 onChange={(e) =>
                   setNotes((n) => ({ ...n, [emp._id]: e.target.value }))
