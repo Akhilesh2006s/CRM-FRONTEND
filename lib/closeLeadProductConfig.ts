@@ -39,6 +39,8 @@ export type ProductDetailRow = {
   selectedCategories?: string[]
   selectedDeliverables?: string[]
   term?: string
+  levels_snapshot?: string[]
+  dispatchMode?: 'one_level_at_a_time' | 'both_levels_together'
 }
 
 export type ClassStrengthSelection = {
@@ -74,6 +76,7 @@ export type CloseProductSectionLine = {
   sameRateForAllClasses: boolean
   price: number
   term?: string
+  dispatchMode?: 'one_level_at_a_time' | 'both_levels_together'
 }
 
 export type CloseProductSection = {
@@ -686,6 +689,8 @@ export function expandSectionsToProductDetails(
           line.term !== undefined && line.term !== ''
             ? normalizeProductTerm(line.term)
             : undefined,
+        levels_snapshot: [...levelsToUse],
+        dispatchMode: line.dispatchMode,
       }
       out.push(parentRow)
 
@@ -762,6 +767,7 @@ export function expandSectionsToProductDetails(
                 subject,
                 isParentRow: false,
                 sameRateForAllClasses: false,
+                dispatchMode: line.dispatchMode,
               })
             }
           }
@@ -806,6 +812,7 @@ export function parentRowToSectionLine(p: ProductDetailRow): CloseProductSection
     sameRateForAllClasses: p.sameRateForAllClasses || false,
     price: Number(p.price) || 0,
     term: p.term,
+    dispatchMode: p.dispatchMode,
   }
 }
 
@@ -923,6 +930,7 @@ export function buildDcOrderProductsFromDetails(
       level: levelSet.size === 1 ? Array.from(levelSet)[0] : undefined,
       subject: subjectSet.size === 1 ? Array.from(subjectSet)[0] : undefined,
       term: invoiceTerm,
+      dispatchMode: parentRow?.dispatchMode,
     }
   })
 }
@@ -964,6 +972,18 @@ export function validateCloseLeadProductConfig(
     return {
       ok: false,
       message: 'Each product must have at least one class with strength greater than 0.',
+    }
+  }
+
+  const missingDispatchChoice = opts.productSections.some((section) =>
+    section.lines.some(
+      (line) => (line.selectedLevels || []).length > 1 && !line.dispatchMode
+    )
+  )
+  if (missingDispatchChoice) {
+    return {
+      ok: false,
+      message: 'Choose whether to dispatch one level at a time or both levels together for each multi-level product.',
     }
   }
 

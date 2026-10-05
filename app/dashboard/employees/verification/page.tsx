@@ -15,7 +15,8 @@ type Approval = {
   roleKey: string
   status: string
   note?: string
-  userId?: { name?: string } | string | null
+  at?: string
+  userId?: { name?: string; role?: string } | string | null
 }
 
 type Employee = {
@@ -64,18 +65,14 @@ export default function EmployeeVerificationPage() {
   const [loading, setLoading] = useState(true)
   const [notes, setNotes] = useState<Record<string, string>>({})
   const [acting, setActing] = useState<string | null>(null)
+  const [view, setView] = useState<'pending' | 'rejected'>('pending')
 
   const canActOn = (roleKey: string) => {
-    if (isAdmin || isHr) return true
-    if (
-      currentUser?.role === 'Executive Manager' ||
-      currentUser?.role === 'Manager'
-    ) {
-      return (
-        roleKey === 'zonal_manager' ||
-        roleKey === 'vertical_manager' ||
-        roleKey === 'training_head'
-      )
+    if (isAdmin) return true
+    if (isHr) return roleKey === 'hr_manager'
+    if (currentUser?.role === 'Executive Manager') return roleKey === 'zonal_manager'
+    if (currentUser?.role === 'Manager') {
+      return ['zonal_manager', 'vertical_manager', 'training_head'].includes(roleKey)
     }
     return false
   }
@@ -83,10 +80,12 @@ export default function EmployeeVerificationPage() {
   const load = async () => {
     setLoading(true)
     try {
-      const data = await apiRequest<Employee[]>('/employees/verification/pending')
+      const data = await apiRequest<Employee[]>(
+        `/employees/verification/pending?status=${view}`
+      )
       setList(Array.isArray(data) ? data : [])
     } catch (e: any) {
-      toast.error(e?.message || 'Failed to load pending verifications')
+      toast.error(e?.message || `Failed to load ${view} employees`)
     } finally {
       setLoading(false)
     }
@@ -94,7 +93,7 @@ export default function EmployeeVerificationPage() {
 
   useEffect(() => {
     load()
-  }, [])
+  }, [view])
 
   const decide = async (
     employeeId: string,
@@ -137,13 +136,32 @@ export default function EmployeeVerificationPage() {
         </p>
       </div>
 
+      {(isAdmin || isHr) && (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant={view === 'pending' ? 'default' : 'outline'}
+            onClick={() => setView('pending')}
+          >
+            Pending approvals
+          </Button>
+          <Button
+            variant={view === 'rejected' ? 'default' : 'outline'}
+            onClick={() => setView('rejected')}
+          >
+            Rejected employees
+          </Button>
+        </div>
+      )}
+
       {loading ? (
         <div className="text-sm text-neutral-600">Loading…</div>
       ) : list.length === 0 ? (
         <Card className="p-6 text-sm text-neutral-600">
-          {isHr
-            ? 'No new employee applications waiting for HR approval.'
-            : 'No employees pending verification.'}
+          {view === 'rejected'
+            ? 'No rejected employee applications.'
+            : isHr
+              ? 'No new employee applications waiting for HR approval.'
+              : 'No employees pending verification.'}
         </Card>
       ) : (
         list.map((emp) => (
@@ -275,8 +293,19 @@ export default function EmployeeVerificationPage() {
                       {ROLE_LABELS[a.roleKey] || a.roleKey}
                     </span>
                     <span className="ml-2 text-neutral-500">({a.status})</span>
+                    {a.note ? (
+                      <p className="mt-1 text-sm text-red-700">
+                        Reason: {a.note}
+                      </p>
+                    ) : null}
+                    {a.status === 'rejected' && typeof a.userId === 'object' && a.userId?.name ? (
+                      <p className="mt-1 text-xs text-neutral-500">
+                        Rejected by {a.userId.name}
+                        {a.at ? ` on ${new Date(a.at).toLocaleString()}` : ''}
+                      </p>
+                    ) : null}
                   </div>
-                  {a.status === 'pending' && canActOn(a.roleKey) && (
+                  {view === 'pending' && a.status === 'pending' && canActOn(a.roleKey) && (
                     <div className="flex gap-2">
                       <Button
                         size="sm"
@@ -296,20 +325,29 @@ export default function EmployeeVerificationPage() {
                       </Button>
                     </div>
                   )}
+                  {view === 'pending' && isHr && a.status === 'pending' && !canActOn(a.roleKey) && (
+                    <span className="text-xs font-medium text-neutral-500">
+                      View only — action assigned to {ROLE_LABELS[a.roleKey] || a.roleKey}
+                    </span>
+                  )}
                 </div>
               ))}
             </div>
 
-            <div>
-              <Textarea
-                className="bg-white"
-                placeholder="Approval note (required when rejecting)"
-                value={notes[emp._id] || ''}
-                onChange={(e) =>
-                  setNotes((n) => ({ ...n, [emp._id]: e.target.value }))
-                }
-              />
-            </div>
+            {view === 'pending' && (emp.approvals || []).some(
+              (approval) => approval.status === 'pending' && canActOn(approval.roleKey)
+            ) && (
+              <div>
+                <Textarea
+                  className="bg-white"
+                  placeholder="Approval note (required when rejecting)"
+                  value={notes[emp._id] || ''}
+                  onChange={(e) =>
+                    setNotes((n) => ({ ...n, [emp._id]: e.target.value }))
+                  }
+                />
+              </div>
+            )}
           </Card>
         ))
       )}

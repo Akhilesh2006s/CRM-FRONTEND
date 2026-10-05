@@ -157,15 +157,6 @@ export default function CloseLeadPage() {
         // Prefill delivery only from a real estimated_delivery_date.
         // Never use follow_up_date — and ignore estimated when it was wrongly cloned from follow-up.
         // If nothing valid is set, default to today so Turn Lead to Client is not blocked empty.
-        const followUpYmd = leadData.follow_up_date
-          ? new Date(leadData.follow_up_date).toISOString().split('T')[0]
-          : ''
-        const estimatedYmd = leadData.estimated_delivery_date
-          ? new Date(leadData.estimated_delivery_date).toISOString().split('T')[0]
-          : ''
-        const todayYmd = new Date().toISOString().split('T')[0]
-        const deliveryDate =
-          estimatedYmd && estimatedYmd !== followUpYmd ? estimatedYmd : todayYmd
         const assigned = leadData.assigned_to
         const assignedId = assigned && typeof assigned === 'object' ? assigned._id : assigned
         if (assignedId) setAssignedEmployeeId(String(assignedId))
@@ -174,7 +165,9 @@ export default function CloseLeadPage() {
           contact_person2: leadData.contact_person2 || leadData.decision_maker || '',
           contact_mobile2: leadData.contact_mobile2 || '',
           financial_contact_designation: leadData.financial_contact_designation || '',
-          delivery_date: deliveryDate,
+          // PO dispatch date must be an explicit user decision; never reuse a
+          // follow-up/estimated date or silently default it to today.
+          delivery_date: '',
           year: currentAcademicYear,
         })
         
@@ -348,6 +341,12 @@ export default function CloseLeadPage() {
                 ? getProductCategories(product) 
                 : undefined,
               term: normalizeProductTerm(productData?.term),
+              levels_snapshot: Array.isArray(productData?.levels_snapshot)
+                ? productData.levels_snapshot
+                : productData?.level
+                  ? [productData.level]
+                  : [],
+              dispatchMode: productData?.dispatchMode,
             }
           })
             .filter((row): row is ProductDetailRow => row !== null)
@@ -517,6 +516,7 @@ export default function CloseLeadPage() {
           term: (p as any).term || (parentRow as any)?.term,
           level: levelValue,
         }),
+        dispatchMode: p.dispatchMode || parentRow?.dispatchMode,
       }
     })
   }

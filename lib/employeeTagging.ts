@@ -27,7 +27,7 @@ export const TAGGING_ROLES = Object.keys(HIERARCHY_TAG_TARGETS)
 
 /** BDE is one zone. Every other user type may hold several zones. */
 export function isSingleZoneRole(role: string): boolean {
-  return role === 'Executive' || role === 'Sales BDE' || role === 'Employee'
+  return role === 'Executive' || role === 'Sales BDE' || role === 'Employee' || role === 'BDE'
 }
 
 /** Roles shown in the tagging picker for a given user type. */

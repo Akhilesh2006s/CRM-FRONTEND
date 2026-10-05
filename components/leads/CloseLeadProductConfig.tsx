@@ -463,6 +463,12 @@ function CloseLeadProductConfigView({
                                             updateProductSectionLine(section.id, line.id, {
                                               selectedLevels: newLevels,
                                               level: newLevels[0],
+                                              dispatchMode:
+                                                newLevels.length > 1
+                                                  ? selectedLevels.length > 1
+                                                    ? line.dispatchMode
+                                                    : undefined
+                                                  : 'one_level_at_a_time',
                                             })
                                           }}
                                         />
@@ -479,6 +485,39 @@ function CloseLeadProductConfigView({
                                     <p className="text-xs text-amber-700">
                                       Select at least one level to generate product rows.
                                     </p>
+                                  )}
+                                  {selectedLevels.length > 1 && (
+                                    <div className="mt-3 max-w-sm space-y-1">
+                                      <Label className="text-xs font-semibold">
+                                        Dispatch levels *
+                                      </Label>
+                                      <Select
+                                        value={line.dispatchMode || undefined}
+                                        onValueChange={(value) =>
+                                          updateProductSectionLine(section.id, line.id, {
+                                            dispatchMode: value as
+                                              | 'one_level_at_a_time'
+                                              | 'both_levels_together',
+                                          })
+                                        }
+                                      >
+                                        <SelectTrigger className="bg-white">
+                                          <SelectValue placeholder="Select dispatch plan" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="one_level_at_a_time">
+                                            One level at a time
+                                          </SelectItem>
+                                          <SelectItem value="both_levels_together">
+                                            Both levels together
+                                          </SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                      <p className="text-xs text-neutral-500">
+                                        One level at a time keeps the next level in Term-Wise DC.
+                                        Both levels together creates one current DC.
+                                      </p>
+                                    </div>
                                   )}
                                 </div>
                               )}

@@ -12,7 +12,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { Can } from '@/components/permissions/Can'
 import { usePermissions } from '@/components/permissions/PermissionsProvider'
 import { toast } from 'sonner'
-import { Pencil } from 'lucide-react'
+import { Eye, Pencil } from 'lucide-react'
 import { sanitizePhoneInput, validateStrictIndianMobile } from '@/lib/phone'
 import { displayRoleName } from '@/lib/roleLabels'
 import { formatEmployeeCode } from '@/lib/employeeCode'
@@ -30,6 +30,47 @@ type Employee = {
   zone?: string
   zones?: string[]
   inactiveReason?: string
+  [key: string]: unknown
+}
+
+function detailLabel(key: string) {
+  return key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (letter) => letter.toUpperCase())
+}
+
+function EmployeeDetailValue({ value }: { value: unknown }) {
+  if (value === null || value === undefined || value === '') {
+    return <span className="text-neutral-400">—</span>
+  }
+  if (typeof value === 'boolean') return <span>{value ? 'Yes' : 'No'}</span>
+  if (Array.isArray(value)) {
+    if (!value.length) return <span className="text-neutral-400">None</span>
+    return (
+      <div className="space-y-2">
+        {value.map((item, index) => (
+          <div key={index} className="rounded border bg-neutral-50 p-2">
+            <EmployeeDetailValue value={item} />
+          </div>
+        ))}
+      </div>
+    )
+  }
+  if (typeof value === 'object') {
+    return (
+      <dl className="grid grid-cols-1 gap-2 md:grid-cols-2">
+        {Object.entries(value as Record<string, unknown>)
+          .filter(([key]) => !['password', '__v'].includes(key))
+          .map(([key, item]) => (
+            <div key={key} className="rounded border bg-white p-2">
+              <dt className="text-xs font-medium text-neutral-500">{detailLabel(key)}</dt>
+              <dd className="mt-1 break-words text-sm">
+                <EmployeeDetailValue value={item} />
+              </dd>
+            </div>
+          ))}
+      </dl>
+    )
+  }
+  return <span>{String(value)}</span>
 }
 
 const availableRoles = [
@@ -59,6 +100,8 @@ export default function ActiveEmployeesPage() {
   const [roleFilter, setRoleFilter] = useState('')
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null)
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null)
+  const [loadingDetails, setLoadingDetails] = useState<string | null>(null)
   const [editForm, setEditForm] = useState({
     name: '',
     email: '',
@@ -88,6 +131,9 @@ export default function ActiveEmployeesPage() {
   const isCoordinator = currentUser?.role === 'Coordinator'
   const isSeniorCoordinator = currentUser?.role === 'Senior Coordinator'
   const isHrManager = currentUser?.role === 'HR Manager'
+  const canViewCompleteDetails =
+    ['Admin', 'Super Admin', 'HR Manager', 'HR Executive'].includes(currentUser?.role || '') ||
+    (!rbacActive ? false : hasPermission('employees.active.edit'))
   const canDeactivate = isHrManager || !rbacActive || hasPermission('employees.active.delete')
   const shouldHideAction = rbacActive
     ? !hasPermission('employees.active.edit') && !hasPermission('employees.active.delete') && !isHrManager
@@ -192,6 +238,17 @@ export default function ActiveEmployeesPage() {
       })
     } catch (e) {
       console.error('Failed to load employee details', e)
+    }
+  }
+
+  const showCompleteDetails = async (employee: Employee) => {
+    setLoadingDetails(employee._id)
+    try {
+      setSelectedEmployee(await apiRequest<Employee>(`/employees/${employee._id}`))
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to load complete employee details')
+    } finally {
+      setLoadingDetails(null)
     }
   }
 
@@ -330,6 +387,7 @@ export default function ActiveEmployeesPage() {
               <th className="py-2 px-3">Department</th>
               <th className="py-2 px-3">Zone</th>
               {isBdeView && <th className="py-2 px-3">Cluster</th>}
+              {canViewCompleteDetails && <th className="py-2 px-3">Details</th>}
               {!shouldHideAction && <th className="py-2 px-3">Action</th>}
             </tr>
           </thead>
@@ -344,6 +402,19 @@ export default function ActiveEmployeesPage() {
                 <td className="py-2 px-3 text-center">{e.department || '-'}</td>
                 <td className="py-2 px-3 text-center">{zoneLabel(e)}</td>
                 {isBdeView && <td className="py-2 px-3 text-center">{e.cluster || '-'}</td>}
+                {canViewCompleteDetails && (
+                  <td className="py-2 px-3 text-center">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={loadingDetails !== null}
+                      onClick={() => void showCompleteDetails(e)}
+                    >
+                      <Eye className="mr-1 h-3 w-3" />
+                      {loadingDetails === e._id ? 'Loading…' : 'View complete details'}
+                    </Button>
+                  </td>
+                )}
                 {!shouldHideAction && (
                   <td className="py-2 px-3 text-right">
                     <div className="flex gap-2 justify-end">
@@ -374,6 +445,30 @@ export default function ActiveEmployeesPage() {
           </div>
         )}
       </Card>
+
+      {selectedEmployee && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Complete employee details"
+        >
+          <Card className="max-h-[90vh] w-full max-w-5xl overflow-y-auto bg-white p-5">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold">
+                  {selectedEmployee.name || 'Employee'} — Complete details
+                </h2>
+                <p className="text-sm text-neutral-500">
+                  {formatEmployeeCode(selectedEmployee.empCode, 'No employee code')} · Active employee
+                </p>
+              </div>
+              <Button variant="outline" onClick={() => setSelectedEmployee(null)}>Close</Button>
+            </div>
+            <EmployeeDetailValue value={selectedEmployee} />
+          </Card>
+        </div>
+      )}
 
       {/* Edit Employee Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>

@@ -1242,7 +1242,7 @@ export default function NewEmployeePage() {
           </div>
           {!roleUsesZones(form.role) ? null : isSingleZoneRole(form.role) ? (
             <div>
-              <Label>Zone *</Label>
+              <Label>{isSingleZoneRole(form.role) ? 'BDE Zone *' : 'Zone *'}</Label>
               <Select
                 value={form.zone}
                 onValueChange={(zone) =>
@@ -1265,6 +1265,9 @@ export default function NewEmployeePage() {
                   ))}
                 </SelectContent>
               </Select>
+              <p className="mt-1 text-xs text-neutral-500">
+                Required. This zone routes the BDE approval to its assigned Zonal Manager.
+              </p>
             </div>
           ) : (
             <div className="md:col-span-2">

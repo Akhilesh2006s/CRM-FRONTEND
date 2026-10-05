@@ -20,6 +20,7 @@ export type CloseLeadProductRow = {
   strength?: number
   quantity?: number
   closeLeadDestination?: CloseLeadDestination
+  dispatchMode?: 'one_level_at_a_time' | 'both_levels_together'
   [key: string]: unknown
 }
 
@@ -80,8 +81,16 @@ export function partitionProductsForCloseLeadRouting<T extends CloseLeadProductR
     const hasTerm1 = flags.some((f) => f.isTerm1)
     const hasTerm2 = flags.some((f) => f.isTerm2)
 
-    const splitByLevel = hasLevel1 && hasLevel2
-    const splitByTerm = !splitByLevel && hasTerm1 && hasTerm2
+    const dispatchTogether = group.some((row) => row.dispatchMode === 'both_levels_together')
+    const splitByLevel = !dispatchTogether && hasLevel1 && hasLevel2
+    const splitByTerm = !dispatchTogether && !splitByLevel && hasTerm1 && hasTerm2
+    const levelOrder = [...new Set(group.map((row) => collapseLabel(row.level)).filter(Boolean))]
+    const splitByGenericLevel =
+      !dispatchTogether &&
+      !splitByLevel &&
+      !splitByTerm &&
+      group.some((row) => row.dispatchMode === 'one_level_at_a_time') &&
+      levelOrder.length > 1
 
     for (let i = 0; i < group.length; i++) {
       const p = group[i]
@@ -91,6 +100,8 @@ export function partitionProductsForCloseLeadRouting<T extends CloseLeadProductR
       if (splitByLevel && f.isLevel2) {
         destination = CLOSE_LEAD_DESTINATION.TERM_WISE_DC
       } else if (splitByTerm && f.isTerm2) {
+        destination = CLOSE_LEAD_DESTINATION.TERM_WISE_DC
+      } else if (splitByGenericLevel && collapseLabel(p.level) !== levelOrder[0]) {
         destination = CLOSE_LEAD_DESTINATION.TERM_WISE_DC
       }
 

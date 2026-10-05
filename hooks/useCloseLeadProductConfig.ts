@@ -261,6 +261,7 @@ export function useCloseLeadProductConfig(options: UseCloseLeadProductConfigOpti
           productCategoryByKey: {},
           sameRateForAllClasses: false,
           price: 0,
+          dispatchMode: 'one_level_at_a_time',
         }
         return { ...sec, lines: [...sec.lines, newLine] }
       })
