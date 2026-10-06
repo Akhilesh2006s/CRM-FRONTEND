@@ -131,13 +131,14 @@ export default function ActiveEmployeesPage() {
   const isCoordinator = currentUser?.role === 'Coordinator'
   const isSeniorCoordinator = currentUser?.role === 'Senior Coordinator'
   const isHrManager = currentUser?.role === 'HR Manager'
+  const isHrExecutive = currentUser?.role === 'HR Executive'
   const canViewCompleteDetails =
     ['Admin', 'Super Admin', 'HR Manager', 'HR Executive'].includes(currentUser?.role || '') ||
     (!rbacActive ? false : hasPermission('employees.active.edit'))
-  const canDeactivate = isHrManager || !rbacActive || hasPermission('employees.active.delete')
+  const canDeactivate = !isHrExecutive && (isHrManager || !rbacActive || hasPermission('employees.active.delete'))
   const shouldHideAction = rbacActive
-    ? !hasPermission('employees.active.edit') && !hasPermission('employees.active.delete') && !isHrManager
-    : isCoordinator || isSeniorCoordinator
+    ? isHrExecutive || (!hasPermission('employees.active.edit') && !hasPermission('employees.active.delete') && !isHrManager)
+    : isCoordinator || isSeniorCoordinator || isHrExecutive
   
   const loadZones = async () => {
     try {
@@ -418,15 +419,17 @@ export default function ActiveEmployeesPage() {
                 {!shouldHideAction && (
                   <td className="py-2 px-3 text-right">
                     <div className="flex gap-2 justify-end">
-                      <Can permission="employees.active.edit">
-                        <Button size="sm" variant="outline" onClick={() => openEditDialog(e)}>
-                          <Pencil className="w-3 h-3 mr-1" />
-                          Edit
-                        </Button>
-                        <Button size="sm" variant="secondary" onClick={() => resetPassword(e._id, e.name)}>
-                          Reset Password
-                        </Button>
-                      </Can>
+                      {!isHrExecutive && (
+                        <Can permission="employees.active.edit">
+                          <Button size="sm" variant="outline" onClick={() => openEditDialog(e)}>
+                            <Pencil className="w-3 h-3 mr-1" />
+                            Edit
+                          </Button>
+                          <Button size="sm" variant="secondary" onClick={() => resetPassword(e._id, e.name)}>
+                            Reset Password
+                          </Button>
+                        </Can>
+                      )}
                       {canDeactivate && (
                         <Button size="sm" variant="outline" className="text-amber-700 border-amber-300" onClick={() => setOffboarding({ id: e._id, name: e.name, status: '', checklist: [] })}>
                           Deactivate

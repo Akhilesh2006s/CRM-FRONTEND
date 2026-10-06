@@ -757,8 +757,12 @@ export function Sidebar() {
           { label: 'Inactive Employees', href: '/dashboard/employees/inactive' },
           { label: 'Employee Verification', href: '/dashboard/employees/verification' },
           { label: 'Attendance', href: '/dashboard/employees/attendance' },
-          { label: 'Salary', href: '/dashboard/employees/salary' },
-          { label: 'Pay Slips', href: '/dashboard/employees/payslips' },
+          ...(!isHrExecutive
+            ? [
+                { label: 'Salary', href: '/dashboard/employees/salary' },
+                { label: 'Pay Slips', href: '/dashboard/employees/payslips' },
+              ]
+            : []),
           { label: 'Employee History', href: '/dashboard/employees/history' },
         ],
       },

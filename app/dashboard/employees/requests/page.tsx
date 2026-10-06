@@ -21,7 +21,7 @@ type RequestRow = {
 
 export default function EmployeeRequestsPage() {
   const { user } = usePermissions()
-  const canDecide = user?.role === 'HR Manager' || user?.role === 'HR Executive' || user?.role === 'Super Admin' || user?.role === 'Admin' || Boolean(user?.isSuperAdmin)
+  const canDecide = user?.role === 'HR Manager' || user?.role === 'Super Admin' || user?.role === 'Admin' || Boolean(user?.isSuperAdmin)
   const [rows, setRows] = useState<RequestRow[]>([])
   const [loading, setLoading] = useState(true)
   const [acting, setActing] = useState('')

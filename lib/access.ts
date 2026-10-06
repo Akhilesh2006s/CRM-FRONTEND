@@ -121,6 +121,14 @@ export function canAccessPath(
       pathname.startsWith('/dashboard/settings/password')
     )
   }
+  if (
+    user.role === 'HR Executive' &&
+    (pathname.startsWith('/dashboard/employees/edit') ||
+      pathname.startsWith('/dashboard/employees/salary') ||
+      pathname.startsWith('/dashboard/employees/payslips'))
+  ) {
+    return false
+  }
   if (!isRbacActive(user)) return true
 
   if (pathname === '/dashboard/dc/grid' || pathname.startsWith('/dashboard/dc/grid/')) {
@@ -188,9 +196,9 @@ export function canAccessPath(
     return true
   }
 
-  // HR Manager always has employee directory + verification + leave access
+  // HR Manager has the full HR workspace.
   if (
-    (user.role === 'HR Manager' || user.role === 'HR Executive') &&
+    user.role === 'HR Manager' &&
     (pathname.startsWith('/dashboard/employees') ||
       pathname.startsWith('/dashboard/leaves') ||
       pathname === '/dashboard/expenses/create' ||
@@ -202,6 +210,36 @@ export function canAccessPath(
       pathname.startsWith('/dashboard/settings/password'))
   ) {
     return true
+  }
+
+  // HR Executive can create and view employees and use attendance/leaves, but
+  // cannot open employee edit, salary, or pay-slip management screens.
+  if (user.role === 'HR Executive') {
+    const allowedEmployeePaths = [
+      '/dashboard/employees/new',
+      '/dashboard/employees/active',
+      '/dashboard/employees/inactive',
+      '/dashboard/employees/verification',
+      '/dashboard/employees/requests',
+      '/dashboard/employees/history',
+      '/dashboard/employees/attendance',
+    ]
+    if (
+      allowedEmployeePaths.some(
+        (allowedPath) => pathname === allowedPath || pathname.startsWith(`${allowedPath}/`)
+      ) ||
+      pathname.startsWith('/dashboard/leaves') ||
+      pathname === '/dashboard/expenses/create' ||
+      pathname === '/dashboard/expenses/my' ||
+      pathname.startsWith('/dashboard/expenses/create/') ||
+      pathname.startsWith('/dashboard/expenses/my/') ||
+      pathname === '/dashboard/complaints/raise' ||
+      pathname === '/dashboard' ||
+      pathname.startsWith('/dashboard/settings/password')
+    ) {
+      return true
+    }
+    if (pathname.startsWith('/dashboard/employees')) return false
   }
 
   const key = permissionForPath(pathname)

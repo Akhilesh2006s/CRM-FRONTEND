@@ -57,7 +57,8 @@ const ROLE_LABELS: Record<string, string> = {
 
 export default function EmployeeVerificationPage() {
   const currentUser = getCurrentUser()
-  const isHr = currentUser?.role === 'HR Manager' || currentUser?.role === 'HR Executive'
+  const isHrManager = currentUser?.role === 'HR Manager'
+  const isHr = isHrManager || currentUser?.role === 'HR Executive'
   const isAdmin =
     currentUser?.role === 'Admin' || currentUser?.role === 'Super Admin'
 
@@ -69,7 +70,7 @@ export default function EmployeeVerificationPage() {
 
   const canActOn = (roleKey: string) => {
     if (isAdmin) return true
-    if (isHr) return roleKey === 'hr_manager'
+    if (isHrManager) return roleKey === 'hr_manager'
     if (currentUser?.role === 'Executive Manager') return roleKey === 'zonal_manager'
     if (currentUser?.role === 'Manager') {
       return ['zonal_manager', 'vertical_manager', 'training_head'].includes(roleKey)
@@ -181,7 +182,7 @@ export default function EmployeeVerificationPage() {
               <span className="text-xs uppercase tracking-wide px-2 py-1 rounded bg-amber-100 text-amber-800">
                 {emp.verificationStatus || 'pending'}
               </span>
-              {(isAdmin || isHr) && (
+              {(isAdmin || isHrManager) && (
                 <Button asChild size="sm" variant="outline">
                   <Link href={`/dashboard/employees/edit/${emp._id}`}>Edit employee</Link>
                 </Button>
