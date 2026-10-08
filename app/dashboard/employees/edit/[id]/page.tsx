@@ -425,11 +425,11 @@ export default function EditEmployeePage() {
             </div>
           </div>
           <div>
-            <Label>Phone (optional)</Label>
+            <Label>Contact No. (Office)</Label>
             <Input className="bg-white text-neutral-900" name="phone" value={form.phone} onChange={onChange} inputMode="numeric" maxLength={15} placeholder="10 to 15 digits" />
           </div>
           <div>
-            <Label>Mobile *</Label>
+            <Label>Mobile No. (Personal) *</Label>
             <Input className="bg-white text-neutral-900" name="mobile" value={form.mobile} onChange={onChange} inputMode="numeric" maxLength={15} placeholder="10 to 15 digits" required />
           </div>
           <div className="md:col-span-2">

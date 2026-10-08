@@ -646,10 +646,10 @@ export default function NewEmployeePage() {
         toast.success('Employee added.')
         router.push('/dashboard/employees/active')
       } else if (getCurrentUser()?.role === 'HR Executive' || getCurrentUser()?.role === 'HR Manager') {
-        toast.success('Employee saved. They can log in after the HR Manager and their head both approve.')
-        router.push('/dashboard/employees/requests')
+        toast.success('Employee saved. Their Vertical Head will complete background verification before HR final approval.')
+        router.push('/dashboard/employees/verification')
       } else {
-        toast.success('Employee saved. They can log in after the HR Manager and their head both approve.')
+        toast.success('Employee saved. The Vertical Head must approve before HR final approval.')
         router.push('/dashboard/employees/verification')
       }
     } catch (err: any) {

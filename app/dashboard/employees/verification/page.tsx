@@ -37,6 +37,7 @@ type Employee = {
   permanentAddress?: string
   aadhaarUrl?: string
   locationPhotoUrl?: string
+  passportPhotoUrl?: string
   references?: { relation: string; name?: string; mobile: string; aadhaarUrl?: string }[]
   verificationStatus?: string
   approvals?: Approval[]
@@ -68,12 +69,18 @@ export default function EmployeeVerificationPage() {
   const [acting, setActing] = useState<string | null>(null)
   const [view, setView] = useState<'pending' | 'rejected'>('pending')
 
-  const canActOn = (roleKey: string) => {
+  const headApprovalsApproved = (employee: Employee) => {
+    const heads = (employee.approvals || []).filter((approval) => approval.roleKey !== 'hr_manager')
+    return heads.length === 0 || heads.every((approval) => approval.status === 'approved')
+  }
+
+  const canActOn = (employee: Employee, roleKey: string) => {
+    if (roleKey === 'hr_manager' && !headApprovalsApproved(employee)) return false
     if (isAdmin) return true
     if (isHrManager) return roleKey === 'hr_manager'
     if (currentUser?.role === 'Executive Manager') return roleKey === 'zonal_manager'
     if (currentUser?.role === 'Manager') {
-      return ['zonal_manager', 'vertical_manager', 'training_head'].includes(roleKey)
+      return ['vertical_manager', 'training_head'].includes(roleKey)
     }
     return false
   }
@@ -132,8 +139,8 @@ export default function EmployeeVerificationPage() {
         </h1>
         <p className="text-sm text-neutral-600 mt-1">
           {isHr
-            ? 'The HR Manager and the employee’s head must both approve. The employee joins Active Employees and can log in only after both approvals.'
-            : 'Approve as the employee’s head. The employee can log in only after you and the HR Manager have both approved.'}
+            ? 'The respective Vertical Head completes background verification first. HR can view the status throughout, and the HR Manager receives final approval access only after the head approves.'
+            : 'Review the employee’s complete details and background information. After your approval, the request is routed to the HR Manager for final approval.'}
         </p>
       </div>
 
@@ -194,6 +201,9 @@ export default function EmployeeVerificationPage() {
               <div><p className="font-medium">Personal mobile</p><p className="text-neutral-700">{emp.mobile || '—'}</p></div>
               <div><p className="font-medium">Department / Designation</p><p className="text-neutral-700">{[emp.department, emp.designation].filter(Boolean).join(' · ') || '—'}</p></div>
               <div><p className="font-medium">Joining date</p><p className="text-neutral-700">{emp.dateOfJoining ? new Date(emp.dateOfJoining).toLocaleDateString() : '—'}</p></div>
+              <div><p className="font-medium">Date of birth</p><p className="text-neutral-700">{emp.dateOfBirth ? new Date(emp.dateOfBirth).toLocaleDateString() : '—'}</p></div>
+              <div><p className="font-medium">Assigned Zonal Manager</p><p className="text-neutral-700">{typeof emp.executiveManagerId === 'object' ? emp.executiveManagerId?.name || '—' : '—'}</p></div>
+              <div><p className="font-medium">Assigned Product Head</p><p className="text-neutral-700">{typeof emp.verticalManagerId === 'object' ? emp.verticalManagerId?.name || '—' : '—'}</p></div>
               <div>
                 <p className="font-medium">Temporary address</p>
                 <p className="text-neutral-700">{emp.temporaryAddress || '—'}</p>
@@ -231,6 +241,12 @@ export default function EmployeeVerificationPage() {
                 ) : (
                   '—'
                 )}
+              </div>
+              <div>
+                <p className="font-medium">Passport photo</p>
+                {emp.passportPhotoUrl ? (
+                  <a className="text-blue-600 underline" href={resolveUploadUrl(emp.passportPhotoUrl)} target="_blank" rel="noreferrer">View upload</a>
+                ) : '—'}
               </div>
             </div>
 
@@ -306,7 +322,7 @@ export default function EmployeeVerificationPage() {
                       </p>
                     ) : null}
                   </div>
-                  {view === 'pending' && a.status === 'pending' && canActOn(a.roleKey) && (
+                  {view === 'pending' && a.status === 'pending' && canActOn(emp, a.roleKey) && (
                     <div className="flex gap-2">
                       <Button
                         size="sm"
@@ -326,9 +342,11 @@ export default function EmployeeVerificationPage() {
                       </Button>
                     </div>
                   )}
-                  {view === 'pending' && isHr && a.status === 'pending' && !canActOn(a.roleKey) && (
+                  {view === 'pending' && isHr && a.status === 'pending' && !canActOn(emp, a.roleKey) && (
                     <span className="text-xs font-medium text-neutral-500">
-                      View only — action assigned to {ROLE_LABELS[a.roleKey] || a.roleKey}
+                      {a.roleKey === 'hr_manager' && !headApprovalsApproved(emp)
+                        ? 'Waiting for Vertical Head background verification'
+                        : `View only — action assigned to ${ROLE_LABELS[a.roleKey] || a.roleKey}`}
                     </span>
                   )}
                 </div>
@@ -336,7 +354,7 @@ export default function EmployeeVerificationPage() {
             </div>
 
             {view === 'pending' && (emp.approvals || []).some(
-              (approval) => approval.status === 'pending' && canActOn(approval.roleKey)
+              (approval) => approval.status === 'pending' && canActOn(emp, approval.roleKey)
             ) && (
               <div>
                 <Textarea

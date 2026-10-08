@@ -508,7 +508,7 @@ export default function ActiveEmployeesPage() {
             </div>
             
             <div>
-              <Label htmlFor="edit-mobile">Mobile *</Label>
+              <Label htmlFor="edit-mobile">Mobile No. (Personal) *</Label>
               <Input
                 id="edit-mobile"
                 type="tel"
@@ -521,7 +521,7 @@ export default function ActiveEmployeesPage() {
               />
             </div>
             <div>
-              <Label htmlFor="edit-phone">Phone (optional)</Label>
+              <Label htmlFor="edit-phone">Contact No. (Office)</Label>
               <Input
                 id="edit-phone"
                 type="tel"

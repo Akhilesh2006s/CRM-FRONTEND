@@ -122,7 +122,7 @@ export const RBAC_NAV_MODULES: RbacNavModule[] = [
     module: 'complaints',
     label: MODULE_LABELS.complaints,
     pages: [
-      { label: 'Raise Complaint', href: '/dashboard/complaints/raise' },
+      { label: 'Raise Ticket', href: '/dashboard/complaints/raise' },
       { label: 'BDE Complaints', href: '/dashboard/complaints' },
     ],
   },

@@ -56,11 +56,11 @@ export default function RaiseComplaintPage() {
         method: 'POST',
         body: JSON.stringify(form),
       })
-      toast.success('Complaint sent to the coordinator')
+      toast.success('Ticket sent to the coordinator')
       setForm(emptyForm)
       load()
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to send complaint')
+      toast.error(err instanceof Error ? err.message : 'Failed to send ticket')
     } finally {
       setSubmitting(false)
     }
@@ -69,8 +69,8 @@ export default function RaiseComplaintPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Raise Complaint</h1>
-        <p className="text-sm text-neutral-600 mt-1">Any employee can raise a complaint for coordinator review.</p>
+        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Raise Ticket</h1>
+        <p className="text-sm text-neutral-600 mt-1">Any employee can raise a ticket for coordinator review.</p>
       </div>
 
       <Card className="p-4 md:p-6 max-w-3xl">
@@ -119,7 +119,7 @@ export default function RaiseComplaintPage() {
       </Card>
 
       <Card className="p-0 overflow-x-auto">
-        <div className="px-4 py-3 border-b font-medium">My complaints</div>
+        <div className="px-4 py-3 border-b font-medium">My tickets</div>
         {loading ? (
           <div className="p-4 text-sm text-neutral-600">Loading…</div>
         ) : (
@@ -136,7 +136,7 @@ export default function RaiseComplaintPage() {
               {items.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="py-4 px-3 text-center text-neutral-500">
-                    No complaints yet
+                    No tickets yet
                   </td>
                 </tr>
               ) : (

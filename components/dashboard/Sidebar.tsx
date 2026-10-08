@@ -84,36 +84,30 @@ type NavItem = {
   children?: { label: string; href: string; icon?: any; adminOnly?: boolean }[]
 }
 
-function ensureRaiseComplaintNav(nav: NavItem[]): NavItem[] {
+function ensureRaiseTicketNav(nav: NavItem[]): NavItem[] {
   const href = '/dashboard/complaints/raise'
-  const alreadyIncluded = nav.some(
-    (item) => item.href === href || item.children?.some((child) => child.href === href)
-  )
-  if (alreadyIncluded) return nav
-
-  const complaintsIndex = nav.findIndex((item) => item.label === 'Complaints')
-  if (complaintsIndex >= 0 && nav[complaintsIndex].children) {
-    return nav.map((item, index) =>
-      index === complaintsIndex
-        ? {
-            ...item,
-            children: [
-              { label: 'Raise a Ticket', href, icon: PlusCircle },
-              ...(item.children || []),
-            ],
-          }
-        : item
-    )
-  }
+  const withoutNestedRaiseTicket = nav.flatMap((item) => {
+    if (item.href === href) return []
+    if (!item.children) return [item]
+    const children = item.children.filter((child) => child.href !== href)
+    if (children.length === 0 && item.label === 'Complaints') return []
+    return [{ ...item, children }]
+  })
 
   const item: NavItem = {
-    label: 'Raise a Ticket (Complaints)',
+    label: 'Raise Ticket',
     icon: AlertCircle,
     href,
   }
-  const insertAt = nav.findIndex((entry) => entry.label === 'Settings' || entry.label === 'Sign out')
-  if (insertAt < 0) return [...nav, item]
-  return [...nav.slice(0, insertAt), item, ...nav.slice(insertAt)]
+  const insertAt = withoutNestedRaiseTicket.findIndex(
+    (entry) => entry.label === 'Settings' || entry.label === 'Sign out'
+  )
+  if (insertAt < 0) return [...withoutNestedRaiseTicket, item]
+  return [
+    ...withoutNestedRaiseTicket.slice(0, insertAt),
+    item,
+    ...withoutNestedRaiseTicket.slice(insertAt),
+  ]
 }
 
 function HoverTooltip({ item, pathname, onClose }: { item: NavItem; pathname: string | null; onClose: () => void }) {
@@ -785,7 +779,7 @@ export function Sidebar() {
         ],
       },
       {
-        label: 'Raise a Ticket (Complaints)',
+        label: 'Raise Ticket',
         icon: AlertCircle,
         href: '/dashboard/complaints/raise',
       },
@@ -858,7 +852,7 @@ export function Sidebar() {
         label: 'Complaints',
         icon: AlertCircle,
         children: [
-          { label: 'Raise Complaint', href: '/dashboard/complaints/raise', icon: PlusCircle },
+          { label: 'Raise Ticket', href: '/dashboard/complaints/raise', icon: PlusCircle },
         ],
       },
       {
@@ -880,6 +874,7 @@ export function Sidebar() {
   } else if (isManager) {
     finalNav = [
       { label: 'My Products', icon: LayoutDashboard, href: '/dashboard/product-manager' },
+      { label: 'Employee Verification', icon: UserCircle2, href: '/dashboard/employees/verification' },
       {
         label: 'Settings',
         icon: Settings,
@@ -973,6 +968,11 @@ export function Sidebar() {
         label: 'BDEs',
         icon: Users,
         href: '/dashboard/executive-managers/executives',
+      },
+      {
+        label: 'Employee Verification',
+        icon: UserCircle2,
+        href: '/dashboard/employees/verification',
       },
       {
         label: 'Clients',
@@ -1250,8 +1250,8 @@ export function Sidebar() {
     })
   }
 
-  // Complaint raising is available to every authenticated role.
-  finalNav = ensureRaiseComplaintNav(finalNav)
+  // Ticket raising is available to every authenticated role under one consistent name.
+  finalNav = ensureRaiseTicketNav(finalNav)
 
   const navReady = mounted && (!rbacActive || permissionsReady)
 

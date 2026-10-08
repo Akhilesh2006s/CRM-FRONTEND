@@ -8,6 +8,7 @@ import { usePermissions } from '@/components/permissions/PermissionsProvider'
 import { toast } from 'sonner'
 import { formatEmployeeCode } from '@/lib/employeeCode'
 import Link from 'next/link'
+import { displayRoleName } from '@/lib/roleLabels'
 
 type RequestRow = {
   _id: string
@@ -69,7 +70,7 @@ export default function EmployeeRequestsPage() {
       <div>
         <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Employee Requests</h1>
         <p className="text-sm text-neutral-600 mt-1">
-          A new employee stays here until the HR Manager approves. Their head must approve as well before they appear in Active Employees and can log in.
+          Employees appear here after their respective Vertical Head completes background verification. The HR Manager then gives the final approval.
         </p>
       </div>
       <Card className="p-0 overflow-x-auto">
@@ -93,7 +94,7 @@ export default function EmployeeRequestsPage() {
                   <td className="py-2 px-3">{formatEmployeeCode(row.empCode)}</td>
                   <td className="py-2 px-3">{row.name || '—'}</td>
                   <td className="py-2 px-3">{row.email || '—'}</td>
-                  <td className="py-2 px-3">{row.role || '—'}</td>
+                  <td className="py-2 px-3">{displayRoleName(row.role) || '—'}</td>
                   <td className="py-2 px-3">{row.mobile || '—'}</td>
                   {canDecide && (
                     <td className="py-2 px-3">

@@ -18,6 +18,7 @@ const EXECUTIVE_MANAGER_WORKSPACE_ROUTES = [
   '/dashboard/executive-managers/executives',
   '/dashboard/expenses/executive-manager-pending',
   '/dashboard/clients/closed-sales',
+  '/dashboard/employees/verification',
 ]
 
 function canAccessExecutiveManagerOwnRoute(
@@ -118,6 +119,7 @@ export function canAccessPath(
     return (
       pathname === '/dashboard' ||
       pathname === '/dashboard/product-manager' ||
+      pathname === '/dashboard/employees/verification' ||
       pathname.startsWith('/dashboard/settings/password')
     )
   }

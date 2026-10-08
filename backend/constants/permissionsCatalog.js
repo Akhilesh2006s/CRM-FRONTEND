@@ -131,7 +131,7 @@ const PAGE_ENTRIES = [
   { href: '/dashboard/executive-managers/executives', module: 'executive_managers', resource: 'executives', label: 'BDEs' },
   // Samples / vendor
   { href: '/dashboard/samples/request', module: 'samples', resource: 'request', label: 'Employee Sample' },
-  { href: '/dashboard/complaints/raise', module: 'complaints', resource: 'raise', label: 'Raise Complaint' },
+  { href: '/dashboard/complaints/raise', module: 'complaints', resource: 'raise', label: 'Raise Ticket' },
   { href: '/dashboard/complaints', module: 'complaints', resource: 'inbox', label: 'BDE Complaints' },
   { href: '/dashboard/stocks', module: 'vendor', resource: 'stocks', label: 'Stocks' },
   { href: '/dashboard/dcs', module: 'vendor', resource: 'dcs', label: 'My DCs' },
