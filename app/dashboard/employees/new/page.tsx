@@ -39,6 +39,8 @@ type ProductSchool = { schoolName: string; schoolCode: string; zone: string; clu
 type ProductSchoolsResponse = { schools: ProductSchool[] }
 const MULTI_ZONE_ROLES = ['Executive Manager', 'Trainer', 'Coordinator', 'Senior Coordinator']
 const roleUsesZones = (role: string) => isSingleZoneRole(role) || MULTI_ZONE_ROLES.includes(role)
+const roleRequiresZones = (role: string) =>
+  isSingleZoneRole(role) || ['Trainer', 'Coordinator', 'Senior Coordinator'].includes(role)
 
 export default function NewEmployeePage() {
   const router = useRouter()
@@ -520,7 +522,7 @@ export default function NewEmployeePage() {
           ? [form.zone.trim()]
           : []
         : form.zones.map((z) => z.trim()).filter(Boolean)
-      if (roleUsesZones(form.role) && selectedZones.length === 0) {
+      if (roleRequiresZones(form.role) && selectedZones.length === 0) {
         setError(isSingleZoneRole(form.role) ? 'Zone is required for BDE' : 'Select at least one zone')
         setSubmitting(false)
         return
@@ -1271,9 +1273,11 @@ export default function NewEmployeePage() {
             </div>
           ) : (
             <div className="md:col-span-2">
-              <Label>Zones *</Label>
+              <Label>Zones{form.role === 'Executive Manager' ? ' (optional)' : ' *'}</Label>
               <p className="text-xs text-neutral-500 mb-2">
-                Select one or more zones. Only BDE is limited to a single zone.
+                {form.role === 'Executive Manager'
+                  ? 'You may create the Zonal Manager first and assign zones later from Zones & Clusters.'
+                  : 'Select one or more zones. Only BDE is limited to a single zone.'}
               </p>
               <div className="max-h-40 overflow-y-auto border rounded p-3 bg-white space-y-2">
                 {zones.length === 0 ? (

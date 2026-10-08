@@ -161,17 +161,13 @@ export default function ZonesPage() {
       toast.error('Select Franchise or Own')
       return
     }
-    if (!zoneManagerId) {
-      toast.error('Select a zone manager')
-      return
-    }
     setSavingZone(true)
     try {
       const created = await apiRequest<Zone>('/zones', {
         method: 'POST',
         body: JSON.stringify({
           name: trimmed,
-          managerId: zoneManagerId,
+          managerId: zoneManagerId || null,
           zoneCode,
           stateCode,
           ownership,
@@ -494,15 +490,15 @@ export default function ZonesPage() {
             </Select>
           </div>
           <div className="space-y-2 md:col-span-2">
-            <Label>Zone manager *</Label>
+            <Label>Zone manager (optional)</Label>
             <Select value={zoneManagerId} onValueChange={setZoneManagerId}>
               <SelectTrigger className="bg-white">
-                <SelectValue placeholder="Select from managers list" />
+                <SelectValue placeholder="Assign later, if needed" />
               </SelectTrigger>
               <SelectContent>
                 {managers.length === 0 ? (
                   <SelectItem value="__none" disabled>
-                    No managers found — create via Assign Managers
+                    No managers found — create the zone first
                   </SelectItem>
                 ) : (
                   managers.map((m) => (
@@ -515,7 +511,7 @@ export default function ZonesPage() {
               </SelectContent>
             </Select>
           </div>
-          <Button type="submit" disabled={savingZone || managers.length === 0}>
+          <Button type="submit" disabled={savingZone}>
             {savingZone ? 'Saving…' : 'Add Zone'}
           </Button>
         </form>
