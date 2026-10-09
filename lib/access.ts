@@ -27,6 +27,16 @@ const EXECUTIVE_MANAGER_WORKSPACE_ROUTES = [
   '/dashboard/leads/renewal',
 ]
 
+const BDE_ROLES = new Set(['Executive', 'Sales BDE', 'Employee', 'BDE'])
+const BDE_OPERATIONAL_ROUTES = [
+  '/dashboard/leads/add',
+  '/dashboard/leads/followup',
+  '/dashboard/leads/renewal',
+  '/dashboard/dc/create',
+  '/dashboard/dc/emp',
+  '/dashboard/dc/client-dc',
+]
+
 function canAccessExecutiveManagerOwnRoute(
   user: AuthUserWithPermissions,
   pathname: string
@@ -101,6 +111,16 @@ export function canAccessPath(
   if (options?.loading) return true
   if (!user) return false
   if (isSuperAdmin(user)) return true
+  // BDE operational pages are core role capabilities. Keep them available even
+  // when a legacy BDE account has stale/missing RBAC permission keys.
+  if (
+    BDE_ROLES.has(String(user.role || '')) &&
+    BDE_OPERATIONAL_ROUTES.some(
+      (route) => pathname === route || pathname.startsWith(`${route}/`)
+    )
+  ) {
+    return true
+  }
   // Every authenticated employee may raise and view their own complaints.
   if (pathname === '/dashboard/complaints/raise' || pathname.startsWith('/dashboard/complaints/raise/')) {
     return true
