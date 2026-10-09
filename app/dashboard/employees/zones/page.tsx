@@ -149,8 +149,8 @@ export default function ZonesPage() {
       toast.error('Zone already exists')
       return
     }
-    if (!/^\d{2}$/.test(zoneCode)) {
-      toast.error('Zone code must be 2 digits')
+    if (!/^[A-Za-z]{2}$/.test(zoneCode)) {
+      toast.error('Zone code must be 2 letters')
       return
     }
     if (!stateCode) {
@@ -168,7 +168,7 @@ export default function ZonesPage() {
         body: JSON.stringify({
           name: trimmed,
           managerId: zoneManagerId || null,
-          zoneCode,
+          zoneCode: zoneCode.toUpperCase(),
           stateCode,
           ownership,
         }),
@@ -432,7 +432,7 @@ export default function ZonesPage() {
       <div>
         <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Zones & Clusters</h1>
         <p className="text-sm text-neutral-600 mt-1">
-          A zone gets a 2-digit code, a state, and Franchise or Own. Clusters are lettered A, B, C. School codes use state + zone code + cluster letter.
+          A zone gets a 2-letter code, a state, and Franchise or Own. Clusters are lettered A, B, C. School codes use state + zone code + cluster letter + a 3-digit school number.
         </p>
       </div>
 
@@ -451,13 +451,13 @@ export default function ZonesPage() {
             />
           </div>
           <div className="space-y-2">
-            <Label>Zone code *</Label>
+            <Label>Zone code (2 letters) *</Label>
             <Input
               className="bg-white text-neutral-900"
               value={zoneCode}
-              onChange={(e) => setZoneCode(e.target.value.replace(/\D/g, '').slice(0, 2))}
-              placeholder="01"
-              inputMode="numeric"
+              onChange={(e) => setZoneCode(e.target.value.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase())}
+              placeholder="CY"
+              inputMode="text"
               maxLength={2}
               required
             />
@@ -550,7 +550,7 @@ export default function ZonesPage() {
                         maxLength={2}
                         onBlur={(e) => {
                           const value = e.target.value.replace(/\D/g, '').slice(0, 2)
-                          if (/^\d{2}$/.test(value)) void saveZoneDetails(z, { zoneCode: value })
+                          if (/^[A-Za-z]{2}$/.test(value)) void saveZoneDetails(z, { zoneCode: value.toUpperCase() })
                         }}
                       />
                     )}
