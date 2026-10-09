@@ -129,6 +129,7 @@ function CloseLeadProductConfigView({
     updateLineUnitPrice,
     updateProductDetail,
     removeProductDetail,
+    commitProductSections,
   } = cfg
 
   const [unitPriceDraftByLine, setUnitPriceDraftByLine] = useState<Record<string, string>>({})
@@ -881,7 +882,18 @@ function CloseLeadProductConfigView({
             <Button variant="outline" onClick={() => setProductDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={() => setProductDialogOpen(false)}>Done</Button>
+            <Button
+              onClick={() => {
+                const committedRows = commitProductSections()
+                if (!committedRows.some((row) => !row.isParentRow)) {
+                  toast.error('Select at least one product, class, and strength before continuing')
+                  return
+                }
+                setProductDialogOpen(false)
+              }}
+            >
+              Done
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

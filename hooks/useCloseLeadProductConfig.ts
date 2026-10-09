@@ -670,6 +670,27 @@ export function useCloseLeadProductConfig(options: UseCloseLeadProductConfigOpti
       getProductCategories,
     })
 
+  /** Materialize the latest dialog selections before the dialog closes. */
+  const commitProductSections = () => {
+    const next = expandSectionsToProductDetails(productSections, {
+      hasProductSubjects,
+      hasProductSpecs,
+      getProductSpecs,
+      getProductCategories,
+      hasProductCategories,
+      schoolType,
+      previousDetails: productDetails,
+      categoryOverrides: productCategoryOverridesRef.current,
+    })
+    setProductDetails(next)
+    setSelectedProducts([
+      ...new Set(
+        productSections.flatMap((section) => section.lines.map((line) => line.product))
+      ),
+    ])
+    return next
+  }
+
   const validateProducts = (opts?: {
     requireDeliverables?: boolean
     requireUnitPrice?: boolean
@@ -741,6 +762,7 @@ export function useCloseLeadProductConfig(options: UseCloseLeadProductConfigOpti
     getLineClassSelections,
     lineHasValidClassSelections,
     buildDcOrderProducts,
+    commitProductSections,
     validateProducts,
     schoolType,
   }
