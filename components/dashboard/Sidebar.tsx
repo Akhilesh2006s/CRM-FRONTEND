@@ -746,10 +746,9 @@ export function Sidebar() {
         icon: Users,
         children: [
           { label: 'New Employee', href: '/dashboard/employees/new' },
-          { label: 'Employee Requests', href: '/dashboard/employees/requests' },
+          { label: 'Employee Approval Status', href: '/dashboard/employees/verification' },
           { label: 'Active Employees', href: '/dashboard/employees/active' },
           { label: 'Inactive Employees', href: '/dashboard/employees/inactive' },
-          { label: 'Employee Verification', href: '/dashboard/employees/verification' },
           { label: 'Attendance', href: '/dashboard/employees/attendance' },
           ...(!isHrExecutive
             ? [
@@ -956,7 +955,8 @@ export function Sidebar() {
       return item
     })
   } else if (isExecutiveManager) {
-    // For Executive Manager role, show My Dashboard and Executive Manager menu
+    // Zonal Managers need the same day-to-day DC, client, and lead workspaces
+    // as the BDEs they supervise, in addition to their approval queues.
     // Get the manager's own ID from user data (we'll need to store it in auth)
     finalNav = [
       {
@@ -975,10 +975,29 @@ export function Sidebar() {
         href: '/dashboard/employees/verification',
       },
       {
-        label: 'Clients',
+        label: 'DC',
         icon: Truck,
         children: [
+          { label: 'Create Sale', href: '/dashboard/dc/create', icon: PlusCircle },
+          { label: 'Emp DC', href: '/dashboard/dc/emp', icon: UserCircle2 },
+        ],
+      },
+      {
+        label: 'Clients',
+        icon: Users,
+        children: [
+          { label: 'My Clients', href: '/dashboard/dc/client-dc', icon: Users },
+          { label: 'Renewal', href: '/dashboard/leads/renewal', icon: RefreshCw },
+          { label: 'Term-Wise DC', href: '/dashboard/dc/client-dc/term-wise', icon: FileText },
           { label: 'PO Edit Request', href: '/dashboard/clients/closed-sales', icon: CheckCircle2 },
+        ],
+      },
+      {
+        label: 'Leads',
+        icon: TrendingUp,
+        children: [
+          { label: 'Add Lead', href: '/dashboard/leads/add', icon: PlusCircle },
+          { label: 'Followup Leads', href: '/dashboard/leads/followup', icon: Phone },
         ],
       },
       {

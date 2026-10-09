@@ -18,6 +18,12 @@ type RequestRow = {
   role?: string
   mobile?: string
   createdAt?: string
+  approvals?: { roleKey: string; status: string }[]
+}
+
+const hasCompletedVerticalHeadApproval = (row: RequestRow) => {
+  const heads = (row.approvals || []).filter((approval) => approval.roleKey !== 'hr_manager')
+  return heads.length > 0 && heads.every((approval) => approval.status === 'approved')
 }
 
 export default function EmployeeRequestsPage() {
@@ -102,12 +108,20 @@ export default function EmployeeRequestsPage() {
                         <Button asChild size="sm" variant="outline">
                           <Link href={`/dashboard/employees/edit/${row._id}`}>Details / Edit</Link>
                         </Button>
-                        <Button size="sm" disabled={acting === row._id} onClick={() => void decide(row._id, 'approve')}>
-                          Approve
-                        </Button>
-                        <Button size="sm" variant="outline" disabled={acting === row._id} onClick={() => void decide(row._id, 'reject')}>
-                          Reject
-                        </Button>
+                        {hasCompletedVerticalHeadApproval(row) ? (
+                          <>
+                            <Button size="sm" disabled={acting === row._id} onClick={() => void decide(row._id, 'approve')}>
+                              Approve
+                            </Button>
+                            <Button size="sm" variant="outline" disabled={acting === row._id} onClick={() => void decide(row._id, 'reject')}>
+                              Reject
+                            </Button>
+                          </>
+                        ) : (
+                          <span className="self-center text-xs font-medium text-neutral-500">
+                            Waiting for Vertical Head background verification
+                          </span>
+                        )}
                       </div>
                     </td>
                   )}

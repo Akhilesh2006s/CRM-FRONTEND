@@ -50,6 +50,7 @@ type Employee = {
 }
 
 const ROLE_LABELS: Record<string, string> = {
+  admin: 'Admin',
   hr_manager: 'HR Manager',
   zonal_manager: 'Zonal Manager',
   training_head: 'Training Head',
@@ -67,11 +68,11 @@ export default function EmployeeVerificationPage() {
   const [loading, setLoading] = useState(true)
   const [notes, setNotes] = useState<Record<string, string>>({})
   const [acting, setActing] = useState<string | null>(null)
-  const [view, setView] = useState<'pending' | 'rejected'>('pending')
+  const [view, setView] = useState<'pending' | 'approved' | 'rejected'>('pending')
 
   const headApprovalsApproved = (employee: Employee) => {
     const heads = (employee.approvals || []).filter((approval) => approval.roleKey !== 'hr_manager')
-    return heads.length === 0 || heads.every((approval) => approval.status === 'approved')
+    return heads.length > 0 && heads.every((approval) => approval.status === 'approved')
   }
 
   const canActOn = (employee: Employee, roleKey: string) => {
@@ -83,6 +84,20 @@ export default function EmployeeVerificationPage() {
       return ['vertical_manager', 'training_head'].includes(roleKey)
     }
     return false
+  }
+
+  const approvalStatusLabel = (employee: Employee) => {
+    if (employee.verificationStatus === 'approved') return 'Approved'
+    if (employee.verificationStatus === 'rejected') return 'Rejected'
+    const approvals = employee.approvals || []
+    const heads = approvals.filter((approval) => approval.roleKey !== 'hr_manager')
+    if (heads.length === 0 || heads.some((approval) => approval.status === 'pending')) {
+      return 'Pending — Vertical Head'
+    }
+    if (approvals.some((approval) => approval.roleKey === 'hr_manager' && approval.status === 'pending')) {
+      return 'Pending — HR Manager'
+    }
+    return 'Pending'
   }
 
   const load = async () => {
@@ -135,7 +150,7 @@ export default function EmployeeVerificationPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">
-          {isHr ? 'New Employee Applications' : 'Employee Verification'}
+          {isHr ? 'Employee Approval Status' : 'Employee Verification'}
         </h1>
         <p className="text-sm text-neutral-600 mt-1">
           {isHr
@@ -158,6 +173,12 @@ export default function EmployeeVerificationPage() {
           >
             Rejected employees
           </Button>
+          <Button
+            variant={view === 'approved' ? 'default' : 'outline'}
+            onClick={() => setView('approved')}
+          >
+            Approved employees
+          </Button>
         </div>
       )}
 
@@ -167,8 +188,10 @@ export default function EmployeeVerificationPage() {
         <Card className="p-6 text-sm text-neutral-600">
           {view === 'rejected'
             ? 'No rejected employee applications.'
+            : view === 'approved'
+              ? 'No approved employee applications.'
             : isHr
-              ? 'No new employee applications waiting for HR approval.'
+              ? 'No pending employee applications.'
               : 'No employees pending verification.'}
         </Card>
       ) : (
@@ -186,8 +209,14 @@ export default function EmployeeVerificationPage() {
                   {emp.cluster ? ` · Cluster: ${emp.cluster}` : ''}
                 </p>
               </div>
-              <span className="text-xs uppercase tracking-wide px-2 py-1 rounded bg-amber-100 text-amber-800">
-                {emp.verificationStatus || 'pending'}
+              <span className={`text-xs uppercase tracking-wide px-2 py-1 rounded ${
+                emp.verificationStatus === 'approved'
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : emp.verificationStatus === 'rejected'
+                    ? 'bg-red-100 text-red-800'
+                    : 'bg-amber-100 text-amber-800'
+              }`}>
+                {approvalStatusLabel(emp)}
               </span>
               {(isAdmin || isHrManager) && (
                 <Button asChild size="sm" variant="outline">

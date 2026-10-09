@@ -98,7 +98,6 @@ export default function CloseLeadPage() {
     setProductSections,
     childProductRows,
     groupedChildProductRows,
-    availableProducts,
     getDefaultLevel,
     getProductCategories,
     hasProductCategories,
@@ -171,14 +170,14 @@ export default function CloseLeadPage() {
           year: currentAcademicYear,
         })
         
-        // Pre-fill selected products and product details - normalize product names to match availableProducts
-        // Only set products that exactly match availableProducts
+        // Pre-fill every selected product. Do not depend on the async product
+        // catalog being loaded here, otherwise later products can disappear.
         let validProducts: string[] = []
         
         if (leadData.products && Array.isArray(leadData.products) && leadData.products.length > 0) {
           validProducts = leadData.products
             .map((p: any) => {
-              const name = p.product_name || p.product || p
+              const name = p.product_name || p.product || p.productName || p
               if (typeof name === 'string') {
                 const normalized = name.trim()
                 // Map variations to exact names
@@ -217,9 +216,7 @@ export default function CloseLeadPage() {
               }
               return null
             })
-            .filter((name: string | null): name is string => {
-              return name !== null && availableProducts.includes(name)
-            })
+            .filter((name: string | null): name is string => Boolean(name))
         } else if (typeof leadData.products === 'string' && leadData.products.trim()) {
           validProducts = leadData.products
             .split(',')
@@ -259,10 +256,10 @@ export default function CloseLeadPage() {
               }
               return normalized
             })
-            .filter((name: string) => availableProducts.includes(name))
+            .filter(Boolean)
         }
         
-        // Only set products if we have valid matches
+        // Build one independent configuration section for every selected product.
         if (validProducts.length > 0) {
           const normalizeName = (raw: string) => {
             const normalized = String(raw || '').trim()
@@ -301,23 +298,23 @@ export default function CloseLeadPage() {
           }
 
           const parentRows: ProductDetailRow[] = validProducts
-            .map((product, productIdx) => {
+            .flatMap((product, productIdx): ProductDetailRow[] => {
             const productData = Array.isArray(leadData.products)
               ? leadData.products.find((p: any) => {
-                  const raw = p?.product_name || p?.product || p
+                  const raw = p?.product_name || p?.product || p?.productName || p
                   return normalizeName(String(raw || '')) === product
                 })
               : undefined
             // Skip Not Interested products when closing (no sale line)
             if (productData?.status === 'Not Interested') {
-              return null
+              return []
             }
             // Load saved quantity/strength and unit_price from follow-up
             const savedStrength =
               Number(productData?.strength) || Number(productData?.quantity) || 0
             const savedUnitPrice = Number(productData?.unit_price) || 0
             
-            return {
+            return [{
               id: Date.now().toString() + productIdx,
               product: product,
               class: '1',
@@ -347,9 +344,8 @@ export default function CloseLeadPage() {
                   ? [productData.level]
                   : [],
               dispatchMode: productData?.dispatchMode,
-            }
+            }]
           })
-            .filter((row): row is ProductDetailRow => row !== null)
           setProductSections(productDetailsToSections(parentRows))
         } else {
           setProductSections([])
@@ -374,7 +370,7 @@ export default function CloseLeadPage() {
     // Handle array format
     if (Array.isArray(lead.products) && lead.products.length > 0) {
       productNames = lead.products.map((p: any) => {
-        const name = p.product_name || p.product || p
+        const name = p.product_name || p.product || p.productName || p
         return typeof name === 'string' ? name.trim() : null
       }).filter((name: string | null): name is string => name !== null)
     } 
@@ -387,7 +383,7 @@ export default function CloseLeadPage() {
       return []
     }
     
-    // Normalize product names to match availableProducts
+    // Normalize legacy product-name variations to their current display names.
     return productNames
       .map((name: string) => {
         const normalized = name.trim()
@@ -425,9 +421,7 @@ export default function CloseLeadPage() {
         }
         return normalized
       })
-      .filter((name: string) => {
-        return name !== null && availableProducts.includes(name)
-      })
+      .filter(Boolean)
   }
 
   const handlePOPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

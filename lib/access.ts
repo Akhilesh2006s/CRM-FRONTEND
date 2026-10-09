@@ -19,6 +19,12 @@ const EXECUTIVE_MANAGER_WORKSPACE_ROUTES = [
   '/dashboard/expenses/executive-manager-pending',
   '/dashboard/clients/closed-sales',
   '/dashboard/employees/verification',
+  '/dashboard/dc/create',
+  '/dashboard/dc/emp',
+  '/dashboard/dc/client-dc',
+  '/dashboard/leads/add',
+  '/dashboard/leads/followup',
+  '/dashboard/leads/renewal',
 ]
 
 function canAccessExecutiveManagerOwnRoute(
