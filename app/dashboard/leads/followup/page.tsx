@@ -231,7 +231,7 @@ export default function FollowupLeadsPage() {
 
   useEffect(() => {
     if (!seesAllFollowups) return
-    const roles = ['Executive', 'Sales BDE', 'Employee']
+    const roles = ['Executive', 'Sales BDE', 'Employee', 'BDE']
     Promise.all(
       roles.map((role) =>
         apiRequest<any[]>(`/employees?isActive=true&role=${encodeURIComponent(role)}`).catch(() => [])

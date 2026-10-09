@@ -27,7 +27,11 @@ const EXECUTIVE_MANAGER_WORKSPACE_ROUTES = [
   '/dashboard/leads/renewal',
 ]
 
-const BDE_ROLES = new Set(['Executive', 'Sales BDE', 'Employee', 'BDE'])
+const BDE_ROLES = new Set(['executive', 'sales bde', 'sales executive', 'employee', 'bde', 'business development executive'])
+
+function normalizedRole(user: AuthUserWithPermissions): string {
+  return String(user.role || user.roleName || '').trim().toLowerCase()
+}
 const BDE_OPERATIONAL_ROUTES = [
   '/dashboard/leads/add',
   '/dashboard/leads/followup',
@@ -114,7 +118,7 @@ export function canAccessPath(
   // BDE operational pages are core role capabilities. Keep them available even
   // when a legacy BDE account has stale/missing RBAC permission keys.
   if (
-    BDE_ROLES.has(String(user.role || '')) &&
+    BDE_ROLES.has(normalizedRole(user)) &&
     BDE_OPERATIONAL_ROUTES.some(
       (route) => pathname === route || pathname.startsWith(`${route}/`)
     )

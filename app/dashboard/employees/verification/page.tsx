@@ -40,6 +40,7 @@ type Employee = {
   passportPhotoUrl?: string
   references?: { relation: string; name?: string; mobile: string; aadhaarUrl?: string }[]
   verificationStatus?: string
+  isActive?: boolean
   approvals?: Approval[]
   executiveManagerId?: { name?: string } | string | null
   verticalManagerId?: { name?: string } | string | null
@@ -68,7 +69,7 @@ export default function EmployeeVerificationPage() {
   const [loading, setLoading] = useState(true)
   const [notes, setNotes] = useState<Record<string, string>>({})
   const [acting, setActing] = useState<string | null>(null)
-  const [view, setView] = useState<'pending' | 'approved' | 'rejected'>('pending')
+  const [view, setView] = useState<'all' | 'pending' | 'approved' | 'rejected'>(isHr ? 'all' : 'pending')
 
   const headApprovalsApproved = (employee: Employee) => {
     const heads = (employee.approvals || []).filter((approval) => approval.roleKey !== 'hr_manager')
@@ -87,7 +88,7 @@ export default function EmployeeVerificationPage() {
   }
 
   const approvalStatusLabel = (employee: Employee) => {
-    if (employee.verificationStatus === 'approved') return 'Approved'
+    if (employee.verificationStatus === 'approved' || (!employee.verificationStatus && employee.isActive)) return 'Approved'
     if (employee.verificationStatus === 'rejected') return 'Rejected'
     const approvals = employee.approvals || []
     const heads = approvals.filter((approval) => approval.roleKey !== 'hr_manager')
@@ -162,6 +163,12 @@ export default function EmployeeVerificationPage() {
       {(isAdmin || isHr) && (
         <div className="flex flex-wrap gap-2">
           <Button
+            variant={view === 'all' ? 'default' : 'outline'}
+            onClick={() => setView('all')}
+          >
+            All employees
+          </Button>
+          <Button
             variant={view === 'pending' ? 'default' : 'outline'}
             onClick={() => setView('pending')}
           >
@@ -190,9 +197,11 @@ export default function EmployeeVerificationPage() {
             ? 'No rejected employee applications.'
             : view === 'approved'
               ? 'No approved employee applications.'
-            : isHr
-              ? 'No pending employee applications.'
-              : 'No employees pending verification.'}
+              : view === 'all'
+                ? 'No employees found.'
+                : isHr
+                  ? 'No pending employee applications.'
+                  : 'No employees pending verification.'}
         </Card>
       ) : (
         list.map((emp) => (

@@ -718,7 +718,7 @@ export function Sidebar() {
     }
   }, [])
 
-  const isEmployee = user?.role === 'Executive'
+  const isEmployee = ['Executive', 'Sales BDE', 'Employee', 'BDE'].includes(String(user?.role || ''))
   const isManager = user?.role === 'Manager'
   const isCoordinator = user?.role === 'Coordinator'
   const isSeniorCoordinator = user?.role === 'Senior Coordinator'
@@ -727,7 +727,7 @@ export function Sidebar() {
   const isRegionalHead = user?.role === 'Regional Head'
   const isNationalHead = user?.role === 'National Head'
   const isHierarchyRole = isRegionalManager || isRegionalHead || isNationalHead
-  const isExecutive = user?.role === 'Executive'
+  const isExecutive = ['Executive', 'Sales BDE', 'Employee', 'BDE'].includes(String(user?.role || ''))
   const isTrainer = user?.role === 'Trainer'
   const isWarehouseExecutive = user?.role === 'Warehouse Executive'
   const isWarehouseManager = user?.role === 'Warehouse Manager'

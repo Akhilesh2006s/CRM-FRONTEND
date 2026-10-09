@@ -8,6 +8,8 @@ export const CLOSE_LEAD_DESTINATION = {
   TERM_WISE_DC: 'TERM_WISE_DC',
 } as const
 
+const GENERIC_LEVEL_SPLIT_PRODUCTS = new Set(['abacus', 'vedic maths', 'vedicmaths'])
+
 export type CloseLeadDestination =
   (typeof CLOSE_LEAD_DESTINATION)[keyof typeof CLOSE_LEAD_DESTINATION]
 
@@ -90,7 +92,8 @@ export function partitionProductsForCloseLeadRouting<T extends CloseLeadProductR
       !splitByLevel &&
       !splitByTerm &&
       group.some((row) => row.dispatchMode === 'one_level_at_a_time') &&
-      levelOrder.length > 1
+      levelOrder.length > 1 &&
+      GENERIC_LEVEL_SPLIT_PRODUCTS.has(String(group[0]?.product || group[0]?.productName || '').trim().toLowerCase())
 
     for (let i = 0; i < group.length; i++) {
       const p = group[i]
