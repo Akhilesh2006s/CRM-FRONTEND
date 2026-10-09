@@ -18,6 +18,10 @@ const EXECUTIVE_MANAGER_WORKSPACE_ROUTES = [
   '/dashboard/executive-managers/executives',
   '/dashboard/expenses/executive-manager-pending',
   '/dashboard/clients/closed-sales',
+  // Closed Sales is the DC-request queue. Zonal Managers may review the
+  // requests for their BDEs, but approval actions remain role-controlled by
+  // the page/API.
+  '/dashboard/dc/closed',
   '/dashboard/employees/verification',
   '/dashboard/dc/create',
   '/dashboard/dc/emp',
@@ -135,6 +139,14 @@ export function canAccessPath(
   }
   if (pathname === '/dashboard/dc/pending' || pathname.startsWith('/dashboard/dc/pending/')) {
     return user.role === 'Senior Coordinator'
+  }
+  // A requested DC must be visible to both queues. Coordinators can act on
+  // it; Zonal Managers only receive read access to the same queue.
+  if (
+    pathname === '/dashboard/dc/closed' ||
+    pathname.startsWith('/dashboard/dc/closed/')
+  ) {
+    return user.role === 'Coordinator' || user.role === 'Executive Manager'
   }
   if (
     (user.role === 'Executive' || user.role === 'Sales BDE') &&

@@ -989,6 +989,7 @@ export function Sidebar() {
           { label: 'My Clients', href: '/dashboard/dc/client-dc', icon: Users },
           { label: 'Renewal', href: '/dashboard/leads/renewal', icon: RefreshCw },
           { label: 'Term-Wise DC', href: '/dashboard/dc/client-dc/term-wise', icon: FileText },
+          { label: 'Closed Sales', href: '/dashboard/dc/closed', icon: CheckCircle2 },
           { label: 'PO Edit Request', href: '/dashboard/clients/closed-sales', icon: CheckCircle2 },
         ],
       },
