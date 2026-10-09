@@ -46,6 +46,7 @@ type Lead = {
   isChain?: boolean
   assignedToId?: string
   assignedToName?: string
+  sourceType?: 'lead' | 'dc-order'
   products?: Array<{
     product_name?: string
     product?: string
@@ -356,6 +357,7 @@ export default function FollowupLeadsPage() {
           isChain: order.isChain === true,
           assignedToId: assignee.id,
           assignedToName: assignee.name,
+          sourceType: 'dc-order',
           }
           return mapped
         })
@@ -604,20 +606,25 @@ export default function FollowupLeadsPage() {
       
       console.log('Updating lead with payload:', payload)
       
-      // Try to update via dc-orders API first (since that's where history is tracked)
+      // Use the endpoint that owns the record. Trying the other collection
+      // first can turn a valid follow-up update into the misleading "Lead not
+      // found" error when the two collections have different ids.
       let updated = false
+      const updateDcOrder = selectedLead.sourceType === 'dc-order'
       try {
-        const response = await apiRequest(`/dc-orders/${selectedLead._id}`, {
+        const endpoint = updateDcOrder ? `/dc-orders/${selectedLead._id}` : `/leads/${selectedLead._id}`
+        const response = await apiRequest(endpoint, {
           method: 'PUT',
           body: JSON.stringify(payload),
         })
         console.log('Update response:', response)
         updated = true
       } catch (err: any) {
-        console.log('dc-orders update failed, trying leads API:', err?.message)
-        // If not found in dc-orders, try leads API
+        if (updateDcOrder) throw err
+        console.log('leads update failed, trying dc-orders API:', err?.message)
+        // Legacy/mixed records may still be stored as a DcOrder; retry there.
         try {
-          await apiRequest(`/leads/${selectedLead._id}`, {
+          await apiRequest(`/dc-orders/${selectedLead._id}`, {
             method: 'PUT',
             body: JSON.stringify(payload),
           })

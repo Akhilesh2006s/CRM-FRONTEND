@@ -119,6 +119,17 @@ export function canAccessPath(
   if (options?.loading) return true
   if (!user) return false
   if (isSuperAdmin(user)) return true
+  // HR accounts are granted the employee approval-status screen by role. Keep
+  // this working even when an older auth payload uses roleName or has not yet
+  // received the refreshed RBAC permission catalog.
+  const role = normalizedRole(user)
+  if (
+    (role === 'hr manager' || role === 'hr executive') &&
+    (pathname === '/dashboard/employees/verification' ||
+      pathname.startsWith('/dashboard/employees/verification/'))
+  ) {
+    return true
+  }
   // BDE operational pages are core role capabilities. Keep them available even
   // when a legacy BDE account has stale/missing RBAC permission keys.
   if (
