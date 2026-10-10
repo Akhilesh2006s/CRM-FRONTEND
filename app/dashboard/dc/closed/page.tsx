@@ -193,11 +193,6 @@ export default function ClosedSalesPage() {
   const [selectedDeal, setSelectedDeal] = useState<DcOrder | null>(null)
   const [openRaiseDCDialog, setOpenRaiseDCDialog] = useState(false)
   const [openLocationDialog, setOpenLocationDialog] = useState(false)
-  const [stockSlip, setStockSlip] = useState<{
-    message: string
-    school: string
-    shortages: Array<{ label?: string; requiredQty?: number; availableQty?: number; shortQty?: number }>
-  } | null>(null)
   const [openPOPhotoDialog, setOpenPOPhotoDialog] = useState(false)
   const [selectedPOPhotoUrl, setSelectedPOPhotoUrl] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -257,6 +252,7 @@ export default function ClosedSalesPage() {
     level: string
     term: string
     unit_price: number
+    price?: number
   }
   const [productRows, setProductRows] = useState<ProductRow[]>([
     { id: '1', product: 'Abacus', class: '1', category: 'new Students', productCategory: undefined, specs: '', quantity: 1, strength: 0, level: 'L1', term: 'Term 1', unit_price: 0 }
@@ -1314,16 +1310,7 @@ export default function ClosedSalesPage() {
       setOpenRaiseDCDialog(false)
       load()
     } catch (e: any) {
-      const shortages = Array.isArray(e?.shortages) ? e.shortages : []
-      if (shortages.length > 0) {
-        setStockSlip({
-          message: e?.message || 'Stock is short. Restock, print, and approve before accepting this DC.',
-          school: selectedDeal?.school_name || 'School',
-          shortages,
-        })
-      } else {
-        alert(e?.message || 'Failed to accept DC')
-      }
+      alert(e?.message || 'Failed to accept DC')
     } finally {
       setSaving(false)
     }
@@ -2367,46 +2354,6 @@ export default function ClosedSalesPage() {
               <p>Loading deal details...</p>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={!!stockSlip} onOpenChange={(open) => { if (!open) setStockSlip(null) }}>
-        <DialogContent className="sm:max-w-[560px] bg-white">
-          <DialogHeader>
-            <DialogTitle>Stock is short</DialogTitle>
-            <DialogDescription>
-              {stockSlip?.school}. Inventory was not deducted. Restock these items, print this slip, and wait for Warehouse Manager approval. Then accept the DC again.
-            </DialogDescription>
-          </DialogHeader>
-          <div id="dc-stock-slip" className="space-y-2 text-sm">
-            {(stockSlip?.shortages || []).map((row, index) => (
-              <div key={`${row.label}-${index}`} className="flex justify-between gap-3 border-b py-2">
-                <span>{row.label || 'Product'}</span>
-                <span className="text-neutral-600">
-                  Need {row.requiredQty ?? 0}, available {row.availableQty ?? 0}, short {row.shortQty ?? Math.max(0, (row.requiredQty || 0) - (row.availableQty || 0))}
-                </span>
-              </div>
-            ))}
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setStockSlip(null)}>Close</Button>
-            <Button
-              type="button"
-              onClick={() => {
-                const lines = (stockSlip?.shortages || [])
-                  .map((row) => `<tr><td>${row.label || 'Product'}</td><td>${row.requiredQty ?? 0}</td><td>${row.availableQty ?? 0}</td><td>${row.shortQty ?? ''}</td></tr>`)
-                  .join('')
-                const popup = window.open('', '_blank', 'noopener,noreferrer,width=720,height=640')
-                if (!popup) return
-                popup.document.write(`<html><head><title>DC restock</title></head><body><h1>Restock before DC</h1><p>${stockSlip?.school || ''}</p><table border="1" cellpadding="6"><tr><th>Product</th><th>Required</th><th>Available</th><th>Short</th></tr>${lines}</table><p>Print this slip. Warehouse Manager approval adds the stock. Accept the DC after that.</p></body></html>`)
-                popup.document.close()
-                popup.focus()
-                popup.print()
-              }}
-            >
-              Print
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
