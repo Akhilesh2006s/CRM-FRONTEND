@@ -642,11 +642,15 @@ export function expandSectionsToProductDetails(
 
       const { fromClass, toClass } = classSelectionBounds(classSelections)
       const priceToUse = Number(line.price) || 0
-      const levelsToUse = line.selectedLevels?.length
+      const configuredLevels = line.selectedLevels?.length
         ? line.selectedLevels
         : line.level
           ? [line.level]
           : []
+      // Level is an optional catalog dimension. Products such as Abacus can
+      // expand once per selected level, while products with no configured
+      // levels must still produce one row per class/spec/subject combination.
+      const levelsToUse = configuredLevels.length > 0 ? configuredLevels : ['']
       const hasSkuCategories = ctx.hasProductCategories(line.product)
       const skuCategories = hasSkuCategories ? ctx.getProductCategories(line.product) : []
       const enrollmentDefault = schoolExisting ? 'Existing Students' : 'New Students'
@@ -677,7 +681,7 @@ export function expandSectionsToProductDetails(
         strength: classSelections[0]?.strength || 0,
         price: priceToUse,
         total: 0,
-        level: levelsToUse[0] || line.level,
+        level: configuredLevels[0] || line.level || '',
         specs: specsToUse[0] || '',
         isParentRow: true,
         sameRateForAllClasses: line.sameRateForAllClasses,
@@ -689,7 +693,7 @@ export function expandSectionsToProductDetails(
           line.term !== undefined && line.term !== ''
             ? normalizeProductTerm(line.term)
             : undefined,
-        levels_snapshot: [...levelsToUse],
+        levels_snapshot: [...configuredLevels],
         dispatchMode: line.dispatchMode,
       }
       out.push(parentRow)
@@ -703,8 +707,6 @@ export function expandSectionsToProductDetails(
 
       let rowIdx = 0
       const parentId = line.parentRowId
-      if (levelsToUse.length === 0) continue
-
       // One row per (selected class × level × spec × subject).
       for (const classSel of classSelections) {
         const strengthToUse = Number(classSel.strength) || 0
