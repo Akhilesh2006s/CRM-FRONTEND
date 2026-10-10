@@ -24,6 +24,13 @@ type School = {
   location?: string
 }
 
+type ListResponse<T> = T[] | { data?: T[] }
+
+function responseRows<T>(response: ListResponse<T> | null | undefined): T[] {
+  if (Array.isArray(response)) return response
+  return Array.isArray(response?.data) ? response.data : []
+}
+
 export default function AddPaymentPage() {
   const [schools, setSchools] = useState<School[]>([])
   const [school, setSchool] = useState<string | undefined>(undefined)
@@ -62,11 +69,14 @@ export default function AddPaymentPage() {
         
         if (isEmployee) {
           // Get schools from multiple sources for this employee
-          const [dcs, leads, dcOrders] = await Promise.all([
-            apiRequest<any[]>(`/dc?employeeId=${currentUser._id}`).catch(() => []),
-            apiRequest<any[]>(`/leads?assignedTo=${currentUser._id}`).catch(() => []),
-            apiRequest<any[]>(`/dc-orders?assigned_to=${currentUser._id}`).catch(() => []),
+          const [dcResponse, leadResponse, dcOrderResponse] = await Promise.all([
+            apiRequest<ListResponse<any>>(`/dc?employeeId=${currentUser._id}`).catch(() => []),
+            apiRequest<ListResponse<any>>(`/leads?assignedTo=${currentUser._id}&limit=500`).catch(() => []),
+            apiRequest<ListResponse<any>>(`/dc-orders?assigned_to=${currentUser._id}&limit=500`).catch(() => []),
           ])
+          const dcs = responseRows(dcResponse)
+          const leads = responseRows(leadResponse)
+          const dcOrders = responseRows(dcOrderResponse)
 
           const schoolMap = new Map<string, School>()
           const addSchool = (row: School) => {
@@ -122,8 +132,8 @@ export default function AddPaymentPage() {
           )
         } else {
           // For admins/managers, show all schools
-          const data = await apiRequest<School[]>('/schools')
-          setSchools(data)
+          const data = await apiRequest<ListResponse<School>>('/schools')
+          setSchools(responseRows(data))
         }
       } catch (err: any) {
         toast.error(err?.message || 'Failed to load schools')
