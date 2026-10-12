@@ -26,6 +26,8 @@ export default function NewProductPage() {
   const [form, setForm] = useState({
     productName: '',
     productLevels: [] as string[],
+    classes: Array.from({ length: 12 }, (_, index) => String(index + 1)),
+    newClass: '',
     newLevel: '',
     hasSubjects: false,
     subjects: [] as string[],
@@ -173,6 +175,7 @@ export default function NewProductPage() {
       const payload: any = {
         productName: form.productName.trim(),
         productLevels: form.productLevels,
+        classes: form.classes,
         hasSubjects: form.hasSubjects,
         subjects: form.hasSubjects ? form.subjects : [],
         hasSpecs: form.hasSpecs,
@@ -264,7 +267,7 @@ export default function NewProductPage() {
                 <Label>Calculation type</Label>
                 <Select
                   value={form.calculationType}
-                  onValueChange={(v: 'none' | 'level_based' | 'subject_based') =>
+                  onValueChange={(v: 'normal' | 'level_based' | 'subject_based') =>
                     setForm({ ...form, calculationType: v })
                   }
                 >
@@ -288,6 +291,26 @@ export default function NewProductPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+
+          <div>
+            <Label>Classes</Label>
+            <p className="text-xs text-neutral-500 mb-2">Choose the classes available for this product.</p>
+            <div className="flex gap-2 mb-2">
+              <Input type="number" min={1} value={form.newClass} onChange={(e) => setForm({ ...form, newClass: e.target.value })}
+                placeholder="Class name or number" className="bg-white" />
+              <Button type="button" variant="outline" onClick={() => {
+                const value = form.newClass.trim()
+                if (value && !form.classes.includes(value)) setForm({ ...form, classes: [...form.classes, value], newClass: '' })
+              }}>Add Class</Button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {form.classes.map((value) => <Badge key={value} variant="outline">
+                {value}
+                <button type="button" aria-label={`Remove class ${value}`} className="ml-2 text-red-600"
+                  onClick={() => setForm({ ...form, classes: form.classes.filter((item) => item !== value) })}>×</button>
+              </Badge>)}
+            </div>
+          </div>
 
           <div>
             <Label>Term / Level</Label>

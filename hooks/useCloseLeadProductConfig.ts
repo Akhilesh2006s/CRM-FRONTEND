@@ -49,6 +49,7 @@ export function useCloseLeadProductConfig(options: UseCloseLeadProductConfigOpti
     products: catalogProducts,
     productNames: availableProducts,
     getProductLevels,
+    getProductClasses,
     getDefaultLevel,
     getProductSpecs,
     hasProductSpecs,
@@ -316,6 +317,13 @@ export function useCloseLeadProductConfig(options: UseCloseLeadProductConfigOpti
         }
       })
     )
+  }
+
+  const updateLineClassPrice = (sectionId: string, lineId: string, classValue: string, unitPrice: number) => {
+    updateLineInSection(sectionId, lineId, (line) => ({
+      ...line,
+      priceByClass: { ...line.priceByClass, [classValue]: unitPrice },
+    }))
   }
 
   const generateRowsFromRange = (
@@ -730,6 +738,7 @@ export function useCloseLeadProductConfig(options: UseCloseLeadProductConfigOpti
     catalogProducts,
     availableProducts,
     getProductLevels,
+    getProductClasses,
     getDefaultLevel,
     getProductSpecs,
     hasProductSpecs,
@@ -753,6 +762,7 @@ export function useCloseLeadProductConfig(options: UseCloseLeadProductConfigOpti
     updateProductSectionLine,
     removeProductSectionLine,
     updateLineUnitPrice,
+    updateLineClassPrice,
     generateRowsFromRange,
     updateParentUnitPrice,
     updateProductDetail,

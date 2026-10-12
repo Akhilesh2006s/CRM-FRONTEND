@@ -112,6 +112,13 @@ type DC = {
   }
   createdAt?: string
   productDetails?: any[]
+  abacusMaterials?: {
+    studentAbacusQuantity: number
+    masterAbacusQuantity: number
+    flashCardSetsQuantity: number
+    masterAbacusUnitPrice: number
+    masterAbacusCharge: number
+  }
   clientOperations?: {
     deliveryStatus?: string
     booksDistributed?: 'Yes' | 'No'
@@ -972,6 +979,18 @@ export default function ClientDCPage() {
         )
         paymentBreakdown = adj.paymentBreakdown
         totalAmount = adj.totalAmount
+      }
+      // Materials belong to the first DC, not every later DC on the order.
+      const invoiceMaterials = fullDC?.abacusMaterials
+      if (Number(invoiceMaterials?.masterAbacusCharge) > 0) {
+        paymentBreakdown.push({
+          product: 'Master Abacus', class: '-', category: 'Abacus material', specs: 'Regular',
+          quantity: Number(invoiceMaterials.masterAbacusQuantity) || 0,
+          strength: Number(invoiceMaterials.masterAbacusQuantity) || 0,
+          unitPrice: Number(invoiceMaterials.masterAbacusUnitPrice) || 0,
+          total: Number(invoiceMaterials.masterAbacusCharge), term: 'Term 1',
+        })
+        totalAmount += Number(invoiceMaterials.masterAbacusCharge)
       }
 
       // Calculate payment and return totals
@@ -1887,6 +1906,7 @@ export default function ClientDCPage() {
       // Calculate total amount from productDetails - ALWAYS get prices from DcOrder products
       let totalAmount = 0
       let paymentBreakdown: any[] = []
+      let requestMaterials: any = selectedDC.abacusMaterials
       
       // Always try to get prices from DcOrder products first (most accurate)
       if (selectedDC.dcOrderId) {
@@ -1974,7 +1994,11 @@ export default function ClientDCPage() {
           const dcOrder = await apiRequest<any>(`/dc-orders/${dcOrderId}`)
           
           if (dcOrder.total_amount && Number(dcOrder.total_amount) > 0) {
-            totalAmount = Number(dcOrder.total_amount)
+            // The order total already includes any Master Abacus charge. The
+            // material is appended as its own invoice line below, so estimate
+            // book prices from the book-only amount to avoid billing twice.
+            totalAmount = Math.max(0, Number(dcOrder.total_amount) -
+              (Number(dcOrder.abacusMaterials?.masterAbacusCharge) || 0))
             // Create breakdown with estimated prices
             paymentBreakdown = productDetails.map((pd: any) => {
             const quantity = Number(pd.quantity) || 0
@@ -2020,6 +2044,16 @@ export default function ClientDCPage() {
         )
         paymentBreakdown = adj.paymentBreakdown
         totalAmount = adj.totalAmount
+      }
+      if (Number(requestMaterials?.masterAbacusCharge) > 0) {
+        paymentBreakdown.push({
+          product: 'Master Abacus', class: '-', category: 'Abacus material', specs: 'Regular',
+          quantity: Number(requestMaterials.masterAbacusQuantity) || 0,
+          strength: Number(requestMaterials.masterAbacusQuantity) || 0,
+          unitPrice: Number(requestMaterials.masterAbacusUnitPrice) || 0,
+          total: Number(requestMaterials.masterAbacusCharge), term: 'Term 1',
+        })
+        totalAmount += Number(requestMaterials.masterAbacusCharge)
       }
 
       // Get school/client information for payment

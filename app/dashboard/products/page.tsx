@@ -20,6 +20,7 @@ type Product = {
   _id: string
   productName: string
   productLevels: string[]
+  classes?: string[]
   hasSubjects: boolean
   subjects: string[]
   hasSpecs: boolean
@@ -51,6 +52,8 @@ export default function ProductsPage() {
   const [editForm, setEditForm] = useState({
     productName: '',
     productLevels: [] as string[],
+    classes: [] as string[],
+    newClass: '',
     newLevel: '',
     hasSubjects: false,
     subjects: [] as string[],
@@ -130,6 +133,8 @@ export default function ProductsPage() {
     setEditForm({
       productName: product.productName,
       productLevels: product.productLevels || [],
+      classes: product.classes?.length ? product.classes : Array.from({ length: 12 }, (_, index) => String(index + 1)),
+      newClass: '',
       newLevel: '',
       hasSubjects: product.hasSubjects || false,
       subjects: product.subjects || [],
@@ -152,6 +157,8 @@ export default function ProductsPage() {
     setEditForm({
       productName: '',
       productLevels: [],
+      classes: [],
+      newClass: '',
       newLevel: '',
       hasSubjects: false,
       subjects: [],
@@ -269,6 +276,7 @@ export default function ProductsPage() {
       const payload: any = {
         productName: editForm.productName,
         productLevels: editForm.productLevels,
+        classes: editForm.classes,
         hasSubjects: editForm.hasSubjects,
         subjects: editForm.hasSubjects ? editForm.subjects : [],
         hasSpecs: editForm.hasSpecs,
@@ -480,6 +488,24 @@ export default function ProductsPage() {
                 onChange={(e) => setEditForm({ ...editForm, productName: e.target.value })}
                 required
               />
+            </div>
+
+            <div>
+              <Label>Classes</Label>
+              <div className="flex gap-2 mt-2 mb-2">
+                <Input type="number" min={1} value={editForm.newClass} placeholder="Class number"
+                  onChange={(e) => setEditForm({ ...editForm, newClass: e.target.value })} />
+                <Button type="button" variant="outline" onClick={() => {
+                  const value = editForm.newClass.trim()
+                  if (value && !editForm.classes.includes(value)) setEditForm({ ...editForm, classes: [...editForm.classes, value], newClass: '' })
+                }}>Add Class</Button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {editForm.classes.map((value) => <Badge key={value} variant="outline">
+                  {value}<button type="button" aria-label={`Remove class ${value}`} className="ml-2 text-red-600"
+                    onClick={() => setEditForm({ ...editForm, classes: editForm.classes.filter((item) => item !== value) })}>×</button>
+                </Badge>)}
+              </div>
             </div>
 
             <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-3 bg-neutral-50">

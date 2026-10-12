@@ -22,7 +22,6 @@ import {
 import { Package, PlusCircle, X, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
 import {
-  SELECTABLE_CLOSE_CLASSES,
   specsFromCatalog,
   getLineClassSelections,
   computeLineDisplayTotal,
@@ -109,6 +108,7 @@ function CloseLeadProductConfigView({
     showSubjectsColumn,
     filteredProducts,
     getProductLevels,
+    getProductClasses,
     getProductSpecs,
     getProductSubjects,
     hasProductSubjects,
@@ -127,6 +127,7 @@ function CloseLeadProductConfigView({
     updateProductSectionLine,
     removeProductSectionLine,
     updateLineUnitPrice,
+    updateLineClassPrice,
     updateProductDetail,
     removeProductDetail,
     commitProductSections,
@@ -295,9 +296,9 @@ function CloseLeadProductConfigView({
                                 [section.id]: open ? line.id : null,
                               }))
                             }
-                            className="border rounded overflow-hidden"
+                            className="relative border rounded overflow-hidden"
                           >
-                            <CollapsibleTrigger className="flex w-full items-center gap-2 px-3 py-2.5 bg-neutral-50 hover:bg-neutral-100 text-left">
+                            <CollapsibleTrigger className="flex w-full items-center gap-2 px-3 pr-32 py-2.5 bg-neutral-50 hover:bg-neutral-100 text-left">
                               <ChevronDown
                                 className={`h-4 w-4 shrink-0 text-neutral-600 transition-transform ${
                                   isOpen ? 'rotate-180' : ''
@@ -308,6 +309,15 @@ function CloseLeadProductConfigView({
                                 {classSummary}
                               </span>
                             </CollapsibleTrigger>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeProductSectionLine(section.id, line.id)}
+                              className="absolute right-2 top-1 text-red-600 hover:text-red-700"
+                            >
+                              <X className="w-4 h-4 mr-1" /> Remove product
+                            </Button>
                             <CollapsibleContent className="space-y-3 p-3 border-t bg-white">
                               <div className="space-y-2">
                                 <Label className="text-xs font-semibold">
@@ -355,7 +365,7 @@ function CloseLeadProductConfigView({
                                   )}
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                                  {SELECTABLE_CLOSE_CLASSES.map((cls) => {
+                                  {getProductClasses(line.product).map((cls) => {
                                     const sel = lineClasses.find((s) => s.class === cls)
                                     const checked = Boolean(sel)
                                     return (
@@ -392,6 +402,20 @@ function CloseLeadProductConfigView({
                                             updateLineClassStrength(section.id, line.id, cls, num)
                                           }}
                                         />
+                                        {!line.sameRateForAllClasses && checked && (
+                                          <Input
+                                            type="number"
+                                            min={0}
+                                            step="0.01"
+                                            aria-label={`Class ${cls} unit rate`}
+                                            className="h-8 w-24"
+                                            placeholder="Rate ₹"
+                                            value={line.priceByClass?.[cls] ?? line.price ?? ''}
+                                            onChange={(e) => updateLineClassPrice(
+                                              section.id, line.id, cls, Number(e.target.value) || 0
+                                            )}
+                                          />
+                                        )}
                                       </div>
                                     )
                                   })}
@@ -507,16 +531,16 @@ function CloseLeadProductConfigView({
                                         </SelectTrigger>
                                         <SelectContent>
                                           <SelectItem value="one_level_at_a_time">
-                                            One level at a time
+                                            Term 1 at a Time
                                           </SelectItem>
                                           <SelectItem value="both_levels_together">
-                                            Both levels together
+                                            Both Terms at a Time
                                           </SelectItem>
                                         </SelectContent>
                                       </Select>
                                       <p className="text-xs text-neutral-500">
-                                        One level at a time keeps the next level in Term-Wise DC.
-                                        Both levels together creates one current DC.
+                                        Term 1 at a Time keeps the next level in Term-Wise DC.
+                                        Both Terms at a Time creates one current DC.
                                       </p>
                                     </div>
                                   )}
@@ -542,16 +566,6 @@ function CloseLeadProductConfigView({
                                     Same rate for all classes (this level)
                                   </Label>
                                 </div>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => removeProductSectionLine(section.id, line.id)}
-                                  className="text-red-600 hover:text-red-700"
-                                >
-                                  <X className="w-4 h-4 mr-1" />
-                                  Remove product
-                                </Button>
                               </div>
 
                               {allowLineConfig && productSpecs.length > 0 && (
@@ -559,7 +573,7 @@ function CloseLeadProductConfigView({
                                   <div className="flex flex-col md:flex-row gap-3 md:items-end">
                                       <div>
                                         <Label className="text-xs font-semibold mb-1 block">
-                                          Unit Price *
+                                          {line.sameRateForAllClasses ? 'Unit Price *' : 'Default Unit Price (optional)'}
                                         </Label>
                                         <Input
                                           type="text"
@@ -581,7 +595,7 @@ function CloseLeadProductConfigView({
                                           }
                                           className={UNIT_PRICE_INPUT_CLASS}
                                           placeholder="0"
-                                          required
+                                          required={line.sameRateForAllClasses}
                                         />
                                       </div>
                                       <div>
@@ -606,7 +620,7 @@ function CloseLeadProductConfigView({
                                 <div className="mt-2 pt-2 border-t flex flex-col md:flex-row gap-3 md:items-end">
                                   <div>
                                     <Label className="text-xs font-semibold mb-1 block">
-                                      Unit Price *
+                                      {line.sameRateForAllClasses ? 'Unit Price *' : 'Default Unit Price (optional)'}
                                     </Label>
                                     <Input
                                       type="text"
@@ -624,7 +638,7 @@ function CloseLeadProductConfigView({
                                       }
                                       className={UNIT_PRICE_INPUT_CLASS}
                                       placeholder="0"
-                                      required
+                                      required={line.sameRateForAllClasses}
                                     />
                                   </div>
                                   <div>

@@ -22,6 +22,7 @@ import { useCloseLeadProductConfig } from '@/hooks/useCloseLeadProductConfig'
 import { CloseLeadProductConfig } from '@/components/leads/CloseLeadProductConfig'
 import { sanitizePhoneInput, validatePhoneDigits } from '@/lib/phone'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { abacusStudentStrength, defaultMasterAbacusQuantity } from '@/lib/abacusMaterials'
 
 type Lead = {
   _id: string
@@ -91,6 +92,8 @@ export default function CloseLeadPage() {
     dcProductDetails: any[]
     totalQuantity: number
   } | null>(null)
+  const [masterQuantityOverride, setMasterQuantityOverride] = useState<string | null>(null)
+  const [masterUnitPrice, setMasterUnitPrice] = useState('')
 
   const productConfig = useCloseLeadProductConfig({ schoolType: lead?.school_type })
   const {
@@ -105,6 +108,9 @@ export default function CloseLeadPage() {
     validateProducts,
     buildDcOrderProducts,
   } = productConfig
+  const abacusStrength = lead?.school_type === 'Existing' ? 0 : abacusStudentStrength(childProductRows)
+  const masterQuantity = masterQuantityOverride === null
+    ? defaultMasterAbacusQuantity(abacusStrength) : Number(masterQuantityOverride) || 0
 
   useEffect(() => {
     if (leadId) {
@@ -556,7 +562,7 @@ export default function CloseLeadPage() {
 
     if (isDcOrder) {
       updatePayload.status = 'saved'
-      const updated = await apiRequest(`/dc-orders/${leadId}`, {
+      const updated = await apiRequest<any>(`/dc-orders/${leadId}`, {
         method: 'PUT',
         body: JSON.stringify(updatePayload),
       })
@@ -625,6 +631,10 @@ export default function CloseLeadPage() {
       requestedQuantity: totalQuantity,
       employeeId: closingEmployeeId,
       productDetails: dcProductDetails,
+      ...(abacusStrength > 0 ? { abacusMaterials: {
+        masterAbacusQuantity: masterQuantity,
+        masterAbacusUnitPrice: Number(masterUnitPrice) || 0,
+      } } : {}),
       status: 'created',
     }
 
@@ -633,7 +643,7 @@ export default function CloseLeadPage() {
       dcPayload.poDocument = poPhotoUrl
     }
 
-    const dc = await apiRequest('/dc/raise', {
+    const dc = await apiRequest<any>('/dc/raise', {
       method: 'POST',
       body: JSON.stringify(dcPayload),
     })
@@ -719,6 +729,13 @@ export default function CloseLeadPage() {
 
     if (!currentUser?._id) {
       toast.error('User not found. Please login again.')
+      return
+    }
+
+    if (abacusStrength > 0 && masterQuantity > 0 && abacusStrength < 100 && !(Number(masterUnitPrice) > 0)) {
+      const message = 'Enter a Master Abacus price when adding it below 100 students.'
+      setError(message)
+      toast.error(message)
       return
     }
 
@@ -962,6 +979,15 @@ export default function CloseLeadPage() {
 
           {/* Add Products (shared Close Lead product config) */}
           <CloseLeadProductConfig config={productConfig} schoolType={lead?.school_type} />
+          {abacusStrength > 0 && <div className="rounded-lg border p-4 space-y-3">
+            <h3 className="font-semibold">First DC · Abacus materials</h3>
+            <p className="text-sm">Student Abacus: {abacusStrength} (one per student). Flash Card sets: {masterQuantity} (with Master Abacus).</p>
+            <p className="text-xs text-neutral-600">Default Master Abacus: {defaultMasterAbacusQuantity(abacusStrength)}. Adjust the quantity if required. Below 100 students, an added Master Abacus must have a price.</p>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div><Label>Master Abacus quantity</Label><Input type="number" min="0" step="1" value={masterQuantityOverride ?? String(masterQuantity)} onChange={(event) => setMasterQuantityOverride(event.target.value)} /></div>
+              <div><Label>Master Abacus unit price (₹, if charged)</Label><Input type="number" min="0" step="0.01" value={masterUnitPrice} onChange={(event) => setMasterUnitPrice(event.target.value)} /></div>
+            </div>
+          </div>}
 
           {/* Upload PO Button */}
           <div className="pt-4 border-t">

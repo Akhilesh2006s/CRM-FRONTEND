@@ -103,6 +103,12 @@ type DC = {
   }
   managerRequestedAt?: string
   productDetails?: ProductDetail[]
+  abacusMaterials?: {
+    studentAbacusQuantity: number
+    masterAbacusQuantity: number
+    flashCardSetsQuantity: number
+    masterAbacusCharge: number
+  }
   dcDate?: string
   dcRemarks?: string
   dcCategory?: string
@@ -948,6 +954,11 @@ export default function WarehouseDcAtWarehouse() {
           </DialogHeader>
           {selectedDC && (
             <div className="space-y-6 py-4">
+              {selectedDC.abacusMaterials && <Card className="p-4 bg-blue-50 text-sm">
+                <h3 className="font-semibold mb-1">Abacus materials for this DC</h3>
+                <p>Student Abacus: {selectedDC.abacusMaterials.studentAbacusQuantity} · Master Abacus: {selectedDC.abacusMaterials.masterAbacusQuantity} · Flash Card sets: {selectedDC.abacusMaterials.flashCardSetsQuantity}</p>
+                {selectedDC.abacusMaterials.masterAbacusCharge > 0 && <p>Master Abacus charge: ₹{selectedDC.abacusMaterials.masterAbacusCharge}</p>}
+              </Card>}
               {/* School Information & More Information - Two Column Layout */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* School Information - Left Column */}

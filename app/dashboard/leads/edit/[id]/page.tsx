@@ -17,6 +17,7 @@ import Link from 'next/link'
 import { useProducts } from '@/hooks/useProducts'
 import { normalizeIntegerInput } from '@/lib/numericInput'
 import { sanitizePhoneInput, validatePhoneDigits } from '@/lib/phone'
+import { validateLeadStyleProducts } from '@/lib/leadProductRules'
 
 type ProductSelection = {
   name: string
@@ -125,9 +126,14 @@ function defaultProductRow(name: string, saved?: SavedProductRow): ProductSelect
 type Lead = {
   _id: string
   school_name?: string
+  school_code?: string
   school_type?: string
   contact_person?: string
   contact_mobile?: string
+  contact_designation?: string
+  financial_contact_designation?: string
+  cluster_code?: string
+  assigned_to?: string | { _id?: string }
   contact_person2?: string
   contact_mobile2?: string
   decision_maker?: string
@@ -165,7 +171,20 @@ export default function EditLeadPage() {
   const leadId = params.id as string
   const currentUser = getCurrentUser()
   const { productNames: availableProducts, loading: productsLoading } = useProducts()
-  
+  const isSuperAdmin = currentUser?.role === 'Super Admin'
+  const [bdeOptions, setBdeOptions] = useState<Array<{ _id: string; name: string }>>([])
+  const [clustersForZone, setClustersForZone] = useState<string[]>([])
+
+  useEffect(() => {
+    if (!isSuperAdmin) return
+    Promise.all(['Executive', 'Sales BDE', 'Employee'].map((role) =>
+      apiRequest<Array<{ _id: string; name: string }>>(`/employees?isActive=true&role=${encodeURIComponent(role)}`).catch(() => [])
+    )).then((groups) => {
+      const byId = new Map(groups.flat().map((employee) => [employee._id, employee]))
+      setBdeOptions([...byId.values()].sort((a, b) => a.name.localeCompare(b.name)))
+    })
+  }, [isSuperAdmin])
+
   const [loading, setLoading] = useState(true)
   const [recordSource, setRecordSource] = useState<RecordSource>('dc-orders')
   const [submitting, setSubmitting] = useState(false)
@@ -176,6 +195,10 @@ export default function EditLeadPage() {
     school_type: 'New',
     contact_person: '',
     contact_mobile: '',
+    contact_designation: '',
+    financial_contact_designation: '',
+    cluster_code: '',
+    assigned_to: '',
     email: '',
     decision_maker_name: '',
     decision_maker_mobile: '',
@@ -198,11 +221,20 @@ export default function EditLeadPage() {
     average_fee: '',
     follow_up_date: '',
   })
+  useEffect(() => {
+    if (!form.zone) { setClustersForZone([]); return }
+    apiRequest<Array<{ _id: string; name: string }>>('/zones').then(async (zones) => {
+      const zone = zones.find((item) => item.name === form.zone)
+      if (!zone) { setClustersForZone([]); return }
+      const clusters = await apiRequest<Array<{ name: string }>>(`/zones/${zone._id}/clusters`)
+      setClustersForZone(clusters.map((item) => item.name).filter(Boolean))
+    }).catch(() => setClustersForZone([]))
+  }, [form.zone])
   
   const [products, setProducts] = useState<ProductSelection[]>([])
   const [loadedLead, setLoadedLead] = useState<Lead | null>(null)
   const productsProcessedRef = useRef<string>('')
-  const showProductTerm = loadedLead?.status === 'Closed'
+  const showProductTerm = true
   
   const [loadingPincode, setLoadingPincode] = useState(false)
   const [areas, setAreas] = useState<Array<{ name: string; district: string; block?: string; branchType?: string }>>([])
@@ -268,6 +300,10 @@ export default function EditLeadPage() {
           school_type: lead.school_type || 'New',
           contact_person: lead.contact_person || '',
           contact_mobile: lead.contact_mobile || '',
+          contact_designation: lead.contact_designation || '',
+          financial_contact_designation: lead.financial_contact_designation || '',
+          cluster_code: lead.cluster_code || lead.cluster || '',
+          assigned_to: typeof lead.assigned_to === 'string' ? lead.assigned_to : lead.assigned_to?._id || '',
           email: lead.email || '',
           decision_maker_name: lead.contact_person2 || lead.decision_maker || '',
           decision_maker_mobile: lead.contact_mobile2 || '',
@@ -492,53 +528,19 @@ export default function EditLeadPage() {
         return
       }
 
-      for (const p of selectedProducts) {
-        const strengthNum = Number(p.strength)
-        const chanceNum = p.chance === '' ? 0 : Number(p.chance)
-        const unitPriceNum = Number(p.unit_price)
-
-        if (p.status === 'Not Interested') {
-          if (!String(p.not_interested_reason || '').trim()) {
-            setError(`Please enter a reason why the school is not interested in "${p.name}".`)
-            setSubmitting(false)
-            return
-          }
-          continue
-        }
-
-        if (
-          !String(p.unit_price || '').trim() ||
-          !Number.isFinite(unitPriceNum) ||
-          unitPriceNum <= 0
-        ) {
-          setError(`Please enter a Unit Price greater than 0 for product "${p.name}".`)
-          setSubmitting(false)
-          return
-        }
-
-        if ((p.status === 'Hot' || p.status === 'Warm') && (!p.strength.trim() || strengthNum <= 0)) {
-          setError(`Please enter strength for product "${p.name}" when status is ${p.status}.`)
-          setSubmitting(false)
-          return
-        }
-
-        if (p.status === 'Hot' && chanceNum < 80) {
-          setError(`Chance % for product "${p.name}" must be at least 80% when status is Hot.`)
-          setSubmitting(false)
-          return
-        }
-        if (p.status === 'Warm' && chanceNum < 20) {
-          setError(`Chance % for product "${p.name}" must be at least 20% when status is Warm.`)
-          setSubmitting(false)
-          return
-        }
+      const productError = validateLeadStyleProducts(selectedProducts)
+      if (productError) {
+        setError(productError)
+        setSubmitting(false)
+        return
       }
 
       const productsPayload = selectedProducts.map((p) => {
         const strengthNum = Number(p.strength) || 0
         const chanceNum =
           p.status === 'Hot' || p.status === 'Warm' ? Number(p.chance) || 0 : 0
-        const unitPriceNum = Number(p.unit_price) || 0
+        const unitPriceNum =
+          p.status === 'Hot' || p.status === 'Warm' ? Number(p.unit_price) || 0 : 0
         return {
           product_name: p.name,
           quantity: strengthNum > 0 ? strengthNum : 1,
@@ -559,6 +561,8 @@ export default function EditLeadPage() {
         contact_mobile: form.contact_mobile,
         contact_person2: form.decision_maker_name || undefined,
         contact_mobile2: form.decision_maker_mobile || undefined,
+        contact_designation: form.contact_designation.trim(),
+        financial_contact_designation: form.financial_contact_designation.trim(),
         location: form.location, // Landmark
         address: form.address || undefined,
         pincode: form.pincode || undefined,
@@ -568,6 +572,8 @@ export default function EditLeadPage() {
         area: form.area || undefined,
         mandal: form.mandal || undefined,
         cluster: form.cluster || undefined,
+        cluster_code: form.cluster || form.cluster_code || undefined,
+        assigned_to: form.assigned_to || undefined,
         latitude: form.latitude ? Number(form.latitude) : undefined,
         longitude: form.longitude ? Number(form.longitude) : undefined,
         zone: form.zone,
@@ -586,6 +592,11 @@ export default function EditLeadPage() {
       // Validate required fields
       if (!form.decision_maker_name || !form.decision_maker_name.trim()) {
         setError('Financial contact person name is required')
+        setSubmitting(false)
+        return
+      }
+      if (!form.contact_designation.trim() || !form.financial_contact_designation.trim()) {
+        setError('Both contact designations are required')
         setSubmitting(false)
         return
       }
@@ -662,9 +673,20 @@ export default function EditLeadPage() {
 
       <Card className="p-4 md:p-6 bg-neutral-50 border border-neutral-200 text-neutral-900">
         <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {isSuperAdmin && <div className="md:col-span-2">
+            <Label>Assign to (BDE)</Label>
+            <Select value={form.assigned_to || undefined} onValueChange={(value) => setForm((current) => ({ ...current, assigned_to: value }))}>
+              <SelectTrigger className="bg-white"><SelectValue placeholder="Select BDE" /></SelectTrigger>
+              <SelectContent>{bdeOptions.map((employee) => <SelectItem key={employee._id} value={employee._id}>{employee.name}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>}
           <div>
             <Label>School name *</Label>
             <Input className="bg-white text-neutral-900" name="school_name" value={form.school_name} onChange={onChange} required />
+          </div>
+          <div>
+            <Label>School code</Label>
+            <Input className="bg-neutral-100" value={loadedLead?.school_code || 'Assigned automatically from the pincode, zone, and cluster'} readOnly />
           </div>
           <div>
             <Label>School Type</Label>
@@ -674,7 +696,7 @@ export default function EditLeadPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="New">New</SelectItem>
-                <SelectItem value="Employee">Employee</SelectItem>
+                <SelectItem value="Existing">Existing</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -687,8 +709,12 @@ export default function EditLeadPage() {
             <Input className="bg-white text-neutral-900" name="contact_mobile" value={form.contact_mobile} onChange={onChange} inputMode="numeric" maxLength={15} placeholder="10 to 15 digits" required />
           </div>
           <div>
-            <Label>Email</Label>
-            <Input className="bg-white text-neutral-900" type="email" name="email" value={form.email} onChange={onChange} />
+            <Label>School contact designation *</Label>
+            <Input className="bg-white text-neutral-900" name="contact_designation" value={form.contact_designation} onChange={onChange} required />
+          </div>
+          <div>
+            <Label>Email *</Label>
+            <Input className="bg-white text-neutral-900" type="email" name="email" value={form.email} onChange={onChange} required />
           </div>
           <div>
             <Label>Financial contact person *</Label>
@@ -697,6 +723,10 @@ export default function EditLeadPage() {
           <div>
             <Label>Financial contact mobile *</Label>
             <Input className="bg-white text-neutral-900" name="decision_maker_mobile" value={form.decision_maker_mobile} onChange={onChange} inputMode="numeric" maxLength={15} placeholder="10 to 15 digits" required />
+          </div>
+          <div>
+            <Label>Financial contact designation *</Label>
+            <Input className="bg-white text-neutral-900" name="financial_contact_designation" value={form.financial_contact_designation} onChange={onChange} required />
           </div>
           <div>
             <Label>Pincode *</Label>
@@ -927,8 +957,12 @@ export default function EditLeadPage() {
             <Input className="bg-white text-neutral-900" name="mandal" value={form.mandal} onChange={onChange} placeholder="Enter mandal" />
           </div>
           <div>
-            <Label>Cluster</Label>
-            <Input className="bg-white text-neutral-900" name="cluster" value={form.cluster} onChange={onChange} placeholder="Enter cluster" />
+            <Label>Cluster *</Label>
+            {clustersForZone.length > 0 ? <Select value={form.cluster || undefined}
+              onValueChange={(value) => setForm((current) => ({ ...current, cluster: value, cluster_code: value }))}>
+              <SelectTrigger className="bg-white"><SelectValue placeholder="Select cluster" /></SelectTrigger>
+              <SelectContent>{clustersForZone.map((cluster) => <SelectItem key={cluster} value={cluster}>{cluster}</SelectItem>)}</SelectContent>
+            </Select> : <Input className="bg-white text-neutral-900" name="cluster" value={form.cluster} onChange={onChange} placeholder="Enter cluster" />}
           </div>
           <div>
             <Label>Latitude</Label>

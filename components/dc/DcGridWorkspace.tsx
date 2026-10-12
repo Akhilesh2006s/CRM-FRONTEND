@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
+import { abacusStudentStrength, defaultMasterAbacusQuantity } from '@/lib/abacusMaterials'
 
 type Choice = 'term1' | 'both'
 type EditType = 'Excess' | 'Shortage' | 'Exchange'
@@ -22,6 +23,7 @@ type Main = {
   dcOrderId?: { school_name?: string; school_code?: string; year?: string };
   grid?: { academicYear: string; deliveryChoice: Choice; scenario: string; sourceDcId?: string; revision: number; adjustments: Adjustment[] };
   originalRows?: Row[]; currentRows?: Row[]; linkedDcs?: Main[];
+  abacusMaterials?: { studentAbacusQuantity: number; masterAbacusQuantity: number; flashCardSetsQuantity: number; masterAbacusUnitPrice: number; masterAbacusCharge: number };
 }
 type Selection = { allocationId: string; quantities: string[]; prices: string[] }
 type Preview = { scenario: string; academicYear: string; allocations: Allocation[]; unavailable: { program: string; class: string; message: string }[] }
@@ -63,6 +65,8 @@ export default function DcGridWorkspace({ initialDcId, initialAction }: { initia
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState('')
   const [selections, setSelections] = useState<Selection[]>([])
+  const [masterQuantityOverride, setMasterQuantityOverride] = useState<string | null>(null)
+  const [masterUnitPrice, setMasterUnitPrice] = useState('')
   const [allocationId, setAllocationId] = useState('')
   const [school, setSchool] = useState({ school_name: '', school_code: '', contact_mobile: '', address: '', pincode: '', state: '', zone: '', cluster: '' })
   const [employeeId, setEmployeeId] = useState('')
@@ -122,6 +126,14 @@ export default function DcGridWorkspace({ initialDcId, initialAction }: { initia
   }, [screen, creationType, main, sourceAcademicYear, year, choice])
 
   const allocations = creationType === 'existing_dc' ? preview?.allocations || [] : catalog?.initial[choice] || []
+  const abacusStrength = abacusStudentStrength(selections.flatMap((selection) => {
+    const allocation = allocations.find((item) => item.id === selection.allocationId)
+    return allocation?.program === 'Abacus'
+      ? selection.quantities.map((quantity) => ({ product: 'Abacus', class: allocation.class, strength: Number(quantity) || 0 }))
+      : []
+  }))
+  const masterQuantity = masterQuantityOverride === null
+    ? defaultMasterAbacusQuantity(abacusStrength) : Number(masterQuantityOverride) || 0
   const bookOptions = (row: Row) => {
     const key = (row.product || row.productName || '').toLowerCase().replace(/[\s_-]/g, '')
     const program = key === 'abacus' ? 'Abacus' : ['vedicmath', 'vedicmaths', 'vedhmath'].includes(key) ? 'Vedic Maths' : ['spellingbee', 'newspellingbee'].includes(key) ? 'Spelling Bee' : ''
@@ -129,6 +141,7 @@ export default function DcGridWorkspace({ initialDcId, initialAction }: { initia
   }
   function startNew(type: '' | 'new_school' | 'existing_dc' = '') {
     setScreen('new'); setCreationType(type); setSelections([]); setRemarks(''); setError(''); setYear('')
+    setMasterQuantityOverride(null); setMasterUnitPrice('')
     if (type !== 'existing_dc') setSourceId('')
   }
   function openRecord(record: Main, action: 'detail' | 'sub' = 'detail') {
@@ -138,7 +151,11 @@ export default function DcGridWorkspace({ initialDcId, initialAction }: { initia
     setSaving(true); setError('')
     try {
       const result = await apiRequest<Main>('/dc/grid', { method: 'POST', body: JSON.stringify({ creationType, sourceDcId: sourceId,
-        sourceAcademicYear, academicYear: year, deliveryChoice: choice, selections, school, employeeId, remarks }) })
+        sourceAcademicYear, academicYear: year, deliveryChoice: choice, selections, school, employeeId, remarks,
+        ...(creationType === 'new_school' && abacusStrength > 0 ? { abacusMaterials: {
+          masterAbacusQuantity: masterQuantity, masterAbacusUnitPrice: Number(masterUnitPrice) || 0,
+        } } : {}),
+      }) })
       setSourceId(result._id); setScreen('detail'); setReload((n) => n + 1); toast.success('Main DC created')
     } catch (e: any) { setError(e.message || 'Unable to create DC.') }
     finally { setSaving(false) }
@@ -242,6 +259,15 @@ export default function DcGridWorkspace({ initialDcId, initialAction }: { initia
             </div>)}
           </div>
         })}
+        {creationType === 'new_school' && abacusStrength > 0 && <div className="rounded-lg border p-4 space-y-3">
+          <h3 className="font-semibold">First DC · Abacus materials</h3>
+          <p className="text-sm">Student Abacus: {abacusStrength} (one per student). Flash Card sets: {masterQuantity} (one per Master Abacus).</p>
+          <p className="text-xs text-neutral-600">Default Master Abacus: {defaultMasterAbacusQuantity(abacusStrength)}. You can add or remove units. Below 100 students, adding Master Abacus requires a price.</p>
+          <div className="grid gap-3 md:grid-cols-2">
+            <Field title="Master Abacus quantity"><Input type="number" min="0" step="1" value={masterQuantityOverride ?? String(masterQuantity)} onChange={(e) => setMasterQuantityOverride(e.target.value)} /></Field>
+            <Field title="Master Abacus unit price (₹, if charged)"><Input type="number" min="0" step="0.01" value={masterUnitPrice} onChange={(e) => setMasterUnitPrice(e.target.value)} /></Field>
+          </div>
+        </div>}
         <Field title="Remarks"><Input value={remarks} onChange={(e) => setRemarks(e.target.value)} maxLength={2000} /></Field>
         <Button disabled={saving || loading || previewLoading || mainLoading || !year || !selections.length || (creationType === 'existing_dc' && !preview)} onClick={saveMain}>{saving ? 'Creating…' : 'Create Main DC'}</Button>
       </>}
@@ -258,6 +284,10 @@ export default function DcGridWorkspace({ initialDcId, initialAction }: { initia
           <div><span className="text-neutral-500">Status</span><p>{main.status.replaceAll('_', ' ')}</p></div>
           {main.grid?.sourceDcId && <div><span className="text-neutral-500">Created against</span><p><Link className="text-blue-700 underline" href={`/dashboard/dc/grid?dc=${main.grid.sourceDcId}`}>Previous Main DC</Link></p></div>}
         </div><RowsTable rows={main.currentRows || []} original={main.originalRows} />
+          {main.abacusMaterials && <div className="text-sm rounded-md bg-neutral-50 p-3">
+            Abacus materials: Student Abacus {main.abacusMaterials.studentAbacusQuantity} · Master Abacus {main.abacusMaterials.masterAbacusQuantity} · Flash Card sets {main.abacusMaterials.flashCardSetsQuantity}
+            {main.abacusMaterials.masterAbacusCharge > 0 && ` · Master charge ₹${main.abacusMaterials.masterAbacusCharge}`}
+          </div>}
           <details className="text-sm"><summary className="cursor-pointer font-medium">Original allocation</summary><RowsTable rows={main.originalRows || []} /></details>
           <div className="flex flex-wrap gap-2"><Button disabled={saving} onClick={() => { setScreen('sub'); setEdits({}); setRemarks(''); setError('') }}>Create Sub DC</Button><Button variant="outline" disabled={saving} onClick={() => startNew('existing_dc')}>Create New DC</Button><Link href="/dashboard/dc/client-dc"><Button variant="outline">Client requests</Button></Link></div>
         </Card>

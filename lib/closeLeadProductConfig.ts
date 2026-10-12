@@ -75,6 +75,8 @@ export type CloseProductSectionLine = {
   productCategoryByKey?: Record<string, string>
   sameRateForAllClasses: boolean
   price: number
+  /** Overrides for individual classes when the shared-rate option is off. */
+  priceByClass?: Record<string, number>
   term?: string
   dispatchMode?: 'one_level_at_a_time' | 'both_levels_together'
 }
@@ -258,6 +260,35 @@ export function pickDefaultProductCategory(
   }
 
   return matched[0] || candidates[0] || ''
+}
+
+/** The entry categories in Grid.docx depend on the student's class. */
+function gridCategoryMatchesClass(product: string, classValue: string, category: string): boolean {
+  const classNumber = Number(classValue)
+  const normalized = normalizeCategoryMatchText(category)
+  if (!Number.isInteger(classNumber) || classNumber < 1) return true
+  if (/abacus/i.test(product)) {
+    return classNumber <= 2 ? normalized.includes('star junior') :
+      classNumber <= 4 ? /\bjunior(s)?\b/.test(normalized) && !/\bstar\b/.test(normalized) :
+      /\bsenior(s)?\b/.test(normalized)
+  }
+  if (/spelling\s*bee/i.test(product)) {
+    const categoryNumber = Number(normalized.match(/\bcategory\s*(\d+)/)?.[1])
+    return !categoryNumber || categoryNumber === (classNumber <= 3 ? 1 : classNumber <= 6 ? 2 : 3)
+  }
+  return true
+}
+
+export function pickGridProductCategory(
+  product: string,
+  classValue: string,
+  categories: string[],
+  opts?: { subject?: string; level?: string; selectedCategories?: string[] }
+): string {
+  const candidates = categories.filter((category) => gridCategoryMatchesClass(product, classValue, category))
+  if (candidates.length > 0 && candidates.length < categories.length)
+    return pickDefaultProductCategory(candidates, opts)
+  return pickDefaultProductCategory(categories, opts)
 }
 
 /** Group child product rows per product + class. For level_based / subject_based,
@@ -473,10 +504,10 @@ export function computeLineDisplayTotal(
   line: CloseProductSectionLine,
   sec?: CloseProductSection
 ): number {
-  const price = Number(line.price) || 0
   const subjectMult = getLineSubjectPriceMultiplier(line)
   return getLineClassSelections(line, sec).reduce(
-    (sum, s) => sum + (Number(s.strength) || 0) * subjectMult * price,
+    (sum, s) => sum + (Number(s.strength) || 0) * subjectMult *
+      (line.sameRateForAllClasses ? Number(line.price) || 0 : Number(line.priceByClass?.[s.class] ?? line.price) || 0),
     0
   )
 }
@@ -637,7 +668,9 @@ export function expandSectionsToProductDetails(
 
   for (const sec of sections) {
     for (const line of sec.lines) {
-      const classSelections = getLineClassSelections(line, sec)
+      const classSelections = [...getLineClassSelections(line, sec)].sort(
+        (a, b) => Number(a.class) - Number(b.class)
+      )
       if (classSelections.length === 0) continue
 
       const { fromClass, toClass } = classSelectionBounds(classSelections)
@@ -712,6 +745,9 @@ export function expandSectionsToProductDetails(
         const strengthToUse = Number(classSel.strength) || 0
         const classNum = parseInt(classSel.class, 10)
         if (!classNum || strengthToUse <= 0) continue
+        const classPrice = line.sameRateForAllClasses
+          ? priceToUse
+          : Number(line.priceByClass?.[classSel.class] ?? line.price) || 0
 
         for (const level of levelsToUse) {
           for (const spec of specsToUse) {
@@ -731,7 +767,7 @@ export function expandSectionsToProductDetails(
                 prevCategoryMap[identity]
               )
               const subjectDefault = hasSkuCategories
-                ? pickDefaultProductCategory(skuCategories, {
+                ? pickGridProductCategory(line.product, classValue, skuCategories, {
                     subject: typeof subject === 'string' ? subject : undefined,
                     level,
                     selectedCategories,
@@ -746,8 +782,10 @@ export function expandSectionsToProductDetails(
                 !subjectNorm ||
                 !existingNorm ||
                 existingNorm.startsWith(subjectNorm)
+              const existingFitsGrid = !existingCategory ||
+                gridCategoryMatchesClass(line.product, classValue, existingCategory)
               const category = resolveRowProductCategory(
-                existingFitsSubject ? existingCategory : '',
+                existingFitsSubject && existingFitsGrid ? existingCategory : '',
                 subjectDefault
               )
               if (category) {
@@ -762,8 +800,8 @@ export function expandSectionsToProductDetails(
                 productCategory: hasSkuCategories ? category : undefined,
                 quantity: strengthToUse || 1,
                 strength: strengthToUse,
-                price: priceToUse || 0,
-                total: strengthToUse * (priceToUse || 0),
+                price: classPrice,
+                total: strengthToUse * classPrice,
                 level,
                 specs: spec || '',
                 subject,
@@ -779,7 +817,11 @@ export function expandSectionsToProductDetails(
       parentRow.total = classSelections.reduce(
         (sum, s) =>
           sum +
-          computeClassSubjectUnitTotal(Number(s.strength) || 0, subjectPriceMult, priceToUse),
+          computeClassSubjectUnitTotal(
+            Number(s.strength) || 0,
+            subjectPriceMult,
+            line.sameRateForAllClasses ? priceToUse : Number(line.priceByClass?.[s.class] ?? line.price) || 0
+          ),
         0
       )
     }
@@ -911,7 +953,9 @@ export function buildDcOrderProductsFromDetails(
       quantityFromRows > 0
         ? quantityFromRows
         : strengthQty * Math.max(1, subjectCountForPrice)
-    const lineTotal = quantity * unitPrice
+    // Grouping already applies the product's level/subject billing divisor.
+    // Multiplying raw DC quantity by price charges twice for a two-level sale.
+    const lineTotal = Number(p.total) || 0
     return {
       product_name: p.product,
       quantity,

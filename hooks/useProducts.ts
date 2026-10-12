@@ -6,6 +6,7 @@ type Product = {
   _id: string
   productName: string
   productLevels: string[]
+  classes?: string[]
   hasSubjects: boolean
   subjects: string[]
   hasSpecs: boolean
@@ -94,6 +95,12 @@ export function useProducts() {
     loading,
     error,
     getProductLevels,
+    getProductClasses: (productName: string): string[] => {
+      const classes = findProduct(productName)?.classes
+      return Array.isArray(classes) && classes.length > 0
+        ? classes.map((value) => String(value).trim()).filter(Boolean)
+        : Array.from({ length: 12 }, (_, index) => String(index + 1))
+    },
     hasProductLevels,
     getDefaultLevel,
     isProductActive,
