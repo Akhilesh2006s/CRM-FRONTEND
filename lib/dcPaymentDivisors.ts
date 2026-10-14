@@ -72,7 +72,10 @@ export function applyPaymentDivisorsToBreakdown(
       unitPrice,
       catalogFallbackCount: fallback,
     })
-    keyToBucketTotal.set(k, bucketTotal)
+    // Multiple specs (e.g. CW + HW) are books in one billed package.
+    const specCount = new Set(bucketLines.map((line) =>
+      String(line.specs || '').trim().toLowerCase())).size || 1
+    keyToBucketTotal.set(k, roundToTwo(bucketTotal / specCount))
     keyToSumStrength.set(k, sumStrength)
   }
 

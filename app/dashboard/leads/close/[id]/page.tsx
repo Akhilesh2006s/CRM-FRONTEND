@@ -17,6 +17,7 @@ import { partitionProductsForCloseLeadRouting } from '@/lib/closeLeadTermRouting
 import {
   type ProductDetailRow,
   productDetailsToSections,
+  billedProductDetailRows,
 } from '@/lib/closeLeadProductConfig'
 import { useCloseLeadProductConfig } from '@/hooks/useCloseLeadProductConfig'
 import { CloseLeadProductConfig } from '@/components/leads/CloseLeadProductConfig'
@@ -107,6 +108,8 @@ export default function CloseLeadPage() {
     getProductSpecs,
     validateProducts,
     buildDcOrderProducts,
+    getCalculationType,
+    getCatalogFallbackCount,
   } = productConfig
   const abacusStrength = lead?.school_type === 'Existing' ? 0 : abacusStudentStrength(childProductRows)
   const masterQuantity = masterQuantityOverride === null
@@ -480,7 +483,8 @@ export default function CloseLeadPage() {
   }
 
   const buildDcProductDetails = () => {
-    const actualProductDetails = childProductRows
+    const actualProductDetails = billedProductDetailRows(
+      childProductRows, getCalculationType, getCatalogFallbackCount)
     return actualProductDetails.map((p) => {
       const parentRow = productDetails.find(
         (parent) => parent.isParentRow && p.id.startsWith(parent.id + '_')
@@ -507,7 +511,7 @@ export default function CloseLeadPage() {
         quantity: Number(p.quantity) || 0,
         strength: Number(p.strength) || 0,
         price: Number(p.price) || 0,
-        total: Number(p.total) || (Number(p.strength) || 0) * (Number(p.price) || 0),
+        total: Number(p.total) || 0,
         level: levelValue,
         specs: p.specs || '',
         subject: p.subject || undefined,

@@ -4,18 +4,29 @@ const fs = require('node:fs')
 const path = require('node:path')
 const ts = require('typescript')
 
-const file = path.join(__dirname, '..', 'lib', 'closeLeadProductConfig.ts')
-const source = fs.readFileSync(file, 'utf8')
-const compiled = ts.transpileModule(source, {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
-}).outputText
-const loaded = { exports: {} }
-new Function('require', 'module', 'exports', compiled)(
-  () => ({ normalizeProductTerm: (value) => value, termFromLevelLabel: () => 'Term 1' }),
-  loaded,
-  loaded.exports,
-)
-const { pickGridProductCategory, computeLineDisplayTotal, expandSectionsToProductDetails } = loaded.exports
+function loadSource(name, dependencies = {}) {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'lib', name), 'utf8')
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+  }).outputText
+  const loaded = { exports: {} }
+  new Function('require', 'module', 'exports', compiled)(
+    (moduleName) => {
+      if (!Object.hasOwn(dependencies, moduleName)) throw Error(`Unexpected import: ${moduleName}`)
+      return dependencies[moduleName]
+    }, loaded, loaded.exports,
+  )
+  return loaded.exports
+}
+const paymentDivisor = loadSource('paymentDivisor.ts')
+const invoice = loadSource('dcPaymentDivisors.ts', { '@/lib/paymentDivisor': paymentDivisor })
+const config = loadSource('closeLeadProductConfig.ts', {
+  '@/lib/paymentDivisor': paymentDivisor,
+  '@/lib/dcPaymentDivisors': invoice,
+  '@/lib/productTerm': { normalizeProductTerm: (value) => value, termFromLevelLabel: () => 'Term 1' },
+})
+const { pickGridProductCategory, computeLineDisplayTotal, expandSectionsToProductDetails,
+  computeProductDetailsDisplayTotal, buildDcOrderProductsFromDetails, billedProductDetailRows } = config
 
 test('entry categories follow the shared Abacus and Spelling Bee class grid', () => {
   const abacus = ['Star Junior', 'Junior', 'Senior']
@@ -52,4 +63,38 @@ test('shared and individual class rates produce distinct totals and ascending DC
   line.sameRateForAllClasses = true
   line.price = 100
   assert.equal(computeLineDisplayTotal(line), 3000)
+})
+
+test('two terms and CW/HW books do not quadruple the student package price', () => {
+  const line = {
+    id: 'line', parentRowId: 'parent', product: 'Abacus p2', level: 'Term 1',
+    selectedLevels: ['Term 1', 'Term 2'], selectedSpecs: ['CW', 'HW'],
+    selectedSubjects: [], selectedDeliverables: [],
+    classSelections: ['1', '2', '3', '4'].map((value) => ({ class: value, strength: 250 })),
+    sameRateForAllClasses: true, price: 250, dispatchMode: 'both_levels_together',
+  }
+  const ctx = {
+    schoolType: 'New', hasProductSubjects: () => false,
+    hasProductCategories: () => true,
+    getProductCategories: () => ['Star Junior L1', 'Star Junior L2', 'Junior L1', 'Junior L2'],
+    getProductSpecs: () => ['CW', 'HW'],
+  }
+  const details = expandSectionsToProductDetails([{ id: 'section', lines: [line] }], ctx)
+  const children = details.filter((row) => !row.isParentRow)
+  const billing = { getCalculationType: () => 'level_based', getCatalogFallbackCount: () => 2 }
+  assert.equal(children.length, 16)
+  assert.equal(computeProductDetailsDisplayTotal(children, billing), 250000)
+  const orderRows = buildDcOrderProductsFromDetails(children, {
+    ...billing, productDetails: details, hasProductCategories: ctx.hasProductCategories,
+    getProductCategories: ctx.getProductCategories,
+  })
+  assert.equal(orderRows.reduce((sum, row) => sum + row.total, 0), 250000)
+  const invoiceAmount = invoice.applyPaymentDivisorsToBreakdown(
+    children.map((row) => ({ product: row.product, class: row.class, strength: row.strength,
+      unitPrice: row.price, level: row.level, specs: row.specs })),
+    billing.getCalculationType, billing.getCatalogFallbackCount,
+  ).totalAmount
+  assert.equal(invoiceAmount, 250000)
+  assert.equal(billedProductDetailRows(children, billing.getCalculationType,
+    billing.getCatalogFallbackCount).reduce((sum, row) => sum + row.total, 0), 250000)
 })

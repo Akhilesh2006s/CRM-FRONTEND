@@ -779,13 +779,13 @@ function CloseLeadProductConfigView({
               <div>
                 <Label className="text-sm font-semibold mb-2 block">Product Details</Label>
                 <div className="border rounded overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="w-full min-w-[1100px] table-auto text-sm">
                     <thead className="bg-neutral-100">
                       <tr>
                         <th className="px-3 py-2 text-left">Product</th>
                         <th className="px-3 py-2 text-left">Level</th>
                         <th className="px-3 py-2 text-left">Class</th>
-                        <th className="px-3 py-2 text-left">Product Category</th>
+                        <th className="min-w-[280px] px-3 py-2 text-left">Product Category</th>
                         {showSpecsColumn && <th className="px-3 py-2 text-left">Specs</th>}
                         {showSubjectsColumn && <th className="px-3 py-2 text-left">Subjects</th>}
                         <th className="px-3 py-2 text-left">Quantity (Strength) *</th>
@@ -800,7 +800,7 @@ function CloseLeadProductConfigView({
                             {getProductLevels(pd.product).length > 0 ? pd.level || '-' : '-'}
                           </td>
                           <td className="px-3 py-2">{pd.class}</td>
-                          <td className="px-3 py-2">
+                          <td className="min-w-[280px] px-3 py-2">
                             {hasProductCategories(pd.product) ? (
                               <Select
                                 value={
@@ -808,7 +808,7 @@ function CloseLeadProductConfigView({
                                 }
                                 onValueChange={(v) => updateProductDetail(pd.id, 'category', v)}
                               >
-                                <SelectTrigger className="w-32 h-8">
+                                <SelectTrigger className="h-auto min-h-8 w-full min-w-[260px] text-left [&_[data-slot=select-value]]:line-clamp-none [&_[data-slot=select-value]]:whitespace-normal">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -875,7 +875,7 @@ function CloseLeadProductConfigView({
                         </td>
                         <td className="px-3 py-3 text-right">
                           ₹
-                          {computeProductDetailsDisplayTotal(childProductRows).toLocaleString(
+                          {computeProductDetailsDisplayTotal(childProductRows, cfg.groupProductOpts).toLocaleString(
                             'en-IN',
                             {
                               minimumFractionDigits: 2,

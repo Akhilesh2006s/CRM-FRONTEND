@@ -52,7 +52,7 @@ export function resolveDivisor(opts: {
     })
     // Each line already carries its own subject quantity (Edit PO: P2 Phy 10 + P2 Maths 10).
     // Do not divide again by subject count — that would count P2 as 10 instead of 20.
-    if (subjects.size > 0 && subjects.size === activeRows.length) {
+    if (subjects.size > 0 && activeRows.every((row) => normalizeSubject(row.subject))) {
       return 1
     }
     let d = subjects.size

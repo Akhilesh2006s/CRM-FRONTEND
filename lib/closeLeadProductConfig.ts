@@ -1,4 +1,5 @@
-import { computeBucketAmount, type CalculationType } from '@/lib/paymentDivisor'
+import { computeBucketAmount, roundToTwo, type CalculationType } from '@/lib/paymentDivisor'
+import { applyPaymentDivisorsToBreakdown } from '@/lib/dcPaymentDivisors'
 import { normalizeProductTerm, termFromLevelLabel, type ProductTerm } from '@/lib/productTerm'
 
 /** Keep only specs that exist on the product. Falls back to the first catalog spec. */
@@ -372,7 +373,7 @@ export const groupProductDetailsByProductAndClass = (
     }
   })
 
-  return Array.from(map.values()).map((row) => {
+  const grouped = Array.from(map.values()).map((row) => {
     if (row._dimRows) {
       const ct = getCt(row.product || '')
       const total = computeBucketAmount({
@@ -386,6 +387,29 @@ export const groupProductDetailsByProductAndClass = (
     }
     return row
   })
+
+  // CW/HW and similar specs are physical books for one class enrollment, not
+  // separate sales of the same student package. Allocate the class amount
+  // across the selected specs, preserving the exact two-decimal grand total.
+  const byProductClass = new Map<string, any[]>()
+  for (const row of grouped) {
+    const key = `${row.product || ''}||${row.class || ''}`
+    const list = byProductClass.get(key) || []
+    list.push(row)
+    byProductClass.set(key, list)
+  }
+  for (const rows of byProductClass.values()) {
+    if (rows.length <= 1) continue
+    const target = roundToTwo(rows.reduce((sum, row) => sum + (Number(row.total) || 0), 0) / rows.length)
+    let allocated = 0
+    rows.forEach((row, index) => {
+      row.total = index === rows.length - 1
+        ? roundToTwo(target - allocated)
+        : roundToTwo((Number(row.total) || 0) / rows.length)
+      allocated += row.total
+    })
+  }
+  return grouped
 }
 
 export function rangeToClassSelections(
@@ -587,15 +611,29 @@ export function computeProductDetailsDisplayQuantity(rows: ProductDetailRow[]): 
     .reduce((sum, r) => sum + (Number(r.quantity) || Number(r.strength) || 0), 0)
 }
 
-/** Sum of Product Details row totals (quantity × unit price per row). */
-export function computeProductDetailsDisplayTotal(rows: ProductDetailRow[]): number {
-  return rows
-    .filter((r) => !r.isParentRow)
-    .reduce((sum, r) => {
-      const qty = Number(r.quantity) || Number(r.strength) || 0
-      const price = Number(r.price) || 0
-      return sum + qty * price
-    }, 0)
+/** Show the same billed amount that is saved on the order, not raw book count × price. */
+export function computeProductDetailsDisplayTotal(
+  rows: ProductDetailRow[], opts?: GroupProductOpts
+): number {
+  return roundToTwo(groupProductDetailsByProductAndClass(
+    rows.filter((r) => !r.isParentRow), opts
+  ).reduce((sum, row) => sum + (Number(row.total) || 0), 0))
+}
+
+/** Persist the billed share of each physical book row on the raised DC. */
+export function billedProductDetailRows(
+  rows: ProductDetailRow[],
+  getCalculationType: (productName: string) => CalculationType,
+  getCatalogFallbackCount: (productName: string, ct: CalculationType) => number
+): ProductDetailRow[] {
+  const billed = applyPaymentDivisorsToBreakdown(
+    rows.map((row) => ({ product: row.product, class: row.class,
+      strength: Number(row.strength) || Number(row.quantity) || 0,
+      unitPrice: Number(row.price) || 0, level: row.level,
+      subject: row.subject, specs: row.specs })),
+    getCalculationType, getCatalogFallbackCount
+  ).paymentBreakdown
+  return rows.map((row, index) => ({ ...row, total: Number(billed[index]?.total) || 0 }))
 }
 
 export function lineHasValidClassSelections(
