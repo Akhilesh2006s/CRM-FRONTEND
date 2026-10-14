@@ -283,7 +283,7 @@ function CloseLeadProductConfigView({
                         const selectedLevels = line.selectedLevels || []
                         const productCategories = getProductCategories(line.product)
                         const selectedCategories = line.selectedCategories || []
-                        // Display total = Σ (class strength × selected subjects × unit price).
+                        // Display one unit price per student for the selected subject package.
                         const lineTotalAmount = computeLineDisplayTotal(line, section)
 
                         return (

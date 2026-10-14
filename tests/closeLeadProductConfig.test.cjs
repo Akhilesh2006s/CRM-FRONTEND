@@ -98,3 +98,50 @@ test('two terms and CW/HW books do not quadruple the student package price', () 
   assert.equal(billedProductDetailRows(children, billing.getCalculationType,
     billing.getCatalogFallbackCount).reduce((sum, row) => sum + row.total, 0), 250000)
 })
+
+test('three selected IT subjects are one 300-student package, not three charges', () => {
+  const line = {
+    id: 'it-line', parentRowId: 'it-parent', product: 'IT', level: '', selectedLevels: [],
+    selectedSpecs: [], selectedSubjects: ['Maths', 'Physics', 'Chemistry'],
+    selectedDeliverables: [], classSelections: ['6', '7', '8'].map((value) =>
+      ({ class: value, strength: 100 })),
+    sameRateForAllClasses: true, price: 1000,
+  }
+  const ctx = {
+    schoolType: 'New', hasProductSubjects: () => true,
+    hasProductCategories: () => false, getProductCategories: () => [],
+  }
+  const details = expandSectionsToProductDetails([{ id: 'it-section', lines: [line] }], ctx)
+  const children = details.filter((row) => !row.isParentRow)
+  assert.equal(children.length, 9)
+  assert.ok(children.every((row) => row.subjectPackage))
+  assert.equal(computeLineDisplayTotal(line), 300000)
+  for (const calculationType of ['normal', 'subject_based']) {
+    const billing = { getCalculationType: () => calculationType, getCatalogFallbackCount: () => 3 }
+    assert.equal(computeProductDetailsDisplayTotal(children, billing), 300000)
+    const orderRows = buildDcOrderProductsFromDetails(children, {
+      ...billing, productDetails: details, hasProductCategories: ctx.hasProductCategories,
+      getProductCategories: ctx.getProductCategories,
+    })
+    assert.equal(orderRows.reduce((sum, row) => sum + row.total, 0), 300000)
+    assert.ok(orderRows.every((row) => row.subjectPackage))
+    const dcRows = billedProductDetailRows(children, billing.getCalculationType,
+      billing.getCatalogFallbackCount)
+    assert.equal(dcRows.reduce((sum, row) => sum + row.total, 0), 300000)
+    const invoiceAmount = invoice.applyPaymentDivisorsToBreakdown(dcRows.map((row) => ({
+      product: row.product, class: row.class, strength: row.strength,
+      unitPrice: row.price, subject: row.subject, subjectPackage: row.subjectPackage,
+    })), billing.getCalculationType, billing.getCatalogFallbackCount).totalAmount
+    assert.equal(invoiceAmount, 300000)
+  }
+})
+
+test('independent subject rows without a package marker remain separate sales', () => {
+  const rows = ['Physics', 'Maths'].map((subject) => ({
+    product: 'P2', class: '1', subject, strength: 10, unitPrice: 100,
+  }))
+  const amount = invoice.applyPaymentDivisorsToBreakdown(
+    rows, () => 'subject_based', () => 2,
+  ).totalAmount
+  assert.equal(amount, 2000)
+})

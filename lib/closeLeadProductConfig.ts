@@ -33,6 +33,8 @@ export type ProductDetailRow = {
   level: string
   specs: string
   subject?: string
+  /** Physical subject row included in one per-student package price. */
+  subjectPackage?: boolean
   isParentRow?: boolean
   sameRateForAllClasses?: boolean
   selectedSubjects?: string[]
@@ -392,20 +394,31 @@ export const groupProductDetailsByProductAndClass = (
   // separate sales of the same student package. Allocate the class amount
   // across the selected specs, preserving the exact two-decimal grand total.
   const byProductClass = new Map<string, any[]>()
+  const packageSubjects = new Map<string, Set<string>>()
+  for (const detail of details) {
+    if (!detail.subjectPackage || !detail.subject) continue
+    const key = `${detail.product || ''}||${detail.class || ''}`
+    const subjects = packageSubjects.get(key) || new Set<string>()
+    subjects.add(normSubject(detail.subject))
+    packageSubjects.set(key, subjects)
+  }
   for (const row of grouped) {
     const key = `${row.product || ''}||${row.class || ''}`
     const list = byProductClass.get(key) || []
     list.push(row)
     byProductClass.set(key, list)
   }
-  for (const rows of byProductClass.values()) {
-    if (rows.length <= 1) continue
-    const target = roundToTwo(rows.reduce((sum, row) => sum + (Number(row.total) || 0), 0) / rows.length)
+  for (const [key, rows] of byProductClass) {
+    const subjectCount = rows.some((row) => row.subjectPackage) && getCt(rows[0].product) !== 'normal'
+      ? Math.max(1, packageSubjects.get(key)?.size || 1) : 1
+    if (rows.length <= 1 && subjectCount <= 1) continue
+    const divisor = rows.length * subjectCount
+    const target = roundToTwo(rows.reduce((sum, row) => sum + (Number(row.total) || 0), 0) / divisor)
     let allocated = 0
     rows.forEach((row, index) => {
       row.total = index === rows.length - 1
         ? roundToTwo(target - allocated)
-        : roundToTwo((Number(row.total) || 0) / rows.length)
+        : roundToTwo((Number(row.total) || 0) / divisor)
       allocated += row.total
     })
   }
@@ -523,14 +536,13 @@ export function computeClassSubjectUnitTotal(
   return strength * subjects * price
 }
 
-/** UI line total: Σ (class strength × selected subjects × unit price). No payment divisor. */
+/** UI line total: one package price per student, regardless of selected subjects. */
 export function computeLineDisplayTotal(
   line: CloseProductSectionLine,
   sec?: CloseProductSection
 ): number {
-  const subjectMult = getLineSubjectPriceMultiplier(line)
   return getLineClassSelections(line, sec).reduce(
-    (sum, s) => sum + (Number(s.strength) || 0) * subjectMult *
+    (sum, s) => sum + (Number(s.strength) || 0) *
       (line.sameRateForAllClasses ? Number(line.price) || 0 : Number(line.priceByClass?.[s.class] ?? line.price) || 0),
     0
   )
@@ -630,7 +642,7 @@ export function billedProductDetailRows(
     rows.map((row) => ({ product: row.product, class: row.class,
       strength: Number(row.strength) || Number(row.quantity) || 0,
       unitPrice: Number(row.price) || 0, level: row.level,
-      subject: row.subject, specs: row.specs })),
+      subject: row.subject, specs: row.specs, subjectPackage: row.subjectPackage })),
     getCalculationType, getCatalogFallbackCount
   ).paymentBreakdown
   return rows.map((row, index) => ({ ...row, total: Number(billed[index]?.total) || 0 }))
@@ -774,7 +786,6 @@ export function expandSectionsToProductDetails(
         ctx.hasProductSubjects(line.product) && selectedSubjects.length > 0
       const subjectsToUse =
         hasSubjects && selectedSubjects.length > 0 ? selectedSubjects : [undefined]
-      const subjectPriceMult = hasSubjects ? selectedSubjects.length : 1
 
       let rowIdx = 0
       const parentId = line.parentRowId
@@ -829,7 +840,7 @@ export function expandSectionsToProductDetails(
               if (category) {
                 categoryOverrides[identity] = category
               }
-              // Per-subject row stores strength×price; class list-price uses subject count via computeLineDisplayTotal.
+              // Subjects remain separate fulfillment rows but share one package price.
               out.push({
                 id: `${parentId}_${classNum}_${rowIdx++}`,
                 product: line.product,
@@ -843,6 +854,7 @@ export function expandSectionsToProductDetails(
                 level,
                 specs: spec || '',
                 subject,
+                subjectPackage: hasSubjects,
                 isParentRow: false,
                 sameRateForAllClasses: false,
                 dispatchMode: line.dispatchMode,
@@ -851,13 +863,13 @@ export function expandSectionsToProductDetails(
           }
         }
       }
-      // Keep parent.total as full line list-price (strength × subjects × price across classes).
+      // The unit price covers the selected subject package for each student.
       parentRow.total = classSelections.reduce(
         (sum, s) =>
           sum +
           computeClassSubjectUnitTotal(
             Number(s.strength) || 0,
-            subjectPriceMult,
+            1,
             line.sameRateForAllClasses ? priceToUse : Number(line.priceByClass?.[s.class] ?? line.price) || 0
           ),
         0
@@ -1010,6 +1022,7 @@ export function buildDcOrderProductsFromDetails(
         return isSku ? catStr : (p as any).productCategory || undefined
       })(),
       selected_subjects: selectedSubjects,
+      subjectPackage: Boolean(p.subjectPackage),
       levels_snapshot: Array.from(levelSet),
       level: levelSet.size === 1 ? Array.from(levelSet)[0] : undefined,
       subject: subjectSet.size === 1 ? Array.from(subjectSet)[0] : undefined,

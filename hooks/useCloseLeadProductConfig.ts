@@ -355,7 +355,6 @@ export function useCloseLeadProductConfig(options: UseCloseLeadProductConfigOpti
       const selectedSubjects = parentRow.selectedSubjects || []
       const hasSubjects = hasProductSubjects(parentRow.product) && selectedSubjects.length > 0
       const subjectsToUse = hasSubjects ? selectedSubjects : [undefined]
-      const subjectPriceMult = hasSubjects ? selectedSubjects.length : 1
       const hasSkuCategories = hasProductCategories(parentRow.product)
       const skuCategories = hasSkuCategories ? getProductCategories(parentRow.product) : []
       const selectedCategories = parentRow.selectedCategories || []
@@ -423,10 +422,11 @@ export function useCloseLeadProductConfig(options: UseCloseLeadProductConfigOpti
               quantity: strengthToUse || 1,
               strength: strengthToUse || 0,
               price: priceToUse || 0,
-              total: (strengthToUse || 0) * subjectPriceMult * (priceToUse || 0),
+              total: (strengthToUse || 0) * (priceToUse || 0),
               level: parentRow.level,
               specs: spec,
               subject: subjectDisplay,
+              subjectPackage: hasSubjects,
               isParentRow: false,
               sameRateForAllClasses: false,
             })
@@ -440,13 +440,6 @@ export function useCloseLeadProductConfig(options: UseCloseLeadProductConfigOpti
 
   const updateParentUnitPrice = (parentId: string, unitPrice: number) => {
     setProductDetails((currentDetails) => {
-      const parentRow = currentDetails.find((p) => p.id === parentId)
-      const subjectMult =
-        parentRow &&
-        hasProductSubjects(parentRow.product) &&
-        (parentRow.selectedSubjects || []).length > 0
-          ? (parentRow.selectedSubjects || []).length
-          : 1
       return currentDetails.map((row) => {
         if (row.id === parentId) {
           return { ...row, price: unitPrice }
@@ -456,7 +449,7 @@ export function useCloseLeadProductConfig(options: UseCloseLeadProductConfigOpti
           return {
             ...row,
             price: unitPrice,
-            total: strength * subjectMult * unitPrice,
+            total: strength * unitPrice,
           }
         }
         return row
@@ -493,20 +486,8 @@ export function useCloseLeadProductConfig(options: UseCloseLeadProductConfigOpti
       }
 
       if (field === 'price' || field === 'strength') {
-        const parentForSubjects =
-          rowToUpdate.isParentRow
-            ? updated
-            : currentDetails.find(
-                (p) => p.isParentRow && rowToUpdate.id.startsWith(p.id + '_')
-              )
-        const subjectMult =
-          parentForSubjects &&
-          hasProductSubjects(parentForSubjects.product) &&
-          (parentForSubjects.selectedSubjects || []).length > 0
-            ? (parentForSubjects.selectedSubjects || []).length
-            : 1
         updated.total =
-          (Number(updated.strength) || 0) * subjectMult * (Number(updated.price) || 0)
+          (Number(updated.strength) || 0) * (Number(updated.price) || 0)
 
         if (!rowToUpdate.isParentRow) {
           if (field === 'strength') {
@@ -537,7 +518,7 @@ export function useCloseLeadProductConfig(options: UseCloseLeadProductConfigOpti
                 return {
                   ...p,
                   strength: newStrength,
-                  total: (Number(newStrength) || 0) * subjectMult * price,
+                  total: (Number(newStrength) || 0) * price,
                 }
               }
               if (p.id === id) return updated
@@ -566,7 +547,7 @@ export function useCloseLeadProductConfig(options: UseCloseLeadProductConfigOpti
                   return {
                     ...p,
                     price: newPrice,
-                    total: strength * subjectMult * (Number(newPrice) || 0),
+                    total: strength * (Number(newPrice) || 0),
                   }
                 }
                 if (p.id === id) return updated

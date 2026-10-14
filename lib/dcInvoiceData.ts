@@ -10,6 +10,7 @@ export type DcInvoicePaymentLine = {
   category: string
   specs: string
   subject?: string
+  subjectPackage?: boolean
   quantity: number
   strength: number
   level: string
@@ -252,6 +253,7 @@ export async function fetchDcInvoiceData(dcId: string, opts: FetchOpts): Promise
           category: pd.category || 'New School',
           specs: matchingProduct?.specs || pd.specs || '',
           subject: pd.subject || undefined,
+          subjectPackage: Boolean(pd.subjectPackage),
           quantity,
           strength,
           level: displayProductLevel(pd.level),
@@ -273,6 +275,7 @@ export async function fetchDcInvoiceData(dcId: string, opts: FetchOpts): Promise
           category: p.category || 'New School',
           specs: p.specs || '',
           subject: p.subject || undefined,
+          subjectPackage: Boolean(p.subjectPackage),
           quantity,
           strength,
           level: displayProductLevel(p.level),

@@ -515,6 +515,7 @@ export default function CloseLeadPage() {
         level: levelValue,
         specs: p.specs || '',
         subject: p.subject || undefined,
+        subjectPackage: Boolean(p.subjectPackage),
         deliverables,
         term: persistProductTerm({
           term: (p as any).term || (parentRow as any)?.term,

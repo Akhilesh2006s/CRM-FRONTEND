@@ -11,6 +11,7 @@ export type PaymentBreakdownLine = {
   unitPrice: number
   level?: string
   subject?: string
+  subjectPackage?: boolean
   [key: string]: unknown
 }
 
@@ -24,6 +25,9 @@ const bucketKey = (line: PaymentBreakdownLine) =>
     String(line.class || '').trim(),
     String(line.subject || '').trim().toLowerCase(),
   ].join('::')
+
+const packageKey = (line: PaymentBreakdownLine) =>
+  [String(line.product || '').trim(), String(line.class || '').trim()].join('::')
 
 /**
  * Adjust per-line totals so each product+class+subject bucket matches
@@ -48,6 +52,16 @@ export function applyPaymentDivisorsToBreakdown(
 
   const keyToBucketTotal = new Map<string, number>()
   const keyToSumStrength = new Map<string, number>()
+  const packageSubjects = new Map<string, Set<string>>()
+  for (const line of lines) {
+    if (!line.subjectPackage || !line.subject) continue
+    const key = packageKey(line)
+    const subjects = packageSubjects.get(key) || new Set<string>()
+    subjects.add(String(line.subject).trim().toLowerCase())
+    packageSubjects.set(key, subjects)
+  }
+  const packageBuckets = new Map<string, string[]>()
+  const packageRawTotals = new Map<string, number>()
 
   for (const [k, bucketLines] of buckets) {
     const productName = bucketLines[0]?.product || ''
@@ -75,17 +89,42 @@ export function applyPaymentDivisorsToBreakdown(
     // Multiple specs (e.g. CW + HW) are books in one billed package.
     const specCount = new Set(bucketLines.map((line) =>
       String(line.specs || '').trim().toLowerCase())).size || 1
-    keyToBucketTotal.set(k, roundToTwo(bucketTotal / specCount))
+    const afterSpecs = roundToTwo(bucketTotal / specCount)
+    const pkgKey = packageKey(bucketLines[0])
+    const subjectCount = bucketLines.some((line) => line.subjectPackage)
+      ? Math.max(1, packageSubjects.get(pkgKey)?.size || 1) : 1
+    keyToBucketTotal.set(k, roundToTwo(afterSpecs / subjectCount))
+    if (subjectCount > 1) {
+      packageBuckets.set(pkgKey, [...(packageBuckets.get(pkgKey) || []), k])
+      packageRawTotals.set(pkgKey, (packageRawTotals.get(pkgKey) || 0) + afterSpecs)
+    }
     keyToSumStrength.set(k, sumStrength)
   }
 
+  // Keep the full package amount exact when dividing cents over subject rows.
+  for (const [pkgKey, keys] of packageBuckets) {
+    const subjectCount = packageSubjects.get(pkgKey)?.size || 1
+    const expected = roundToTwo((packageRawTotals.get(pkgKey) || 0) / subjectCount)
+    const allocated = roundToTwo(keys.reduce((sum, key) => sum + (keyToBucketTotal.get(key) || 0), 0))
+    const last = keys[keys.length - 1]
+    keyToBucketTotal.set(last, roundToTwo((keyToBucketTotal.get(last) || 0) + expected - allocated))
+  }
+
+  const remainingByBucket = new Map(keyToBucketTotal)
+  const remainingStrengthByBucket = new Map(keyToSumStrength)
   const paymentBreakdown = lines.map((line) => {
     const k = bucketKey(line)
     const bucketTotal = keyToBucketTotal.get(k) ?? 0
     const sumS = keyToSumStrength.get(k) ?? 0
     const str = lineStrength(line)
-    const total =
-      sumS > 0 ? roundToTwo((bucketTotal * str) / sumS) : 0
+    const remainingStrength = remainingStrengthByBucket.get(k) || 0
+    const total = remainingStrength > 0
+      ? remainingStrength === str
+        ? remainingByBucket.get(k) || 0
+        : roundToTwo((bucketTotal * str) / sumS)
+      : 0
+    remainingByBucket.set(k, roundToTwo((remainingByBucket.get(k) || 0) - total))
+    remainingStrengthByBucket.set(k, remainingStrength - str)
     return { ...line, total }
   })
 
