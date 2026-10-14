@@ -28,6 +28,8 @@ import {
   computeProductDetailsDisplayQuantity,
   computeProductDetailsDisplayTotal,
   lineHasValidClassSelections,
+  isIitProduct,
+  type IitAssignment,
   type ProductDetailRow,
   type CloseProductSection,
 } from '@/lib/closeLeadProductConfig'
@@ -268,8 +270,11 @@ function CloseLeadProductConfigView({
                       {section.lines.map((line) => {
                         const isOpen = expandedLineBySection[section.id] === line.id
                         const lineClasses = getLineClassSelections(line, section)
+                        const isIit = isIitProduct(line.product)
                         const classSummary =
-                          lineClasses
+                          isIit ? (line.iitAssignments || []).map((row) =>
+                            `Cl ${row.class}${row.section && row.section !== 'ALL' ? row.section : ''} ${row.program} (${row.strength})`
+                          ).join(', ') || 'No IIT assignments' : lineClasses
                             .filter((s) => Number(s.strength) > 0)
                             .map((s) => `Cl ${s.class} (${s.strength})`)
                             .join(', ') || 'No classes selected'
@@ -319,7 +324,37 @@ function CloseLeadProductConfigView({
                               <X className="w-4 h-4 mr-1" /> Remove product
                             </Button>
                             <CollapsibleContent className="space-y-3 p-3 border-t bg-white">
-                              <div className="space-y-2">
+                              {isIit && (
+                                <div className="space-y-3">
+                                  <div>
+                                    <Label className="text-xs font-semibold">IIT school assignments *</Label>
+                                    <p className="text-xs text-neutral-500">Add one row for each class and section. Leave section blank for the whole class. Each row has its own agreed per-student rate.</p>
+                                  </div>
+                                  {(line.iitAssignments || []).map((row) => {
+                                    const change = (patch: Partial<IitAssignment>) =>
+                                      updateProductSectionLine(section.id, line.id, {
+                                        iitAssignments: (line.iitAssignments || []).map((item) => item.id === row.id ? { ...item, ...patch } : item),
+                                      })
+                                    return (
+                                      <div key={row.id} className="grid grid-cols-2 md:grid-cols-7 gap-2 rounded border p-2 items-end">
+                                        <div><Label className="text-xs">Class *</Label><Input aria-label="IIT class" value={row.class} onChange={(e) => change({ class: e.target.value })} list={`iit-classes-${line.id}`} placeholder="8" /></div>
+                                        <div><Label className="text-xs">Section</Label><Input aria-label="IIT section" value={row.section === 'ALL' ? '' : row.section} onChange={(e) => change({ section: e.target.value.toUpperCase() })} placeholder="A / all" /></div>
+                                        <div><Label className="text-xs">Program *</Label><Input aria-label="IIT program" value={row.program} onChange={(e) => change({ program: e.target.value })} list={`iit-programs-${line.id}`} placeholder="Prime" /></div>
+                                        <div><Label className="text-xs">Stream *</Label><Input aria-label="IIT stream" value={row.stream} onChange={(e) => change({ stream: e.target.value })} placeholder="MBiPC" /></div>
+                                        <div><Label className="text-xs">Students *</Label><Input aria-label="IIT student strength" type="number" min={1} value={row.strength || ''} onChange={(e) => change({ strength: Number(e.target.value) || 0 })} /></div>
+                                        <div><Label className="text-xs">Rate / student ₹ *</Label><Input aria-label="IIT unit price" type="number" min={0} step="0.01" value={row.unitPrice || ''} onChange={(e) => change({ unitPrice: Number(e.target.value) || 0 })} /></div>
+                                        <Button type="button" variant="outline" size="sm" onClick={() => updateProductSectionLine(section.id, line.id, { iitAssignments: (line.iitAssignments || []).filter((item) => item.id !== row.id) })}>Remove</Button>
+                                        <div className="col-span-2 md:col-span-7 text-xs text-right text-neutral-600">Amount: ₹{(Number(row.strength) * Number(row.unitPrice) || 0).toLocaleString('en-IN')}</div>
+                                      </div>
+                                    )
+                                  })}
+                                  <datalist id={`iit-classes-${line.id}`}>{getProductClasses(line.product).map((cls) => <option key={cls} value={cls} />)}</datalist>
+                                  <datalist id={`iit-programs-${line.id}`}>{productCategories.map((category) => <option key={category} value={category} />)}</datalist>
+                                  <Button type="button" variant="outline" size="sm" onClick={() => updateProductSectionLine(section.id, line.id, { iitAssignments: [...(line.iitAssignments || []), { id: `${Date.now()}_${Math.random()}`, class: '', section: '', program: '', stream: '', strength: 0, unitPrice: 0 }] })}><PlusCircle className="h-4 w-4 mr-1" /> Add IIT assignment</Button>
+                                  <div className="text-sm font-medium">IIT total: ₹{lineTotalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                                </div>
+                              )}
+                              {!isIit && <div className="space-y-2">
                                 <Label className="text-xs font-semibold">
                                   Classes for {line.product} *
                                 </Label>
@@ -425,9 +460,9 @@ function CloseLeadProductConfigView({
                                     Select at least one class with strength greater than 0.
                                   </p>
                                 )}
-                              </div>
+                              </div>}
 
-                              {productSpecs.length > 0 && (
+                              {!isIit && productSpecs.length > 0 && (
                               <div className="space-y-2 border-t pt-2">
                                 <Label className="text-xs font-semibold">Select Specs:</Label>
                                 <div className="flex flex-wrap gap-4">
@@ -467,7 +502,7 @@ function CloseLeadProductConfigView({
                               </div>
                               )}
 
-                              {productLevels.length > 0 && (
+                              {!isIit && productLevels.length > 0 && (
                                 <div className="space-y-2 border-t pt-2">
                                   <Label className="text-xs font-semibold">Select Levels:</Label>
                                   <div className="flex flex-wrap gap-2">
@@ -547,7 +582,7 @@ function CloseLeadProductConfigView({
                                 </div>
                               )}
 
-                              <div className="flex flex-wrap items-center gap-3 justify-between border-t pt-2">
+                              {!isIit && <div className="flex flex-wrap items-center gap-3 justify-between border-t pt-2">
                                 <div className="flex items-center gap-2">
                                   <Checkbox
                                     className="border-neutral-400"
@@ -566,9 +601,9 @@ function CloseLeadProductConfigView({
                                     Same rate for all classes (this level)
                                   </Label>
                                 </div>
-                              </div>
+                              </div>}
 
-                              {allowLineConfig && productSpecs.length > 0 && (
+                              {!isIit && allowLineConfig && productSpecs.length > 0 && (
                                 <div className="mt-2 pt-2 border-t">
                                   <div className="flex flex-col md:flex-row gap-3 md:items-end">
                                       <div>
@@ -616,7 +651,7 @@ function CloseLeadProductConfigView({
                                   </div>
                               )}
 
-                              {productSpecs.length === 0 && (
+                              {!isIit && productSpecs.length === 0 && (
                                 <div className="mt-2 pt-2 border-t flex flex-col md:flex-row gap-3 md:items-end">
                                   <div>
                                     <Label className="text-xs font-semibold mb-1 block">
@@ -700,7 +735,7 @@ function CloseLeadProductConfigView({
                                 )
                               })()}
 
-                              {hasSubjects && productSubjects.length > 0 && (
+                              {!isIit && hasSubjects && productSubjects.length > 0 && (
                                 <div className="mt-2 pt-2 border-t">
                                   <Label className="text-xs font-semibold mb-2 block">
                                     Select Subjects:
@@ -733,7 +768,7 @@ function CloseLeadProductConfigView({
                                 </div>
                               )}
 
-                              {hasProductCategories(line.product) && productCategories.length > 0 && (
+                              {!isIit && hasProductCategories(line.product) && productCategories.length > 0 && (
                                 <div className="mt-2 pt-2 border-t">
                                   <Label className="text-xs font-semibold mb-2 block">
                                     Select Product Category:
@@ -799,9 +834,11 @@ function CloseLeadProductConfigView({
                           <td className="px-3 py-2 whitespace-nowrap">
                             {getProductLevels(pd.product).length > 0 ? pd.level || '-' : '-'}
                           </td>
-                          <td className="px-3 py-2">{pd.class}</td>
+                          <td className="px-3 py-2">{pd.class}{pd.section && pd.section !== 'ALL' ? ` ${pd.section}` : ''}{pd.stream ? ` · ${pd.stream}` : ''}</td>
                           <td className="min-w-[280px] px-3 py-2">
-                            {hasProductCategories(pd.product) ? (
+                            {isIitProduct(pd.product) ? (
+                              <span>{pd.program || '-'}</span>
+                            ) : hasProductCategories(pd.product) ? (
                               <Select
                                 value={
                                   (pd.productCategory || pd.category || '').trim() || undefined
@@ -828,6 +865,7 @@ function CloseLeadProductConfigView({
                             <td className="px-3 py-2">{pd.subject || '-'}</td>
                           )}
                           <td className="px-3 py-2">
+                            {isIitProduct(pd.product) ? pd.strength : (
                             <Input
                               type="number"
                               value={pd.strength || ''}
@@ -850,6 +888,7 @@ function CloseLeadProductConfigView({
                               placeholder="0"
                               required
                             />
+                            )}
                           </td>
                           <td className="px-3 py-2">
                             <Button

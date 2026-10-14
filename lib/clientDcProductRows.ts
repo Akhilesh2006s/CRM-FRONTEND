@@ -54,6 +54,9 @@ export function productLineIdentityKey(p: Record<string, any>): string {
     .trim()
     .toLowerCase()
   const klass = String(p.class ?? '').trim().toLowerCase()
+  const section = String(p.section ?? '').trim().toLowerCase()
+  const program = String(p.program ?? '').trim().toLowerCase()
+  const stream = String(p.stream ?? '').trim().toLowerCase()
   const level = String(p.level ?? '')
     .trim()
     .toLowerCase()
@@ -67,7 +70,7 @@ export function productLineIdentityKey(p: Record<string, any>): string {
   const term = String(p.term ?? '')
     .trim()
     .toLowerCase()
-  return [product, klass, level, specs, productCategory, subject, term].join('|')
+  return [product, klass, section, program, stream, level, specs, productCategory, subject, term].join('|')
 }
 
 export function productRowLineId(p: Record<string, any> | null | undefined): string {
@@ -150,10 +153,13 @@ export function productClassBaseKey(p: Record<string, any>): string {
     .trim()
     .toLowerCase()
   const klass = String(p.class ?? '').trim().toLowerCase()
+  const section = String(p.section ?? '').trim().toLowerCase()
+  const program = String(p.program ?? '').trim().toLowerCase()
+  const stream = String(p.stream ?? '').trim().toLowerCase()
   const subject = String(p.subject ?? '')
     .trim()
     .toLowerCase()
-  return [product, klass, subject].join('|')
+  return [product, klass, section, program, stream, subject].join('|')
 }
 
 /** Same as productClassBaseKey but keeps CW/HW (and other specs) as separate lines. */
@@ -467,6 +473,9 @@ export function findMatchingOrderProduct(
   const cls = detail.class != null ? String(detail.class).trim().toLowerCase() : ''
   const level = String(detail.level ?? '').trim().toLowerCase()
   const subj = String(detail.subject ?? '').trim().toLowerCase()
+  const sameIitAssignment = (o: any) => ['section', 'program', 'stream'].every(
+    (field) => String(o[field] ?? '').trim().toLowerCase() === String(detail[field] ?? '').trim().toLowerCase()
+  )
 
   for (let i = 0; i < items.length; i++) {
     if (used.has(i)) continue
@@ -476,6 +485,7 @@ export function findMatchingOrderProduct(
     const ol = String(o.level ?? '').trim().toLowerCase()
     const osj = String(o.subject ?? '').trim().toLowerCase()
     if (on !== name || !name) continue
+    if (!sameIitAssignment(o)) continue
     if (cls !== oc) continue
     if (subj !== osj) continue
     if (level !== ol) continue
@@ -512,6 +522,8 @@ export function findPricedOrderProduct(
       const o = items[i]
       const on = (o.product_name || o.product || o.productName || '').toLowerCase().trim()
       if (on !== name) continue
+      if (!['section', 'program', 'stream'].every((field) =>
+        String(o[field] ?? '').trim().toLowerCase() === String(detail[field] ?? '').trim().toLowerCase())) continue
       if (resolvePersistedUnitPrice(o.unit_price, o.price) > 0) {
         used.add(i)
         return o
@@ -544,6 +556,9 @@ function mapToClientDCProductRow(
     lineId: productRowLineId(raw) || id,
     product,
     class: resolved.class,
+    section: raw.section,
+    program: raw.program,
+    stream: raw.stream,
     productCategory: resolved.productCategory,
     specs: resolved.specs,
     category: raw.category,

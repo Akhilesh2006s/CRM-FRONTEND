@@ -499,6 +499,9 @@ export default function CloseLeadPage() {
       return {
         product: p.product,
         class: p.class || '1',
+        section: p.section || undefined,
+        program: p.program || undefined,
+        stream: p.stream || undefined,
         category: isSkuCategory
           ? enrollmentCategory
           : p.category ||

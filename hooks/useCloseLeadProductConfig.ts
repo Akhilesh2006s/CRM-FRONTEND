@@ -254,6 +254,7 @@ export function useCloseLeadProductConfig(options: UseCloseLeadProductConfigOpti
                 ? [getDefaultLevel(product)]
                 : [],
           classSelections: [],
+          iitAssignments: /\bIIT\b/i.test(product) ? [] : undefined,
           sameStrengthForAllClasses: false,
           selectedSpecs: getProductSpecs(product).slice(0, 1),
           selectedSubjects: [],

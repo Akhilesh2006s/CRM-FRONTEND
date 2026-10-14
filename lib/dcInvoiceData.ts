@@ -7,6 +7,9 @@ export type DcInvoicePaymentLine = {
   product: string
   term?: string
   class: string
+  section?: string
+  program?: string
+  stream?: string
   category: string
   specs: string
   subject?: string
@@ -250,6 +253,9 @@ export async function fetchDcInvoiceData(dcId: string, opts: FetchOpts): Promise
         return {
           product: pd.product || '',
           class: pd.class || '1',
+          section: pd.section,
+          program: pd.program,
+          stream: pd.stream,
           category: pd.category || 'New School',
           specs: matchingProduct?.specs || pd.specs || '',
           subject: pd.subject || undefined,
@@ -272,6 +278,9 @@ export async function fetchDcInvoiceData(dcId: string, opts: FetchOpts): Promise
         return {
           product: p.product || '',
           class: p.class || '1',
+          section: p.section,
+          program: p.program,
+          stream: p.stream,
           category: p.category || 'New School',
           specs: p.specs || '',
           subject: p.subject || undefined,
@@ -298,7 +307,7 @@ export async function fetchDcInvoiceData(dcId: string, opts: FetchOpts): Promise
         level: pb.level,
         subject: pb.subject,
       })),
-      opts.getCalculationType,
+      (product) => /\bIIT\b/i.test(product) ? 'normal' : opts.getCalculationType(product),
       () => 0
     )
     paymentBreakdown = adj.paymentBreakdown as DcInvoicePaymentLine[]

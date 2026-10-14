@@ -7,6 +7,9 @@ import {
 export type PaymentBreakdownLine = {
   product: string
   class: string
+  section?: string
+  program?: string
+  stream?: string
   strength: number
   unitPrice: number
   level?: string
@@ -23,11 +26,17 @@ const bucketKey = (line: PaymentBreakdownLine) =>
   [
     String(line.product || '').trim(),
     String(line.class || '').trim(),
+    String(line.section || '').trim().toLowerCase(),
+    String(line.program || '').trim().toLowerCase(),
+    String(line.stream || '').trim().toLowerCase(),
     String(line.subject || '').trim().toLowerCase(),
   ].join('::')
 
 const packageKey = (line: PaymentBreakdownLine) =>
-  [String(line.product || '').trim(), String(line.class || '').trim()].join('::')
+  [String(line.product || '').trim(), String(line.class || '').trim(),
+    String(line.section || '').trim().toLowerCase(),
+    String(line.program || '').trim().toLowerCase(),
+    String(line.stream || '').trim().toLowerCase()].join('::')
 
 /**
  * Adjust per-line totals so each product+class+subject bucket matches
@@ -65,7 +74,9 @@ export function applyPaymentDivisorsToBreakdown(
 
   for (const [k, bucketLines] of buckets) {
     const productName = bucketLines[0]?.product || ''
-    const ct = getCalculationType(productName)
+    // IIT prices are agreed for each school/class/section/program row, not a
+    // catalog subject package; no catalog-level divisor may reduce this rate.
+    const ct = /\bIIT\b/i.test(productName) ? 'normal' : getCalculationType(productName)
     const fallback = getCatalogFallbackCount(productName, ct)
     const unitPrice = Math.max(
       0,

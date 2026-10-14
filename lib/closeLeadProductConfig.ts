@@ -33,6 +33,10 @@ export type ProductDetailRow = {
   level: string
   specs: string
   subject?: string
+  section?: string
+  program?: string
+  stream?: string
+  iitAssignments?: IitAssignment[]
   /** Physical subject row included in one per-student package price. */
   subjectPackage?: boolean
   isParentRow?: boolean
@@ -51,6 +55,21 @@ export type ClassStrengthSelection = {
   strength: number
 }
 
+export type IitAssignment = {
+  id: string
+  class: string
+  /** ALL is a class-wide assignment; otherwise the school's section label. */
+  section: string
+  program: string
+  stream: string
+  strength: number
+  unitPrice: number
+}
+
+export const isIitProduct = (name: string) => /\bIIT\b/i.test(String(name || ''))
+export const normalizeIitSection = (value: string) =>
+  String(value || '').trim().toUpperCase() || 'ALL'
+
 export type CloseProductSectionLine = {
   id: string
   parentRowId: string
@@ -61,6 +80,7 @@ export type CloseProductSectionLine = {
   selectedLevels: string[]
   /** Per-product class + strength (independent for each product in the section). */
   classSelections: ClassStrengthSelection[]
+  iitAssignments?: IitAssignment[]
   sameStrengthForAllClasses?: boolean
   fromClass?: string
   toClass?: string
@@ -301,7 +321,7 @@ export const groupProductDetailsByProductAndClass = (
   details: any[],
   opts?: GroupProductOpts
 ) => {
-  const getCt = (name: string) => opts?.getCalculationType(name) ?? ('none' as CalculationType)
+  const getCt = (name: string) => isIitProduct(name) ? ('normal' as CalculationType) : opts?.getCalculationType(name) ?? ('none' as CalculationType)
   const getFallback = (name: string, ct: CalculationType) =>
     opts?.getCatalogFallbackCount(name, ct) ?? 0
 
@@ -317,7 +337,7 @@ export const groupProductDetailsByProductAndClass = (
 
   details.forEach((p) => {
     // Keep CW / HW (and other specs) as separate lines — do not collapse by product+class only.
-    const key = `${p.product || ''}||${p.class || ''}||${normSpecs(p.specs)}`
+    const key = `${p.product || ''}||${p.class || ''}||${normalizeIitSection(p.section || '')}||${p.program || ''}||${p.stream || ''}||${normSpecs(p.specs)}`
     const strength = Number(p.strength) || 0
     const price = Number(p.price) || 0
     const ct = getCt(p.product || '')
@@ -397,13 +417,13 @@ export const groupProductDetailsByProductAndClass = (
   const packageSubjects = new Map<string, Set<string>>()
   for (const detail of details) {
     if (!detail.subjectPackage || !detail.subject) continue
-    const key = `${detail.product || ''}||${detail.class || ''}`
+    const key = `${detail.product || ''}||${detail.class || ''}||${normalizeIitSection(detail.section || '')}||${detail.program || ''}||${detail.stream || ''}`
     const subjects = packageSubjects.get(key) || new Set<string>()
     subjects.add(normSubject(detail.subject))
     packageSubjects.set(key, subjects)
   }
   for (const row of grouped) {
-    const key = `${row.product || ''}||${row.class || ''}`
+    const key = `${row.product || ''}||${row.class || ''}||${normalizeIitSection(row.section || '')}||${row.program || ''}||${row.stream || ''}`
     const list = byProductClass.get(key) || []
     list.push(row)
     byProductClass.set(key, list)
@@ -541,6 +561,9 @@ export function computeLineDisplayTotal(
   line: CloseProductSectionLine,
   sec?: CloseProductSection
 ): number {
+  if (isIitProduct(line.product) && line.iitAssignments !== undefined)
+    return roundToTwo(line.iitAssignments.reduce((sum, row) =>
+      sum + (Number(row.strength) || 0) * (Number(row.unitPrice) || 0), 0))
   return getLineClassSelections(line, sec).reduce(
     (sum, s) => sum + (Number(s.strength) || 0) *
       (line.sameRateForAllClasses ? Number(line.price) || 0 : Number(line.priceByClass?.[s.class] ?? line.price) || 0),
@@ -553,6 +576,8 @@ export function computeLineDisplayQuantity(
   line: CloseProductSectionLine,
   sec?: CloseProductSection
 ): number {
+  if (isIitProduct(line.product) && line.iitAssignments !== undefined)
+    return line.iitAssignments.reduce((sum, row) => sum + (Number(row.strength) || 0), 0)
   const subjectMult = getLineSubjectPriceMultiplier(line)
   return getLineClassSelections(line, sec).reduce(
     (sum, s) => sum + (Number(s.strength) || 0) * subjectMult,
@@ -640,10 +665,11 @@ export function billedProductDetailRows(
 ): ProductDetailRow[] {
   const billed = applyPaymentDivisorsToBreakdown(
     rows.map((row) => ({ product: row.product, class: row.class,
+      section: row.section, program: row.program, stream: row.stream,
       strength: Number(row.strength) || Number(row.quantity) || 0,
       unitPrice: Number(row.price) || 0, level: row.level,
       subject: row.subject, specs: row.specs, subjectPackage: row.subjectPackage })),
-    getCalculationType, getCatalogFallbackCount
+    (product) => isIitProduct(product) ? 'normal' : getCalculationType(product), getCatalogFallbackCount
   ).paymentBreakdown
   return rows.map((row, index) => ({ ...row, total: Number(billed[index]?.total) || 0 }))
 }
@@ -718,6 +744,52 @@ export function expandSectionsToProductDetails(
 
   for (const sec of sections) {
     for (const line of sec.lines) {
+      if (isIitProduct(line.product) && line.iitAssignments !== undefined) {
+        const assignments = line.iitAssignments.filter((row) =>
+          row.class.trim() && row.program.trim() && row.stream.trim() &&
+          Number(row.strength) > 0 && Number(row.unitPrice) > 0
+        )
+        if (assignments.length === 0) continue
+        const classes = assignments.map((row) => Number(row.class)).filter(Number.isFinite)
+        const parentRow: ProductDetailRow = {
+          id: line.parentRowId,
+          product: line.product,
+          class: '0',
+          fromClass: String(Math.min(...classes)),
+          toClass: String(Math.max(...classes)),
+          category: schoolExisting ? 'Existing Students' : 'New Students',
+          quantity: 1,
+          strength: assignments.reduce((sum, row) => sum + Number(row.strength), 0),
+          price: 0,
+          total: assignments.reduce((sum, row) => sum + Number(row.strength) * Number(row.unitPrice), 0),
+          level: '',
+          specs: '',
+          isParentRow: true,
+          iitAssignments: line.iitAssignments.map((row) => ({ ...row })),
+          selectedDeliverables: line.selectedDeliverables || [],
+        }
+        out.push(parentRow)
+        for (const row of assignments) {
+          out.push({
+            id: `${line.parentRowId}_${row.id}`,
+            product: line.product,
+            class: row.class.trim(),
+            section: normalizeIitSection(row.section),
+            program: row.program.trim(),
+            stream: row.stream.trim(),
+            category: schoolExisting ? 'Existing Students' : 'New Students',
+            productCategory: row.program.trim(),
+            quantity: Number(row.strength),
+            strength: Number(row.strength),
+            price: Number(row.unitPrice),
+            total: Number(row.strength) * Number(row.unitPrice),
+            level: '',
+            specs: '',
+            isParentRow: false,
+          })
+        }
+        continue
+      }
       const classSelections = [...getLineClassSelections(line, sec)].sort(
         (a, b) => Number(a.class) - Number(b.class)
       )
@@ -897,6 +969,7 @@ export function parentRowToSectionLine(p: ProductDetailRow): CloseProductSection
     level: levelsFromSnapshot[0] || p.level || '',
     selectedLevels: levelsFromSnapshot,
     classSelections: rangeToClassSelections(from, to, strength),
+    iitAssignments: isIitProduct(p.product) ? (p.iitAssignments || []) : undefined,
     sameStrengthForAllClasses: false,
     selectedSpecs: p.selectedSpecs || [],
     selectedSubjects: p.selectedSubjects || [],
@@ -952,6 +1025,9 @@ export function buildDcOrderProductsFromDetails(
         !r.isParentRow &&
         (r.product || '') === (p.product || '') &&
         String(r.class || '') === String(p.class || '') &&
+        normalizeIitSection(r.section || '') === normalizeIitSection(p.section || '') &&
+        String(r.program || '') === String(p.program || '') &&
+        String(r.stream || '') === String(p.stream || '') &&
         String(r.specs || '').trim().toLowerCase() === String((p as any).specs || '').trim().toLowerCase()
     )
     const parentRow = sampleChild
@@ -964,6 +1040,9 @@ export function buildDcOrderProductsFromDetails(
       (r) =>
         (r.product || '') === (p.product || '') &&
         String(r.class || '') === String(p.class || '') &&
+        normalizeIitSection(r.section || '') === normalizeIitSection(p.section || '') &&
+        String(r.program || '') === String(p.program || '') &&
+        String(r.stream || '') === String(p.stream || '') &&
         String(r.specs || '').trim().toLowerCase() === String((p as any).specs || '').trim().toLowerCase()
     )
     const levelSet = new Set<string>()
@@ -1013,6 +1092,9 @@ export function buildDcOrderProductsFromDetails(
       unit_price: unitPrice,
       total: lineTotal,
       class: String(p.class ?? '1'),
+      section: (p as any).section || undefined,
+      program: (p as any).program || undefined,
+      stream: (p as any).stream || undefined,
       specs: (p as any).specs || undefined,
       deliverables,
       productCategory: (() => {
@@ -1048,6 +1130,24 @@ export type ValidateCloseLeadProductsOpts = {
 export function validateCloseLeadProductConfig(
   opts: ValidateCloseLeadProductsOpts
 ): { ok: true } | { ok: false; message: string } {
+  for (const section of opts.productSections) {
+    for (const line of section.lines) {
+      if (!isIitProduct(line.product) || line.iitAssignments === undefined) continue
+      if (line.iitAssignments.length === 0) return { ok: false, message: 'Add at least one IIT class/section/program assignment.' }
+      const used = new Map<string, Set<string>>()
+      for (const row of line.iitAssignments) {
+        if (!/^\d+$/.test(row.class.trim()) || Number(row.class) <= 0 || !row.program.trim() || !row.stream.trim() || Number(row.strength) <= 0 || Number(row.unitPrice) <= 0)
+          return { ok: false, message: 'Each IIT assignment needs class, program, stream, strength, and a unit price greater than zero.' }
+        const key = row.class.trim().toLowerCase()
+        const sectionName = normalizeIitSection(row.section).toLowerCase()
+        const prior = used.get(key) || new Set<string>()
+        if (prior.has(sectionName) || (sectionName === 'all' && prior.size > 0) || (sectionName !== 'all' && prior.has('all')))
+          return { ok: false, message: `Class ${row.class} has overlapping IIT section assignments.` }
+        prior.add(sectionName)
+        used.set(key, prior)
+      }
+    }
+  }
   const childRows = opts.productDetails.filter((pd) => !pd.isParentRow)
   const grouped = groupProductDetailsByProductAndClass(childRows, {
     getCalculationType: opts.getCalculationType,

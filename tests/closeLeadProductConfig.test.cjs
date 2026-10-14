@@ -41,6 +41,39 @@ test('entry categories follow the shared Abacus and Spelling Bee class grid', ()
   assert.equal(pickGridProductCategory('Spelling Bee', '7', spelling), 'Category 3')
 })
 
+test('IIT same-class sections retain different programs, strengths and school rates', () => {
+  const line = {
+    id: 'line', parentRowId: 'parent', product: 'IIT', level: '', selectedLevels: [],
+    classSelections: [], selectedSpecs: [], selectedSubjects: [], selectedDeliverables: [],
+    sameRateForAllClasses: false, price: 0,
+    iitAssignments: [
+      { id: 'a', class: '8', section: 'A', program: 'Prime', stream: 'MBiPC', strength: 30, unitPrice: 1200 },
+      { id: 'b', class: '8', section: 'B', program: 'Winners', stream: 'MPC', strength: 20, unitPrice: 900 },
+    ],
+  }
+  const sections = [{ id: 's', lines: [line] }]
+  const ctx = { schoolType: 'New', hasProductSubjects: () => false,
+    hasProductCategories: () => false, getProductCategories: () => [] }
+  const details = expandSectionsToProductDetails(sections, ctx)
+  assert.equal(computeLineDisplayTotal(line), 54000)
+  assert.equal(details.filter((row) => !row.isParentRow).length, 2)
+  const products = buildDcOrderProductsFromDetails(details.filter((row) => !row.isParentRow), {
+    productDetails: details, getCalculationType: () => 'subject_based',
+    getCatalogFallbackCount: () => 3, hasProductCategories: () => false,
+    getProductCategories: () => [],
+  })
+  assert.deepEqual(products.map((row) => [row.class, row.section, row.program, row.stream, row.total]), [
+    ['8', 'A', 'Prime', 'MBiPC', 36000], ['8', 'B', 'Winners', 'MPC', 18000],
+  ])
+  assert.deepEqual(billedProductDetailRows(details.filter((row) => !row.isParentRow),
+    () => 'subject_based', () => 3).map((row) => row.total), [36000, 18000])
+  assert.deepEqual(config.validateCloseLeadProductConfig({ productDetails: details, productSections: sections,
+    getCalculationType: () => 'subject_based', getCatalogFallbackCount: () => 3 }), { ok: true })
+  line.iitAssignments[1].section = 'A'
+  assert.match(config.validateCloseLeadProductConfig({ productDetails: details, productSections: sections,
+    getCalculationType: () => 'none', getCatalogFallbackCount: () => 0 }).message, /overlapping/)
+})
+
 test('shared and individual class rates produce distinct totals and ascending DC classes', () => {
   const line = {
     id: 'line', parentRowId: 'parent', product: 'Abacus', level: 'Level 1',
