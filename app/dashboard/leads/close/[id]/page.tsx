@@ -24,6 +24,9 @@ import { CloseLeadProductConfig } from '@/components/leads/CloseLeadProductConfi
 import { sanitizePhoneInput, validatePhoneDigits } from '@/lib/phone'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { abacusStudentStrength, defaultMasterAbacusQuantity } from '@/lib/abacusMaterials'
+import { AbacusMaterialsFields } from '@/components/dc/AbacusMaterialsFields'
+import { buildSpecimenRows } from '@/lib/dcRowCategory'
+import { Checkbox } from '@/components/ui/checkbox'
 
 type Lead = {
   _id: string
@@ -95,6 +98,7 @@ export default function CloseLeadPage() {
   } | null>(null)
   const [masterQuantityOverride, setMasterQuantityOverride] = useState<string | null>(null)
   const [masterUnitPrice, setMasterUnitPrice] = useState('')
+  const [specimenRequested, setSpecimenRequested] = useState(false)
 
   const productConfig = useCloseLeadProductConfig({ schoolType: lead?.school_type })
   const {
@@ -485,7 +489,7 @@ export default function CloseLeadPage() {
   const buildDcProductDetails = () => {
     const actualProductDetails = billedProductDetailRows(
       childProductRows, getCalculationType, getCatalogFallbackCount)
-    return actualProductDetails.map((p) => {
+    const rows = actualProductDetails.map((p) => {
       const parentRow = productDetails.find(
         (parent) => parent.isParentRow && p.id.startsWith(parent.id + '_')
       )
@@ -494,8 +498,8 @@ export default function CloseLeadPage() {
       const skuCats = hasProductCategories(p.product) ? getProductCategories(p.product) : []
       const catStr = typeof p.category === 'string' ? p.category.trim() : ''
       const isSkuCategory = skuCats.some((c) => c.toLowerCase() === catStr.toLowerCase())
-      const enrollmentCategory =
-        lead?.school_type === 'Existing' ? 'Existing Students' : 'New Students'
+      // Billed book rows; renewal schools are billed the same way as new students.
+      const enrollmentCategory = 'New Students'
       return {
         product: p.product,
         class: p.class || '1',
@@ -527,6 +531,9 @@ export default function CloseLeadPage() {
         dispatchMode: p.dispatchMode || parentRow?.dispatchMode,
       }
     })
+    return specimenRequested
+      ? [...rows, ...buildSpecimenRows(rows).map((row) => ({ ...row, deliverables: [] }))]
+      : rows
   }
 
   /** Mark lead/order closed, then raise DC. Only call after user confirms any split dialog. */
@@ -744,6 +751,7 @@ export default function CloseLeadPage() {
       const message = 'Enter a Master Abacus price when adding it below 100 students.'
       setError(message)
       toast.error(message)
+      productConfig.setProductDialogOpen(true)
       return
     }
 
@@ -986,16 +994,30 @@ export default function CloseLeadPage() {
           </div>
 
           {/* Add Products (shared Close Lead product config) */}
-          <CloseLeadProductConfig config={productConfig} schoolType={lead?.school_type} />
-          {abacusStrength > 0 && <div className="rounded-lg border p-4 space-y-3">
-            <h3 className="font-semibold">First DC · Abacus materials</h3>
-            <p className="text-sm">Student Abacus: {abacusStrength} (one per student). Flash Card sets: {masterQuantity} (with Master Abacus).</p>
-            <p className="text-xs text-neutral-600">Default Master Abacus: {defaultMasterAbacusQuantity(abacusStrength)}. Adjust the quantity if required. Below 100 students, an added Master Abacus must have a price.</p>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div><Label>Master Abacus quantity</Label><Input type="number" min="0" step="1" value={masterQuantityOverride ?? String(masterQuantity)} onChange={(event) => setMasterQuantityOverride(event.target.value)} /></div>
-              <div><Label>Master Abacus unit price (₹, if charged)</Label><Input type="number" min="0" step="0.01" value={masterUnitPrice} onChange={(event) => setMasterUnitPrice(event.target.value)} /></div>
-            </div>
-          </div>}
+          <CloseLeadProductConfig
+            config={productConfig}
+            schoolType={lead?.school_type}
+            dialogExtra={childProductRows.length > 0 && <>
+              <label className="flex items-start gap-3 rounded-lg border p-4 cursor-pointer">
+                <Checkbox checked={specimenRequested} onCheckedChange={(checked) => setSpecimenRequested(checked === true)} />
+                <span>
+                  <span className="font-semibold block">Specimen copies requested</span>
+                  <span className="text-xs text-neutral-600">
+                    Adds one copy of each selected book for every class as Training Material (no billing).
+                  </span>
+                </span>
+              </label>
+              {abacusStrength > 0 && <AbacusMaterialsFields
+                studentQuantity={abacusStrength}
+                masterQuantity={masterQuantity}
+                masterQuantityInput={masterQuantityOverride ?? String(masterQuantity)}
+                onMasterQuantityChange={setMasterQuantityOverride}
+                masterUnitPrice={masterUnitPrice}
+                onMasterUnitPriceChange={setMasterUnitPrice}
+                hint={`Default Master Abacus: ${defaultMasterAbacusQuantity(abacusStrength)}. Adjust the quantity if required. Below 100 students, an added Master Abacus must have a price.`}
+              />}
+            </>}
+          />
 
           {/* Upload PO Button */}
           <div className="pt-4 border-t">

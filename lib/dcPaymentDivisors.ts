@@ -3,10 +3,12 @@ import {
   roundToTwo,
   type CalculationType,
 } from '@/lib/paymentDivisor'
+import { isBillableDcRow } from '@/lib/dcRowCategory'
 
 export type PaymentBreakdownLine = {
   product: string
   class: string
+  category?: string
   section?: string
   program?: string
   stream?: string
@@ -44,10 +46,20 @@ const packageKey = (line: PaymentBreakdownLine) =>
  * Already-split subject rows (P2 Phy and P2 Maths) stay separate so both quantities count.
  */
 export function applyPaymentDivisorsToBreakdown(
-  lines: PaymentBreakdownLine[],
+  allLines: PaymentBreakdownLine[],
   getCalculationType: (productName: string) => CalculationType,
   getCatalogFallbackCount: (productName: string, ct: CalculationType) => number
 ): { paymentBreakdown: PaymentBreakdownLine[]; totalAmount: number } {
+  // Training Material and Shortage rows are delivered but never billed.
+  const freeLines = allLines
+    .filter((line) => !isBillableDcRow(line))
+    .map((line) => ({ ...line, unitPrice: 0, total: 0 }))
+  if (freeLines.length) {
+    const billed = applyPaymentDivisorsToBreakdown(
+      allLines.filter((line) => isBillableDcRow(line)), getCalculationType, getCatalogFallbackCount)
+    return { paymentBreakdown: [...billed.paymentBreakdown, ...freeLines], totalAmount: billed.totalAmount }
+  }
+  const lines = allLines
   if (!lines.length) {
     return { paymentBreakdown: [], totalAmount: 0 }
   }

@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useProducts } from '@/hooks/useProducts'
 import { toast } from 'sonner'
+import { DC_ROW_CATEGORIES, DC_ROW_CATEGORY_BILLING, canonicalDcRowCategory, type DcRowCategory } from '@/lib/dcRowCategory'
 import { sanitizeMobileInput, validateContactMobile, validateContactPerson } from '@/lib/saleFormValidation'
 import { keepMyClientsOwnedProductRows } from '@/lib/clientDcProductRows'
 import { CLOSE_LEAD_DESTINATION } from '@/lib/closeLeadTermRouting'
@@ -255,31 +256,16 @@ export default function ClosedSalesPage() {
     price?: number
   }
   const [productRows, setProductRows] = useState<ProductRow[]>([
-    { id: '1', product: 'Abacus', class: '1', category: 'new Students', productCategory: undefined, specs: '', quantity: 1, strength: 0, level: 'L1', term: 'Term 1', unit_price: 0 }
+    { id: '1', product: 'Abacus', class: '1', category: 'New Students', productCategory: undefined, specs: '', quantity: 1, strength: 0, level: 'L1', term: 'Term 1', unit_price: 0 }
   ])
   
   const availableClasses = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
-  const categoryOptions = [
-    'NA',
-    'Training Mterial',
-    'new Students',
-    'Old Students',
-    'Excess',
-    'Exchange',
-    'Shortage',
-    'Excess-OldStudents',
-    'Excess NewStudents',
-  ]
+  const categoryOptions: string[] = [...DC_ROW_CATEGORIES]
 
   const normalizeCategoryForDropdown = (raw: any, fallback: string) => {
     const v = typeof raw === 'string' ? raw.trim() : ''
     if (!v) return fallback
-    if (v === 'New Students') return 'new Students'
-    if (v === 'Existing Students') return 'Old Students'
-    if (v === 'Both') return 'NA'
-    if (v === 'New School') return 'new Students'
-    if (v === 'Existing School') return 'Old Students'
-    return categoryOptions.includes(v) ? v : fallback
+    return canonicalDcRowCategory(v) || fallback
   }
   const { productNames: availableProducts, getProductLevels, getDefaultLevel, getProductSpecs, getProductSubjects, getProductCategories, hasProductCategories, hasProductSubjects, hasProductSpecs } = useProducts()
 
@@ -309,7 +295,7 @@ export default function ClosedSalesPage() {
       class: p.class || '1',
       category: normalizeCategoryForDropdown(
         p.category,
-        schoolType === 'Existing' ? 'Old Students' : 'new Students'
+        'New Students'
       ),
       productCategory: matchedSku || undefined,
       specs: p.specs || 'Regular',
@@ -842,7 +828,7 @@ export default function ClosedSalesPage() {
         id: '1',
         product: 'Abacus',
         class: '1',
-        category: normalizedDeal.school_type === 'Existing' ? 'Old Students' : 'new Students',
+        category: 'New Students',
         specs: '',
         quantity: 1,
         strength: 0,
@@ -890,7 +876,7 @@ export default function ClosedSalesPage() {
           id: '1',
           product: 'Abacus',
           class: '1',
-          category: deal.school_type === 'Existing' ? 'Old Students' : 'new Students',
+          category: 'New Students',
           specs: '',
           quantity: 1,
           strength: 0,
@@ -1223,7 +1209,7 @@ export default function ClosedSalesPage() {
         getProductLevels(row.product).length > 0 &&
         (!row.level || row.level.trim() === '')
       ) {
-        invalidRows.push(`Row ${rowNum}: Level is required`)
+        invalidRows.push(`Row ${rowNum}: Term / Level is required`)
       }
       if (!row.term || row.term.trim() === '') {
         invalidRows.push(`Row ${rowNum}: Term is required`)
@@ -1255,7 +1241,7 @@ export default function ClosedSalesPage() {
           ? productRows.map(row => ({
               product: row.product || '',
               class: row.class || '1',
-              category: row.category || (selectedDeal?.school_type === 'Existing' ? 'Old Students' : 'new Students'),
+              category: canonicalDcRowCategory(row.category) || 'New Students',
               productCategory: row.productCategory || undefined,
           specs: row.specs || 'Regular',
           subject: row.subject || undefined,
@@ -1904,12 +1890,12 @@ export default function ClosedSalesPage() {
                       <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b-2 border-slate-300">
                         <th className="py-4 px-5 text-left text-slate-700 font-bold text-xs uppercase tracking-wider">Product</th>
                         <th className="py-4 px-5 text-left text-slate-700 font-bold text-xs uppercase tracking-wider">Class</th>
-                        <th className="py-4 px-5 text-left text-slate-700 font-bold text-xs uppercase tracking-wider">Category</th>
-                        <th className="py-4 px-5 text-left text-slate-700 font-bold text-xs uppercase tracking-wider">Product Category</th>
+                        <th className="py-4 px-5 text-left text-slate-700 font-bold text-xs uppercase tracking-wider">Enrollment Category</th>
+                        <th className="py-4 px-5 text-left text-slate-700 font-bold text-xs uppercase tracking-wider">Series</th>
                         <th className="py-4 px-5 text-left text-slate-700 font-bold text-xs uppercase tracking-wider">Specs</th>
-                        <th className="py-4 px-5 text-left text-slate-700 font-bold text-xs uppercase tracking-wider">Subject</th>
+                        <th className="py-4 px-5 text-left text-slate-700 font-bold text-xs uppercase tracking-wider">Special Notes</th>
                         <th className="py-4 px-5 text-left text-slate-700 font-bold text-xs uppercase tracking-wider">Quantity</th>
-                        <th className="py-4 px-5 text-left text-slate-700 font-bold text-xs uppercase tracking-wider">Level</th>
+                        <th className="py-4 px-5 text-left text-slate-700 font-bold text-xs uppercase tracking-wider">Term / Level</th>
                         <th className="py-4 px-5 text-left text-slate-700 font-bold text-xs uppercase tracking-wider">Term</th>
                         <th className="py-4 px-5 text-center text-slate-700 font-bold text-xs uppercase tracking-wider">Action</th>
                       </tr>
@@ -1984,7 +1970,7 @@ export default function ClosedSalesPage() {
                               <SelectContent>
                                 {categoryOptions.map(cat => (
                                   <SelectItem key={cat} value={cat}>
-                                    {cat}
+                                    {cat} ({DC_ROW_CATEGORY_BILLING[cat as DcRowCategory]})
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -2051,7 +2037,7 @@ export default function ClosedSalesPage() {
                               }}
                               >
                                 <SelectTrigger className="h-9 text-sm bg-white border-slate-200 w-32">
-                                  <SelectValue placeholder="Subject" />
+                                  <SelectValue placeholder="Special Note" />
                                 </SelectTrigger>
                                 <SelectContent>
                                   {getProductSubjects(row.product).map((subj) => (
@@ -2114,7 +2100,7 @@ export default function ClosedSalesPage() {
                                 }}
                               >
                                 <SelectTrigger className="h-9 text-sm bg-white border-slate-200 min-w-[7.5rem] w-auto">
-                                  <SelectValue placeholder="Level" />
+                                  <SelectValue placeholder="Term / Level" />
                                 </SelectTrigger>
                                 <SelectContent>
                                   {levels.map((level) => (

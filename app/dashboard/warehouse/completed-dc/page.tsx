@@ -23,6 +23,7 @@ import { fetchDcInvoiceData, type DcInvoiceData } from '@/lib/dcInvoiceData'
 import DcInvoiceViewDialog from '@/components/dc/DcInvoiceViewDialog'
 import StockReturnFromCompletedDcDialog from '@/components/warehouse/StockReturnFromCompletedDcDialog'
 import { toast } from 'sonner'
+import { dcRowCategoryOrDefault, isSpecimenRow } from '@/lib/dcRowCategory'
 import { Pencil, X, Upload, FileText, Download, Loader2 } from 'lucide-react'
 import jsPDF from 'jspdf'
 import { sortDcsNewestFirst } from '@/lib/dcListSort'
@@ -790,16 +791,9 @@ export default function CompletedDCPage() {
       const groupedProducts: any[] = []
       productDetails.forEach((p: any) => {
         const classNum = p.class || '1'
-        // Determine student type from category field
-        // If category contains "New" or is "New Students", use "New Students", otherwise "Existing Students"
-        let studentType = 'Existing Students'
-        if (p.category) {
-          if (p.category.toLowerCase().includes('new') || p.category === 'New Students') {
-            studentType = 'New Students'
-          } else {
-            studentType = 'Existing Students'
-          }
-        }
+        const studentType = fullDC.dcType === 'shortage'
+          ? 'Shortage'
+          : isSpecimenRow(p) ? 'Training Material' : dcRowCategoryOrDefault(p.category)
         const productName = p.productName || p.product || ''
         const quantity = p.quantity || 0
         
@@ -812,6 +806,12 @@ export default function CompletedDCPage() {
           })
         }
       })
+      // Abacus kits ship as Training Material rows (no class).
+      const abacusKit = fullDC.abacusMaterials || {}
+      ;[['Student Abacus', abacusKit.studentAbacusQuantity], ['Master Abacus', abacusKit.masterAbacusQuantity], ['Flash Cards', abacusKit.flashCardSetsQuantity]]
+        .forEach(([product, qty]) => {
+          if (Number(qty) > 0) groupedProducts.push({ class: 'NA', studentType: 'Training Material', product: `Abacus ${product}`, qty: Number(qty) })
+        })
 
       // Calculate total quantity
       const totalQty = groupedProducts.reduce((sum, p) => sum + (p.qty || 0), 0)
@@ -893,7 +893,7 @@ export default function CompletedDCPage() {
       const tableStartY = yPos
       const tableWidth = pageWidth - 20
       const colWidths = [20, 45, 90, 25]
-      const colHeaders = ['Class', 'Student Type', 'Product', 'Qty']
+      const colHeaders = ['Class', 'Category', 'Product', 'Qty']
       const colX = [leftX, leftX + colWidths[0], leftX + colWidths[0] + colWidths[1], leftX + colWidths[0] + colWidths[1] + colWidths[2]]
 
       // Table Header

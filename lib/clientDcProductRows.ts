@@ -7,6 +7,11 @@ const STUDENT_ENROLLMENT_CATEGORIES = [
   'Both',
   'New School',
   'Existing School',
+  'Old Students',
+  'Training Material',
+  'Training-Material',
+  'Shortage',
+  'Excess',
 ] as const
 
 function isStudentEnrollmentCategory(cat: string) {
@@ -70,7 +75,8 @@ export function productLineIdentityKey(p: Record<string, any>): string {
   const term = String(p.term ?? '')
     .trim()
     .toLowerCase()
-  return [product, klass, section, program, stream, level, specs, productCategory, subject, term].join('|')
+  const itemType = String(p.itemType ?? '').trim().toLowerCase()
+  return [product, klass, section, program, stream, level, specs, productCategory, subject, term, ...(itemType ? [itemType] : [])].join('|')
 }
 
 export function productRowLineId(p: Record<string, any> | null | undefined): string {
@@ -321,7 +327,8 @@ export function poRowCompositeKey(p: Record<string, any>): string {
   const subject = blankPoPart(p.subject)
   const level = blankPoPart(p.level)
   const specs = blankPoPart(p.specs)
-  return [product, klass, subject, level, specs].join('|')
+  const itemType = blankPoPart(p.itemType)
+  return [product, klass, subject, level, specs, ...(itemType ? [itemType] : [])].join('|')
 }
 
 function productClassLevelKey(p: Record<string, any>): string {
@@ -562,6 +569,7 @@ function mapToClientDCProductRow(
     productCategory: resolved.productCategory,
     specs: resolved.specs,
     category: raw.category,
+    itemType: raw.itemType || undefined,
     quantity: quantityNum,
     strength: strengthNum,
     level: displayProductLevel(raw.level),

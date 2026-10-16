@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useProducts } from '@/hooks/useProducts'
 import { toast } from 'sonner'
+import { DC_ROW_CATEGORIES, canonicalDcRowCategory } from '@/lib/dcRowCategory'
 import { keepMyClientsOwnedProductRows } from '@/lib/clientDcProductRows'
 import { resolveExistingProductTerm } from '@/lib/productTerm'
 import { sortDcsNewestFirst } from '@/lib/dcListSort'
@@ -175,17 +176,7 @@ export default function PendingDCPage() {
   const [productRows, setProductRows] = useState<ProductRow[]>([])
   
   const availableClasses = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
-  const categoryOptions = [
-    'NA',
-    'Training Mterial',
-    'new Students',
-    'Old Students',
-    'Excess',
-    'Exchange',
-    'Shortage',
-    'Excess-OldStudents',
-    'Excess NewStudents',
-  ]
+  const categoryOptions: string[] = [...DC_ROW_CATEGORIES]
   const { productNames: availableProducts, getProductLevels, getDefaultLevel, getProductSpecs, getProductSubjects, getProductCategories, hasProductCategories, hasProductSpecs } = useProducts()
   const availableDCCategories = ['Term 1', 'Term 2', 'Term 3', 'Full Year']
 
@@ -339,18 +330,12 @@ export default function PendingDCPage() {
           const isStudentCategory = (v: any) => studentCategoryValues.some(sc => normalizeSku(sc) === normalizeSku(v))
 
           const normalizeCategory = (v: string) => {
-            if (!v) return ''
-            if (v === 'New Students') return 'new Students'
-            if (v === 'Existing Students') return 'Old Students'
-            if (v === 'Both') return 'NA'
-            if (v === 'New School') return 'new Students'
-            if (v === 'Existing School') return 'Old Students'
-            return v
+            return canonicalDcRowCategory(v)
           }
 
           const normalizedCategory = normalizeCategory(rawCategory)
           const defaultCategory =
-            mergedDC.school_type === 'Existing' ? 'Old Students' : 'new Students'
+            'New Students'
           const finalCategory = isShortageDc
             ? 'Shortage'
             : categoryOptions.includes(normalizedCategory)
@@ -449,9 +434,7 @@ export default function PendingDCPage() {
                 class: p.class || '1',
                 category: isShortageDc
                   ? 'Shortage'
-                  : mergedDC.school_type === 'Existing'
-                    ? 'Old Students'
-                    : 'new Students',
+                  : 'New Students',
                 productCategory: finalProductCategory || undefined,
                 productName: matchedProduct, // Use matched product
                 quantity: Number(p.quantity) || 0,
@@ -493,9 +476,7 @@ export default function PendingDCPage() {
           class: '1',
           category: isShortageDc
             ? 'Shortage'
-            : mergedDC?.school_type === 'Existing'
-              ? 'Old Students'
-              : 'new Students',
+            : 'New Students',
           productCategory: undefined,
           productName: matchedProduct, // Use matched product
           quantity: fallbackQuantity,
@@ -1061,12 +1042,12 @@ export default function PendingDCPage() {
                   <tr className="bg-gray-100 border-b">
                     <th className="py-2 px-3 text-left border-r text-gray-900">Product</th>
                     <th className="py-2 px-3 text-left border-r text-gray-900">Class</th>
-                    <th className="py-2 px-3 text-left border-r text-gray-900">Product Category</th>
-                    <th className="py-2 px-3 text-left border-r text-gray-900">Category</th>
+                    <th className="py-2 px-3 text-left border-r text-gray-900">Series</th>
+                    <th className="py-2 px-3 text-left border-r text-gray-900">Enrollment Category</th>
                     <th className="py-2 px-3 text-left border-r text-gray-900">Specs</th>
-                    <th className="py-2 px-3 text-left border-r text-gray-900">Subject</th>
+                    <th className="py-2 px-3 text-left border-r text-gray-900">Special Notes</th>
                     <th className="py-2 px-3 text-left border-r text-gray-900">Strength</th>
-                    <th className="py-2 px-3 text-left border-r text-gray-900">Level</th>
+                    <th className="py-2 px-3 text-left border-r text-gray-900">Term / Level</th>
                     <th className="py-2 px-3 text-center text-gray-900">Action</th>
                   </tr>
                 </thead>
@@ -1131,7 +1112,7 @@ export default function PendingDCPage() {
                             }}
                           >
                             <SelectTrigger className="h-8 text-xs bg-white">
-                              <SelectValue placeholder="Prod Category" />
+                              <SelectValue placeholder="Select Series" />
                             </SelectTrigger>
                             <SelectContent>
                             {(() => {
@@ -1189,7 +1170,7 @@ export default function PendingDCPage() {
                             setProductRows(updated)
                           }}>
                             <SelectTrigger className="h-8 text-xs bg-white">
-                              <SelectValue placeholder="Select Subject" />
+                              <SelectValue placeholder="Select Special Note" />
                             </SelectTrigger>
                             <SelectContent>
                               {getProductSubjects(row.product).map(subject => (

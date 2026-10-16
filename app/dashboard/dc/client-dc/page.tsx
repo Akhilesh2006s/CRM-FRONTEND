@@ -54,6 +54,7 @@ import {
   editPoHasNewCommercialLines,
   dedupeSavedPoRows,
   requestDcRowQuantity,
+  productLineIdentityKey,
   type ResolveClientDCRowOpts,
 } from '@/lib/clientDcProductRows'
 import {
@@ -62,6 +63,9 @@ import {
   type RequestDcTermRouting,
 } from '@/lib/clientDcTermPartition'
 import { useRouter } from 'next/navigation'
+import { abacusStudentStrength, defaultMasterAbacusQuantity } from '@/lib/abacusMaterials'
+import { AbacusMaterialsFields } from '@/components/dc/AbacusMaterialsFields'
+import { DC_ROW_CATEGORIES, DC_ROW_CATEGORY_BILLING, buildSpecimenRows, dcRowCategoryOrDefault, isSpecimenRow } from '@/lib/dcRowCategory'
 
 type DC = {
   _id: string
@@ -257,12 +261,17 @@ export default function ClientDCPage() {
     strength: number
     level: string
     term: string
+    // Billing category: New Students / Training Material / Shortage / Excess
+    category?: string
+    itemType?: string
   }>>([])
   const [dcDate, setDcDate] = useState('')
   const [dcRemarks, setDcRemarks] = useState('')
   const [dcCategory, setDcCategory] = useState('')
   const [dcNotes, setDcNotes] = useState('')
   const [dcPoPhotoUrl, setDcPoPhotoUrl] = useState('')
+  const [requestMasterQuantity, setRequestMasterQuantity] = useState<string | null>(null)
+  const [requestMasterUnitPrice, setRequestMasterUnitPrice] = useState('')
   /** Resolved API origin for PO preview (never raw :5000 /uploads URLs). */
   const dcPoDisplayUrl = dcPoPhotoUrl ? resolveUploadUrl(dcPoPhotoUrl) : ''
   const [savingClientDC, setSavingClientDC] = useState(false)
@@ -273,6 +282,10 @@ export default function ClientDCPage() {
     () => partitionRowsByTerm(dcProductRows),
     [dcProductRows]
   )
+  // Abacus materials stay editable only on the school's first new-school DC (the one that carries them).
+  const requestAbacusStrength = selectedDC?.abacusMaterials ? abacusStudentStrength(dcProductRows) : 0
+  const requestMasterQuantityValue = requestMasterQuantity === null || requestMasterQuantity === ''
+    ? defaultMasterAbacusQuantity(requestAbacusStrength) : Number(requestMasterQuantity) || 0
   const [shortageDialogOpen, setShortageDialogOpen] = useState(false)
   const [shortageParentDC, setShortageParentDC] = useState<DC | null>(null)
   const [shortageNotes, setShortageNotes] = useState('')
@@ -1355,7 +1368,20 @@ export default function ClientDCPage() {
             ? dcDeduped
             : poDeduped
 
-      const productsToShow = toRequestDcRows(thisDetails)
+      // Saved PO rows carry no billing category or specimen copies — restore both from this DC.
+      const savedDcRows: any[] = Array.isArray(fullDC.productDetails) ? fullDC.productDetails : []
+      const savedCategoryByKey = new Map(
+        savedDcRows.map((p: any) => [productLineIdentityKey(p), p.category] as const)
+      )
+      const shownRows = toRequestDcRows(thisDetails.filter((p: any) => !isSpecimenRow(p)))
+        .map((row: any) => ({
+          ...row,
+          category: dcRowCategoryOrDefault(savedCategoryByKey.get(productLineIdentityKey(row)) ?? row.category),
+        }))
+      const savedSpecimens = savedDcRows.filter((p: any) => isSpecimenRow(p))
+      const productsToShow = savedSpecimens.length
+        ? [...shownRows, ...toRequestDcRows(savedSpecimens).map((row: any) => ({ ...row, category: 'Training Material' }))]
+        : shownRows
       setDcProductRows(productsToShow)
 
       setDcDate(fullDC.dcDate ? new Date(fullDC.dcDate).toISOString().split('T')[0] : '')
@@ -1363,6 +1389,8 @@ export default function ClientDCPage() {
       setDcCategory(fullDC.dcCategory || '')
       setDcNotes(fullDC.dcNotes || '')
       setDcPoPhotoUrl(fullDC.poPhotoUrl || '')
+      setRequestMasterQuantity(fullDC.abacusMaterials ? String(fullDC.abacusMaterials.masterAbacusQuantity ?? '') : null)
+      setRequestMasterUnitPrice(fullDC.abacusMaterials?.masterAbacusUnitPrice ? String(fullDC.abacusMaterials.masterAbacusUnitPrice) : '')
     } catch (e) {
       console.error('Failed to load DC details:', e)
       const fallbackDetails = (savedPoProducts || [])
@@ -1374,6 +1402,8 @@ export default function ClientDCPage() {
       setDcCategory('')
       setDcNotes('')
       setDcPoPhotoUrl(dc.poPhotoUrl || '')
+      setRequestMasterQuantity(null)
+      setRequestMasterUnitPrice('')
     }
     
     setClientDCDialogOpen(true)
@@ -1617,7 +1647,7 @@ export default function ClientDCPage() {
       (r) => hasProductCategories(r.product) && !(r.productCategory && String(r.productCategory).trim())
     )
     if (missingSku) {
-      toast.error(`Select a product category for ${missingSku.product || 'each product'} with shortage quantity.`)
+      toast.error(`Select a series for ${missingSku.product || 'each product'} with shortage quantity.`)
       return
     }
 
@@ -1759,6 +1789,11 @@ export default function ClientDCPage() {
       return
     }
 
+    if (requestAbacusStrength > 0 && requestMasterQuantityValue > 0 && requestAbacusStrength < 100 && !(Number(requestMasterUnitPrice) > 0)) {
+      toast.error('Enter a Master Abacus price when adding it below 100 students.')
+      return
+    }
+
     setSavingClientDC(true)
     try {
       const defaultStudentCategory =
@@ -1777,7 +1812,8 @@ export default function ClientDCPage() {
           lineId: ensureProductLineId(row),
           product: row.product || '',
           class: row.class || '1',
-          category: normalizeStudentCategory(row.category) || defaultStudentCategory,
+          category: dcRowCategoryOrDefault(row.category),
+          itemType: row.itemType || undefined,
           productCategory: row.productCategory || undefined,
           specs: persistEditPoSpecs(row.product_name || row.product, row.specs),
           subject: row.subject || undefined,
@@ -1811,6 +1847,10 @@ export default function ClientDCPage() {
         productDetails: productDetails,
         requestedQuantity: totalQuantity,
       }
+      const abacusMaterialsFor = (rows: any[]) => requestAbacusStrength > 0 && abacusStudentStrength(rows) > 0
+        ? { abacusMaterials: { masterAbacusQuantity: requestMasterQuantityValue, masterAbacusUnitPrice: Number(requestMasterUnitPrice) || 0 } }
+        : {}
+      Object.assign(updatePayload, abacusMaterialsFor(productDetails))
 
       // Update PO photo if provided
       if (dcPoPhotoUrl) {
@@ -1831,6 +1871,7 @@ export default function ClientDCPage() {
           requestedQuantity: term1Quantity,
           // Stay po_submitted until admin/coordinator raises from Closed Sales → then pending_dc
           status: 'po_submitted',
+          ...abacusMaterialsFor(term1Products),
         }
         if (dcPoPhotoUrl) {
           term1Payload.poPhotoUrl = dcPoPhotoUrl
@@ -1909,7 +1950,7 @@ export default function ClientDCPage() {
       // Calculate total amount from productDetails - ALWAYS get prices from DcOrder products
       let totalAmount = 0
       let paymentBreakdown: any[] = []
-      let requestMaterials: any = selectedDC.abacusMaterials
+      let requestMaterials: any = updatedDC?.abacusMaterials || selectedDC.abacusMaterials
       
       // Always try to get prices from DcOrder products first (most accurate)
       if (selectedDC.dcOrderId) {
@@ -3729,7 +3770,7 @@ export default function ClientDCPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Product</TableHead>
-                  <TableHead>Product Category</TableHead>
+                  <TableHead>Series</TableHead>
                   <TableHead>Class</TableHead>
                   <TableHead>Ordered</TableHead>
                   <TableHead>Delivered</TableHead>
@@ -3753,7 +3794,7 @@ export default function ClientDCPage() {
                           }}
                         >
                           <SelectTrigger className="h-8 text-xs">
-                            <SelectValue placeholder="Select category" />
+                            <SelectValue placeholder="Select Series" />
                           </SelectTrigger>
                           <SelectContent>
                             {(() => {
@@ -4100,6 +4141,25 @@ export default function ClientDCPage() {
                         disabled
                       />
                     </td>
+                    <td className="py-2 px-3 border-r min-w-[190px]">
+                      {isSpecimenRow(row) ? (
+                        <span className="text-xs">Training Material · Specimen copy (No billing)</span>
+                      ) : (
+                        <Select
+                          value={dcRowCategoryOrDefault(row.category)}
+                          onValueChange={(value) =>
+                            setDcProductRows((rows) => rows.map((r) => (r.id === row.id ? { ...r, category: value } : r)))
+                          }
+                        >
+                          <SelectTrigger className="h-10 text-sm"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {DC_ROW_CATEGORIES.map((cat) => (
+                              <SelectItem key={cat} value={cat}>{cat} ({DC_ROW_CATEGORY_BILLING[cat]})</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </td>
                     <td className="py-3 px-4 border-r">
                       <Input
                         type="text"
@@ -4162,17 +4222,18 @@ export default function ClientDCPage() {
                           <tr className="bg-neutral-100 border-b">
                             <th className="py-3 px-4 text-left text-sm font-semibold border-r">Product</th>
                             <th className="py-3 px-4 text-left text-sm font-semibold border-r">Class</th>
-                            <th className="py-3 px-4 text-left text-sm font-semibold border-r">Product Category</th>
+                            <th className="py-3 px-4 text-left text-sm font-semibold border-r">Category</th>
+                            <th className="py-3 px-4 text-left text-sm font-semibold border-r">Series</th>
                             <th className="py-3 px-4 text-left text-sm font-semibold border-r">Specs</th>
                             <th className="py-3 px-4 text-left text-sm font-semibold border-r">Strength</th>
-                            <th className="py-3 px-4 text-left text-sm font-semibold border-r">Level</th>
+                            <th className="py-3 px-4 text-left text-sm font-semibold border-r">Term / Level</th>
                           </tr>
                         </thead>
                         <tbody>
                           {dcProductRows.map((row) => renderProductRow(row))}
                         {/* Total Row */}
                         <tr className="border-t-2 border-neutral-300 bg-neutral-100 font-semibold">
-                          <td colSpan={4} className="px-3 py-3 text-right">
+                          <td colSpan={5} className="px-3 py-3 text-right">
                             <span className="text-neutral-700">Total:</span>
                           </td>
                           <td className="px-3 py-3 text-right">
@@ -4211,17 +4272,18 @@ export default function ClientDCPage() {
                               <tr className="bg-neutral-100 border-b">
                                 <th className="py-3 px-4 text-left text-sm font-semibold border-r">Product</th>
                                 <th className="py-3 px-4 text-left text-sm font-semibold border-r">Class</th>
-                                <th className="py-3 px-4 text-left text-sm font-semibold border-r">Product Category</th>
+                                <th className="py-3 px-4 text-left text-sm font-semibold border-r">Category</th>
+                                <th className="py-3 px-4 text-left text-sm font-semibold border-r">Series</th>
                                 <th className="py-3 px-4 text-left text-sm font-semibold border-r">Specs</th>
                                 <th className="py-3 px-4 text-left text-sm font-semibold border-r">Strength</th>
-                                <th className="py-3 px-4 text-left text-sm font-semibold border-r">Level</th>
+                                <th className="py-3 px-4 text-left text-sm font-semibold border-r">Term / Level</th>
                               </tr>
                             </thead>
                             <tbody>
                               {term1Products.map((row) => renderProductRow(row))}
                               {/* Total Row for Term 1 */}
                               <tr className="border-t-2 border-neutral-300 bg-neutral-100 font-semibold">
-                                <td colSpan={5} className="px-3 py-3 text-right">
+                                <td colSpan={6} className="px-3 py-3 text-right">
                                   <span className="text-neutral-700">Total:</span>
                                 </td>
                                 <td className="px-3 py-3 text-right">
@@ -4248,17 +4310,18 @@ export default function ClientDCPage() {
                               <tr className="bg-neutral-100 border-b">
                                 <th className="py-3 px-4 text-left text-sm font-semibold border-r">Product</th>
                                 <th className="py-3 px-4 text-left text-sm font-semibold border-r">Class</th>
-                                <th className="py-3 px-4 text-left text-sm font-semibold border-r">Product Category</th>
+                                <th className="py-3 px-4 text-left text-sm font-semibold border-r">Category</th>
+                                <th className="py-3 px-4 text-left text-sm font-semibold border-r">Series</th>
                                 <th className="py-3 px-4 text-left text-sm font-semibold border-r">Specs</th>
                                 <th className="py-3 px-4 text-left text-sm font-semibold border-r">Strength</th>
-                                <th className="py-3 px-4 text-left text-sm font-semibold border-r">Level</th>
+                                <th className="py-3 px-4 text-left text-sm font-semibold border-r">Term / Level</th>
                               </tr>
                             </thead>
                             <tbody>
                               {term2Products.map((row) => renderProductRow(row))}
                               {/* Total Row for Term 2 */}
                               <tr className="border-t-2 border-neutral-300 bg-neutral-100 font-semibold">
-                                <td colSpan={5} className="px-3 py-3 text-right">
+                                <td colSpan={6} className="px-3 py-3 text-right">
                                   <span className="text-neutral-700">Total:</span>
                                 </td>
                                 <td className="px-3 py-3 text-right">
@@ -4327,6 +4390,40 @@ export default function ClientDCPage() {
                   </p>
                 )}
               </div>
+            )}
+
+            {dcProductRows.some((row) => !isSpecimenRow(row)) && (
+              <label className="flex items-start gap-3 rounded-lg border p-4 cursor-pointer">
+                <Checkbox
+                  checked={dcProductRows.some((row) => isSpecimenRow(row))}
+                  onCheckedChange={(checked) =>
+                    setDcProductRows((rows) => {
+                      const books = rows.filter((row) => !isSpecimenRow(row))
+                      return checked
+                        ? [...books, ...buildSpecimenRows(books).map((row, i) => ({ ...row, id: `specimen-${Date.now()}-${i}` }))]
+                        : books
+                    })
+                  }
+                />
+                <span>
+                  <span className="font-semibold block">Specimen copies requested</span>
+                  <span className="text-xs text-neutral-600">
+                    Adds one copy of each selected book for every class as Training Material (no billing).
+                  </span>
+                </span>
+              </label>
+            )}
+
+            {requestAbacusStrength > 0 && (
+              <AbacusMaterialsFields
+                studentQuantity={requestAbacusStrength}
+                masterQuantity={requestMasterQuantityValue}
+                masterQuantityInput={requestMasterQuantity ?? String(requestMasterQuantityValue)}
+                onMasterQuantityChange={setRequestMasterQuantity}
+                masterUnitPrice={requestMasterUnitPrice}
+                onMasterUnitPriceChange={setRequestMasterUnitPrice}
+                hint={`Default Master Abacus: ${defaultMasterAbacusQuantity(requestAbacusStrength)}. Adjust the quantity if required. Below 100 students, an added Master Abacus must have a price.`}
+              />
             )}
 
           </div>
@@ -4687,7 +4784,7 @@ export default function ClientDCPage() {
                                 }}
                               >
                                 <SelectTrigger className="w-full">
-                                  <SelectValue placeholder="Select category" />
+                                  <SelectValue placeholder="Select Series" />
                                 </SelectTrigger>
                                 <SelectContent>
                                   {options.map((cat) => (
@@ -4936,10 +5033,10 @@ export default function ClientDCPage() {
                           <TableHeader>
                             <TableRow>
                               <TableHead>Product Name</TableHead>
-                              <TableHead>Product Category</TableHead>
+                              <TableHead>Series</TableHead>
                               <TableHead>Class</TableHead>
-                              <TableHead>Subject</TableHead>
-                              <TableHead>Level</TableHead>
+                              <TableHead>Special Notes</TableHead>
+                              <TableHead>Term / Level</TableHead>
                               <TableHead>Specs</TableHead>
                               <TableHead>Quantity</TableHead>
                               <TableHead>Unit Price</TableHead>
@@ -4984,10 +5081,10 @@ export default function ClientDCPage() {
                             <TableHeader>
                               <TableRow>
                                 <TableHead>Product Name</TableHead>
-                                <TableHead>Product Category</TableHead>
+                                <TableHead>Series</TableHead>
                                 <TableHead>Class</TableHead>
-                                <TableHead>Subject</TableHead>
-                                <TableHead>Level</TableHead>
+                                <TableHead>Special Notes</TableHead>
+                                <TableHead>Term / Level</TableHead>
                                 <TableHead>Specs</TableHead>
                                 <TableHead>Quantity</TableHead>
                                 <TableHead>Unit Price</TableHead>
@@ -5018,10 +5115,10 @@ export default function ClientDCPage() {
                             <TableHeader>
                               <TableRow>
                                 <TableHead>Product Name</TableHead>
-                                <TableHead>Product Category</TableHead>
+                                <TableHead>Series</TableHead>
                                 <TableHead>Class</TableHead>
-                                <TableHead>Subject</TableHead>
-                                <TableHead>Level</TableHead>
+                                <TableHead>Special Notes</TableHead>
+                                <TableHead>Term / Level</TableHead>
                                 <TableHead>Specs</TableHead>
                                 <TableHead>Quantity</TableHead>
                                 <TableHead>Unit Price</TableHead>
@@ -5157,7 +5254,7 @@ export default function ClientDCPage() {
                         {hasCategories && (
                           <div className="mt-2 pt-2 border-t">
                             <Label className="text-xs font-semibold mb-2 block">
-                              Select Product Category: *
+                              Select Series: *
                             </Label>
                             <div className="flex flex-wrap gap-2">
                               {productCategories.map((cat) => {
@@ -5314,7 +5411,7 @@ export default function ClientDCPage() {
                         {hasCategories && (
                           <div className="mt-2 pt-2 border-t">
                             <Label className="text-xs font-semibold mb-2 block">
-                              Select Product Category: *
+                              Select Series: *
                             </Label>
                             <div className="flex flex-wrap gap-2">
                               {productCategories.map((cat) => {

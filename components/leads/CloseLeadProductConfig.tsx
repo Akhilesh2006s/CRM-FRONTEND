@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -73,6 +73,8 @@ export type CloseLeadProductConfigProps = {
   /** Hide the ADD PRODUCTS trigger button (dialog can still be opened via config). */
   hideTrigger?: boolean
   className?: string
+  /** Extra form content rendered inside the dialog, below the product table (e.g. Abacus materials). */
+  dialogExtra?: ReactNode
 }
 
 function CloseLeadProductConfigView({
@@ -81,12 +83,14 @@ function CloseLeadProductConfigView({
   onReady,
   hideTrigger = false,
   className,
+  dialogExtra,
 }: {
   cfg: CloseLeadProductConfigApi
   onChange?: (details: ProductDetailRow[], sections: CloseProductSection[]) => void
   onReady?: (api: CloseLeadProductConfigApi) => void
   hideTrigger?: boolean
   className?: string
+  dialogExtra?: ReactNode
 }) {
   useEffect(() => {
     onReady?.(cfg)
@@ -504,7 +508,7 @@ function CloseLeadProductConfigView({
 
                               {!isIit && productLevels.length > 0 && (
                                 <div className="space-y-2 border-t pt-2">
-                                  <Label className="text-xs font-semibold">Select Levels:</Label>
+                                <Label className="text-xs font-semibold">Select Term / Level:</Label>
                                   <div className="flex flex-wrap gap-2">
                                     {productLevels.map((lvl) => (
                                       <div key={lvl} className="flex items-center space-x-1">
@@ -738,7 +742,7 @@ function CloseLeadProductConfigView({
                               {!isIit && hasSubjects && productSubjects.length > 0 && (
                                 <div className="mt-2 pt-2 border-t">
                                   <Label className="text-xs font-semibold mb-2 block">
-                                    Select Subjects:
+                                    Select Special Notes:
                                   </Label>
                                   <div className="flex flex-wrap gap-2">
                                     {productSubjects.map((subject) => (
@@ -771,7 +775,7 @@ function CloseLeadProductConfigView({
                               {!isIit && hasProductCategories(line.product) && productCategories.length > 0 && (
                                 <div className="mt-2 pt-2 border-t">
                                   <Label className="text-xs font-semibold mb-2 block">
-                                    Select Product Category:
+                                    Select Series:
                                   </Label>
                                   <div className="flex flex-wrap gap-2">
                                     {productCategories.map((category) => (
@@ -818,11 +822,11 @@ function CloseLeadProductConfigView({
                     <thead className="bg-neutral-100">
                       <tr>
                         <th className="px-3 py-2 text-left">Product</th>
-                        <th className="px-3 py-2 text-left">Level</th>
+                        <th className="px-3 py-2 text-left">Term / Level</th>
                         <th className="px-3 py-2 text-left">Class</th>
-                        <th className="min-w-[280px] px-3 py-2 text-left">Product Category</th>
+                        <th className="min-w-[280px] px-3 py-2 text-left">Series</th>
                         {showSpecsColumn && <th className="px-3 py-2 text-left">Specs</th>}
-                        {showSubjectsColumn && <th className="px-3 py-2 text-left">Subjects</th>}
+                        {showSubjectsColumn && <th className="px-3 py-2 text-left">Special Notes</th>}
                         <th className="px-3 py-2 text-left">Quantity (Strength) *</th>
                         <th className="px-3 py-2 text-left">Action</th>
                       </tr>
@@ -929,6 +933,7 @@ function CloseLeadProductConfigView({
                 </div>
               </div>
             )}
+            {dialogExtra}
           </div>
 
           <DialogFooter>
@@ -960,6 +965,7 @@ function CloseLeadProductConfigInternal({
   onReady,
   hideTrigger,
   className,
+  dialogExtra,
 }: Omit<CloseLeadProductConfigProps, 'config'>) {
   const cfg = useCloseLeadProductConfig({ schoolType })
   return (
@@ -969,6 +975,7 @@ function CloseLeadProductConfigInternal({
       onReady={onReady}
       hideTrigger={hideTrigger}
       className={className}
+      dialogExtra={dialogExtra}
     />
   )
 }
@@ -985,6 +992,7 @@ export function CloseLeadProductConfig({
   onReady,
   hideTrigger,
   className,
+  dialogExtra,
 }: CloseLeadProductConfigProps) {
   if (config) {
     return (
@@ -994,6 +1002,7 @@ export function CloseLeadProductConfig({
         onReady={onReady}
         hideTrigger={hideTrigger}
         className={className}
+        dialogExtra={dialogExtra}
       />
     )
   }
@@ -1004,6 +1013,7 @@ export function CloseLeadProductConfig({
       onReady={onReady}
       hideTrigger={hideTrigger}
       className={className}
+      dialogExtra={dialogExtra}
     />
   )
 }
