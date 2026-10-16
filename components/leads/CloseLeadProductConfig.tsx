@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/collapsible'
 import { Package, PlusCircle, X, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
-import { IIT_STREAM_OPTIONS, canonicalIitStream } from '@/lib/iitStreams'
+import { DEFAULT_IIT_STREAMS, iitStreamLabel, matchIitStream } from '@/lib/iitStreams'
 import {
   specsFromCatalog,
   getLineClassSelections,
@@ -118,6 +118,7 @@ function CloseLeadProductConfigView({
     getProductClasses,
     getProductSpecs,
     getProductSubjects,
+    getProductStreams,
     hasProductSubjects,
     getProductCategories,
     hasProductCategories,
@@ -276,6 +277,8 @@ function CloseLeadProductConfigView({
                         const isOpen = expandedLineBySection[section.id] === line.id
                         const lineClasses = getLineClassSelections(line, section)
                         const isIit = isIitProduct(line.product)
+                        const configuredStreams = isIit ? getProductStreams(line.product) : []
+                        const streamOptions = configuredStreams.length ? configuredStreams : DEFAULT_IIT_STREAMS
                         const classSummary =
                           isIit ? (line.iitAssignments || []).map((row) =>
                             `Cl ${row.class}${row.section && row.section !== 'ALL' ? row.section : ''} ${row.program} (${row.strength})`
@@ -346,13 +349,13 @@ function CloseLeadProductConfigView({
                                         <div><Label className="text-xs">Section</Label><Input aria-label="IIT section" value={row.section === 'ALL' ? '' : row.section} onChange={(e) => change({ section: e.target.value.toUpperCase() })} placeholder="A / all" /></div>
                                         <div><Label className="text-xs">Program *</Label><Input aria-label="IIT program" value={row.program} onChange={(e) => change({ program: e.target.value })} list={`iit-programs-${line.id}`} placeholder="Prime" /></div>
                                         <div><Label className="text-xs">Stream *</Label>
-                                          <Select value={canonicalIitStream(row.stream) || undefined} onValueChange={(value) => change({ stream: value })}>
+                                          <Select value={matchIitStream(row.stream, streamOptions) || undefined} onValueChange={(value) => change({ stream: value })}>
                                             <SelectTrigger aria-label="IIT stream"><SelectValue placeholder="Select stream" /></SelectTrigger>
                                             <SelectContent>
-                                              {IIT_STREAM_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
+                                              {streamOptions.map((option) => <SelectItem key={option} value={option}>{iitStreamLabel(option)}</SelectItem>)}
                                             </SelectContent>
                                           </Select>
-                                          {row.stream && !canonicalIitStream(row.stream) && <p className="text-xs text-red-600 mt-1">&quot;{row.stream}&quot; is not a standard stream. Select one.</p>}
+                                          {row.stream && !matchIitStream(row.stream, streamOptions) && <p className="text-xs text-red-600 mt-1">&quot;{row.stream}&quot; is not in this product&apos;s streams. Select one.</p>}
                                         </div>
                                         <div><Label className="text-xs">Students *</Label><Input aria-label="IIT student strength" type="number" min={1} value={row.strength || ''} onChange={(e) => change({ strength: Number(e.target.value) || 0 })} /></div>
                                         <div><Label className="text-xs">Rate / student ₹ *</Label><Input aria-label="IIT unit price" type="number" min={0} step="0.01" value={row.unitPrice || ''} onChange={(e) => change({ unitPrice: Number(e.target.value) || 0 })} /></div>

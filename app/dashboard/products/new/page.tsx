@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { apiRequest } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
+import { ProductStreamsField } from '@/components/products/ProductStreamsField'
 import { ArrowLeft, Save, SlidersHorizontal } from 'lucide-react'
 import Link from 'next/link'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -37,6 +38,7 @@ export default function NewProductPage() {
     newSpec: '',
     hasCategory: false,
     categories: [] as string[],
+    streams: [] as string[],
     newCategory: '',
     prodStatus: 1,
     calculationType: 'normal' as 'normal' | 'level_based' | 'subject_based',
@@ -166,7 +168,7 @@ export default function NewProductPage() {
       return
     }
     if (form.calculationType === 'subject_based' && !form.hasSubjects) {
-      setError('Subject-based payment requires Special Notes / subjects to be enabled with at least one entry')
+      setError('Subject-based payment requires at least one Special Note')
       setSubmitting(false)
       return
     }
@@ -182,6 +184,7 @@ export default function NewProductPage() {
         specs: form.hasSpecs ? form.specs : [],
         hasCategory: form.hasCategory,
         categories: form.hasCategory ? form.categories : [],
+        streams: form.streams,
         prodStatus: form.prodStatus,
         calculationType: form.calculationType,
       }
@@ -359,6 +362,8 @@ export default function NewProductPage() {
               </div>
             )}
           </div>
+
+          <ProductStreamsField value={form.streams} onChange={(streams) => setForm({ ...form, streams })} />
 
           <div className="flex items-center space-x-2">
             <Checkbox

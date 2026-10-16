@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { apiRequest } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
+import { ProductStreamsField } from '@/components/products/ProductStreamsField'
 import { PlusCircle, Edit, Search, Package, SlidersHorizontal, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -27,6 +28,7 @@ type Product = {
   specs?: string | string[] // Support both old (string) and new (array) format for backward compatibility
   hasCategory?: boolean
   categories?: string[]
+  streams?: string[]
   prodStatus: number
   calculationType?: 'normal' | 'none' | 'level_based' | 'subject_based'
   createdAt: string
@@ -63,6 +65,7 @@ export default function ProductsPage() {
     newSpec: '',
     hasCategory: false,
     categories: [] as string[],
+    streams: [] as string[],
     newCategory: '',
     prodStatus: 1,
     calculationType: 'normal' as 'normal' | 'level_based' | 'subject_based',
@@ -144,6 +147,7 @@ export default function ProductsPage() {
       newSpec: '',
       hasCategory: product.hasCategory || false,
       categories: product.categories || [],
+      streams: product.streams || [],
       newCategory: '',
       prodStatus: product.prodStatus,
       calculationType: (product.calculationType === 'none' ? 'normal' : product.calculationType) || 'normal',
@@ -168,6 +172,7 @@ export default function ProductsPage() {
       newSpec: '',
       hasCategory: false,
       categories: [],
+      streams: [],
       newCategory: '',
       prodStatus: 1,
       calculationType: 'normal',
@@ -267,7 +272,7 @@ export default function ProductsPage() {
       return
     }
     if (editForm.calculationType === 'subject_based' && !editForm.hasSubjects) {
-      toast.error('Subject-based payment requires subjects to be enabled')
+      toast.error('Subject-based payment requires at least one Special Note')
       return
     }
 
@@ -283,6 +288,7 @@ export default function ProductsPage() {
         specs: editForm.hasSpecs ? editForm.specs : [],
         hasCategory: editForm.hasCategory,
         categories: editForm.hasCategory ? editForm.categories : [],
+        streams: editForm.streams,
         prodStatus: editForm.prodStatus,
         calculationType: editForm.calculationType,
       }
@@ -366,10 +372,10 @@ export default function ProductsPage() {
               <thead>
                 <tr className="border-b border-neutral-200">
                   <th className="text-left py-3 px-4 font-semibold text-neutral-700">Product Name</th>
-                  <th className="text-left py-3 px-4 font-semibold text-neutral-700">Levels</th>
-                  <th className="text-left py-3 px-4 font-semibold text-neutral-700">Subjects</th>
+                  <th className="text-left py-3 px-4 font-semibold text-neutral-700">Term / Level</th>
+                  <th className="text-left py-3 px-4 font-semibold text-neutral-700">Special Notes</th>
                   <th className="text-left py-3 px-4 font-semibold text-neutral-700">Specs</th>
-                  <th className="text-left py-3 px-4 font-semibold text-neutral-700">Product Category</th>
+                  <th className="text-left py-3 px-4 font-semibold text-neutral-700">Series</th>
                   <th className="text-left py-3 px-4 font-semibold text-neutral-700">Status</th>
                   <th className="text-left py-3 px-4 font-semibold text-neutral-700">Created Date</th>
                   <th className="text-left py-3 px-4 font-semibold text-neutral-700">Actions</th>
@@ -526,7 +532,7 @@ export default function ProductsPage() {
             </div>
 
             <div>
-              <Label>Product Levels</Label>
+              <Label>Term / Level</Label>
               <div className="flex gap-2 mb-2">
                 <Input
                   placeholder="Enter level (e.g., L1, L2)"
@@ -556,6 +562,8 @@ export default function ProductsPage() {
               )}
             </div>
 
+            <ProductStreamsField value={editForm.streams} onChange={(streams) => setEditForm({ ...editForm, streams })} />
+
             <div className="flex items-center space-x-2">
               <Checkbox
                 id="hasSubjects"
@@ -565,22 +573,22 @@ export default function ProductsPage() {
                 }
               />
               <Label htmlFor="hasSubjects" className="cursor-pointer">
-                Has Subjects
+                Special Notes
               </Label>
             </div>
 
             {editForm.hasSubjects && (
               <div>
-                <Label>Subjects</Label>
+                <Label>Special Notes</Label>
                 <div className="flex gap-2 mb-2">
                   <Input
-                    placeholder="Enter subject name"
+                    placeholder="Enter special note"
                     value={editForm.newSubject}
                     onChange={(e) => setEditForm({ ...editForm, newSubject: e.target.value })}
                     onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addSubject())}
                   />
                   <Button type="button" onClick={addSubject} variant="outline">
-                    Add Subject
+                    Add Special Note
                   </Button>
                 </div>
                 {editForm.subjects.length > 0 && (
@@ -658,23 +666,23 @@ export default function ProductsPage() {
                 }
               />
               <Label htmlFor="hasCategory" className="cursor-pointer">
-                Has Product Category
+                Series
               </Label>
             </div>
 
             {editForm.hasCategory && (
               <div>
-                <Label>Product Categories *</Label>
+                <Label>Series *</Label>
                 <p className="text-xs text-neutral-500 mb-2">Add one or multiple product categories</p>
                 <div className="flex gap-2 mb-2">
                   <Input
-                    placeholder="Enter product category name"
+                    placeholder="Enter series name"
                     value={editForm.newCategory}
                     onChange={(e) => setEditForm({ ...editForm, newCategory: e.target.value })}
                     onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addCategory())}
                   />
                   <Button type="button" onClick={addCategory} variant="outline">
-                    Add Product Category
+                    Add Series
                   </Button>
                 </div>
                 {editForm.categories.length > 0 && (

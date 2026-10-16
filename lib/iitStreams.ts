@@ -1,27 +1,36 @@
-/** Fixed IIT subject combinations. Keep in sync with backend/utils/iitStockRows.js. */
-export const IIT_STREAM_OPTIONS = [
-  { value: 'MPC', label: 'MPC — Maths, Physics, Chemistry' },
-  { value: 'BiPC', label: 'BiPC — Biology, Physics, Chemistry' },
-  { value: 'MBiPC', label: 'MBiPC — Maths, Biology, Physics, Chemistry' },
-] as const
+/** IIT subject combinations. The list comes from the product's Streams in Products;
+ * these defaults are used only until streams are configured there. */
+export const DEFAULT_IIT_STREAMS = ['MPC', 'BiPC', 'MBiPC']
 
-const TOKENS: [string, string][] = [['bi', 'B'], ['b', 'B'], ['m', 'M'], ['p', 'P'], ['c', 'C']]
+const TOKENS: [string, string][] = [['bi', 'Biology'], ['b', 'Biology'], ['m', 'Maths'], ['p', 'Physics'], ['c', 'Chemistry']]
 
-function subjectKey(raw: string): string {
-  let rest = raw.toLowerCase().replace(/[^a-z]/g, '')
-  const letters = new Set<string>()
+/** Subjects in a combination, e.g. "MBiPC" → Maths, Biology, Physics, Chemistry; [] if unrecognised. */
+export function iitStreamSubjects(raw: unknown): string[] {
+  let rest = String(raw || '').toLowerCase().replace(/[^a-z]/g, '')
+  const subjects: string[] = []
   while (rest) {
     const match = TOKENS.find(([token]) => rest.startsWith(token))
-    if (!match) return ''
-    letters.add(match[1])
+    if (!match) return []
+    if (!subjects.includes(match[1])) subjects.push(match[1])
     rest = rest.slice(match[0].length)
   }
-  return [...letters].sort().join('')
+  return subjects
 }
 
-/** Map any spelling of a combination (e.g. "MPCBi", "mbipc") to its standard option; '' if unknown. */
-export function canonicalIitStream(raw: unknown): string {
-  const key = subjectKey(String(raw || ''))
-  if (!key) return ''
-  return IIT_STREAM_OPTIONS.find((option) => subjectKey(option.value) === key)?.value || ''
+const streamKey = (raw: unknown) => {
+  const subjects = iitStreamSubjects(raw)
+  return subjects.length ? subjects.slice().sort().join('|') : String(raw || '').trim().toLowerCase()
+}
+
+/** The configured option a stored stream corresponds to (any spelling/order of the same subjects); '' if none. */
+export function matchIitStream(raw: unknown, options: string[]): string {
+  if (!String(raw || '').trim()) return ''
+  const key = streamKey(raw)
+  return options.find((option) => streamKey(option) === key) || ''
+}
+
+/** Option label: "MBiPC — Maths, Biology, Physics, Chemistry". */
+export function iitStreamLabel(stream: string): string {
+  const subjects = iitStreamSubjects(stream)
+  return subjects.length ? `${stream} — ${subjects.join(', ')}` : stream
 }

@@ -13,6 +13,7 @@ type Product = {
   specs?: string | string[] // Support both old (string) and new (array) format
   hasCategory?: boolean
   categories?: string[]
+  streams?: string[]
   prodStatus: number
   calculationType?: 'normal' | 'none' | 'level_based' | 'subject_based'
 }
@@ -124,6 +125,11 @@ export function useProducts() {
     hasProductSubjects: (productName: string): boolean => {
       const product = products.find(p => p.productName === productName)
       return product?.hasSubjects === true && product?.subjects && Array.isArray(product.subjects) && product.subjects.length > 0
+    },
+    // IIT subject combinations configured on the product (e.g. MBiPC, MPC, M)
+    getProductStreams: (productName: string): string[] => {
+      const product = findProduct(productName)
+      return Array.isArray(product?.streams) ? product.streams.filter(Boolean) : []
     },
     // Get product categories for a specific product
     getProductCategories: (productName: string): string[] => {
