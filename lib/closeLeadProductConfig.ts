@@ -1,5 +1,6 @@
 import { computeBucketAmount, roundToTwo, type CalculationType } from '@/lib/paymentDivisor'
 import { applyPaymentDivisorsToBreakdown } from '@/lib/dcPaymentDivisors'
+import { canonicalIitStream } from '@/lib/iitStreams'
 import { normalizeProductTerm, termFromLevelLabel, type ProductTerm } from '@/lib/productTerm'
 
 /** Keep only specs that exist on the product. Falls back to the first catalog spec. */
@@ -776,7 +777,7 @@ export function expandSectionsToProductDetails(
             class: row.class.trim(),
             section: normalizeIitSection(row.section),
             program: row.program.trim(),
-            stream: row.stream.trim(),
+            stream: canonicalIitStream(row.stream) || row.stream.trim(),
             category: schoolExisting ? 'Existing Students' : 'New Students',
             productCategory: row.program.trim(),
             quantity: Number(row.strength),
@@ -1138,6 +1139,8 @@ export function validateCloseLeadProductConfig(
       for (const row of line.iitAssignments) {
         if (!/^\d+$/.test(row.class.trim()) || Number(row.class) <= 0 || !row.program.trim() || !row.stream.trim() || Number(row.strength) <= 0 || Number(row.unitPrice) <= 0)
           return { ok: false, message: 'Each IIT assignment needs class, program, stream, strength, and a unit price greater than zero.' }
+        if (!canonicalIitStream(row.stream))
+          return { ok: false, message: `IIT class ${row.class.trim()}: select a stream from the list (MPC, BiPC or MBiPC).` }
         const key = row.class.trim().toLowerCase()
         const sectionName = normalizeIitSection(row.section).toLowerCase()
         const prior = used.get(key) || new Set<string>()
