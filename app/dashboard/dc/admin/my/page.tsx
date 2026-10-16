@@ -134,7 +134,8 @@ export default function AllCreatedDCsPage() {
 
   const loadEmployees = async () => {
     try {
-      const data = await apiRequest<any[]>('/employees?isActive=true')
+      // BDEs and managers only; the API limits Coordinators to their assigned zones.
+      const data = await apiRequest<any[]>('/employees?isActive=true&scope=sales')
       const list = Array.isArray(data) ? data : []
       setAllEmployees(
         list

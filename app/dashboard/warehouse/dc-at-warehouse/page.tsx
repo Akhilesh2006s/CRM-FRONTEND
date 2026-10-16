@@ -26,6 +26,9 @@ import { consolidateStockRows } from '@/lib/warehouseStockList'
 
 type ProductDetail = {
   product: string
+  section?: string
+  program?: string
+  stream?: string
   productName?: string
   productCategory?: string
   class: string
@@ -359,7 +362,11 @@ export default function WarehouseDcAtWarehouse() {
             class: p.class || 'NA',
             category: p.category || 'Training-Material',
             specs: resolveProductMasterSpec(productName, p.specs),
-            subject: mapped.subject || undefined,
+            // IIT combination rows keep what was raised; stock matching expands the combination itself.
+            subject: p.stream ? subjectValue : mapped.subject || undefined,
+            section: p.section || undefined,
+            program: p.program || undefined,
+            stream: p.stream || undefined,
             quantity: requestedQty,
             availableQuantity: availableQty,
             deliverableQuantity: deliverableQty,
@@ -586,10 +593,13 @@ export default function WarehouseDcAtWarehouse() {
         const remainingQty = Math.max(0, availableQty - deliverableQty)
         return {
           ...p,
-          productCategory: mapped.productCategory,
-          specs: mapped.specs,
-          subject: mapped.subject || undefined,
-          level: mapped.level,
+          // IIT combination rows keep the fields entered when the DC was raised.
+          ...(p.stream ? {} : {
+            productCategory: mapped.productCategory,
+            specs: mapped.specs,
+            subject: mapped.subject || undefined,
+            level: mapped.level,
+          }),
           quantity: requiredQty,
           availableQuantity: availableQty,
           remainingQuantity: remainingQty,
@@ -623,6 +633,9 @@ export default function WarehouseDcAtWarehouse() {
             category: p.category,
             specs: p.specs || '',
             subject: p.subject || undefined,
+            section: p.section || undefined,
+            program: p.program || undefined,
+            stream: p.stream || undefined,
             quantity: p.quantity,
             availableQuantity: p.availableQuantity,
             deliverableQuantity: p.deliverableQuantity,
@@ -666,6 +679,9 @@ export default function WarehouseDcAtWarehouse() {
         category: p.category,
         specs: p.specs || '',
         subject: p.subject || undefined,
+        section: p.section || undefined,
+        program: p.program || undefined,
+        stream: p.stream || undefined,
         quantity: p.quantity,
         availableQuantity: p.availableQuantity,
         deliverableQuantity: p.deliverableQuantity,
@@ -766,10 +782,13 @@ export default function WarehouseDcAtWarehouse() {
         const deliverableQty = p.deliverableQuantity != null ? Number(p.deliverableQuantity) : requiredQty
         return {
           ...p,
-          productCategory: mapped.productCategory,
-          specs: mapped.specs,
-          subject: mapped.subject || undefined,
-          level: mapped.level,
+          // IIT combination rows keep the fields entered when the DC was raised.
+          ...(p.stream ? {} : {
+            productCategory: mapped.productCategory,
+            specs: mapped.specs,
+            subject: mapped.subject || undefined,
+            level: mapped.level,
+          }),
           quantity: requiredQty,
           availableQuantity: availableQty,
           remainingQuantity: Math.max(0, availableQty - deliverableQty),
@@ -802,6 +821,9 @@ export default function WarehouseDcAtWarehouse() {
             productCategory: p.productCategory,
             specs: p.specs || '',
             subject: p.subject || undefined,
+            section: p.section || undefined,
+            program: p.program || undefined,
+            stream: p.stream || undefined,
             quantity: p.quantity,
             availableQuantity: p.availableQuantity,
             deliverableQuantity: p.deliverableQuantity,

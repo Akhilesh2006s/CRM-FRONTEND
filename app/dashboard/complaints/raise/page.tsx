@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
+import { ticketStatusLabel } from '@/components/tickets/TicketsInbox'
 
 type Complaint = {
   _id: string
@@ -33,7 +34,7 @@ export default function RaiseComplaintPage() {
       const data = await apiRequest<Complaint[]>('/complaints/my')
       setItems(Array.isArray(data) ? data : [])
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Failed to load complaints')
+      toast.error(e instanceof Error ? e.message : 'Failed to load tickets')
       setItems([])
     } finally {
       setLoading(false)
@@ -150,7 +151,7 @@ export default function RaiseComplaintPage() {
                       ) : null}
                     </td>
                     <td className="py-2 px-3">{item.schoolName || '—'}</td>
-                    <td className="py-2 px-3">{item.status}</td>
+                    <td className="py-2 px-3">{ticketStatusLabel(item.status)}</td>
                     <td className="py-2 px-3">{new Date(item.createdAt).toLocaleDateString()}</td>
                   </tr>
                 ))

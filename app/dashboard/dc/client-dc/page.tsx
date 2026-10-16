@@ -264,6 +264,9 @@ export default function ClientDCPage() {
     // Billing category: New Students / Training Material / Shortage / Excess
     category?: string
     itemType?: string
+    section?: string
+    program?: string
+    stream?: string
   }>>([])
   const [dcDate, setDcDate] = useState('')
   const [dcRemarks, setDcRemarks] = useState('')
@@ -1814,6 +1817,9 @@ export default function ClientDCPage() {
           class: row.class || '1',
           category: dcRowCategoryOrDefault(row.category),
           itemType: row.itemType || undefined,
+          section: row.section || undefined,
+          program: row.program || undefined,
+          stream: row.stream || undefined,
           productCategory: row.productCategory || undefined,
           specs: persistEditPoSpecs(row.product_name || row.product, row.specs),
           subject: row.subject || undefined,

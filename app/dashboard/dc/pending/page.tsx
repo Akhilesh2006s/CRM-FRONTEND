@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useProducts } from '@/hooks/useProducts'
 import { toast } from 'sonner'
+import { TransportDetailsSection, canEditTransportDetails } from '@/components/dc/TransportDetailsSection'
 import { DC_ROW_CATEGORIES, canonicalDcRowCategory } from '@/lib/dcRowCategory'
 import { keepMyClientsOwnedProductRows } from '@/lib/clientDcProductRows'
 import { resolveExistingProductTerm } from '@/lib/productTerm'
@@ -125,6 +126,10 @@ type ProductRow = {
   productCategory?: string
   specs: string
   subject?: string
+  // IIT assignment identity (class section, program, stream e.g. MPC / MBiPC)
+  section?: string
+  program?: string
+  stream?: string
   strength: number
   price: number
   total: number
@@ -368,6 +373,9 @@ export default function PendingDCPage() {
             level: p.level || getDefaultLevel(matchedProduct),
             specs: p.specs || 'Regular',
             subject: p.subject || undefined,
+            section: p.section || undefined,
+            program: p.program || undefined,
+            stream: p.stream || undefined,
             price: Number(p.unit_price) || Number(p.price) || 0,
             total: Number(p.total) || 0,
             term: resolveExistingProductTerm(p),
@@ -442,6 +450,9 @@ export default function PendingDCPage() {
                 level: p.level || getDefaultLevel(matchedProduct),
                 specs: p.specs || 'Regular',
                 subject: p.subject || undefined,
+                section: p.section || undefined,
+                program: p.program || undefined,
+                stream: p.stream || undefined,
                 price: Number(p.unit_price) || Number(p.price) || 0,
                 total:
                   Number(p.total) ||
@@ -593,6 +604,9 @@ export default function PendingDCPage() {
             level: row.level,
             specs: row.specs || '',
             subject: row.subject || undefined,
+            section: row.section || undefined,
+            program: row.program || undefined,
+            stream: row.stream || undefined,
             term: row.term || 'Term 1',
             unit_price: Number(row.price) || Number(row.unit_price) || 0,
             price: Number(row.price) || Number(row.unit_price) || 0,
@@ -666,6 +680,9 @@ export default function PendingDCPage() {
             level: row.level,
             specs: row.specs || '',
             subject: row.subject || undefined,
+            section: row.section || undefined,
+            program: row.program || undefined,
+            stream: row.stream || undefined,
             term: row.term || 'Term 1',
             unit_price: Number(row.price) || Number(row.unit_price) || 0,
             price: Number(row.price) || Number(row.unit_price) || 0,
@@ -880,49 +897,27 @@ export default function PendingDCPage() {
               </div>
 
               {/* Delivery and Address Section - Transport Details */}
-              {selectedDC.dcOrderId && typeof selectedDC.dcOrderId === 'object' && (
-                <div className="border-t border-gray-200 pt-6 mt-6">
-                  <h3 className="font-semibold text-gray-900 mb-4">Delivery and Address</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label>Transport Name</Label>
-                      <Input 
-                        value={selectedDC.dcOrderId.pendingEdit?.transport_name || selectedDC.dcOrderId.transport_name || ''} 
-                        disabled 
-                        className="bg-gray-100 text-gray-900" 
-                        placeholder="Transport Name"
-                      />
-                    </div>
-                    <div>
-                      <Label>Transport Location</Label>
-                      <Input 
-                        value={selectedDC.dcOrderId.pendingEdit?.transport_location || selectedDC.dcOrderId.transport_location || ''} 
-                        disabled 
-                        className="bg-gray-100 text-gray-900" 
-                        placeholder="Transport Location"
-                      />
-                    </div>
-                    <div>
-                      <Label>Transportation Landmark</Label>
-                      <Input 
-                        value={selectedDC.dcOrderId.pendingEdit?.transportation_landmark || selectedDC.dcOrderId.transportation_landmark || ''} 
-                        disabled 
-                        className="bg-gray-100 text-gray-900" 
-                        placeholder="Transportation Landmark"
-                      />
-                    </div>
-                    <div>
-                      <Label>Pincode</Label>
-                      <Input 
-                        value={selectedDC.dcOrderId.pendingEdit?.pincode || selectedDC.dcOrderId.pincode || ''} 
-                        disabled 
-                        className="bg-gray-100 text-gray-900" 
-                        placeholder="Pincode"
-                      />
-                    </div>
+              {selectedDC.dcOrderId && typeof selectedDC.dcOrderId === 'object' && (() => {
+                const order: any = selectedDC.dcOrderId
+                const pe = order.pendingEdit || {}
+                return (
+                  <div className="border-t border-gray-200 pt-6 mt-6">
+                    <TransportDetailsSection
+                      dcOrderId={order._id}
+                      details={{
+                        transport_name: pe.transport_name || order.transport_name,
+                        transport_location: pe.transport_location || order.transport_location,
+                        transportation_landmark: pe.transportation_landmark || order.transportation_landmark,
+                        pincode: pe.pincode || order.pincode,
+                      }}
+                      canEdit={canEditTransportDetails(currentUser?.role)}
+                      onSaved={(saved) => setSelectedDC((dc: any) => dc && typeof dc.dcOrderId === 'object'
+                        ? { ...dc, dcOrderId: { ...dc.dcOrderId, ...saved, pendingEdit: { ...(dc.dcOrderId.pendingEdit || {}), ...saved } } }
+                        : dc)}
+                    />
                   </div>
-                </div>
-              )}
+                )
+              })()}
             </div>
           )}
 
@@ -1163,7 +1158,12 @@ export default function PendingDCPage() {
                         )}
                       </td>
                       <td className="py-2 px-3 border-r">
-                        {getProductSubjects(row.product).length > 0 ? (
+                        {row.stream ? (
+                          // IIT combination entered at raise (e.g. MPC / MBiPC) stays as entered.
+                          <span className="text-xs text-gray-900" title="Combination entered when the DC was raised">
+                            {row.stream}{row.section && row.section !== 'ALL' ? ` · Sec ${row.section}` : ''}
+                          </span>
+                        ) : getProductSubjects(row.product).length > 0 ? (
                           <Select value={row.subject || ''} onValueChange={(v) => {
                             const updated = [...productRows]
                             updated[idx].subject = v

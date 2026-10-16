@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useProducts } from '@/hooks/useProducts'
 import { toast } from 'sonner'
+import { TransportDetailsSection, canEditTransportDetails } from '@/components/dc/TransportDetailsSection'
 import { DC_ROW_CATEGORIES, DC_ROW_CATEGORY_BILLING, canonicalDcRowCategory, type DcRowCategory } from '@/lib/dcRowCategory'
 import { sanitizeMobileInput, validateContactMobile, validateContactPerson } from '@/lib/saleFormValidation'
 import { keepMyClientsOwnedProductRows } from '@/lib/clientDcProductRows'
@@ -248,6 +249,10 @@ export default function ClosedSalesPage() {
     productCategory?: string
     specs: string
     subject?: string
+    // IIT assignment identity (class section, program, stream e.g. MPC / MBiPC)
+    section?: string
+    program?: string
+    stream?: string
     quantity: number
     strength: number
     level: string
@@ -300,6 +305,9 @@ export default function ClosedSalesPage() {
       productCategory: matchedSku || undefined,
       specs: p.specs || 'Regular',
       subject: p.subject || undefined,
+      section: p.section || undefined,
+      program: p.program || undefined,
+      stream: p.stream || undefined,
       quantity: Number.isFinite(quantityNum) && quantityNum >= 0 ? quantityNum : 1,
       strength: Number.isFinite(strengthNum) && strengthNum >= 0 ? strengthNum : 0,
       level: p.level || getDefaultLevel(originalProduct || 'Abacus'),
@@ -901,6 +909,19 @@ export default function ClosedSalesPage() {
   const openViewLocation = (deal: DcOrder) => {
     setSelectedDeal(deal)
     setOpenLocationDialog(true)
+    // The list omits transport fields; load what the BDE entered.
+    apiRequest<any>(`/dc-orders/${deal._id}`).then((full) => {
+      const pe = full?.pendingEdit || {}
+      setSelectedDeal((current) => current?._id !== deal._id ? current : {
+        ...current,
+        address: pe.address || full.address || current.address,
+        location: pe.location || full.location || current.location,
+        transport_name: pe.transport_name || full.transport_name || '',
+        transport_location: pe.transport_location || full.transport_location || '',
+        transportation_landmark: pe.transportation_landmark || full.transportation_landmark || '',
+        pincode: pe.pincode || full.pincode || '',
+      })
+    }).catch(() => {})
   }
 
   /** DC Date + Category are marked required in the Raise DC UI (*). Remarks is optional.
@@ -1017,6 +1038,9 @@ export default function ClosedSalesPage() {
         productCategory: row.productCategory || undefined,
         specs: row.specs || 'Regular',
         subject: row.subject || undefined,
+        section: row.section || undefined,
+        program: row.program || undefined,
+        stream: row.stream || undefined,
         strength: Number(row.strength) || 0,
         quantity: Number(row.quantity) || 0,
         level: row.level,
@@ -1142,6 +1166,9 @@ export default function ClosedSalesPage() {
           productCategory: row.productCategory || undefined,
           specs: row.specs || 'Regular',
           subject: row.subject || undefined,
+          section: row.section || undefined,
+          program: row.program || undefined,
+          stream: row.stream || undefined,
           strength: Number(row.strength) || 0,
           quantity: Number(row.quantity) || 0,
           level: row.level || getDefaultLevel(row.product || 'Abacus'),
@@ -1245,6 +1272,9 @@ export default function ClosedSalesPage() {
               productCategory: row.productCategory || undefined,
           specs: row.specs || 'Regular',
           subject: row.subject || undefined,
+          section: row.section || undefined,
+          program: row.program || undefined,
+          stream: row.stream || undefined,
           strength: Number(row.strength) || 0,
           quantity: Number(row.quantity) || 0,
           level: row.level || getDefaultLevel(row.product || 'Abacus'),
@@ -1831,48 +1861,15 @@ export default function ClosedSalesPage() {
 
               {/* Delivery and Address Section - Transport Details */}
               <div className="border-t border-slate-200 pt-6 mt-6">
-                <div className="mb-4">
-                  <h3 className="font-bold text-slate-900 text-xl mb-2">Delivery and Address</h3>
-                  <p className="text-sm text-slate-500">Transport details for this order</p>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <Label className="text-sm font-medium mb-2 block">Transport Name</Label>
-                    <Input 
-                      value={selectedDeal.transport_name || ''} 
-                      disabled 
-                      className="bg-slate-50 text-slate-900 border-slate-200 h-11 text-sm" 
-                      placeholder="Transport Name"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium mb-2 block">Transport Location</Label>
-                    <Input 
-                      value={selectedDeal.transport_location || ''} 
-                      disabled 
-                      className="bg-slate-50 text-slate-900 border-slate-200 h-11 text-sm" 
-                      placeholder="Transport Location"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium mb-2 block">Transportation Landmark</Label>
-                    <Input 
-                      value={selectedDeal.transportation_landmark || ''} 
-                      disabled 
-                      className="bg-slate-50 text-slate-900 border-slate-200 h-11 text-sm" 
-                      placeholder="Transportation Landmark"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium mb-2 block">Pincode</Label>
-                    <Input 
-                      value={selectedDeal.pincode || ''} 
-                      disabled 
-                      className="bg-slate-50 text-slate-900 border-slate-200 h-11 text-sm" 
-                      placeholder="Pincode"
-                    />
-                  </div>
-                </div>
+                <TransportDetailsSection
+                  dcOrderId={selectedDeal._id}
+                  details={selectedDeal}
+                  canEdit={canEditTransportDetails(currentUser?.role)}
+                  onSaved={(saved) => {
+                    setSelectedDeal((deal) => (deal ? { ...deal, ...saved } : deal))
+                    setItems((list) => list.map((deal) => (deal._id === selectedDeal._id ? { ...deal, ...saved } : deal)))
+                  }}
+                />
               </div>
 
               {/* Products Table - Editable */}
@@ -2027,7 +2024,12 @@ export default function ClosedSalesPage() {
                             )}
                           </td>
                           <td className="py-4 px-5">
-                            {hasProductSubjects(row.product) && getProductSubjects(row.product).length > 0 ? (
+                            {row.stream ? (
+                              // IIT combination entered at raise (e.g. MPC / MBiPC) stays as entered.
+                              <span className="text-sm text-slate-900" title="Combination entered when the DC was raised">
+                                {row.stream}{row.section && row.section !== 'ALL' ? ` · Sec ${row.section}` : ''}
+                              </span>
+                            ) : hasProductSubjects(row.product) && getProductSubjects(row.product).length > 0 ? (
                               <Select
                               value={row.subject || ''}
                                 onValueChange={(value) => {
@@ -2368,6 +2370,12 @@ export default function ClosedSalesPage() {
                   <Input value={selectedDeal.location || '-'} disabled />
                 </div>
               </div>
+              <TransportDetailsSection
+                title="Transport details"
+                dcOrderId={selectedDeal._id}
+                details={selectedDeal}
+                canEdit={false}
+              />
               {selectedDeal.address && (
                 <div>
                   <Label>Map</Label>

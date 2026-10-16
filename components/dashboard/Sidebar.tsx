@@ -90,7 +90,7 @@ function ensureRaiseTicketNav(nav: NavItem[]): NavItem[] {
     if (item.href === href) return []
     if (!item.children) return [item]
     const children = item.children.filter((child) => child.href !== href)
-    if (children.length === 0 && item.label === 'Complaints') return []
+    if (children.length === 0 && item.label === 'View Tickets') return []
     return [{ ...item, children }]
   })
 
@@ -261,9 +261,13 @@ const NAV: NavItem[] = [
     ],
   },
   {
-    label: 'Complaints',
+    label: 'View Tickets',
     icon: AlertCircle,
-    children: [{ label: 'BDE Complaints', href: '/dashboard/complaints' }],
+    children: [
+      { label: 'All Tickets', href: '/dashboard/complaints' },
+      { label: 'Solved Tickets', href: '/dashboard/complaints/solved' },
+      { label: 'Pending Tickets', href: '/dashboard/complaints/pending' },
+    ],
   },
   {
     label: 'Warehouse',
@@ -549,7 +553,7 @@ function applyExecutiveSidebarOrder(nav: NavItem[]): NavItem[] {
     'Payments',
     'Expenses',
     'Training',
-    'Complaints',
+    'View Tickets',
     'Settings',
     'Samples',
   ] as const
@@ -848,7 +852,7 @@ export function Sidebar() {
         ],
       },
       {
-        label: 'Complaints',
+        label: 'View Tickets',
         icon: AlertCircle,
         children: [
           { label: 'Raise Ticket', href: '/dashboard/complaints/raise', icon: PlusCircle },
@@ -883,7 +887,7 @@ export function Sidebar() {
     ]
   } else if (isCoordinator) {
     // For Coordinator role, only show: Dashboard, Clients, Users / Employees, Trainings & Services, Warehouse, Payments, Reports, Settings, Sign out
-    const allowedMenuItems = ['Dashboard', 'Clients', 'Users / Employees', 'Trainings & Services', 'Complaints', 'Warehouse', 'Payments', 'Reports', 'Settings', 'Sign out']
+    const allowedMenuItems = ['Dashboard', 'Clients', 'Users / Employees', 'Trainings & Services', 'View Tickets', 'Warehouse', 'Payments', 'Reports', 'Settings', 'Sign out']
     finalNav = NAV.filter(item => allowedMenuItems.includes(item.label))
       .map(item => {
         if (item.label === 'Clients' && item.children) {

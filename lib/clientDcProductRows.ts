@@ -184,6 +184,9 @@ export function orderProductToClientDcDetail(p: Record<string, any>) {
     product: p.product_name || p.product || p.productName || '',
     product_name: p.product_name || p.product || p.productName || '',
     class: p.class,
+    section: p.section || undefined,
+    program: p.program || undefined,
+    stream: p.stream || undefined,
     specs: p.specs,
     productCategory: p.productCategory,
     category: p.category,
@@ -954,6 +957,11 @@ export function expandEditPoRowsBySubject<T extends Record<string, any>>(
   for (const row of source) {
     const name = String(row.product_name || row.product || row.productName || '').trim()
     const currentSubject = String(row.subject || '').trim()
+    // IIT rows carry a combination (stream, e.g. MPC / MBiPC) — never split it or invent a subject.
+    if (String(row.stream || '').trim()) {
+      out.push({ ...row, lineId: ensureProductLineId(row) })
+      continue
+    }
     if (currentSubject && currentSubject !== '-' && !currentSubject.includes(',')) {
       out.push({
         ...row,
