@@ -1,35 +1,76 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Card } from '@/components/ui/card'
-import { apiRequest } from '@/lib/api'
+import { apiRequest, resolveUploadUrl } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Pencil, CheckCircle } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Pencil, CheckCircle, Eye, ExternalLink } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+
+type Person = {
+  _id: string
+  name: string
+  email?: string
+  empCode?: string
+  role?: string
+}
 
 type Expense = {
   _id: string
   title: string
+  description?: string
   amount: number
+  employeeAmount?: number
+  approvedAmount?: number
   category: string
   status: 'Pending' | 'Executive Manager Approved' | 'Manager Approved' | 'Approved' | 'Rejected'
+  date?: string
+  stayDateEnd?: string
   createdAt: string
-  employeeId?: {
-    _id: string
-    name: string
-    email: string
-  }
-  trainerId?: {
-    _id: string
-    name: string
-    email: string
-  }
+  employeeId?: Person | null
+  trainerId?: Person | null
+  createdBy?: Person | null
+  /** Backend-resolved employee: employeeId, else trainerId, else submitter */
+  employee?: Person | null
+  department?: string
+  paymentMethod?: string
+  receipt?: string
+  ticketReceipt?: string
+  receiptNumber?: string
+  expItemId?: string
+  transportType?: string
+  travelFrom?: string
+  travelTo?: string
+  approxKms?: number
+  gpsDistance?: number
+  employeeRemarks?: string
+  managerRemarks?: string
+  rejectionReason?: string
+  executiveManagerApprovedBy?: Person | null
+  executiveManagerApprovedAt?: string
+  managerApprovedBy?: Person | null
+  managerApprovedAt?: string
+  approvedBy?: Person | null
+  approvedAt?: string
+  returnedBy?: Person | null
+  returnedAt?: string
   pendingMonth?: string
 }
+
+const getEmployee = (expense: Expense) =>
+  expense.employee || expense.employeeId || expense.trainerId || expense.createdBy || null
 
 type Employee = {
   _id: string
@@ -52,6 +93,12 @@ export default function ManagerPendingExpensesPage() {
     trainerId: 'all',
   })
   const [approving, setApproving] = useState<string | null>(null)
+  const [viewing, setViewing] = useState<Expense | null>(null)
+  const [role, setRole] = useState('')
+
+  useEffect(() => {
+    setRole(getCurrentUser()?.role || '')
+  }, [])
 
   useEffect(() => {
     // Load employees and trainers
@@ -122,6 +169,7 @@ export default function ManagerPendingExpensesPage() {
           ? 'Expense forwarded for manager approval'
           : 'Expense approved successfully'
       )
+      setViewing(null)
       loadExpenses()
     } catch (error: any) {
       toast.error(error?.message || 'Failed to approve expense')
@@ -142,6 +190,16 @@ export default function ManagerPendingExpensesPage() {
       hour12: false,
     }).replace(/(\d+)\/(\d+)\/(\d+),/, '$3-$2-$1').replace(', ', ' ')
   }
+
+  const formatDay = (dateString?: string) => {
+    if (!dateString) return '-'
+    const date = new Date(dateString)
+    if (Number.isNaN(date.getTime())) return '-'
+    return date.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: '2-digit' })
+  }
+
+  const formatAmount = (value?: number) =>
+    typeof value === 'number' && Number.isFinite(value) ? value.toFixed(2) : '-'
 
   const getExpenseType = (category: string) => {
     // Map categories to display format
@@ -184,7 +242,14 @@ export default function ManagerPendingExpensesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Product Manager Pending Expenses List</h1>
+        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">
+          {role === 'Manager' ? 'Product Manager Pending Expenses List' : 'Pending Expenses List'}
+        </h1>
+        {role && role !== 'Manager' && (
+          <p className="text-sm text-neutral-500 mt-1">
+            Expenses awaiting Zonal Manager or Product Manager approval. Open a row to review its full details before approving.
+          </p>
+        )}
       </div>
 
       {/* Filter Section */}
@@ -272,7 +337,7 @@ export default function ManagerPendingExpensesPage() {
                   >
                     <TableCell>{index + 1}</TableCell>
                     <TableCell className="font-medium">
-                      {expense.employeeId?.name || expense.trainerId?.name || '-'}
+                      {getEmployee(expense)?.name || '-'}
                     </TableCell>
                     <TableCell>{formatDate(expense.createdAt)}</TableCell>
                     <TableCell>{getExpenseType(expense.category)}</TableCell>
@@ -287,7 +352,15 @@ export default function ManagerPendingExpensesPage() {
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => handleEdit(expense._id, expense.employeeId?._id || expense.trainerId?._id)}
+                          onClick={() => setViewing(expense)}
+                          className="text-blue-600 hover:text-blue-700 transition-colors"
+                          aria-label="View expense details"
+                          title="View details"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => handleEdit(expense._id, getEmployee(expense)?._id)}
                           className="text-orange-600 hover:text-orange-700 transition-colors"
                           aria-label="Update expense"
                         >
@@ -318,7 +391,241 @@ export default function ManagerPendingExpensesPage() {
           </Table>
         </div>
       </Card>
+
+      <ExpenseDetailsDialog
+        expense={viewing}
+        onClose={() => setViewing(null)}
+        onApprove={(exp) => handleApprove(exp._id, exp.status)}
+        approving={!!viewing && approving === viewing._id}
+        formatDate={formatDate}
+        formatDay={formatDay}
+        formatAmount={formatAmount}
+        getExpenseType={getExpenseType}
+        getStatusColor={getStatusColor}
+        getStatusDisplay={getStatusDisplay}
+      />
     </div>
+  )
+}
+
+const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp)(\?.*)?$/i
+
+function DetailRow({ label, value }: { label: string; value?: ReactNode }) {
+  if (value === undefined || value === null || value === '' || value === '-') return null
+  return (
+    <div className="grid grid-cols-[150px_1fr] gap-3 py-1.5 text-sm">
+      <span className="text-neutral-500">{label}</span>
+      <span className="text-neutral-900 break-words whitespace-pre-wrap">{value}</span>
+    </div>
+  )
+}
+
+function Attachment({ label, url }: { label: string; url?: string }) {
+  const href = resolveUploadUrl(url)
+  if (!href) return null
+  return (
+    <div className="space-y-2">
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-blue-600 hover:text-blue-700 inline-flex items-center gap-1 text-sm font-medium"
+      >
+        {label}
+        <ExternalLink className="h-3 w-3" />
+      </a>
+      {IMAGE_EXT.test(href) && (
+        <a href={href} target="_blank" rel="noopener noreferrer" className="block">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={href} alt={label} className="max-h-64 rounded-md border border-neutral-200 object-contain" />
+        </a>
+      )}
+    </div>
+  )
+}
+
+function ExpenseDetailsDialog({
+  expense,
+  onClose,
+  onApprove,
+  approving,
+  formatDate,
+  formatDay,
+  formatAmount,
+  getExpenseType,
+  getStatusColor,
+  getStatusDisplay,
+}: {
+  expense: Expense | null
+  onClose: () => void
+  onApprove: (expense: Expense) => void
+  approving: boolean
+  formatDate: (d: string) => string
+  formatDay: (d?: string) => string
+  formatAmount: (v?: number) => string
+  getExpenseType: (c: string) => string
+  getStatusColor: (s: string) => string
+  getStatusDisplay: (s: string) => string
+}) {
+  const employee = expense ? getEmployee(expense) : null
+  const submitter = expense?.createdBy
+  const isTravel = expense?.category?.toLowerCase() === 'travel'
+  const isStay = /^accom/i.test(expense?.category || '')
+  const amountEdited =
+    !!expense &&
+    typeof expense.approvedAmount === 'number' &&
+    expense.approvedAmount !== (expense.employeeAmount ?? expense.amount)
+
+  const history = expense
+    ? [
+        { step: 'Submitted', by: submitter, at: expense.createdAt, remarks: expense.employeeRemarks },
+        expense.executiveManagerApprovedAt || expense.executiveManagerApprovedBy
+          ? { step: 'Approved by Zonal Manager', by: expense.executiveManagerApprovedBy, at: expense.executiveManagerApprovedAt }
+          : null,
+        expense.managerApprovedAt || expense.managerApprovedBy
+          ? { step: 'Approved by Product Manager', by: expense.managerApprovedBy, at: expense.managerApprovedAt }
+          : null,
+        expense.approvedAt || expense.approvedBy
+          ? { step: 'Approved by Finance', by: expense.approvedBy, at: expense.approvedAt }
+          : null,
+        expense.returnedAt || expense.returnedBy
+          ? { step: 'Sent back for correction', by: expense.returnedBy, at: expense.returnedAt, remarks: expense.rejectionReason }
+          : null,
+      ].filter((h): h is NonNullable<typeof h> => !!h)
+    : []
+
+  return (
+    <Dialog open={!!expense} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        {expense && (
+          <>
+            <DialogHeader>
+              <DialogTitle>Expense Details</DialogTitle>
+              <DialogDescription>
+                {expense.title || `${getExpenseType(expense.category)} expense`} · raised {formatDate(expense.createdAt)}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-5">
+              <div>
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(expense.status)}`}>
+                  {getStatusDisplay(expense.status)}
+                </span>
+              </div>
+
+              <section>
+                <h3 className="text-sm font-semibold text-neutral-900 mb-1">Employee</h3>
+                <div className="divide-y divide-neutral-100">
+                  <DetailRow label="Name" value={employee?.name || '-'} />
+                  <DetailRow label="Employee Code" value={employee?.empCode} />
+                  <DetailRow label="Role" value={employee?.role} />
+                  <DetailRow label="Email" value={employee?.email} />
+                  <DetailRow label="Department" value={expense.department} />
+                  {submitter && employee && submitter._id !== employee._id && (
+                    <DetailRow label="Raised By" value={`${submitter.name}${submitter.role ? ` (${submitter.role})` : ''}`} />
+                  )}
+                </div>
+              </section>
+
+              <section>
+                <h3 className="text-sm font-semibold text-neutral-900 mb-1">Expense</h3>
+                <div className="divide-y divide-neutral-100">
+                  <DetailRow label="Type" value={getExpenseType(expense.category)} />
+                  <DetailRow
+                    label={isStay && expense.stayDateEnd ? 'Stay Dates' : 'Expense Date'}
+                    value={
+                      isStay && expense.stayDateEnd
+                        ? `${formatDay(expense.date)} – ${formatDay(expense.stayDateEnd)}`
+                        : formatDay(expense.date)
+                    }
+                  />
+                  <DetailRow label="Description" value={expense.description} />
+                  <DetailRow label="Employee Remarks" value={expense.employeeRemarks} />
+                  <DetailRow label="Manager Remarks" value={expense.managerRemarks} />
+                  <DetailRow label="Receipt No." value={expense.receiptNumber} />
+                  <DetailRow label="Item ID" value={expense.expItemId} />
+                  <DetailRow label="Payment Method" value={expense.paymentMethod} />
+                </div>
+              </section>
+
+              {isTravel && (
+                <section>
+                  <h3 className="text-sm font-semibold text-neutral-900 mb-1">Travel</h3>
+                  <div className="divide-y divide-neutral-100">
+                    <DetailRow label="Mode" value={expense.transportType} />
+                    <DetailRow label="From" value={expense.travelFrom} />
+                    <DetailRow label="To" value={expense.travelTo} />
+                    <DetailRow label="Claimed Distance" value={expense.approxKms ? `${expense.approxKms} km` : undefined} />
+                    <DetailRow label="GPS Distance" value={expense.gpsDistance ? `${expense.gpsDistance} km` : undefined} />
+                  </div>
+                </section>
+              )}
+
+              <section>
+                <h3 className="text-sm font-semibold text-neutral-900 mb-1">Amount</h3>
+                <div className="divide-y divide-neutral-100">
+                  <DetailRow label="Claimed" value={formatAmount(expense.employeeAmount ?? expense.amount)} />
+                  {typeof expense.approvedAmount === 'number' && (
+                    <DetailRow
+                      label="Approved"
+                      value={
+                        <span className={amountEdited ? 'text-orange-700 font-medium' : undefined}>
+                          {formatAmount(expense.approvedAmount)}
+                          {amountEdited ? ' (edited by approver)' : ''}
+                        </span>
+                      }
+                    />
+                  )}
+                </div>
+              </section>
+
+              <section>
+                <h3 className="text-sm font-semibold text-neutral-900 mb-2">Attachments</h3>
+                {expense.receipt || expense.ticketReceipt ? (
+                  <div className="space-y-3">
+                    <Attachment label="Bill / Receipt" url={expense.receipt} />
+                    <Attachment label="Ticket / Proof" url={expense.ticketReceipt} />
+                  </div>
+                ) : (
+                  <p className="text-sm text-neutral-500">No bills attached.</p>
+                )}
+              </section>
+
+              <section>
+                <h3 className="text-sm font-semibold text-neutral-900 mb-2">Approval History</h3>
+                <ol className="space-y-2">
+                  {history.map((h, i) => (
+                    <li key={i} className="text-sm border-l-2 border-neutral-200 pl-3">
+                      <div className="font-medium text-neutral-900">{h.step}</div>
+                      <div className="text-neutral-500">
+                        {h.by?.name || 'Unknown'}
+                        {h.by?.role ? ` (${h.by.role})` : ''}
+                        {h.at ? ` · ${formatDate(h.at)}` : ''}
+                      </div>
+                      {h.remarks && <div className="text-neutral-700 mt-0.5">“{h.remarks}”</div>}
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={onClose}>
+                Close
+              </Button>
+              <Button
+                onClick={() => onApprove(expense)}
+                disabled={approving}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                <CheckCircle className="h-4 w-4 mr-1" />
+                {approving ? 'Approving...' : 'Approve'}
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }
 
