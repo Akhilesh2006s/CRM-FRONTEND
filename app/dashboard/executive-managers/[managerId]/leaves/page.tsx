@@ -12,7 +12,7 @@ import { LeaveApprovalStatus, type LeaveApprovalFields } from '@/components/leav
 import { leaveTypeLabel } from '@/lib/leaveTypes'
 import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
-import { Calendar, CheckCircle, XCircle, Clock, ArrowLeft } from 'lucide-react'
+import { Calendar, CheckCircle, XCircle, ArrowLeft, PlusCircle, RefreshCw } from 'lucide-react'
 import {
   Table,
   TableBody,
@@ -31,17 +31,37 @@ import {
 } from '@/components/ui/dialog'
 import Link from 'next/link'
 
+type LeaveEmployee = {
+  _id: string
+  name: string
+  email: string
+  phone?: string
+  mobile?: string
+  assignedCity?: string
+  assignedArea?: string
+}
+
+/** A request that never answers must not leave the page on "Loading..." forever. */
+const LOAD_TIMEOUT_MS = 20000
+
+async function requestWithTimeout<T>(path: string): Promise<T> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), LOAD_TIMEOUT_MS)
+  try {
+    return await apiRequest<T>(path, { signal: controller.signal })
+  } catch (err: unknown) {
+    if (controller.signal.aborted) {
+      throw new Error('The server took too long to respond. Please retry.')
+    }
+    throw err
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 type Leave = {
   _id: string
-  employeeId: {
-    _id: string
-    name: string
-    email: string
-    phone?: string
-    mobile?: string
-    assignedCity?: string
-    assignedArea?: string
-  }
+  employeeId: LeaveEmployee | null
   leaveType: string
   startDate: string
   endDate: string
@@ -65,8 +85,14 @@ export default function ExecutiveManagerLeavesPage() {
   const params = useParams()
   const managerId = params.managerId as string
   const currentUser = getCurrentUser()
+  const isOwnPage = !!currentUser?._id && currentUser._id === managerId
+  const [tab, setTab] = useState<'team' | 'mine'>('team')
   const [leaves, setLeaves] = useState<Leave[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [myLeaves, setMyLeaves] = useState<Leave[]>([])
+  const [myLoading, setMyLoading] = useState(false)
+  const [myError, setMyError] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [employeeFilter, setEmployeeFilter] = useState<string>('all')
   const [fromDate, setFromDate] = useState('')
@@ -79,14 +105,40 @@ export default function ExecutiveManagerLeavesPage() {
 
   useEffect(() => {
     if (!currentUser) {
+      setLoading(false)
       router.push('/auth/login')
       return
     }
+    if (!managerId) {
+      setLoading(false)
+      setLoadError('Zonal Manager not found in the page address.')
+      return
+    }
     loadLeaves()
-  }, [statusFilter, employeeFilter, fromDate, toDate])
+  }, [managerId, statusFilter, employeeFilter, fromDate, toDate])
+
+  useEffect(() => {
+    if (tab === 'mine') loadMyLeaves()
+  }, [tab])
+
+  const loadMyLeaves = async () => {
+    if (!currentUser?._id) return
+    setMyLoading(true)
+    setMyError(null)
+    try {
+      const data = await requestWithTimeout<Leave[]>(`/leaves?employeeId=${currentUser._id}`)
+      setMyLeaves(Array.isArray(data) ? data : [])
+    } catch (err: unknown) {
+      setMyError(err instanceof Error ? err.message : 'Failed to load your leaves')
+      setMyLeaves([])
+    } finally {
+      setMyLoading(false)
+    }
+  }
 
   const loadLeaves = async () => {
     setLoading(true)
+    setLoadError(null)
     try {
       let url = `/executive-managers/${managerId}/leaves`
       const params = new URLSearchParams()
@@ -96,11 +148,13 @@ export default function ExecutiveManagerLeavesPage() {
       if (toDate) params.append('toDate', toDate)
       if (params.toString()) url += `?${params.toString()}`
       
-      const data = await apiRequest<Leave[]>(url)
-      setLeaves(data || [])
-    } catch (err: any) {
-      toast.error('Failed to load leaves')
-      console.error(err)
+      const data = await requestWithTimeout<Leave[]>(url)
+      setLeaves(Array.isArray(data) ? data : [])
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to load leaves'
+      setLoadError(message)
+      setLeaves([])
+      toast.error(message)
     } finally {
       setLoading(false)
     }
@@ -145,7 +199,11 @@ export default function ExecutiveManagerLeavesPage() {
   }
 
   const uniqueEmployees = Array.from(
-    new Map(leaves.map(leave => [leave.employeeId._id, leave.employeeId])).values()
+    new Map(
+      leaves
+        .filter((leave) => leave.employeeId)
+        .map((leave) => [leave.employeeId!._id, leave.employeeId!])
+    ).values()
   )
 
   return (
@@ -160,7 +218,89 @@ export default function ExecutiveManagerLeavesPage() {
           </Link>
           <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Leave Management</h1>
         </div>
+        <Link href="/dashboard/leaves/request">
+          <Button size="sm">
+            <PlusCircle className="w-4 h-4 mr-2" />
+            Apply for Leave
+          </Button>
+        </Link>
       </div>
+
+      <div className="flex gap-2 border-b border-neutral-200">
+        <button
+          type="button"
+          onClick={() => setTab('team')}
+          className={`px-4 py-2 text-sm -mb-px border-b-2 ${tab === 'team' ? 'border-sky-600 text-sky-700 font-medium' : 'border-transparent text-neutral-600'}`}
+        >
+          {isOwnPage ? 'My BDEs\u2019 Leaves' : 'Team Leaves'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('mine')}
+          className={`px-4 py-2 text-sm -mb-px border-b-2 ${tab === 'mine' ? 'border-sky-600 text-sky-700 font-medium' : 'border-transparent text-neutral-600'}`}
+        >
+          My Leaves
+        </button>
+      </div>
+
+      {tab === 'mine' && (
+        <Card className="p-4 bg-white border border-neutral-200">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-semibold flex items-center">
+              <Calendar className="w-4 h-4 mr-2" />
+              My Leaves
+            </h3>
+            <Button variant="outline" size="sm" onClick={loadMyLeaves} disabled={myLoading}>
+              <RefreshCw className="w-4 h-4 mr-1" />
+              Refresh
+            </Button>
+          </div>
+          <p className="text-xs text-neutral-500 mb-4">
+            Your leave is approved after both Admin and HR Manager approve it.
+          </p>
+          {myLoading ? (
+            <div className="text-center py-8">Loading...</div>
+          ) : myError ? (
+            <div className="text-center py-8 text-red-600 text-sm">{myError}</div>
+          ) : myLeaves.length === 0 ? (
+            <div className="text-center py-8 text-neutral-500">
+              You have not applied for any leave yet.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Leave Type</TableHead>
+                    <TableHead>Start Date</TableHead>
+                    <TableHead>End Date</TableHead>
+                    <TableHead>Days</TableHead>
+                    <TableHead>Reason</TableHead>
+                    <TableHead>Approval status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {myLeaves.map((leave) => (
+                    <TableRow key={leave._id}>
+                      <TableCell>{leaveTypeLabel(leave.leaveType)}</TableCell>
+                      <TableCell>{new Date(leave.startDate).toLocaleDateString()}</TableCell>
+                      <TableCell>{new Date(leave.endDate).toLocaleDateString()}</TableCell>
+                      <TableCell>{leave.days}</TableCell>
+                      <TableCell className="max-w-xs truncate">{leave.reason}</TableCell>
+                      <TableCell className="align-top">
+                        <LeaveApprovalStatus leave={leave} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {tab === 'team' && (
+      <>
 
       {/* Filters */}
       <Card className="p-4 bg-neutral-50 border border-neutral-200">
@@ -226,6 +366,14 @@ export default function ExecutiveManagerLeavesPage() {
         </h3>
         {loading ? (
           <div className="text-center py-8">Loading...</div>
+        ) : loadError ? (
+          <div className="text-center py-8 space-y-3">
+            <p className="text-sm text-red-600">{loadError}</p>
+            <Button variant="outline" size="sm" onClick={loadLeaves}>
+              <RefreshCw className="w-4 h-4 mr-1" />
+              Retry
+            </Button>
+          </div>
         ) : leaves.length === 0 ? (
           <div className="text-center py-8 text-neutral-500">No leaves found</div>
         ) : (
@@ -249,8 +397,8 @@ export default function ExecutiveManagerLeavesPage() {
                   <TableRow key={leave._id}>
                     <TableCell>
                       <div>
-                        <p className="font-medium">{leave.employeeId.name}</p>
-                        <p className="text-xs text-neutral-500">{leave.employeeId.email}</p>
+                        <p className="font-medium">{leave.employeeId?.name || 'Unknown employee'}</p>
+                        <p className="text-xs text-neutral-500">{leave.employeeId?.email || ''}</p>
                       </div>
                     </TableCell>
                     <TableCell>{leaveTypeLabel(leave.leaveType)}</TableCell>
@@ -258,7 +406,7 @@ export default function ExecutiveManagerLeavesPage() {
                     <TableCell>{new Date(leave.endDate).toLocaleDateString()}</TableCell>
                     <TableCell>{leave.days}</TableCell>
                     <TableCell className="max-w-xs truncate">{leave.reason}</TableCell>
-                    <TableCell>{leave.employeeId.assignedCity || '-'}</TableCell>
+                    <TableCell>{leave.employeeId?.assignedCity || '-'}</TableCell>
                     <TableCell className="align-top">
                       <LeaveApprovalStatus leave={leave} />
                     </TableCell>
@@ -307,6 +455,8 @@ export default function ExecutiveManagerLeavesPage() {
           </div>
         )}
       </Card>
+      </>
+      )}
 
       <Dialog open={approveDialogOpen} onOpenChange={setApproveDialogOpen}>
         <DialogContent>
@@ -316,8 +466,8 @@ export default function ExecutiveManagerLeavesPage() {
             </DialogTitle>
             <DialogDescription>
               {action === 'approve'
-                ? `Are you sure you want to approve this leave request from ${selectedLeave?.employeeId.name}?`
-                : `Please provide a reason for rejecting this leave request from ${selectedLeave?.employeeId.name}`}
+                ? `Are you sure you want to approve this leave request from ${selectedLeave?.employeeId?.name || 'this employee'}?`
+                : `Please provide a reason for rejecting this leave request from ${selectedLeave?.employeeId?.name || 'this employee'}`}
             </DialogDescription>
           </DialogHeader>
           {action === 'reject' && (
