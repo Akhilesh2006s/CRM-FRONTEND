@@ -10,6 +10,8 @@ import { apiRequest } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
 import { ProductStreamsField } from '@/components/products/ProductStreamsField'
+import { ProductRelatedItemsField, relatedItemsError } from '@/components/products/ProductRelatedItemsField'
+import type { ProductRelatedItem } from '@/lib/dcRowCategory'
 import { PlusCircle, Edit, Search, Package, SlidersHorizontal, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -29,6 +31,7 @@ type Product = {
   hasCategory?: boolean
   categories?: string[]
   streams?: string[]
+  relatedItems?: ProductRelatedItem[]
   prodStatus: number
   calculationType?: 'normal' | 'none' | 'level_based' | 'subject_based'
   createdAt: string
@@ -66,6 +69,7 @@ export default function ProductsPage() {
     hasCategory: false,
     categories: [] as string[],
     streams: [] as string[],
+    relatedItems: [] as ProductRelatedItem[],
     newCategory: '',
     prodStatus: 1,
     calculationType: 'normal' as 'normal' | 'level_based' | 'subject_based',
@@ -148,6 +152,7 @@ export default function ProductsPage() {
       hasCategory: product.hasCategory || false,
       categories: product.categories || [],
       streams: product.streams || [],
+      relatedItems: (product.relatedItems || []).map((item) => ({ ...item })),
       newCategory: '',
       prodStatus: product.prodStatus,
       calculationType: (product.calculationType === 'none' ? 'normal' : product.calculationType) || 'normal',
@@ -173,6 +178,7 @@ export default function ProductsPage() {
       hasCategory: false,
       categories: [],
       streams: [],
+      relatedItems: [],
       newCategory: '',
       prodStatus: 1,
       calculationType: 'normal',
@@ -276,6 +282,12 @@ export default function ProductsPage() {
       return
     }
 
+    const itemsError = relatedItemsError(editForm.relatedItems)
+    if (itemsError) {
+      toast.error(itemsError)
+      return
+    }
+
     setSaving(true)
     try {
       const payload: any = {
@@ -289,6 +301,7 @@ export default function ProductsPage() {
         hasCategory: editForm.hasCategory,
         categories: editForm.hasCategory ? editForm.categories : [],
         streams: editForm.streams,
+        relatedItems: editForm.relatedItems,
         prodStatus: editForm.prodStatus,
         calculationType: editForm.calculationType,
       }
@@ -563,6 +576,7 @@ export default function ProductsPage() {
             </div>
 
             <ProductStreamsField value={editForm.streams} onChange={(streams) => setEditForm({ ...editForm, streams })} />
+            <ProductRelatedItemsField value={editForm.relatedItems} onChange={(relatedItems) => setEditForm({ ...editForm, relatedItems })} />
 
             <div className="flex items-center space-x-2">
               <Checkbox

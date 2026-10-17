@@ -1,12 +1,12 @@
-import { canonicalDcRowCategory } from '@/lib/dcRowCategory'
+import { canonicalDcRowCategory, isRelatedItemRow } from '@/lib/dcRowCategory'
 
-export type AbacusMaterialRow = { product?: string; productName?: string; class?: string; category?: string; strength?: number; quantity?: number }
+export type AbacusMaterialRow = { itemType?: string; product?: string; productName?: string; class?: string; category?: string; strength?: number; quantity?: number }
 
 export function abacusStudentStrength(rows: AbacusMaterialRow[]): number {
   const byClass = new Map<string, number>()
   for (const row of rows) {
     if (!/abacus/i.test(String(row.product || row.productName || ''))) continue
-    if (canonicalDcRowCategory(row.category) === 'Training Material') continue
+    if (canonicalDcRowCategory(row.category) === 'Training Material' || isRelatedItemRow(row)) continue
     const className = String(row.class || '').trim()
     if (!className) continue
     byClass.set(className, Math.max(byClass.get(className) || 0, Number(row.strength ?? row.quantity) || 0))

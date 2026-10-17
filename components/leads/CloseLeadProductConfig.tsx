@@ -344,13 +344,13 @@ function CloseLeadProductConfigView({
                                         iitAssignments: (line.iitAssignments || []).map((item) => item.id === row.id ? { ...item, ...patch } : item),
                                       })
                                     return (
-                                      <div key={row.id} className="grid grid-cols-2 md:grid-cols-7 gap-2 rounded border p-2 items-end">
+                                      <div key={row.id} className="grid grid-cols-2 md:grid-cols-[minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,2.2fr)_minmax(0,0.9fr)_minmax(0,1fr)_auto] gap-2 rounded border p-2 items-end [&>*]:min-w-0">
                                         <div><Label className="text-xs">Class *</Label><Input aria-label="IIT class" value={row.class} onChange={(e) => change({ class: e.target.value })} list={`iit-classes-${line.id}`} placeholder="8" /></div>
                                         <div><Label className="text-xs">Section</Label><Input aria-label="IIT section" value={row.section === 'ALL' ? '' : row.section} onChange={(e) => change({ section: e.target.value.toUpperCase() })} placeholder="A / all" /></div>
                                         <div><Label className="text-xs">Program *</Label><Input aria-label="IIT program" value={row.program} onChange={(e) => change({ program: e.target.value })} list={`iit-programs-${line.id}`} placeholder="Prime" /></div>
                                         <div><Label className="text-xs">Stream *</Label>
                                           <Select value={matchIitStream(row.stream, streamOptions) || undefined} onValueChange={(value) => change({ stream: value })}>
-                                            <SelectTrigger aria-label="IIT stream"><SelectValue placeholder="Select stream" /></SelectTrigger>
+                                            <SelectTrigger aria-label="IIT stream" title={row.stream ? iitStreamLabel(row.stream) : undefined} className="w-full min-w-0 [&>span]:truncate [&>span]:block [&>span]:min-w-0 text-left"><SelectValue placeholder="Select stream" /></SelectTrigger>
                                             <SelectContent>
                                               {streamOptions.map((option) => <SelectItem key={option} value={option}>{iitStreamLabel(option)}</SelectItem>)}
                                             </SelectContent>

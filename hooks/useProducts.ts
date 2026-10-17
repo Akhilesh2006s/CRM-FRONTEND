@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { apiRequest } from '@/lib/api'
 import { normalizeCalculationType, type CalculationType } from '@/lib/paymentDivisor'
+import type { ProductRelatedItem } from '@/lib/dcRowCategory'
 
 type Product = {
   _id: string
@@ -14,6 +15,7 @@ type Product = {
   hasCategory?: boolean
   categories?: string[]
   streams?: string[]
+  relatedItems?: ProductRelatedItem[]
   prodStatus: number
   calculationType?: 'normal' | 'none' | 'level_based' | 'subject_based'
 }
@@ -130,6 +132,11 @@ export function useProducts() {
     getProductStreams: (productName: string): string[] => {
       const product = findProduct(productName)
       return Array.isArray(product?.streams) ? product.streams.filter(Boolean) : []
+    },
+    // Items that ship with the product on every DC (Tensmat, Teacher Books, Flash Cards, ...)
+    getProductRelatedItems: (productName: string): ProductRelatedItem[] => {
+      const items = findProduct(productName)?.relatedItems
+      return Array.isArray(items) ? items.filter((item) => item && String(item.name || '').trim()) : []
     },
     // Get product categories for a specific product
     getProductCategories: (productName: string): string[] => {

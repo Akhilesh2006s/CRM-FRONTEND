@@ -25,7 +25,7 @@ import { sanitizePhoneInput, validatePhoneDigits } from '@/lib/phone'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { abacusStudentStrength, defaultMasterAbacusQuantity } from '@/lib/abacusMaterials'
 import { AbacusMaterialsFields } from '@/components/dc/AbacusMaterialsFields'
-import { buildSpecimenRows } from '@/lib/dcRowCategory'
+import { buildRelatedItemRows, buildSpecimenRows, specimenCopiesValue } from '@/lib/dcRowCategory'
 import { Checkbox } from '@/components/ui/checkbox'
 
 type Lead = {
@@ -99,6 +99,7 @@ export default function CloseLeadPage() {
   const [masterQuantityOverride, setMasterQuantityOverride] = useState<string | null>(null)
   const [masterUnitPrice, setMasterUnitPrice] = useState('')
   const [specimenRequested, setSpecimenRequested] = useState(false)
+  const [specimenCopies, setSpecimenCopies] = useState('1')
 
   const productConfig = useCloseLeadProductConfig({ schoolType: lead?.school_type })
   const {
@@ -114,6 +115,7 @@ export default function CloseLeadPage() {
     buildDcOrderProducts,
     getCalculationType,
     getCatalogFallbackCount,
+    getProductRelatedItems,
   } = productConfig
   const abacusStrength = lead?.school_type === 'Existing' ? 0 : abacusStudentStrength(childProductRows)
   const masterQuantity = masterQuantityOverride === null
@@ -531,9 +533,11 @@ export default function CloseLeadPage() {
         dispatchMode: p.dispatchMode || parentRow?.dispatchMode,
       }
     })
+    // Product related items (Tensmat, Teacher Books, Flash Cards, ...) always ship with the product.
+    const withRelatedItems = [...rows, ...buildRelatedItemRows(rows, getProductRelatedItems)]
     return specimenRequested
-      ? [...rows, ...buildSpecimenRows(rows).map((row) => ({ ...row, deliverables: [] }))]
-      : rows
+      ? [...withRelatedItems, ...buildSpecimenRows(rows, specimenCopiesValue(specimenCopies)).map((row) => ({ ...row, deliverables: [] }))]
+      : withRelatedItems
   }
 
   /** Mark lead/order closed, then raise DC. Only call after user confirms any split dialog. */
@@ -998,15 +1002,31 @@ export default function CloseLeadPage() {
             config={productConfig}
             schoolType={lead?.school_type}
             dialogExtra={childProductRows.length > 0 && <>
-              <label className="flex items-start gap-3 rounded-lg border p-4 cursor-pointer">
-                <Checkbox checked={specimenRequested} onCheckedChange={(checked) => setSpecimenRequested(checked === true)} />
-                <span>
-                  <span className="font-semibold block">Specimen copies requested</span>
-                  <span className="text-xs text-neutral-600">
-                    Adds one copy of each selected book for every class as Training Material (no billing).
+              <div className="flex flex-wrap items-start gap-3 rounded-lg border p-4">
+                <label className="flex flex-1 min-w-[240px] items-start gap-3 cursor-pointer">
+                  <Checkbox checked={specimenRequested} onCheckedChange={(checked) => setSpecimenRequested(checked === true)} />
+                  <span>
+                    <span className="font-semibold block">Specimen copies requested</span>
+                    <span className="text-xs text-neutral-600">
+                      Adds the entered number of copies of each selected book for every class as Training Material (no billing).
+                    </span>
                   </span>
-                </span>
-              </label>
+                </label>
+                {specimenRequested && (
+                  <div className="w-36">
+                    <Label className="text-xs">Copies per book *</Label>
+                    <Input
+                      aria-label="Specimen copies per book"
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={specimenCopies}
+                      onChange={(e) => setSpecimenCopies(e.target.value)}
+                      onBlur={() => setSpecimenCopies(String(specimenCopiesValue(specimenCopies)))}
+                    />
+                  </div>
+                )}
+              </div>
               {abacusStrength > 0 && <AbacusMaterialsFields
                 studentQuantity={abacusStrength}
                 masterQuantity={masterQuantity}

@@ -14,6 +14,16 @@ export const DC_ROW_CATEGORY_BILLING: Record<DcRowCategory, string> = {
 const NON_BILLABLE = new Set<string>(['Training Material', 'Shortage'])
 
 export const SPECIMEN_ITEM_TYPE = 'Specimen Copy'
+export const RELATED_ITEM_TYPE = 'Related Item'
+
+/** An item configured on a product that ships with it on every DC. */
+export type ProductRelatedItem = {
+  name: string
+  billable: boolean
+  price: number
+  basis: 'per_student' | 'per_class'
+  quantity: number
+}
 
 /** Map legacy labels ('new Students', 'Old Students', 'Training-Material', 'Excess-NewStudents', ...)
  * to one of DC_ROW_CATEGORIES. Unknown values (e.g. a book series) return ''. */
@@ -48,12 +58,19 @@ export function isSpecimenRow(row: { itemType?: unknown } | null | undefined): b
   return String(row?.itemType || '') === SPECIMEN_ITEM_TYPE
 }
 
-/** One copy of each book (product + class + series/level/specs) the school selected, as Training Material. */
-export function buildSpecimenRows<T extends Record<string, any>>(rows: T[]): T[] {
+/** Parse a specimen copies input; blank/invalid falls back to 1. */
+export function specimenCopiesValue(input: unknown): number {
+  const n = Math.floor(Number(input))
+  return Number.isFinite(n) && n >= 1 ? n : 1
+}
+
+/** `copies` of each book (product + class + series/level/specs) the school selected, as Training Material. */
+export function buildSpecimenRows<T extends Record<string, any>>(rows: T[], copies = 1): T[] {
+  const qty = specimenCopiesValue(copies)
   const seen = new Set<string>()
   const out: T[] = []
   for (const row of rows) {
-    if (isSpecimenRow(row) || canonicalDcRowCategory(row.category) === 'Training Material') continue
+    if (isSpecimenRow(row) || isRelatedItemRow(row) || canonicalDcRowCategory(row.category) === 'Training Material') continue
     const key = [row.product || row.productName, row.class, row.productCategory, row.level, row.specs, row.subject, row.term]
       .map((v) => String(v ?? '').trim().toLowerCase()).join('|')
     if (seen.has(key)) continue
@@ -63,12 +80,71 @@ export function buildSpecimenRows<T extends Record<string, any>>(rows: T[]): T[]
       ...rest,
       category: 'Training Material',
       itemType: SPECIMEN_ITEM_TYPE,
-      quantity: 1,
-      strength: 1,
+      quantity: qty,
+      strength: qty,
       unit_price: 0,
       price: 0,
       total: 0,
     } as unknown as T)
+  }
+  return out
+}
+
+export function isRelatedItemRow(row: { itemType?: unknown } | null | undefined): boolean {
+  return String(row?.itemType || '') === RELATED_ITEM_TYPE
+}
+
+/**
+ * One DC row per related item per class of each product the school took. The item name goes in
+ * `specs` so it shows in every DC table. Billable items carry the product's price ('New Students');
+ * non-billable ones go as Training Material at ₹0. Per-student quantity uses the class strength:
+ * the largest row per section (levels/specs share students), summed across sections.
+ */
+export function buildRelatedItemRows<T extends Record<string, any>>(
+  rows: T[],
+  getRelatedItems: (productName: string) => ProductRelatedItem[],
+): T[] {
+  const classes = new Map<string, { base: T; sections: Map<string, number> }>()
+  for (const row of rows) {
+    if (isSpecimenRow(row) || isRelatedItemRow(row) || canonicalDcRowCategory(row.category) === 'Training Material') continue
+    const product = String(row.product || row.productName || row.product_name || '').trim()
+    const className = String(row.class ?? '').trim()
+    if (!product || !className) continue
+    const key = `${product.toLowerCase()}|${className.toLowerCase()}`
+    const entry = classes.get(key) ?? { base: row, sections: new Map<string, number>() }
+    const section = String(row.section || '').trim().toUpperCase()
+    const strength = Number(row.strength ?? row.quantity) || 0
+    entry.sections.set(section, Math.max(entry.sections.get(section) || 0, strength))
+    classes.set(key, entry)
+  }
+  const out: T[] = []
+  for (const { base, sections } of classes.values()) {
+    const product = String(base.product || base.productName || base.product_name || '').trim()
+    const strength = [...sections.values()].reduce((sum, n) => sum + n, 0)
+    for (const item of getRelatedItems(product) || []) {
+      const name = String(item?.name || '').trim()
+      if (!name) continue
+      const per = Math.max(1, Math.floor(Number(item.quantity) || 1))
+      const quantity = item.basis === 'per_class' ? per : per * strength
+      if (!(quantity > 0)) continue
+      const unitPrice = item.billable ? Number(item.price) || 0 : 0
+      out.push({
+        product,
+        productName: product,
+        class: base.class,
+        term: base.term,
+        level: '',
+        specs: name,
+        category: item.billable ? 'New Students' : 'Training Material',
+        itemType: RELATED_ITEM_TYPE,
+        quantity,
+        strength: quantity,
+        unit_price: unitPrice,
+        price: unitPrice,
+        total: unitPrice * quantity,
+        deliverables: [],
+      } as unknown as T)
+    }
   }
   return out
 }

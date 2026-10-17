@@ -13,6 +13,8 @@ import { apiRequest } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
 import { ProductStreamsField } from '@/components/products/ProductStreamsField'
+import { ProductRelatedItemsField, relatedItemsError } from '@/components/products/ProductRelatedItemsField'
+import type { ProductRelatedItem } from '@/lib/dcRowCategory'
 import { ArrowLeft, Save, SlidersHorizontal } from 'lucide-react'
 import Link from 'next/link'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -39,6 +41,7 @@ export default function NewProductPage() {
     hasCategory: false,
     categories: [] as string[],
     streams: [] as string[],
+    relatedItems: [] as ProductRelatedItem[],
     newCategory: '',
     prodStatus: 1,
     calculationType: 'normal' as 'normal' | 'level_based' | 'subject_based',
@@ -173,6 +176,13 @@ export default function NewProductPage() {
       return
     }
 
+    const itemsError = relatedItemsError(form.relatedItems)
+    if (itemsError) {
+      setError(itemsError)
+      setSubmitting(false)
+      return
+    }
+
     try {
       const payload: any = {
         productName: form.productName.trim(),
@@ -185,6 +195,7 @@ export default function NewProductPage() {
         hasCategory: form.hasCategory,
         categories: form.hasCategory ? form.categories : [],
         streams: form.streams,
+        relatedItems: form.relatedItems,
         prodStatus: form.prodStatus,
         calculationType: form.calculationType,
       }
@@ -364,6 +375,7 @@ export default function NewProductPage() {
           </div>
 
           <ProductStreamsField value={form.streams} onChange={(streams) => setForm({ ...form, streams })} />
+          <ProductRelatedItemsField value={form.relatedItems} onChange={(relatedItems) => setForm({ ...form, relatedItems })} />
 
           <div className="flex items-center space-x-2">
             <Checkbox

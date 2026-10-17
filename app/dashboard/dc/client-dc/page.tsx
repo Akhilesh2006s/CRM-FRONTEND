@@ -65,7 +65,7 @@ import {
 import { useRouter } from 'next/navigation'
 import { abacusStudentStrength, defaultMasterAbacusQuantity } from '@/lib/abacusMaterials'
 import { AbacusMaterialsFields } from '@/components/dc/AbacusMaterialsFields'
-import { DC_ROW_CATEGORIES, DC_ROW_CATEGORY_BILLING, buildSpecimenRows, dcRowCategoryOrDefault, isSpecimenRow } from '@/lib/dcRowCategory'
+import { DC_ROW_CATEGORIES, DC_ROW_CATEGORY_BILLING, buildRelatedItemRows, buildSpecimenRows, dcRowCategoryOrDefault, isRelatedItemRow, isSpecimenRow, specimenCopiesValue } from '@/lib/dcRowCategory'
 
 type DC = {
   _id: string
@@ -250,6 +250,7 @@ export default function ClientDCPage() {
   
   // Client DC Dialog (Full DC Management)
   const [clientDCDialogOpen, setClientDCDialogOpen] = useState(false)
+  const [specimenCopiesInput, setSpecimenCopiesInput] = useState('1')
   const [dcProductRows, setDcProductRows] = useState<Array<{
     id: string
     product: string
@@ -408,6 +409,7 @@ export default function ClientDCPage() {
     hasProductCategories,
     getCalculationType,
     getProductId,
+    getProductRelatedItems,
   } = useProducts()
   
   // Get available levels for a specific product, default to L1 if product not found
@@ -1376,16 +1378,24 @@ export default function ClientDCPage() {
       const savedCategoryByKey = new Map(
         savedDcRows.map((p: any) => [productLineIdentityKey(p), p.category] as const)
       )
-      const shownRows = toRequestDcRows(thisDetails.filter((p: any) => !isSpecimenRow(p)))
+      const shownRows = toRequestDcRows(thisDetails.filter((p: any) => !isSpecimenRow(p) && !isRelatedItemRow(p)))
         .map((row: any) => ({
           ...row,
           category: dcRowCategoryOrDefault(savedCategoryByKey.get(productLineIdentityKey(row)) ?? row.category),
         }))
       const savedSpecimens = savedDcRows.filter((p: any) => isSpecimenRow(p))
-      const productsToShow = savedSpecimens.length
-        ? [...shownRows, ...toRequestDcRows(savedSpecimens).map((row: any) => ({ ...row, category: 'Training Material' }))]
-        : shownRows
+      // Product related items are rebuilt from the current catalog so new items/prices apply.
+      const relatedRows = buildRelatedItemRows(shownRows, getProductRelatedItems)
+        .map((row: any, i: number) => ({ ...row, id: `related-${Date.now()}-${i}` }))
+      const productsToShow = [
+        ...shownRows,
+        ...relatedRows,
+        ...(savedSpecimens.length
+          ? toRequestDcRows(savedSpecimens).map((row: any) => ({ ...row, category: 'Training Material' }))
+          : []),
+      ]
       setDcProductRows(productsToShow)
+      setSpecimenCopiesInput(String(specimenCopiesValue(savedSpecimens[0]?.quantity ?? savedSpecimens[0]?.strength)))
 
       setDcDate(fullDC.dcDate ? new Date(fullDC.dcDate).toISOString().split('T')[0] : '')
       setDcRemarks(fullDC.dcRemarks || '')
@@ -1810,8 +1820,14 @@ export default function ClientDCPage() {
       }
 
       // Prepare product details owned by THIS My Clients DC only.
+      const bookRows = dcProductRows.filter((row) => !isRelatedItemRow(row))
+      const rowsToSend = [
+        ...bookRows.filter((row) => !isSpecimenRow(row)),
+        ...buildRelatedItemRows(bookRows, getProductRelatedItems),
+        ...bookRows.filter((row) => isSpecimenRow(row)),
+      ]
       const productDetails = keepMyClientsOwnedProductRows(
-        dcProductRows.map((row) => ({
+        rowsToSend.map((row) => ({
           lineId: ensureProductLineId(row),
           product: row.product || '',
           class: row.class || '1',
@@ -1827,6 +1843,8 @@ export default function ClientDCPage() {
           strength: Number(row.strength) || 0,
           level: row.level && row.level !== '-' ? row.level : '',
           term: resolveClientDCRowTerm(row),
+          // Related items carry their catalog price (₹0 when non-billable); book prices resolve server-side.
+          ...(isRelatedItemRow(row) ? { unit_price: Number((row as any).unit_price) || 0 } : {}),
         }))
       )
 
@@ -4150,6 +4168,12 @@ export default function ClientDCPage() {
                     <td className="py-2 px-3 border-r min-w-[190px]">
                       {isSpecimenRow(row) ? (
                         <span className="text-xs">Training Material · Specimen copy (No billing)</span>
+                      ) : isRelatedItemRow(row) ? (
+                        <span className="text-xs">
+                          Related item · {dcRowCategoryOrDefault(row.category) === 'Training Material'
+                            ? 'Training Material (No billing)'
+                            : `Billable ₹${Number((row as any).unit_price) || 0}/unit`}
+                        </span>
                       ) : (
                         <Select
                           value={dcRowCategoryOrDefault(row.category)}
@@ -4399,25 +4423,45 @@ export default function ClientDCPage() {
             )}
 
             {dcProductRows.some((row) => !isSpecimenRow(row)) && (
-              <label className="flex items-start gap-3 rounded-lg border p-4 cursor-pointer">
-                <Checkbox
-                  checked={dcProductRows.some((row) => isSpecimenRow(row))}
-                  onCheckedChange={(checked) =>
-                    setDcProductRows((rows) => {
-                      const books = rows.filter((row) => !isSpecimenRow(row))
-                      return checked
-                        ? [...books, ...buildSpecimenRows(books).map((row, i) => ({ ...row, id: `specimen-${Date.now()}-${i}` }))]
-                        : books
-                    })
-                  }
-                />
-                <span>
-                  <span className="font-semibold block">Specimen copies requested</span>
-                  <span className="text-xs text-neutral-600">
-                    Adds one copy of each selected book for every class as Training Material (no billing).
+              <div className="flex flex-wrap items-start gap-3 rounded-lg border p-4">
+                <label className="flex flex-1 min-w-[240px] items-start gap-3 cursor-pointer">
+                  <Checkbox
+                    checked={dcProductRows.some((row) => isSpecimenRow(row))}
+                    onCheckedChange={(checked) =>
+                      setDcProductRows((rows) => {
+                        const books = rows.filter((row) => !isSpecimenRow(row))
+                        return checked
+                          ? [...books, ...buildSpecimenRows(books, specimenCopiesValue(specimenCopiesInput)).map((row, i) => ({ ...row, id: `specimen-${Date.now()}-${i}` }))]
+                          : books
+                      })
+                    }
+                  />
+                  <span>
+                    <span className="font-semibold block">Specimen copies requested</span>
+                    <span className="text-xs text-neutral-600">
+                      Adds the entered number of copies of each selected book for every class as Training Material (no billing).
+                    </span>
                   </span>
-                </span>
-              </label>
+                </label>
+                {dcProductRows.some((row) => isSpecimenRow(row)) && (
+                  <div className="w-36">
+                    <Label className="text-xs">Copies per book *</Label>
+                    <Input
+                      aria-label="Specimen copies per book"
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={specimenCopiesInput}
+                      onChange={(e) => {
+                        setSpecimenCopiesInput(e.target.value)
+                        const qty = specimenCopiesValue(e.target.value)
+                        setDcProductRows((rows) => rows.map((row) => (isSpecimenRow(row) ? { ...row, quantity: qty, strength: qty } : row)))
+                      }}
+                      onBlur={() => setSpecimenCopiesInput(String(specimenCopiesValue(specimenCopiesInput)))}
+                    />
+                  </div>
+                )}
+              </div>
             )}
 
             {requestAbacusStrength > 0 && (
