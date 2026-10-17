@@ -12,6 +12,9 @@ type RosterRow = {
   endTime?: string
   attendanceReason?: string
   town?: string
+  pincode?: string
+  latitude?: number
+  longitude?: number
   employeeId?: { name?: string; empCode?: string; role?: string; zone?: string } | string
 }
 
@@ -44,7 +47,7 @@ export default function AttendanceRosterPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Attendance</h1>
-        <p className="text-sm text-neutral-600 mt-1">HR sees every employee. A head sees the people under them.</p>
+        <p className="text-sm text-neutral-600 mt-1">HR, Admin and Coordinators see every employee (Coordinators view only). A head sees the people under them.</p>
       </div>
       <Card className="p-0 overflow-x-auto">
         {loading && <p className="p-4 text-sm">Loading…</p>}
@@ -58,8 +61,10 @@ export default function AttendanceRosterPage() {
                 <th className="py-2 px-3 text-left">Employee</th>
                 <th className="py-2 px-3 text-left">Role</th>
                 <th className="py-2 px-3 text-left">Zone</th>
+                <th className="py-2 px-3 text-left">Status</th>
                 <th className="py-2 px-3 text-left">Check in</th>
                 <th className="py-2 px-3 text-left">Check out</th>
+                <th className="py-2 px-3 text-left">Location</th>
                 <th className="py-2 px-3 text-left">Reason</th>
               </tr>
             </thead>
@@ -72,9 +77,29 @@ export default function AttendanceRosterPage() {
                     <td className="py-2 px-3">{employee?.name || '—'}</td>
                     <td className="py-2 px-3">{employee?.role ? displayRoleName(employee.role) : '—'}</td>
                     <td className="py-2 px-3">{employee?.zone || '—'}</td>
+                    <td className="py-2 px-3">
+                      {row.endTime ? (
+                        <span className="text-neutral-600">Checked out</span>
+                      ) : (
+                        <span className="text-green-700">Checked in</span>
+                      )}
+                    </td>
                     <td className="py-2 px-3">{when(row.startTime)}</td>
                     <td className="py-2 px-3">{when(row.endTime)}</td>
-                    <td className="py-2 px-3">{row.attendanceReason || row.town || '—'}</td>
+                    <td className="py-2 px-3">
+                      {[row.town, row.pincode].filter(Boolean).join(' - ') || '—'}
+                      {typeof row.latitude === 'number' && typeof row.longitude === 'number' && (
+                        <a
+                          className="ml-2 text-xs text-sky-700 underline"
+                          href={`https://www.google.com/maps?q=${row.latitude},${row.longitude}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Map
+                        </a>
+                      )}
+                    </td>
+                    <td className="py-2 px-3">{row.attendanceReason || '—'}</td>
                   </tr>
                 )
               })}

@@ -110,6 +110,47 @@ function canAccessExecutiveManagerWorkspace(
   )
 }
 
+/** Partner accounts are not employees and take no leave. */
+const NON_EMPLOYEE_ROLES = new Set(['Vendor', 'Partner', 'Franchise'])
+/** Roles holding one of the two leave approvals (HR Executive views the queue only). */
+const LEAVE_APPROVER_ROLES = new Set([
+  'HR Manager',
+  'HR Executive',
+  'Admin',
+  'Super Admin',
+  'Executive Manager',
+  'Manager',
+])
+/** Coordinators view all leaves and attendance, read-only. */
+const LEAVE_VIEWER_ROLES = new Set(['Coordinator', 'Senior Coordinator'])
+
+const matchesRoute = (pathname: string, route: string) =>
+  pathname === route || pathname.startsWith(`${route}/`)
+
+/** true/false when a leave rule decides; undefined to fall through to the usual checks. */
+function leaveManagementAccess(role: string | undefined, pathname: string): boolean | undefined {
+  const r = String(role || '')
+  if (
+    matchesRoute(pathname, '/dashboard/leaves/request') ||
+    matchesRoute(pathname, '/dashboard/leaves/approved')
+  ) {
+    return !NON_EMPLOYEE_ROLES.has(r)
+  }
+  if (matchesRoute(pathname, '/dashboard/leaves/pending') && LEAVE_APPROVER_ROLES.has(r)) {
+    return true
+  }
+  if (
+    matchesRoute(pathname, '/dashboard/leaves/report') &&
+    (LEAVE_VIEWER_ROLES.has(r) || r === 'HR Manager' || r === 'HR Executive' || r === 'Admin')
+  ) {
+    return true
+  }
+  if (matchesRoute(pathname, '/dashboard/employees/attendance') && LEAVE_VIEWER_ROLES.has(r)) {
+    return true
+  }
+  return undefined
+}
+
 /** Same rule for sidebar links and RouteGuard page access */
 export function canAccessPath(
   user: AuthUserWithPermissions | null,
@@ -148,6 +189,10 @@ export function canAccessPath(
   if (pathname === '/dashboard/complaints/raise' || pathname.startsWith('/dashboard/complaints/raise/')) {
     return true
   }
+  // Leave Management is on every employee dashboard (apply + My Leaves).
+  // Approval queues and the read-only views follow the dual-approval roles.
+  const leaveAccess = leaveManagementAccess(user.role, pathname)
+  if (leaveAccess !== undefined) return leaveAccess
   if (pathname === '/dashboard/dc/pending' || pathname.startsWith('/dashboard/dc/pending/')) {
     return user.role === 'Senior Coordinator'
   }

@@ -110,6 +110,58 @@ function ensureRaiseTicketNav(nav: NavItem[]): NavItem[] {
   ]
 }
 
+/** Partner accounts are not employees and take no leave. */
+const NON_EMPLOYEE_NAV_ROLES = new Set(['Vendor', 'Partner', 'Franchise'])
+/** Roles that hold one of the two approvals on a leave (HR Executive views the queue). */
+const LEAVE_APPROVER_NAV_ROLES = new Set(['HR Manager', 'HR Executive', 'Admin', 'Super Admin', 'Manager'])
+/** Roles that view every leave, read-only. */
+const LEAVE_REPORT_NAV_ROLES = new Set(['HR Manager', 'HR Executive', 'Admin', 'Super Admin', 'Coordinator', 'Senior Coordinator'])
+
+/**
+ * Leave Management on every employee dashboard: Apply for Leave and My Leaves
+ * for everyone, plus the approval queue / report for the roles that use them.
+ */
+function ensureLeaveManagementNav(nav: NavItem[], role: string | undefined): NavItem[] {
+  const r = String(role || '')
+  if (!r || NON_EMPLOYEE_NAV_ROLES.has(r)) return nav
+
+  const wanted: NonNullable<NavItem['children']> = []
+  if (LEAVE_APPROVER_NAV_ROLES.has(r)) {
+    wanted.push({ label: 'Pending Leaves', href: '/dashboard/leaves/pending', icon: Clock })
+  }
+  if (LEAVE_REPORT_NAV_ROLES.has(r)) {
+    wanted.push({ label: 'Leaves Report', href: '/dashboard/leaves/report', icon: FileText })
+  }
+  wanted.push(
+    { label: 'Apply for Leave', href: '/dashboard/leaves/request', icon: PlusCircle },
+    { label: 'My Leaves', href: '/dashboard/leaves/approved', icon: CheckCircle2 }
+  )
+
+  const index = nav.findIndex((item) => item.label === 'Leave Management')
+  if (index >= 0) {
+    const existing = nav[index]
+    // A single-link group (e.g. the Zonal Manager's team leaves) becomes its first child.
+    const children = existing.children
+      ? [...existing.children]
+      : existing.href
+        ? [{ label: 'Team Leaves', href: existing.href, icon: Users }]
+        : []
+    for (const child of wanted) {
+      if (!children.some((c) => c.href === child.href)) children.push(child)
+    }
+    const next = [...nav]
+    next[index] = { label: existing.label, icon: existing.icon || CalendarCheck2, children }
+    return next
+  }
+
+  const item: NavItem = { label: 'Leave Management', icon: CalendarCheck2, children: wanted }
+  const insertAt = nav.findIndex(
+    (entry) => entry.label === 'Raise Ticket' || entry.label === 'Settings' || entry.label === 'Sign out'
+  )
+  if (insertAt < 0) return [...nav, item]
+  return [...nav.slice(0, insertAt), item, ...nav.slice(insertAt)]
+}
+
 function HoverTooltip({ item, pathname, onClose }: { item: NavItem; pathname: string | null; onClose: () => void }) {
   const tooltipRef = useRef<HTMLDivElement>(null)
   const [position, setPosition] = useState({ top: 0, left: 64 })
@@ -1273,6 +1325,9 @@ export function Sidebar() {
       return children.length === item.children.length ? item : { ...item, children }
     })
   }
+
+  // Leave Management is on every employee dashboard.
+  finalNav = ensureLeaveManagementNav(finalNav, user?.role || permUser?.role)
 
   // Ticket raising is available to every authenticated role under one consistent name.
   finalNav = ensureRaiseTicketNav(finalNav)

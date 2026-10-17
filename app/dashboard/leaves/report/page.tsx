@@ -16,8 +16,10 @@ import {
 } from '@/components/ui/select'
 import { leaveTypeLabel } from '@/lib/leaveTypes'
 import { formatEmployeeCode } from '@/lib/employeeCode'
+import { usePermissions } from '@/components/permissions/PermissionsProvider'
+import { LeaveApprovalStatus, type LeaveApprovalFields } from '@/components/leaves/LeaveApprovalStatus'
 
-type Leave = {
+type Leave = LeaveApprovalFields & {
   _id: string
   employeeId: {
     name?: string
@@ -37,6 +39,9 @@ type Leave = {
 }
 
 export default function LeavesReportPage() {
+  const { user } = usePermissions()
+  // Coordinators view every leave but never approve, so they get no approval queue link.
+  const isViewOnly = user?.role === 'Coordinator' || user?.role === 'Senior Coordinator'
   const [items, setItems] = useState<Leave[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -153,14 +158,18 @@ export default function LeavesReportPage() {
         <div>
           <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Leaves Report</h1>
           <p className="text-sm text-neutral-600 mt-1">
-            Leave approvals are listed month by month. The HR Manager approves employee leave. Super Admin can see every record.
+            Leave approvals are listed month by month. Every leave needs two approvals (the employee&apos;s
+            head and the HR Manager); each approver&apos;s decision is shown in the status column.
+            {isViewOnly && ' View only.'}
           </p>
         </div>
-        <Link href="/dashboard/leaves/pending">
-          <Button variant="outline" size="sm">
-            Pending approvals
-          </Button>
-        </Link>
+        {!isViewOnly && (
+          <Link href="/dashboard/leaves/pending">
+            <Button variant="outline" size="sm">
+              Pending approvals
+            </Button>
+          </Link>
+        )}
       </div>
 
       {loadError && (
@@ -259,11 +268,11 @@ export default function LeavesReportPage() {
                   <th className="py-2 px-3 text-left">Designation</th>
                   <th className="py-2 px-3 text-left">Department</th>
                   <th className="py-2 px-3 text-left">Manager</th>
-                  <th className="py-2 px-3">Status</th>
+                  <th className="py-2 px-3 text-left">Approval status</th>
                   <th className="py-2 px-3 text-left">Leave Type</th>
                   <th className="py-2 px-3">From</th>
                   <th className="py-2 px-3">To</th>
-                  <th className="py-2 px-3 text-left">Approved by</th>
+                  <th className="py-2 px-3 text-left">Final decision by</th>
                   <th className="py-2 px-3">Approval date</th>
                   <th className="py-2 px-3 text-left">Reason</th>
                 </tr>
@@ -283,7 +292,9 @@ export default function LeavesReportPage() {
                     <td className="py-2 px-3">{designationOf(l)}</td>
                     <td className="py-2 px-3">{departmentOf(l)}</td>
                     <td className="py-2 px-3 text-sm text-neutral-600">{managerName(l)}</td>
-                    <td className="py-2 px-3 text-center">{l.status}</td>
+                    <td className="py-2 px-3 align-top min-w-[220px]">
+                      <LeaveApprovalStatus leave={l} />
+                    </td>
                     <td className="py-2 px-3">{leaveTypeLabel(l.leaveType)}</td>
                     <td className="py-2 px-3 text-center">
                       {new Date(l.startDate).toLocaleDateString()}

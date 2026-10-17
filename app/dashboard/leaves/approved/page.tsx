@@ -5,8 +5,9 @@ import { apiRequest } from '@/lib/api'
 import { Card } from '@/components/ui/card'
 import { usePermissions } from '@/components/permissions/PermissionsProvider'
 import { leaveTypeLabel } from '@/lib/leaveTypes'
+import { LeaveApprovalStatus, type LeaveApprovalFields } from '@/components/leaves/LeaveApprovalStatus'
 
-type Leave = {
+type Leave = LeaveApprovalFields & {
   _id: string
   startDate: string
   endDate: string
@@ -40,7 +41,12 @@ export default function EmployeeApprovedLeavesPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">My Leaves</h1>
+      <div>
+        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">My Leaves</h1>
+        <p className="text-sm text-neutral-600 mt-1">
+          A leave is approved only after both of your approvers approve it. Each approver&apos;s decision is shown below.
+        </p>
+      </div>
       <Card className="p-0 overflow-x-auto">
         {loading && <div className="p-4">Loading…</div>}
         {!loading && (
@@ -51,7 +57,7 @@ export default function EmployeeApprovedLeavesPage() {
                 <th className="py-2 px-3">From</th>
                 <th className="py-2 px-3">To</th>
                 <th className="py-2 px-3 text-left">Reason</th>
-                <th className="py-2 px-3">Status</th>
+                <th className="py-2 px-3 text-left">Approval status</th>
               </tr>
             </thead>
             <tbody>
@@ -72,18 +78,8 @@ export default function EmployeeApprovedLeavesPage() {
                     {new Date(l.endDate).toLocaleDateString()}
                   </td>
                   <td className="py-2 px-3">{l.reason || '-'}</td>
-                  <td className="py-2 px-3 text-center">
-                    <span
-                      className={
-                        l.status === 'Approved'
-                          ? 'inline-flex px-2 py-1 rounded-full text-xs bg-green-100 text-green-700'
-                          : l.status === 'Rejected'
-                            ? 'inline-flex px-2 py-1 rounded-full text-xs bg-red-100 text-red-700'
-                            : 'inline-flex px-2 py-1 rounded-full text-xs bg-yellow-100 text-yellow-700'
-                      }
-                    >
-                      {l.status}
-                    </span>
+                  <td className="py-2 px-3 align-top">
+                    <LeaveApprovalStatus leave={l} />
                   </td>
                 </tr>
               ))}

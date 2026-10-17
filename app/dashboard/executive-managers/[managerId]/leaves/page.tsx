@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { apiRequest } from '@/lib/api'
+import { LeaveApprovalStatus, type LeaveApprovalFields } from '@/components/leaves/LeaveApprovalStatus'
 import { leaveTypeLabel } from '@/lib/leaveTypes'
 import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
@@ -54,6 +55,9 @@ type Leave = {
   approvedAt?: string
   rejectionReason?: string
   createdAt: string
+  approvals?: LeaveApprovalFields['approvals']
+  approvalSummary?: string
+  canDecide?: boolean
 }
 
 export default function ExecutiveManagerLeavesPage() {
@@ -119,31 +123,24 @@ export default function ExecutiveManagerLeavesPage() {
 
     setProcessing(true)
     try {
-      await apiRequest(`/executive-managers/leaves/${selectedLeave._id}/approve`, {
+      await apiRequest(`/leaves/${selectedLeave._id}/approve`, {
         method: 'PUT',
         body: JSON.stringify({
           status: action === 'approve' ? 'Approved' : 'Rejected',
           rejectionReason: action === 'reject' ? rejectionReason : undefined,
         }),
       })
-      toast.success(`Leave ${action === 'approve' ? 'approved' : 'rejected'} successfully`)
+      toast.success(
+        action === 'approve'
+          ? 'Your approval is recorded. The leave is approved once HR Manager also approves.'
+          : 'Leave rejected'
+      )
       setApproveDialogOpen(false)
       loadLeaves()
     } catch (err: any) {
       toast.error(err?.message || `Failed to ${action} leave`)
     } finally {
       setProcessing(false)
-    }
-  }
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'Approved':
-        return <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs font-semibold">Approved</span>
-      case 'Rejected':
-        return <span className="px-2 py-1 bg-red-100 text-red-800 rounded text-xs font-semibold">Rejected</span>
-      default:
-        return <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs font-semibold">Pending</span>
     }
   }
 
@@ -262,9 +259,11 @@ export default function ExecutiveManagerLeavesPage() {
                     <TableCell>{leave.days}</TableCell>
                     <TableCell className="max-w-xs truncate">{leave.reason}</TableCell>
                     <TableCell>{leave.employeeId.assignedCity || '-'}</TableCell>
-                    <TableCell>{getStatusBadge(leave.status)}</TableCell>
+                    <TableCell className="align-top">
+                      <LeaveApprovalStatus leave={leave} />
+                    </TableCell>
                     <TableCell>
-                      {leave.status === 'Pending' ? (
+                      {leave.status === 'Pending' && leave.canDecide ? (
                         <div className="flex gap-2">
                           <Button
                             variant="outline"
@@ -285,6 +284,8 @@ export default function ExecutiveManagerLeavesPage() {
                             Reject
                           </Button>
                         </div>
+                      ) : leave.status === 'Pending' ? (
+                        <span className="text-xs text-neutral-500">Your decision is recorded or not required</span>
                       ) : (
                         <div className="text-xs text-neutral-500">
                           {leave.approvedBy && (

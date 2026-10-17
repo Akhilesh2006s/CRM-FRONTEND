@@ -55,8 +55,12 @@ export function canAccessLeavePage(
   }
 }
 
+/** Partner accounts are not employees and take no leave. */
+const NON_EMPLOYEE_ROLES = ['Vendor', 'Partner', 'Franchise'] as const
+
+/** Every employee role can apply for leave and see My Leaves. */
 export function canApplyForLeave(role: string | undefined): boolean {
-  return includesRole(LEAVE_SELF_SERVICE_ROLES, role)
+  return !!role && !includesRole(NON_EMPLOYEE_ROLES, role)
 }
 
 export function canViewMyLeaves(role: string | undefined): boolean {

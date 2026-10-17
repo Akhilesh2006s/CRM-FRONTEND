@@ -18,14 +18,21 @@ import {
 import { toast } from 'sonner'
 import { leaveTypeLabel } from '@/lib/leaveTypes'
 import { formatEmployeeCode } from '@/lib/employeeCode'
+import {
+  LeaveApprovalStatus,
+  slotLabel,
+  type LeaveApprovalFields,
+} from '@/components/leaves/LeaveApprovalStatus'
 
-type Leave = {
+type Leave = LeaveApprovalFields & {
   _id: string
   employeeId: {
     _id?: string
     name?: string
     empCode?: string
+    role?: string
     executiveManagerId?: { _id?: string; name?: string } | string
+    verticalManagerId?: { _id?: string; name?: string } | string
   } | string | null
   reason?: string
   startDate: string
@@ -36,9 +43,6 @@ type Leave = {
 
 export default function AdminPendingLeavesPage() {
   const { user, permissionsReady } = usePermissions()
-  const isExecutiveManager = user?.role === 'Executive Manager'
-  const isHrExecutive = user?.role === 'HR Executive'
-  const canDecide = !isHrExecutive
   const [items, setItems] = useState<Leave[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -52,10 +56,11 @@ export default function AdminPendingLeavesPage() {
     setLoading(true)
     setLoadError(null)
     try {
-      const data = isExecutiveManager
-        ? await apiRequest<Leave[]>(`/executive-managers/${user._id}/leaves?status=Pending`)
-        : await apiRequest<Leave[]>('/leaves?status=Pending')
-      setItems(Array.isArray(data) ? data : [])
+      const data = await apiRequest<Leave[]>('/leaves?status=Pending')
+      const rows = Array.isArray(data) ? data : []
+      // Leaves waiting on this viewer's decision come first.
+      rows.sort((a, b) => Number(!!b.canDecide) - Number(!!a.canDecide))
+      setItems(rows)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Failed to load leaves'
       setLoadError(msg)
@@ -64,7 +69,7 @@ export default function AdminPendingLeavesPage() {
     } finally {
       setLoading(false)
     }
-  }, [user?._id, isExecutiveManager])
+  }, [user?._id])
 
   useEffect(() => {
     if (permissionsReady && user?._id) load()
@@ -75,25 +80,36 @@ export default function AdminPendingLeavesPage() {
     return typeof l.employeeId === 'string' ? l.employeeId : l.employeeId?.name || 'Unknown'
   }
 
-  const getManagerName = (l: Leave) => {
-    if (!l.employeeId || typeof l.employeeId === 'string') return '—'
-    const mgr = l.employeeId.executiveManagerId
-    if (!mgr) return '— Not assigned'
-    if (typeof mgr === 'string') return mgr
-    return mgr.name || '—'
+  const isOwnLeave = (l: Leave) =>
+    !!l.employeeId && typeof l.employeeId === 'object' && l.employeeId._id === user?._id
+
+  /** Admin can approve every pending slot at once when their own decision would not finish it. */
+  const showOverride = (l: Leave) => {
+    if (!l.canOverride) return false
+    const pending = (l.approvals || []).filter((a) => a.status === 'Pending').map((a) => a.slot)
+    const mine = l.decidableSlots || []
+    return pending.some((slot) => !mine.includes(slot))
   }
 
-  const approve = async (id: string) => {
+  const waitingText = (l: Leave) => {
+    if (isOwnLeave(l)) return 'Your own leave'
+    const pending = (l.approvals || []).filter((a) => a.status === 'Pending')
+    if (pending.length === 0) return '—'
+    return `Waiting for ${pending.map((a) => a.label || slotLabel(a.slot)).join(' & ')}`
+  }
+
+  const approve = async (id: string, override = false) => {
     setActing(true)
     try {
-      const url = isExecutiveManager
-        ? `/executive-managers/leaves/${id}/approve`
-        : `/leaves/${id}/approve`
-      await apiRequest(url, {
+      const updated = await apiRequest<Leave>(`/leaves/${id}/approve`, {
         method: 'PUT',
-        body: JSON.stringify({ status: 'Approved' }),
+        body: JSON.stringify({ status: 'Approved', override }),
       })
-      toast.success('Leave approved. Employee marked inactive for leave period.')
+      toast.success(
+        updated?.status === 'Approved'
+          ? 'Leave approved by all approvers.'
+          : `Your approval is recorded. ${updated?.approvalSummary || ''}`.trim()
+      )
       load()
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Failed to approve leave')
@@ -118,10 +134,7 @@ export default function AdminPendingLeavesPage() {
     setActing(true)
     try {
       const body = { status: 'Rejected', rejectionReason: reason }
-      const url = isExecutiveManager
-        ? `/executive-managers/leaves/${rejectingId}/approve`
-        : `/leaves/${rejectingId}/approve`
-      await apiRequest(url, { method: 'PUT', body: JSON.stringify(body) })
+      await apiRequest(`/leaves/${rejectingId}/approve`, { method: 'PUT', body: JSON.stringify(body) })
       toast.success('Leave rejected — employee will see the reason in My Leaves')
       setRejectDialogOpen(false)
       setRejectingId(null)
@@ -140,7 +153,13 @@ export default function AdminPendingLeavesPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Pending Leaves</h1>
+        <div>
+          <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Pending Leaves</h1>
+          <p className="text-sm text-neutral-600 mt-1">
+            Each leave needs two approvals: BDE — Zonal Manager + HR Manager; Trainer — Product Head + HR Manager;
+            other roles — Admin + HR Manager. Any rejection rejects the leave.
+          </p>
+        </div>
         <div className="text-sm text-neutral-600">Total: {items.length}</div>
       </div>
       {loadError && (
@@ -154,11 +173,11 @@ export default function AdminPendingLeavesPage() {
               <tr className="bg-sky-50/70 border-b text-neutral-700">
                 <th className="py-2 px-3 text-left">Employee code</th>
                 <th className="py-2 px-3 text-left">Employee</th>
-                {!isExecutiveManager && <th className="py-2 px-3 text-left">Manager</th>}
                 <th className="py-2 px-3 text-left">Leave Type</th>
                 <th className="py-2 px-3">From</th>
                 <th className="py-2 px-3">To</th>
                 <th className="py-2 px-3 text-left">Reason</th>
+                <th className="py-2 px-3 text-left">Approval status</th>
                 <th className="py-2 px-3">Action</th>
               </tr>
             </thead>
@@ -166,7 +185,7 @@ export default function AdminPendingLeavesPage() {
               {items.length === 0 && (
                 <tr>
                   <td
-                    colSpan={isExecutiveManager ? 7 : 8}
+                    colSpan={8}
                     className="py-4 px-3 text-center text-neutral-500"
                   >
                     No pending leaves
@@ -177,9 +196,6 @@ export default function AdminPendingLeavesPage() {
                 <tr key={l._id} className="border-b last:border-0">
                   <td className="py-2 px-3">{formatEmployeeCode(typeof l.employeeId === 'object' && l.employeeId ? l.employeeId.empCode : undefined)}</td>
                   <td className="py-2 px-3">{getEmployeeName(l)}</td>
-                  {!isExecutiveManager && (
-                    <td className="py-2 px-3 text-sm text-neutral-600">{getManagerName(l)}</td>
-                  )}
                   <td className="py-2 px-3">{leaveTypeLabel(l.leaveType)}</td>
                   <td className="py-2 px-3 text-center">
                     {new Date(l.startDate).toLocaleDateString()}
@@ -188,23 +204,42 @@ export default function AdminPendingLeavesPage() {
                     {new Date(l.endDate).toLocaleDateString()}
                   </td>
                   <td className="py-2 px-3">{l.reason || '-'}</td>
-                  <td className="py-2 px-3 text-right">
-                    {canDecide ? (
-                      <div className="flex gap-2 justify-end">
-                        <Button size="sm" disabled={acting} onClick={() => approve(l._id)}>
-                          Approve
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          disabled={acting}
-                          onClick={() => openReject(l._id)}
-                        >
-                          Reject
-                        </Button>
+                  <td className="py-2 px-3 align-top">
+                    <LeaveApprovalStatus leave={l} />
+                  </td>
+                  <td className="py-2 px-3 text-right align-top">
+                    {l.canDecide ? (
+                      <div className="flex flex-col items-end gap-2">
+                        <div className="text-xs text-neutral-500">
+                          {l.decisionIsOverride ? 'Admin override: ' : 'As '}
+                          {(l.decidableSlots || []).map(slotLabel).join(' & ')}
+                        </div>
+                        <div className="flex gap-2 justify-end">
+                          <Button size="sm" disabled={acting} onClick={() => approve(l._id)}>
+                            Approve
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={acting}
+                            onClick={() => openReject(l._id)}
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                        {showOverride(l) && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={acting}
+                            onClick={() => approve(l._id, true)}
+                          >
+                            Approve all (override)
+                          </Button>
+                        )}
                       </div>
                     ) : (
-                      <span className="text-xs text-neutral-500">Waiting for HR Manager</span>
+                      <span className="text-xs text-neutral-500">{waitingText(l)}</span>
                     )}
                   </td>
                 </tr>
