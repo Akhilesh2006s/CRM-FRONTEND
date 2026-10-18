@@ -16,6 +16,8 @@ import { sanitizePhoneInput, validatePhoneDigits } from '@/lib/phone'
 import { ArrowLeft, MapPin, Edit, History, X, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { DueRenewalsCard, type DueRenewalRow } from '@/components/clients/DueRenewalsCard'
+import { ContractEditor } from '@/components/clients/ContractEditor'
 
 type DcOrderSearchRow = {
   _id: string
@@ -36,6 +38,9 @@ type DcOrderSearchRow = {
   school_type?: string
   products?: Array<{ product_name?: string; quantity?: number; term?: string }>
   status?: string
+  contract_years?: number
+  contract_start?: string
+  contract_end?: string
 }
 
 type Lead = {
@@ -189,6 +194,8 @@ export default function RenewalLeadsPage() {
     { product_name: '', term: 'Term 1', strength: '', renewal_pct: 100, isFromPreviousDc: false },
   ])
   const [creatingRenewal, setCreatingRenewal] = useState(false)
+  const [dueRefreshKey, setDueRefreshKey] = useState(0)
+  const isAdmin = currentUser?.role === 'Admin' || currentUser?.role === 'Super Admin'
 
   useEffect(() => {
     loadLeads()
@@ -298,6 +305,9 @@ export default function RenewalLeadsPage() {
     strength: (full.strength as number) ?? row.strength,
     address: (full.address as string) ?? row.address,
     school_type: (full.school_type as string) ?? row.school_type,
+    contract_years: (full.contract_years as number) ?? row.contract_years,
+    contract_start: (full.contract_start as string) ?? row.contract_start,
+    contract_end: (full.contract_end as string) ?? row.contract_end,
     products: Array.isArray(full.products) ? (full.products as DcOrderSearchRow['products']) : row.products,
     status: (full.status as string) ?? row.status,
   })
@@ -423,6 +433,7 @@ export default function RenewalLeadsPage() {
         }),
       })
       toast.success('Renewal lead created')
+      setDueRefreshKey((key) => key + 1)
       setSelectedSchool(null)
       setSchoolQuery('')
       setRenewRemarks('')
@@ -688,7 +699,15 @@ export default function RenewalLeadsPage() {
         </Link>
       </div>
 
-      <Card className="p-4 border-emerald-200 bg-emerald-50/40">
+      <DueRenewalsCard
+        refreshKey={dueRefreshKey}
+        onStartRenewal={(row: DueRenewalRow) => {
+          selectSchool({ ...row, products: [] })
+          document.getElementById('create-renewal-lead')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }}
+      />
+
+      <Card id="create-renewal-lead" className="p-4 border-emerald-200 bg-emerald-50/40">
         <h2 className="text-lg font-semibold text-emerald-900 mb-3">Create renewal lead</h2>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="space-y-3">
@@ -765,6 +784,19 @@ export default function RenewalLeadsPage() {
                 </div>
                 <div>
                   <span className="text-neutral-500">Location:</span> {displayField(selectedSchool.location)}
+                </div>
+                <div className="pt-1">
+                  <div className="text-neutral-500 mb-1">Contract:</div>
+                  <ContractEditor
+                    key={`${selectedSchool._id}-${selectedSchool.contract_end || ''}`}
+                    schoolId={selectedSchool._id}
+                    contract={selectedSchool}
+                    canEdit={isAdmin}
+                    onSaved={(saved) => {
+                      setSelectedSchool((prev) => (prev ? { ...prev, ...saved } as DcOrderSearchRow : prev))
+                      setDueRefreshKey((key) => key + 1)
+                    }}
+                  />
                 </div>
               </div>
             )}

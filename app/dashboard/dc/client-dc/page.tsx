@@ -24,6 +24,7 @@ import { Pencil, Package, Plus, Upload, X, Search, CreditCard, FileText, PlusCir
 import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
 import { sanitizePhoneInput, validatePhoneDigits } from '@/lib/phone'
+import { ContractPeriod } from '@/components/clients/ContractPeriod'
 import { useProducts } from '@/hooks/useProducts'
 import { applyPaymentDivisorsToBreakdown } from '@/lib/dcPaymentDivisors'
 import { aggregateInvoicePaymentTerms } from '@/lib/dcInvoiceData'
@@ -95,6 +96,9 @@ type DC = {
     transport_location?: string
     createdAt?: string // Date when lead was turned to client
     pendingEdit?: { status?: string }
+    contract_years?: number
+    contract_start?: string
+    contract_end?: string
   }
   customerName?: string
   customerPhone?: string
@@ -3204,6 +3208,7 @@ export default function ClientDCPage() {
                   <TableHead className="font-bold text-neutral-700 py-4">Client Name</TableHead>
                   <TableHead className="font-bold text-neutral-700 py-4">Phone</TableHead>
                   <TableHead className="font-bold text-neutral-700 py-4">Product</TableHead>
+                  <TableHead className="font-bold text-neutral-700 py-4 min-w-[170px]">Contract</TableHead>
                   <TableHead className="font-bold text-neutral-700 py-4 min-w-[220px]">Workflow / next action</TableHead>
                   <TableHead className="font-bold text-neutral-700 py-4 min-w-[180px]">Transport / LR</TableHead>
                   <TableHead className="font-bold text-neutral-700 py-4">Delivery status</TableHead>
@@ -3224,7 +3229,7 @@ export default function ClientDCPage() {
               <TableBody>
                 {filteredItems.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={20} className="text-center text-neutral-500 py-4">
+                    <TableCell colSpan={21} className="text-center text-neutral-500 py-4">
                       No clients found matching your search.
                     </TableCell>
                   </TableRow>
@@ -3267,6 +3272,7 @@ export default function ClientDCPage() {
                         <TableCell className="font-semibold text-neutral-900">{customerName}</TableCell>
                         <TableCell className="text-neutral-700">{phone}</TableCell>
                         <TableCell className="max-w-[320px] whitespace-normal break-words text-neutral-700" title={product}>{product}</TableCell>
+                        <TableCell><ContractPeriod contract={linkedOrder} compact /></TableCell>
                         <TableCell>
                           <div className="flex flex-col gap-1 min-w-[210px]">
                             <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 w-fit">
