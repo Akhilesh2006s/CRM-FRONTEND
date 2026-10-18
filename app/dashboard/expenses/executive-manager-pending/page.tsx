@@ -28,8 +28,14 @@ type Expense = {
     name: string
     email: string
   }
+  createdBy?: { _id: string; name: string } | null
+  /** Backend-resolved employee: employeeId, else trainerId, else submitter */
+  employee?: { _id: string; name: string } | null
   pendingMonth?: string
 }
+
+const getEmployee = (expense: Expense) =>
+  expense.employee || expense.employeeId || expense.trainerId || expense.createdBy || null
 
 type Employee = {
   _id: string
@@ -41,7 +47,6 @@ export default function ExecutiveManagerPendingExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
   const [employees, setEmployees] = useState<Employee[]>([])
-  const [approving, setApproving] = useState<string | null>(null)
   const [filters, setFilters] = useState({
     employeeId: 'all',
   })
@@ -93,22 +98,6 @@ export default function ExecutiveManagerPendingExpensesPage() {
 
   const handleSearch = () => {
     loadExpenses()
-  }
-
-  const handleApprove = async (expenseId: string) => {
-    setApproving(expenseId)
-    try {
-      await apiRequest(`/expenses/${expenseId}/executive-approve`, {
-        method: 'PUT',
-        body: JSON.stringify({}),
-      })
-      toast.success('Expense approved successfully')
-      loadExpenses()
-    } catch (error: any) {
-      toast.error(error?.message || 'Failed to approve expense')
-    } finally {
-      setApproving(null)
-    }
   }
 
   const handleEdit = (expenseId: string, employeeId?: string) => {
@@ -221,7 +210,7 @@ export default function ExecutiveManagerPendingExpensesPage() {
                   <TableCell colSpan={8} className="text-center py-8 text-neutral-500">
                     {employees.length === 0 
                       ? 'No employees assigned to you. Please contact an administrator.' 
-                      : 'No pending expenses found for your assigned employees'}
+                      : 'No expenses are awaiting your approval'}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -232,7 +221,7 @@ export default function ExecutiveManagerPendingExpensesPage() {
                   >
                     <TableCell>{index + 1}</TableCell>
                     <TableCell className="font-medium">
-                      {expense.employeeId?.name || expense.trainerId?.name || '-'}
+                      {getEmployee(expense)?.name || '-'}
                     </TableCell>
                     <TableCell>{formatDate(expense.createdAt)}</TableCell>
                     <TableCell>{getExpenseType(expense.category)}</TableCell>
@@ -241,7 +230,7 @@ export default function ExecutiveManagerPendingExpensesPage() {
                     </TableCell>
                     <TableCell>
                       <button
-                        onClick={() => handleEdit(expense._id, expense.employeeId?._id || expense.trainerId?._id)}
+                        onClick={() => handleEdit(expense._id, getEmployee(expense)?._id)}
                         className="text-orange-600 hover:text-orange-700 transition-colors"
                         aria-label="Update expense"
                       >
@@ -249,20 +238,14 @@ export default function ExecutiveManagerPendingExpensesPage() {
                       </button>
                     </TableCell>
                     <TableCell>
+                      {/* Approval needs an amount and remarks per item, entered on the review page. */}
                       <Button
-                        onClick={() => handleApprove(expense._id)}
-                        disabled={approving === expense._id}
+                        onClick={() => handleEdit(expense._id, getEmployee(expense)?._id)}
                         size="sm"
                         className="bg-green-600 hover:bg-green-700 text-white"
                       >
-                        {approving === expense._id ? (
-                          'Approving...'
-                        ) : (
-                          <>
-                            <CheckCircle className="h-4 w-4 mr-1" />
-                            Approve
-                          </>
-                        )}
+                        <CheckCircle className="h-4 w-4 mr-1" />
+                        Review &amp; Approve
                       </Button>
                     </TableCell>
                     <TableCell>{getPendingMonth(expense)}</TableCell>

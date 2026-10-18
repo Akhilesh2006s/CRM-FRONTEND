@@ -15,35 +15,34 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Pencil, CheckCircle, Eye, ExternalLink } from 'lucide-react'
+import { CheckCircle, Eye, ExternalLink } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import {
+  type ApprovalExpense,
+  type ExpensePerson,
+  approvalHistory,
+  expenseStage,
+  expenseStatusColor,
+  expenseStatusText,
+  firstLevelAmount,
+  firstLevelApproverLabel,
+  firstLevelApprovedBy,
+} from '@/lib/expenseApproval'
 
-type Person = {
-  _id: string
-  name: string
-  email?: string
-  empCode?: string
-  role?: string
-}
-
-type Expense = {
+type Expense = ApprovalExpense & {
   _id: string
   title: string
   description?: string
   amount: number
-  employeeAmount?: number
-  approvedAmount?: number
   category: string
-  status: 'Pending' | 'Executive Manager Approved' | 'Manager Approved' | 'Approved' | 'Rejected'
   date?: string
   stayDateEnd?: string
   createdAt: string
-  employeeId?: Person | null
-  trainerId?: Person | null
-  createdBy?: Person | null
+  employeeId?: ExpensePerson | null
+  trainerId?: ExpensePerson | null
   /** Backend-resolved employee: employeeId, else trainerId, else submitter */
-  employee?: Person | null
+  employee?: ExpensePerson | null
   department?: string
   paymentMethod?: string
   receipt?: string
@@ -55,17 +54,6 @@ type Expense = {
   travelTo?: string
   approxKms?: number
   gpsDistance?: number
-  employeeRemarks?: string
-  managerRemarks?: string
-  rejectionReason?: string
-  executiveManagerApprovedBy?: Person | null
-  executiveManagerApprovedAt?: string
-  managerApprovedBy?: Person | null
-  managerApprovedAt?: string
-  approvedBy?: Person | null
-  approvedAt?: string
-  returnedBy?: Person | null
-  returnedAt?: string
   pendingMonth?: string
 }
 
@@ -82,6 +70,43 @@ type Trainer = {
   name: string
 }
 
+const formatDate = (dateString?: string) => {
+  if (!dateString) return '-'
+  const date = new Date(dateString)
+  if (Number.isNaN(date.getTime())) return '-'
+  return date.toLocaleString('en-IN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).replace(/(\d+)\/(\d+)\/(\d+),/, '$3-$2-$1').replace(', ', ' ')
+}
+
+const formatDay = (dateString?: string) => {
+  if (!dateString) return '-'
+  const date = new Date(dateString)
+  if (Number.isNaN(date.getTime())) return '-'
+  return date.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: '2-digit' })
+}
+
+const formatAmount = (value?: number) =>
+  typeof value === 'number' && Number.isFinite(value) ? value.toFixed(2) : '-'
+
+const getExpenseType = (category: string) => {
+  if (!category) return '-'
+  if (category === 'Other') return 'Others'
+  return category.charAt(0).toUpperCase() + category.slice(1)
+}
+
+const getPendingMonth = (expense: Expense) => {
+  if (expense.pendingMonth) return expense.pendingMonth
+  const date = new Date(expense.createdAt)
+  return date.toLocaleString('en-US', { month: 'long' })
+}
+
 export default function ManagerPendingExpensesPage() {
   const router = useRouter()
   const [expenses, setExpenses] = useState<Expense[]>([])
@@ -92,7 +117,6 @@ export default function ManagerPendingExpensesPage() {
     employeeId: 'all',
     trainerId: 'all',
   })
-  const [approving, setApproving] = useState<string | null>(null)
   const [viewing, setViewing] = useState<Expense | null>(null)
   const [role, setRole] = useState('')
 
@@ -101,7 +125,6 @@ export default function ManagerPendingExpensesPage() {
   }, [])
 
   useEffect(() => {
-    // Load employees and trainers
     ;(async () => {
       try {
         const [empData, trainerData] = await Promise.all([
@@ -137,119 +160,28 @@ export default function ManagerPendingExpensesPage() {
     }
   }
 
-  const handleSearch = () => {
-    loadExpenses()
-  }
-
-  const handleEdit = (expenseId: string, employeeId?: string) => {
-    // Navigate to manager expense update page for the employee
-    if (employeeId) {
-      router.push(`/dashboard/expenses/manager-update/${employeeId}`)
-    } else {
-      router.push(`/dashboard/expenses/edit/${expenseId}`)
+  // Approving needs an amount and (at first level) a remark per item, so it happens on
+  // the per-item review page for the employee.
+  const openReview = (expense: Expense) => {
+    const employeeId = getEmployee(expense)?._id
+    if (!employeeId) {
+      toast.error('This expense has no employee to review')
+      return
     }
+    router.push(`/dashboard/expenses/manager-update/${employeeId}`)
   }
 
-  const handleApprove = async (expenseId: string, currentStatus: string) => {
-    setApproving(expenseId)
-    try {
-      const user = getCurrentUser()
-      const oversightRoles = new Set(['Admin', 'Super Admin', 'Coordinator', 'Finance Manager'])
-      const nextStatus =
-        currentStatus === 'Pending' && oversightRoles.has(user?.role || '')
-          ? 'Executive Manager Approved'
-          : 'Approved'
-
-      await apiRequest(`/expenses/${expenseId}/approve`, {
-        method: 'PUT',
-        body: JSON.stringify({ status: nextStatus }),
-      })
-      toast.success(
-        nextStatus === 'Executive Manager Approved'
-          ? 'Expense forwarded for manager approval'
-          : 'Expense approved successfully'
-      )
-      setViewing(null)
-      loadExpenses()
-    } catch (error: any) {
-      toast.error(error?.message || 'Failed to approve expense')
-    } finally {
-      setApproving(null)
-    }
-  }
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleString('en-IN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    }).replace(/(\d+)\/(\d+)\/(\d+),/, '$3-$2-$1').replace(', ', ' ')
-  }
-
-  const formatDay = (dateString?: string) => {
-    if (!dateString) return '-'
-    const date = new Date(dateString)
-    if (Number.isNaN(date.getTime())) return '-'
-    return date.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: '2-digit' })
-  }
-
-  const formatAmount = (value?: number) =>
-    typeof value === 'number' && Number.isFinite(value) ? value.toFixed(2) : '-'
-
-  const getExpenseType = (category: string) => {
-    // Map categories to display format
-    if (category === 'Other') return 'Others'
-    return category
-  }
-
-  const getPendingMonth = (expense: Expense) => {
-    if (expense.pendingMonth) return expense.pendingMonth
-    // Fallback: calculate from createdAt date
-    const date = new Date(expense.createdAt)
-    return date.toLocaleString('en-US', { month: 'long' })
-  }
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Approved':
-        return 'bg-green-100 text-green-700'
-      case 'Manager Approved':
-        return 'bg-blue-100 text-blue-700'
-      case 'Executive Manager Approved':
-        return 'bg-purple-100 text-purple-700'
-      case 'Pending':
-        return 'bg-amber-100 text-amber-700'
-      case 'Rejected':
-        return 'bg-red-100 text-red-700'
-      default:
-        return 'bg-gray-100 text-gray-700'
-    }
-  }
-
-  const getStatusDisplay = (status: string) => {
-    if (status === 'Pending') return 'Pending at Zonal Manager'
-    if (status === 'Manager Approved') return 'Product Manager Approved'
-    if (status === 'Executive Manager Approved') return 'Approved by Zonal Manager, Pending at Product Manager'
-    if (status === 'Approved') return 'Approved'
-    return status
-  }
+  const isFinance = role === 'Finance Manager'
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">
-          {role === 'Manager' ? 'Product Manager Pending Expenses List' : 'Pending Expenses List'}
-        </h1>
-        {role && role !== 'Manager' && (
-          <p className="text-sm text-neutral-500 mt-1">
-            Expenses awaiting Zonal Manager or Product Manager approval. Open a row to review its full details before approving.
-          </p>
-        )}
+        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Pending Expenses List</h1>
+        <p className="text-sm text-neutral-500 mt-1">
+          {isFinance
+            ? 'Expenses approved at first level and awaiting your final approval.'
+            : 'Expenses awaiting your approval. Open one to review its full details, then approve or reject it on the review page.'}
+        </p>
       </div>
 
       {/* Filter Section */}
@@ -291,7 +223,7 @@ export default function ManagerPendingExpensesPage() {
               </SelectContent>
             </Select>
           </div>
-          <Button onClick={handleSearch} className="bg-blue-600 hover:bg-blue-700 text-white">
+          <Button onClick={loadExpenses} className="bg-blue-600 hover:bg-blue-700 text-white">
             Search
           </Button>
         </div>
@@ -308,6 +240,7 @@ export default function ManagerPendingExpensesPage() {
                 <TableHead className="font-semibold">Raised Date</TableHead>
                 <TableHead className="font-semibold">Exp Type</TableHead>
                 <TableHead className="font-semibold text-right">Amount</TableHead>
+                <TableHead className="font-semibold text-right">1st Level Amount</TableHead>
                 <TableHead className="font-semibold">Approval Status</TableHead>
                 <TableHead className="font-semibold">Action</TableHead>
                 <TableHead className="font-semibold">Pending Months</TableHead>
@@ -316,17 +249,14 @@ export default function ManagerPendingExpensesPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-neutral-500">
+                  <TableCell colSpan={9} className="text-center py-8 text-neutral-500">
                     Loading expenses...
                   </TableCell>
                 </TableRow>
               ) : expenses.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-neutral-500">
-                    No pending expenses found.
-                    <span className="block text-sm text-neutral-400 mt-1">
-                      New submissions appear here while awaiting Zonal Manager or Product Manager approval.
-                    </span>
+                  <TableCell colSpan={9} className="text-center py-8 text-neutral-500">
+                    No expenses are awaiting your approval.
                   </TableCell>
                 </TableRow>
               ) : (
@@ -336,17 +266,16 @@ export default function ManagerPendingExpensesPage() {
                     className={`${index % 2 === 0 ? 'bg-white' : 'bg-neutral-50/50'}`}
                   >
                     <TableCell>{index + 1}</TableCell>
-                    <TableCell className="font-medium">
-                      {getEmployee(expense)?.name || '-'}
-                    </TableCell>
+                    <TableCell className="font-medium">{getEmployee(expense)?.name || '-'}</TableCell>
                     <TableCell>{formatDate(expense.createdAt)}</TableCell>
                     <TableCell>{getExpenseType(expense.category)}</TableCell>
                     <TableCell className="text-right font-medium">
-                      {expense.amount.toFixed(2)}
+                      {formatAmount(expense.employeeAmount ?? expense.amount)}
                     </TableCell>
+                    <TableCell className="text-right">{formatAmount(firstLevelAmount(expense))}</TableCell>
                     <TableCell>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(expense.status)}`}>
-                        {getStatusDisplay(expense.status)}
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${expenseStatusColor(expense.status)}`}>
+                        {expenseStatusText(expense)}
                       </span>
                     </TableCell>
                     <TableCell>
@@ -359,27 +288,13 @@ export default function ManagerPendingExpensesPage() {
                         >
                           <Eye className="h-4 w-4" />
                         </button>
-                        <button
-                          onClick={() => handleEdit(expense._id, getEmployee(expense)?._id)}
-                          className="text-orange-600 hover:text-orange-700 transition-colors"
-                          aria-label="Update expense"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
                         <Button
-                          onClick={() => handleApprove(expense._id, expense.status)}
-                          disabled={approving === expense._id}
+                          onClick={() => openReview(expense)}
                           size="sm"
                           className="bg-green-600 hover:bg-green-700 text-white h-7 px-2 text-xs"
                         >
-                          {approving === expense._id ? (
-                            'Approving...'
-                          ) : (
-                            <>
-                              <CheckCircle className="h-3 w-3 mr-1" />
-                              Approve
-                            </>
-                          )}
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Review
                         </Button>
                       </div>
                     </TableCell>
@@ -395,14 +310,7 @@ export default function ManagerPendingExpensesPage() {
       <ExpenseDetailsDialog
         expense={viewing}
         onClose={() => setViewing(null)}
-        onApprove={(exp) => handleApprove(exp._id, exp.status)}
-        approving={!!viewing && approving === viewing._id}
-        formatDate={formatDate}
-        formatDay={formatDay}
-        formatAmount={formatAmount}
-        getExpenseType={getExpenseType}
-        getStatusColor={getStatusColor}
-        getStatusDisplay={getStatusDisplay}
+        onReview={(exp) => openReview(exp)}
       />
     </div>
   )
@@ -447,52 +355,18 @@ function Attachment({ label, url }: { label: string; url?: string }) {
 function ExpenseDetailsDialog({
   expense,
   onClose,
-  onApprove,
-  approving,
-  formatDate,
-  formatDay,
-  formatAmount,
-  getExpenseType,
-  getStatusColor,
-  getStatusDisplay,
+  onReview,
 }: {
   expense: Expense | null
   onClose: () => void
-  onApprove: (expense: Expense) => void
-  approving: boolean
-  formatDate: (d: string) => string
-  formatDay: (d?: string) => string
-  formatAmount: (v?: number) => string
-  getExpenseType: (c: string) => string
-  getStatusColor: (s: string) => string
-  getStatusDisplay: (s: string) => string
+  onReview: (expense: Expense) => void
 }) {
   const employee = expense ? getEmployee(expense) : null
   const submitter = expense?.createdBy
   const isTravel = expense?.category?.toLowerCase() === 'travel'
   const isStay = /^accom/i.test(expense?.category || '')
-  const amountEdited =
-    !!expense &&
-    typeof expense.approvedAmount === 'number' &&
-    expense.approvedAmount !== (expense.employeeAmount ?? expense.amount)
-
-  const history = expense
-    ? [
-        { step: 'Submitted', by: submitter, at: expense.createdAt, remarks: expense.employeeRemarks },
-        expense.executiveManagerApprovedAt || expense.executiveManagerApprovedBy
-          ? { step: 'Approved by Zonal Manager', by: expense.executiveManagerApprovedBy, at: expense.executiveManagerApprovedAt }
-          : null,
-        expense.managerApprovedAt || expense.managerApprovedBy
-          ? { step: 'Approved by Product Manager', by: expense.managerApprovedBy, at: expense.managerApprovedAt }
-          : null,
-        expense.approvedAt || expense.approvedBy
-          ? { step: 'Approved by Finance', by: expense.approvedBy, at: expense.approvedAt }
-          : null,
-        expense.returnedAt || expense.returnedBy
-          ? { step: 'Sent back for correction', by: expense.returnedBy, at: expense.returnedAt, remarks: expense.rejectionReason }
-          : null,
-      ].filter((h): h is NonNullable<typeof h> => !!h)
-    : []
+  const stage = expense ? expenseStage(expense) : null
+  const firstBy = expense ? firstLevelApprovedBy(expense) : null
 
   return (
     <Dialog open={!!expense} onOpenChange={(open) => !open && onClose()}>
@@ -507,10 +381,18 @@ function ExpenseDetailsDialog({
             </DialogHeader>
 
             <div className="space-y-5">
-              <div>
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(expense.status)}`}>
-                  {getStatusDisplay(expense.status)}
+              <div className="space-y-1">
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${expenseStatusColor(expense.status)}`}>
+                  {expenseStatusText(expense)}
                 </span>
+                {stage === 'first' && (
+                  <p className="text-xs text-neutral-500">
+                    First-level approver: {firstLevelApproverLabel(expense.firstLevelApprover)}
+                    {expense.firstLevelApprover?.kind === 'tag' && expense.firstLevelApprover.scope
+                      ? ` (tagged by Admin for ${expense.firstLevelApprover.scope === 'all' ? 'all employees' : `this ${expense.firstLevelApprover.scope}`})`
+                      : ''}
+                  </p>
+                )}
               </div>
 
               <section>
@@ -541,7 +423,6 @@ function ExpenseDetailsDialog({
                   />
                   <DetailRow label="Description" value={expense.description} />
                   <DetailRow label="Employee Remarks" value={expense.employeeRemarks} />
-                  <DetailRow label="Manager Remarks" value={expense.managerRemarks} />
                   <DetailRow label="Receipt No." value={expense.receiptNumber} />
                   <DetailRow label="Item ID" value={expense.expItemId} />
                   <DetailRow label="Payment Method" value={expense.paymentMethod} />
@@ -562,20 +443,22 @@ function ExpenseDetailsDialog({
               )}
 
               <section>
-                <h3 className="text-sm font-semibold text-neutral-900 mb-1">Amount</h3>
+                <h3 className="text-sm font-semibold text-neutral-900 mb-1">Amounts</h3>
                 <div className="divide-y divide-neutral-100">
                   <DetailRow label="Claimed" value={formatAmount(expense.employeeAmount ?? expense.amount)} />
-                  {typeof expense.approvedAmount === 'number' && (
-                    <DetailRow
-                      label="Approved"
-                      value={
-                        <span className={amountEdited ? 'text-orange-700 font-medium' : undefined}>
-                          {formatAmount(expense.approvedAmount)}
-                          {amountEdited ? ' (edited by approver)' : ''}
-                        </span>
-                      }
-                    />
+                  <DetailRow
+                    label="First-level Approved"
+                    value={
+                      firstLevelAmount(expense) !== undefined
+                        ? `${formatAmount(firstLevelAmount(expense))}${firstBy?.name ? ` by ${firstBy.name}` : ''}`
+                        : undefined
+                    }
+                  />
+                  <DetailRow label="First-level Remarks" value={stage !== 'first' ? expense.managerRemarks : undefined} />
+                  {expense.status === 'Approved' && (
+                    <DetailRow label="Final Approved" value={formatAmount(expense.approvedAmount)} />
                   )}
+                  <DetailRow label="Finance Remarks" value={expense.financeRemarks} />
                 </div>
               </section>
 
@@ -594,13 +477,14 @@ function ExpenseDetailsDialog({
               <section>
                 <h3 className="text-sm font-semibold text-neutral-900 mb-2">Approval History</h3>
                 <ol className="space-y-2">
-                  {history.map((h, i) => (
+                  {approvalHistory(expense).map((h, i) => (
                     <li key={i} className="text-sm border-l-2 border-neutral-200 pl-3">
                       <div className="font-medium text-neutral-900">{h.step}</div>
                       <div className="text-neutral-500">
                         {h.by?.name || 'Unknown'}
                         {h.by?.role ? ` (${h.by.role})` : ''}
                         {h.at ? ` · ${formatDate(h.at)}` : ''}
+                        {typeof h.amount === 'number' ? ` · Rs. ${formatAmount(h.amount)}` : ''}
                       </div>
                       {h.remarks && <div className="text-neutral-700 mt-0.5">“{h.remarks}”</div>}
                     </li>
@@ -613,13 +497,9 @@ function ExpenseDetailsDialog({
               <Button variant="outline" onClick={onClose}>
                 Close
               </Button>
-              <Button
-                onClick={() => onApprove(expense)}
-                disabled={approving}
-                className="bg-green-600 hover:bg-green-700 text-white"
-              >
+              <Button onClick={() => onReview(expense)} className="bg-green-600 hover:bg-green-700 text-white">
                 <CheckCircle className="h-4 w-4 mr-1" />
-                {approving ? 'Approving...' : 'Approve'}
+                Review &amp; Decide
               </Button>
             </DialogFooter>
           </>
@@ -628,4 +508,3 @@ function ExpenseDetailsDialog({
     </Dialog>
   )
 }
-

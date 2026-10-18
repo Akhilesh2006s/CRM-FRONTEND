@@ -84,6 +84,42 @@ type NavItem = {
   children?: { label: string; href: string; icon?: any; adminOnly?: boolean }[]
 }
 
+/**
+ * Expense approval links. Admin-tagged approvers (any role) get the pending-list
+ * permission from the API; Admin / Super Admin also manage who the approvers are.
+ */
+function ensureExpenseApprovalNav(
+  nav: NavItem[],
+  role: string | undefined,
+  permissions: string[] | undefined
+): NavItem[] {
+  const r = String(role || '')
+  const isAdmin = r === 'Admin' || r === 'Super Admin'
+  const wanted: NonNullable<NavItem['children']> = []
+  if (isAdmin || r === 'Finance Manager' || (permissions || []).includes('expenses.pending.page.view')) {
+    wanted.push({ label: 'Pending Expenses List', href: '/dashboard/expenses/pending' })
+  }
+  if (isAdmin) {
+    wanted.push({ label: 'Expense Approvers', href: '/dashboard/expenses/approvers' })
+  }
+  if (wanted.length === 0) return nav
+
+  const index = nav.findIndex((item) => item.label === 'Expenses')
+  if (index >= 0) {
+    const existing = nav[index]
+    const children = [...(existing.children || [])]
+    for (const child of wanted) {
+      if (!children.some((c) => c.href === child.href)) children.push(child)
+    }
+    const next = [...nav]
+    next[index] = { ...existing, children }
+    return next
+  }
+  const signOut = nav.findIndex((item) => item.href === '/auth/login')
+  const group: NavItem = { label: 'Expenses', icon: Calculator, children: wanted }
+  return signOut >= 0 ? [...nav.slice(0, signOut), group, ...nav.slice(signOut)] : [...nav, group]
+}
+
 function ensureRaiseTicketNav(nav: NavItem[]): NavItem[] {
   const href = '/dashboard/complaints/raise'
   const withoutNestedRaiseTicket = nav.flatMap((item) => {
@@ -1328,6 +1364,12 @@ export function Sidebar() {
 
   // Leave Management is on every employee dashboard.
   finalNav = ensureLeaveManagementNav(finalNav, user?.role || permUser?.role)
+
+  finalNav = ensureExpenseApprovalNav(
+    finalNav,
+    user?.role || permUser?.role,
+    permUser?.permissions
+  )
 
   // Ticket raising is available to every authenticated role under one consistent name.
   finalNav = ensureRaiseTicketNav(finalNav)

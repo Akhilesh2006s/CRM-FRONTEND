@@ -8,13 +8,13 @@ import { Button } from '@/components/ui/button'
 import { Plus, Eye } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { type ApprovalExpense, expenseStatusColor, expenseStatusText } from '@/lib/expenseApproval'
 
-type Expense = {
+type Expense = ApprovalExpense & {
   _id: string
   title: string
   amount: number
   category: string
-  status: 'Pending' | 'Executive Manager Approved' | 'Manager Approved' | 'Approved' | 'Rejected'
   date: string
   createdAt: string
   employeeRemarks?: string
@@ -52,31 +52,6 @@ export default function MyExpensesPage() {
       month: '2-digit',
       day: '2-digit',
     })
-  }
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Approved':
-        return 'bg-green-100 text-green-700'
-      case 'Manager Approved':
-        return 'bg-blue-100 text-blue-700'
-      case 'Executive Manager Approved':
-        return 'bg-purple-100 text-purple-700'
-      case 'Pending':
-        return 'bg-amber-100 text-amber-700'
-      case 'Rejected':
-        return 'bg-red-100 text-red-700'
-      default:
-        return 'bg-gray-100 text-gray-700'
-    }
-  }
-
-  const getStatusDisplay = (status: string) => {
-    if (status === 'Pending') return 'Pending at Zonal Manager'
-    if (status === 'Manager Approved') return 'Product Manager Approved'
-    if (status === 'Executive Manager Approved') return 'Approved by Zonal Manager, Pending at Product Manager'
-    if (status === 'Approved') return 'Approved'
-    return status
   }
 
   const getExpenseType = (category: string) => {
@@ -149,8 +124,8 @@ export default function MyExpensesPage() {
                       {expense.approvedAmount ? expense.approvedAmount.toFixed(2) : '-'}
                     </TableCell>
                     <TableCell>
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(expense.status)}`}>
-                        {getStatusDisplay(expense.status)}
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${expenseStatusColor(expense.status)}`}>
+                        {expenseStatusText(expense)}
                       </span>
                     </TableCell>
                     <TableCell>

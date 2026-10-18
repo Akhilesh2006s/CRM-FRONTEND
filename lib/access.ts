@@ -33,6 +33,23 @@ const EXECUTIVE_MANAGER_WORKSPACE_ROUTES = [
 
 const BDE_ROLES = new Set(['executive', 'sales bde', 'sales executive', 'employee', 'bde', 'business development executive'])
 
+/**
+ * Expense approval pages. Who may approve what is enforced per expense by the API;
+ * these pages show only what is routed to the viewer. Admins tag approvers on
+ * /dashboard/expenses/approvers, and tagged users receive the pending-list permission.
+ */
+function expenseApprovalAccess(user: AuthUserWithPermissions, pathname: string): boolean | undefined {
+  const under = (p: string) => pathname === p || pathname.startsWith(p + '/')
+  if (under('/dashboard/expenses/approvers')) return user.role === 'Admin'
+  if (under('/dashboard/expenses/pending') || under('/dashboard/expenses/manager-update')) {
+    return (
+      ['Admin', 'Finance Manager', 'Executive Manager'].includes(String(user.role || '')) ||
+      hasPermission(user, 'expenses.pending.page.view')
+    )
+  }
+  return undefined
+}
+
 function normalizedRole(user: AuthUserWithPermissions): string {
   return String(user.role || user.roleName || '').trim().toLowerCase()
 }
@@ -193,6 +210,8 @@ export function canAccessPath(
   // Approval queues and the read-only views follow the dual-approval roles.
   const leaveAccess = leaveManagementAccess(user.role, pathname)
   if (leaveAccess !== undefined) return leaveAccess
+  const expenseAccess = expenseApprovalAccess(user, pathname)
+  if (expenseAccess !== undefined) return expenseAccess
   if (pathname === '/dashboard/dc/pending' || pathname.startsWith('/dashboard/dc/pending/')) {
     return user.role === 'Senior Coordinator'
   }

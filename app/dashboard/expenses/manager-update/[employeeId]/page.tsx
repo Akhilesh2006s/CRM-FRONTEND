@@ -11,28 +11,23 @@ import { Textarea } from '@/components/ui/textarea'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { apiRequest, resolveUploadUrl } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
+import {
+  type ApprovalExpense,
+  type ExpensePerson,
+  expenseStage,
+  expenseStatusText,
+  firstLevelAmount,
+  firstLevelApprovedBy,
+} from '@/lib/expenseApproval'
 import { toast } from 'sonner'
 import { ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, ExternalLink, FileText } from 'lucide-react'
 
-type Person = {
-  _id: string
-  name: string
-  email?: string
-  empCode?: string
-  role?: string
-}
-
-type Expense = {
+type Expense = ApprovalExpense & {
   _id: string
   title: string
   amount: number
-  employeeAmount?: number
-  approvedAmount?: number
   category: string
-  status: string
   description?: string
-  employeeRemarks?: string
-  managerRemarks?: string
   date: string
   gpsDistance?: number
   /** Distance tracked by the employee's device (LocationPing) on the expense date */
@@ -44,11 +39,18 @@ type Expense = {
   travelFrom?: string
   travelTo?: string
   approxKms?: number
-  employeeId?: Person | null
-  trainerId?: Person | null
-  createdBy?: Person | null
+  employeeId?: ExpensePerson | null
+  trainerId?: ExpensePerson | null
   /** Backend-resolved employee: employeeId, else trainerId, else submitter */
-  employee?: Person | null
+  employee?: ExpensePerson | null
+}
+
+type Decision = 'approve' | 'reject'
+
+type ItemForm = {
+  decision: Decision
+  approvedAmount: string
+  remarks: string
 }
 
 type SortKey = 'expItemId' | 'category' | 'gps' | 'date' | 'amount'
@@ -74,14 +76,8 @@ const describe = (expense: Expense) => {
 
 const gpsKm = (expense: Expense) => expense.trackedDistanceKm ?? 0
 
-const statusLabel = (status: string) => {
-  if (status === 'Pending') return 'Pending at Zonal Manager'
-  if (status === 'Executive Manager Approved') return 'Pending at Product Manager'
-  return status
-}
-
 const pageTitle = (role: string) => {
-  if (role === 'Manager') return 'Product Manager Expense Update'
+  if (role === 'Finance Manager') return 'Finance Expense Approval'
   if (role === 'Executive Manager') return 'Zonal Manager Expense Update'
   return 'Expense Review & Approval'
 }
@@ -121,15 +117,10 @@ export default function ManagerExpenseUpdatePage() {
   const [submitting, setSubmitting] = useState(false)
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
-  const [employee, setEmployee] = useState<Person | null>(null)
+  const [employee, setEmployee] = useState<ExpensePerson | null>(null)
   const [role, setRole] = useState('')
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'date', dir: 'asc' })
-
-  // Form state for each expense
-  const [expenseForms, setExpenseForms] = useState<Record<string, {
-    approvedAmount: string
-    managerRemarks: string
-  }>>({})
+  const [forms, setForms] = useState<Record<string, ItemForm>>({})
 
   useEffect(() => {
     setRole(getCurrentUser()?.role || '')
@@ -152,15 +143,13 @@ export default function ManagerExpenseUpdatePage() {
 
       setExpenses(data)
 
-      // Initialize form state
-      const initialForms: Record<string, { approvedAmount: string; managerRemarks: string }> = {}
-      data.forEach(exp => {
-        initialForms[exp._id] = {
-          approvedAmount: String(exp.approvedAmount ?? claimedAmount(exp)),
-          managerRemarks: exp.managerRemarks || '',
-        }
+      // Finance starts from the first-level amount; first level starts from the claim.
+      const initial: Record<string, ItemForm> = {}
+      data.forEach((exp) => {
+        const start = expenseStage(exp) === 'finance' ? firstLevelAmount(exp) ?? claimedAmount(exp) : claimedAmount(exp)
+        initial[exp._id] = { decision: 'approve', approvedAmount: String(start), remarks: '' }
       })
-      setExpenseForms(initialForms)
+      setForms(initial)
 
       if (data.length > 0) {
         const first = data[0]
@@ -174,65 +163,76 @@ export default function ManagerExpenseUpdatePage() {
     }
   }
 
-  const handleSearch = () => {
-    loadExpenses()
+  const setForm = (expenseId: string, patch: Partial<ItemForm>) => {
+    setForms((prev) => ({ ...prev, [expenseId]: { ...prev[expenseId], ...patch } }))
   }
 
-  const handleFormChange = (expenseId: string, field: 'approvedAmount' | 'managerRemarks', value: string) => {
-    setExpenseForms(prev => ({
-      ...prev,
-      [expenseId]: {
-        ...prev[expenseId],
-        [field]: value,
-      }
-    }))
-  }
-
-  const parsedApproved = (expense: Expense) => {
-    const raw = expenseForms[expense._id]?.approvedAmount
+  const parsedAmount = (expense: Expense) => {
+    const raw = forms[expense._id]?.approvedAmount
     if (raw === undefined || raw.trim() === '') return null
     const n = Number(raw)
     return Number.isFinite(n) ? n : NaN
   }
 
-  const handleApprove = async () => {
+  const remarksRequired = (expense: Expense) => expenseStage(expense) === 'first'
+
+  /** Why this item's decision cannot be submitted, or null. */
+  const itemError = (expense: Expense): string | null => {
+    const form = forms[expense._id]
+    if (!form) return 'missing form'
+    if (form.decision === 'approve') {
+      const n = parsedAmount(expense)
+      if (n === null || Number.isNaN(n) || n < 0) return 'enter a valid approval amount'
+    }
+    if (remarksRequired(expense) && !form.remarks.trim()) return 'remarks are required'
+    return null
+  }
+
+  const handleSubmit = async () => {
     if (expenses.length === 0) {
       toast.error('No expenses to approve')
       return
     }
 
-    const invalid = expenses.find((exp) => {
-      const n = parsedApproved(exp)
-      return n === null || Number.isNaN(n) || n < 0
-    })
+    const invalid = sortedExpenses.find((exp) => itemError(exp))
     if (invalid) {
-      toast.error(`Enter a valid approval amount for item ${itemId(invalid)}`)
+      toast.error(`Item ${itemId(invalid)}: ${itemError(invalid)}`)
       return
     }
 
     setSubmitting(true)
     try {
-      const expensesToApprove = expenses.map(exp => ({
-        id: exp._id,
-        approvedAmount: parsedApproved(exp),
-        managerRemarks: expenseForms[exp._id]?.managerRemarks || '',
-      }))
-
-      const res = await apiRequest<{ message: string }>('/expenses/approve-multiple', {
-        method: 'POST',
-        body: JSON.stringify({ expenses: expensesToApprove }),
+      const payload = expenses.map((exp) => {
+        const form = forms[exp._id]
+        return {
+          id: exp._id,
+          action: form.decision,
+          approvedAmount: form.decision === 'approve' ? parsedAmount(exp) : undefined,
+          remarks: form.remarks.trim(),
+        }
       })
 
-      toast.success(res?.message || `${expenses.length} expense(s) approved successfully`)
+      const res = await apiRequest<{ message: string; failed?: { id: string; message: string }[] }>(
+        '/expenses/approve-multiple',
+        { method: 'POST', body: JSON.stringify({ expenses: payload }) }
+      )
+
+      if (res?.failed?.length) {
+        toast.warning(`${res.message}. ${res.failed[0].message}`)
+        loadExpenses()
+        return
+      }
+      toast.success(res?.message || 'Expenses updated')
       router.push('/dashboard/expenses/pending')
     } catch (error: any) {
-      toast.error(error?.message || 'Failed to approve expenses')
+      toast.error(error?.message || 'Failed to update expenses')
     } finally {
       setSubmitting(false)
     }
   }
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return '-'
     const date = new Date(dateString)
     if (Number.isNaN(date.getTime())) return '-'
     return date.toLocaleDateString('en-GB', {
@@ -288,8 +288,10 @@ export default function ManagerExpenseUpdatePage() {
 
   const totalClaimed = expenses.reduce((sum, exp) => sum + claimedAmount(exp), 0)
 
-  const totalApproved = expenses.reduce((sum, exp) => {
-    const n = parsedApproved(exp)
+  const approving = expenses.filter((exp) => forms[exp._id]?.decision !== 'reject')
+  const rejectingCount = expenses.length - approving.length
+  const totalApproved = approving.reduce((sum, exp) => {
+    const n = parsedAmount(exp)
     return sum + (n === null || Number.isNaN(n) ? 0 : n)
   }, 0)
 
@@ -297,6 +299,8 @@ export default function ManagerExpenseUpdatePage() {
   const totalGpsDistance = [...new Map(
     expenses.filter(isTravel).map((exp) => [new Date(exp.date).toDateString(), gpsKm(exp)] as const)
   ).values()].reduce((sum, km) => sum + km, 0)
+
+  const hasFinanceItems = expenses.some((exp) => expenseStage(exp) === 'finance')
 
   return (
     <div className="space-y-6">
@@ -330,7 +334,7 @@ export default function ManagerExpenseUpdatePage() {
               className="w-[180px] bg-white"
             />
           </div>
-          <Button onClick={handleSearch} className="bg-blue-600 hover:bg-blue-700 text-white">
+          <Button onClick={loadExpenses} className="bg-blue-600 hover:bg-blue-700 text-white">
             Search
           </Button>
         </div>
@@ -354,6 +358,10 @@ export default function ManagerExpenseUpdatePage() {
             {employee?.role && <span className="text-neutral-500 text-sm font-normal"> · {employee.role}</span>}
           </div>
         </div>
+        <p className="text-xs text-neutral-500 mt-3">
+          First-level approval needs an approved amount and remarks. Final (Finance) approval needs the final amount; remarks are optional.
+          Either level can reject an item.
+        </p>
       </Card>
 
       {/* Expenses Table */}
@@ -370,6 +378,8 @@ export default function ManagerExpenseUpdatePage() {
                 <SortHead k="date" label="Date of Expense" />
                 <SortHead k="amount" label="Amount" className="text-right" />
                 <TableHead className="font-semibold">Emp.Remarks</TableHead>
+                {hasFinanceItems && <TableHead className="font-semibold">First-level Approval</TableHead>}
+                <TableHead className="font-semibold">Decision</TableHead>
                 <TableHead className="font-semibold">Approval Amount</TableHead>
                 <TableHead className="font-semibold">Mngr.Remarks</TableHead>
                 <TableHead className="font-semibold">Bill Image</TableHead>
@@ -378,31 +388,36 @@ export default function ManagerExpenseUpdatePage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="text-center py-8 text-neutral-500">
+                  <TableCell colSpan={13} className="text-center py-8 text-neutral-500">
                     Loading expenses...
                   </TableCell>
                 </TableRow>
               ) : expenses.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="text-center py-8 text-neutral-500">
+                  <TableCell colSpan={13} className="text-center py-8 text-neutral-500">
                     No expenses awaiting your approval for this employee
                   </TableCell>
                 </TableRow>
               ) : (
                 <>
                   {sortedExpenses.map((expense, index) => {
-                    const approved = parsedApproved(expense)
-                    const edited = approved !== null && !Number.isNaN(approved) && approved !== claimedAmount(expense)
+                    const form = forms[expense._id]
+                    const stage = expenseStage(expense)
+                    const rejecting = form?.decision === 'reject'
+                    const amount = parsedAmount(expense)
+                    const reference = stage === 'finance' ? firstLevelAmount(expense) ?? claimedAmount(expense) : claimedAmount(expense)
+                    const edited = !rejecting && amount !== null && !Number.isNaN(amount) && amount !== reference
+                    const firstBy = firstLevelApprovedBy(expense)
                     return (
                       <TableRow
                         key={expense._id}
-                        className={`${index % 2 === 0 ? 'bg-white' : 'bg-neutral-50/50'}`}
+                        className={`${rejecting ? 'bg-red-50/60' : index % 2 === 0 ? 'bg-white' : 'bg-neutral-50/50'}`}
                       >
                         <TableCell>{index + 1}</TableCell>
                         <TableCell className="font-medium">{itemId(expense)}</TableCell>
                         <TableCell>
                           <div>{getExpenseType(expense.category)}</div>
-                          <div className="text-[11px] text-neutral-500 whitespace-nowrap">{statusLabel(expense.status)}</div>
+                          <div className="text-[11px] text-neutral-500 max-w-[180px]">{expenseStatusText(expense)}</div>
                         </TableCell>
                         <TableCell className="whitespace-nowrap font-medium text-red-600">
                           {isTravel(expense) ? `${gpsKm(expense)} Kms` : <span className="text-neutral-400">-</span>}
@@ -427,24 +442,51 @@ export default function ManagerExpenseUpdatePage() {
                             rows={2}
                           />
                         </TableCell>
+                        {hasFinanceItems && (
+                          <TableCell className="min-w-[180px] text-sm">
+                            {stage === 'finance' ? (
+                              <div className="space-y-0.5">
+                                <div className="font-medium">{firstBy?.name || 'Unknown'}{firstBy?.role ? ` (${firstBy.role})` : ''}</div>
+                                <div>Rs. {(firstLevelAmount(expense) ?? claimedAmount(expense)).toFixed(2)}</div>
+                                {expense.managerRemarks && <div className="text-neutral-600">“{expense.managerRemarks}”</div>}
+                              </div>
+                            ) : (
+                              <span className="text-neutral-400">-</span>
+                            )}
+                          </TableCell>
+                        )}
+                        <TableCell>
+                          <select
+                            value={form?.decision || 'approve'}
+                            onChange={(e) => setForm(expense._id, { decision: e.target.value as Decision })}
+                            className={`h-9 rounded-md border px-2 text-sm bg-white ${rejecting ? 'border-red-400 text-red-700' : 'border-neutral-300'}`}
+                            aria-label={`Decision for item ${itemId(expense)}`}
+                          >
+                            <option value="approve">Approve</option>
+                            <option value="reject">Reject</option>
+                          </select>
+                        </TableCell>
                         <TableCell>
                           <Input
                             type="number"
                             step="0.01"
                             min="0"
-                            value={expenseForms[expense._id]?.approvedAmount ?? ''}
-                            onChange={(e) => handleFormChange(expense._id, 'approvedAmount', e.target.value)}
+                            value={form?.approvedAmount ?? ''}
+                            onChange={(e) => setForm(expense._id, { approvedAmount: e.target.value })}
+                            disabled={rejecting}
                             className={`w-32 bg-white text-sm font-medium ${edited ? 'border-orange-400 text-orange-700' : ''}`}
-                            placeholder="Approved Amount"
+                            placeholder={stage === 'finance' ? 'Final Amount' : 'Approved Amount'}
                             aria-label={`Approval amount for item ${itemId(expense)}`}
                           />
                         </TableCell>
                         <TableCell className="min-w-[180px] max-w-xs">
                           <Textarea
-                            value={expenseForms[expense._id]?.managerRemarks || ''}
-                            onChange={(e) => handleFormChange(expense._id, 'managerRemarks', e.target.value)}
-                            placeholder="Manager Remarks"
-                            className="min-h-[60px] resize-none bg-white text-sm"
+                            value={form?.remarks || ''}
+                            onChange={(e) => setForm(expense._id, { remarks: e.target.value })}
+                            placeholder={remarksRequired(expense) ? 'Remarks (required)' : 'Finance remarks (optional)'}
+                            className={`min-h-[60px] resize-none bg-white text-sm ${
+                              remarksRequired(expense) && !form?.remarks.trim() ? 'border-amber-400' : ''
+                            }`}
                             rows={2}
                           />
                         </TableCell>
@@ -473,7 +515,7 @@ export default function ManagerExpenseUpdatePage() {
                     <TableCell className="text-right whitespace-nowrap">
                       Rs. {totalClaimed.toFixed(2)}
                     </TableCell>
-                    <TableCell></TableCell>
+                    <TableCell colSpan={hasFinanceItems ? 3 : 2}></TableCell>
                     <TableCell className="whitespace-nowrap">
                       Rs. {totalApproved.toFixed(2)}
                     </TableCell>
@@ -493,19 +535,20 @@ export default function ManagerExpenseUpdatePage() {
         )}
       </Card>
 
-      {/* Approve Button */}
+      {/* Submit */}
       {expenses.length > 0 && (
         <div className="flex flex-col items-center gap-2">
           <p className="text-sm text-neutral-600">
-            Approving {expenses.length} item(s) for Rs. {totalApproved.toFixed(2)}
-            {totalApproved !== totalClaimed && ` (claimed Rs. ${totalClaimed.toFixed(2)})`}
+            Approving {approving.length} item(s) for Rs. {totalApproved.toFixed(2)}
+            {rejectingCount > 0 && `, rejecting ${rejectingCount}`}
+            {totalApproved !== totalClaimed && rejectingCount === 0 && ` (claimed Rs. ${totalClaimed.toFixed(2)})`}
           </p>
           <Button
-            onClick={handleApprove}
+            onClick={handleSubmit}
             disabled={submitting}
             className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2"
           >
-            {submitting ? 'Approving...' : 'Approve'}
+            {submitting ? 'Submitting...' : rejectingCount === expenses.length ? 'Reject' : 'Approve'}
           </Button>
         </div>
       )}
