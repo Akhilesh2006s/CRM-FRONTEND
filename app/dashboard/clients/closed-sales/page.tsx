@@ -1,5 +1,6 @@
 'use client'
 
+import { productQuantitySummary } from '@/lib/productNames'
 import { useEffect, useState } from 'react'
 import { apiRequest } from '@/lib/api'
 import { Card } from '@/components/ui/card'
@@ -285,7 +286,7 @@ export default function ExecutiveManagerClosedSalesPage() {
 
   const getProductsDisplay = (deal: DcOrder) => {
     if (!deal.products || !Array.isArray(deal.products)) return '-'
-    return deal.products.map(p => `${p.product_name}${p.quantity ? ` - ${p.quantity}` : ''}`).join(', ')
+    return productQuantitySummary(deal.products) || '-'
   }
 
   const formatDate = (dateString?: string) => {

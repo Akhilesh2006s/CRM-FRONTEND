@@ -1,5 +1,6 @@
 'use client'
 
+import { uniqueProductNames } from '@/lib/productNames'
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card } from '@/components/ui/card'
@@ -37,6 +38,8 @@ type School = {
 }
 
 type Trainer = { _id: string; name: string; trainerProducts?: string[] }
+
+const schoolProductNames = uniqueProductNames
 type Employee = { _id: string; name: string }
 
 export default function AssignTrainingServicePage() {
@@ -435,7 +438,7 @@ export default function AssignTrainingServicePage() {
 
     filteredSchools.forEach((school, index) => {
       const products = Array.isArray(school.products)
-        ? school.products.map((p: any) => typeof p === 'string' ? p : p.product_name).join(',')
+        ? schoolProductNames(school.products).join(', ')
         : ''
       
       rows.push([
@@ -624,7 +627,7 @@ export default function AssignTrainingServicePage() {
               <tbody>
                 {paginatedSchools.map((school, index) => {
                   const products = Array.isArray(school.products)
-                    ? school.products.map((p: any) => typeof p === 'string' ? p : p.product_name).join(',')
+                    ? schoolProductNames(school.products).join(', ')
                     : ''
                   const location = school.location || ''
                   const fullLocation = school.school_name ? `${school.school_name}, ${location}` : location

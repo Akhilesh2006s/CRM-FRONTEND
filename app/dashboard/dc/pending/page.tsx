@@ -1,4 +1,5 @@
 'use client'
+import { uniqueProductNames } from '@/lib/productNames'
 import { AbacusMaterialsSummary } from '@/components/dc/AbacusMaterialsSummary'
 
 import { useEffect, useState } from 'react'
@@ -259,7 +260,7 @@ export default function PendingDCPage() {
         customerAddress: fullDC.customerAddress || (dcOrderData?.address) || (dcOrderData?.location) || '',
         // Get product from DcOrder if available
         product: fullDC.product || (dcOrderData?.products && Array.isArray(dcOrderData.products) 
-          ? dcOrderData.products.map((p) => p.product_name || p.product || '').join(', ') 
+          ? uniqueProductNames(dcOrderData.products as any[]).join(', ') 
           : ''),
         // Store DcOrder data for display
         dcOrderId: dcOrderData || fullDC.dcOrderId,
