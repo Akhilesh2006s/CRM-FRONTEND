@@ -2032,6 +2032,9 @@ export default function ClosedSalesPage() {
                               <span className="text-sm text-slate-900" title="Combination entered when the DC was raised">
                                 {row.stream}{row.section && row.section !== 'ALL' ? ` · Sec ${row.section}` : ''}
                               </span>
+                            ) : String(row.subject || '').includes(',') ? (
+                              // All deliverables of the row (e.g. "CW, HW"), billed once per student.
+                              <span className="text-sm text-slate-900">{row.subject}</span>
                             ) : hasProductSubjects(row.product) && getProductSubjects(row.product).length > 0 ? (
                               <Select
                               value={row.subject || ''}

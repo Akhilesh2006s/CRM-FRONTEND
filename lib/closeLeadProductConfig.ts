@@ -732,6 +732,8 @@ export type ExpandSectionsCtx = {
   previousDetails?: ProductDetailRow[]
   /** Explicit per-row overrides (user selections), keyed by productCategoryRowIdentity. */
   categoryOverrides?: Record<string, string>
+  /** Billing type; Subject-based products keep one row per deliverable (subject). */
+  getCalculationType?: (product: string) => string
 }
 
 export function expandSectionsToProductDetails(
@@ -857,8 +859,13 @@ export function expandSectionsToProductDetails(
       const selectedSubjects = line.selectedSubjects || []
       const hasSubjects =
         ctx.hasProductSubjects(line.product) && selectedSubjects.length > 0
-      const subjectsToUse =
-        hasSubjects && selectedSubjects.length > 0 ? selectedSubjects : [undefined]
+      // Deliverables (CW, HW ...) of a product that isn't Subject-based go on ONE row per class
+      // ("CW, HW"): the students pay once. Subject-based products keep a row per subject.
+      const combineDeliverables =
+        hasSubjects && ctx.getCalculationType?.(line.product) !== 'subject_based'
+      const subjectsToUse = combineDeliverables
+        ? [selectedSubjects.join(', ')]
+        : hasSubjects && selectedSubjects.length > 0 ? selectedSubjects : [undefined]
 
       let rowIdx = 0
       const parentId = line.parentRowId
@@ -890,14 +897,14 @@ export function expandSectionsToProductDetails(
               )
               const subjectDefault = hasSkuCategories
                 ? pickGridProductCategory(line.product, classValue, skuCategories, {
-                    subject: typeof subject === 'string' ? subject : undefined,
+                    subject: !combineDeliverables && typeof subject === 'string' ? subject : undefined,
                     level,
                     selectedCategories,
                   }) || skuCategories[0] || ''
                 : enrollmentDefault
               // Drop stale defaults that don't match this row's subject (e.g. Star junior on a junior row).
               const subjectNorm = normalizeCategoryMatchText(
-                typeof subject === 'string' ? subject : ''
+                !combineDeliverables && typeof subject === 'string' ? subject : ''
               )
               const existingNorm = normalizeCategoryMatchText(existingCategory)
               const existingFitsSubject =
@@ -927,6 +934,7 @@ export function expandSectionsToProductDetails(
                 level,
                 specs: spec || '',
                 subject,
+                selectedSubjects: combineDeliverables ? [...selectedSubjects] : undefined,
                 subjectPackage: hasSubjects,
                 isParentRow: false,
                 sameRateForAllClasses: false,

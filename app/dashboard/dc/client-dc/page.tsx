@@ -2564,7 +2564,11 @@ export default function ClientDCPage() {
             })
           : []
 
-      const expandedDetails = expandEditPoRowsBySubject(rowsFromDetails, getProductSubjects)
+      const expandedDetails = expandEditPoRowsBySubject(
+        rowsFromDetails,
+        getProductSubjects,
+        (product) => getCalculationType(product) !== 'subject_based'
+      )
       // This DC's productDetails are the source of truth. Never substitute DcOrder.products —
       // that array still holds the unsplit lead (P3 L1+L2 summed to 14).
       setEditProductRows(expandedDetails)
@@ -2693,7 +2697,7 @@ export default function ClientDCPage() {
             subject: row.subject && String(row.subject).trim() !== '-' ? String(row.subject).trim() : undefined,
             selected_subjects:
               row.subject && String(row.subject).trim() !== '-'
-                ? [String(row.subject).trim()]
+                ? String(row.subject).split(',').map((d) => d.trim()).filter(Boolean)
                 : [],
             closeLeadDestination: 'MY_CLIENT',
           }
@@ -2753,7 +2757,7 @@ export default function ClientDCPage() {
             subject: row.subject && String(row.subject).trim() !== '-' ? String(row.subject).trim() : undefined,
             selected_subjects:
               row.subject && String(row.subject).trim() !== '-'
-                ? [String(row.subject).trim()]
+                ? String(row.subject).split(',').map((d) => d.trim()).filter(Boolean)
                 : [],
             category: row.category || undefined,
             productCategory: hasProductCategories(row.product_name)

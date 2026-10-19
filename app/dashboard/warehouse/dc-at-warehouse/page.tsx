@@ -1,5 +1,6 @@
 'use client'
 
+import { expandDeliverableStockRows } from '@/lib/deliverableStockRows'
 import { useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -494,7 +495,7 @@ export default function WarehouseDcAtWarehouse() {
   useEffect(() => {
     if (openDialog && selectedDC && productRows.length > 0) {
       const stockCheck = validateDcStockAgainstInventory(
-        productRows.map(toStockRow),
+        expandDeliverableStockRows(productRows.map(toStockRow)),
         warehouseInventory
       )
       setInsufficientQuantity(!stockCheck.ok)
@@ -608,7 +609,7 @@ export default function WarehouseDcAtWarehouse() {
       setProductRows(updatedProductRows)
 
       const stockCheck = validateDcStockAgainstInventory(
-        updatedProductRows.map(toStockRow),
+        expandDeliverableStockRows(updatedProductRows.map(toStockRow)),
         inventoryArray
       )
       if (!stockCheck.ok) {
@@ -797,7 +798,7 @@ export default function WarehouseDcAtWarehouse() {
       setProductRows(updatedProductRows)
 
       const stockCheck = validateDcStockAgainstInventory(
-        updatedProductRows.map(toStockRow),
+        expandDeliverableStockRows(updatedProductRows.map(toStockRow)),
         inventoryArray
       )
       setInsufficientQuantity(!stockCheck.ok)

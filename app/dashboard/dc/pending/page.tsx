@@ -1165,6 +1165,9 @@ export default function PendingDCPage() {
                           <span className="text-xs text-gray-900" title="Combination entered when the DC was raised">
                             {row.stream}{row.section && row.section !== 'ALL' ? ` · Sec ${row.section}` : ''}
                           </span>
+                        ) : String(row.subject || '').includes(',') ? (
+                          // All deliverables of the row (e.g. "CW, HW"), billed once per student.
+                          <span className="text-xs text-gray-900">{row.subject}</span>
                         ) : getProductSubjects(row.product).length > 0 ? (
                           <Select value={row.subject || ''} onValueChange={(v) => {
                             const updated = [...productRows]

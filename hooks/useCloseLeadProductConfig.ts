@@ -80,6 +80,7 @@ export function useCloseLeadProductConfig(options: UseCloseLeadProductConfigOpti
         schoolType,
         previousDetails: prev,
         categoryOverrides: productCategoryOverridesRef.current,
+        getCalculationType,
       })
     )
     const names = [...new Set(productSections.flatMap((s) => s.lines.map((l) => l.product)))]
@@ -657,6 +658,7 @@ export function useCloseLeadProductConfig(options: UseCloseLeadProductConfigOpti
       schoolType,
       previousDetails: productDetails,
       categoryOverrides: productCategoryOverridesRef.current,
+      getCalculationType,
     })
     setProductDetails(next)
     setSelectedProducts([

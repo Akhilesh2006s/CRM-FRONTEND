@@ -947,7 +947,9 @@ function expandSubjectCoverKey(row: Record<string, any>, subject?: string): stri
  */
 export function expandEditPoRowsBySubject<T extends Record<string, any>>(
   rows: T[],
-  getProductSubjects: (productName: string) => string[]
+  getProductSubjects: (productName: string) => string[],
+  /** Deliverables of products that are not Subject-based stay on one row ("CW, HW"). */
+  keepDeliverablesTogether?: (productName: string) => boolean
 ): T[] {
   const source = Array.isArray(rows) ? rows : []
   const covered = new Set<string>()
@@ -965,6 +967,14 @@ export function expandEditPoRowsBySubject<T extends Record<string, any>>(
     // IIT rows carry a combination (stream, e.g. MPC / MBiPC) — never split it or invent a subject.
     if (String(row.stream || '').trim()) {
       out.push({ ...row, lineId: ensureProductLineId(row) })
+      continue
+    }
+    if (currentSubject.includes(',') && keepDeliverablesTogether?.(name)) {
+      out.push({
+        ...row,
+        selected_subjects: currentSubject.split(',').map((s) => s.trim()).filter(Boolean),
+        lineId: ensureProductLineId(row),
+      })
       continue
     }
     if (currentSubject && currentSubject !== '-' && !currentSubject.includes(',')) {
