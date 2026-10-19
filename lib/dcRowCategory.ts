@@ -133,6 +133,7 @@ export function buildRelatedItemRows<T extends Record<string, any>>(
         productName: product,
         class: base.class,
         term: base.term,
+        dispatchMode: base.dispatchMode,
         level: '',
         specs: name,
         category: item.billable ? 'New Students' : 'Training Material',

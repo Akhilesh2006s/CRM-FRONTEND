@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
+import { TransportDetailsSection, canEditTransportDetails } from '@/components/dc/TransportDetailsSection'
+import { SchoolAddressSection } from '@/components/dc/SchoolAddressSection'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useProducts } from '@/hooks/useProducts'
@@ -1147,20 +1149,19 @@ export default function SavedDCPage() {
           </DialogHeader>
           {selectedDeal && (
             <div className="space-y-4 py-4">
-              <div>
-                <Label>Address</Label>
-                <Textarea value={selectedDeal.address || selectedDeal.location || 'N/A'} disabled rows={4} />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Zone</Label>
-                  <Input value={selectedDeal.zone || '-'} disabled />
-                </div>
-                <div>
-                  <Label>Location/Town</Label>
-                  <Input value={selectedDeal.location || '-'} disabled />
-                </div>
-              </div>
+              <SchoolAddressSection
+                dcOrderId={selectedDeal._id}
+                details={selectedDeal}
+                canEdit={canEditTransportDetails(currentUser?.role)}
+                onSaved={(saved) => setSelectedDeal((prev) => (prev ? { ...prev, ...saved } : prev))}
+              />
+              <TransportDetailsSection
+                title="Transport details"
+                dcOrderId={selectedDeal._id}
+                details={selectedDeal as any}
+                canEdit={canEditTransportDetails(currentUser?.role)}
+                onSaved={(saved) => setSelectedDeal((prev) => (prev ? { ...prev, ...saved } : prev))}
+              />
             </div>
           )}
           <DialogFooter>

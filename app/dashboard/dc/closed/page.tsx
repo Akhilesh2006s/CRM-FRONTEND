@@ -16,7 +16,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useProducts } from '@/hooks/useProducts'
 import { toast } from 'sonner'
 import { TransportDetailsSection, canEditTransportDetails } from '@/components/dc/TransportDetailsSection'
-import { DC_ROW_CATEGORIES, DC_ROW_CATEGORY_BILLING, canonicalDcRowCategory, type DcRowCategory } from '@/lib/dcRowCategory'
+import { SchoolAddressSection } from '@/components/dc/SchoolAddressSection'
+import { SentToSeniorList } from '@/components/dc/SentToSeniorList'
+import { AbacusMaterialsSummary } from '@/components/dc/AbacusMaterialsSummary'
+import { DC_ROW_CATEGORIES, canonicalDcRowCategory, type DcRowCategory } from '@/lib/dcRowCategory'
 import { sanitizeMobileInput, validateContactMobile, validateContactPerson } from '@/lib/saleFormValidation'
 import { keepMyClientsOwnedProductRows } from '@/lib/clientDcProductRows'
 import { CLOSE_LEAD_DESTINATION } from '@/lib/closeLeadTermRouting'
@@ -1961,13 +1964,13 @@ export default function ClosedSalesPage() {
                                 setProductRows(updated)
                               }}
                             >
-                              <SelectTrigger className="h-9 text-sm bg-white border-slate-200 w-32">
+                              <SelectTrigger className="h-9 text-sm bg-white border-slate-200 w-40 min-w-[10rem]">
                                 <SelectValue placeholder="Category" />
                               </SelectTrigger>
                               <SelectContent>
                                 {categoryOptions.map(cat => (
                                   <SelectItem key={cat} value={cat}>
-                                    {cat} ({DC_ROW_CATEGORY_BILLING[cat as DcRowCategory]})
+                                    {cat}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -2154,7 +2157,7 @@ export default function ClosedSalesPage() {
                       ))}
                       {/* Total Row */}
                       <tr className="bg-gradient-to-r from-slate-100 to-slate-200 border-t-2 border-slate-400 font-bold">
-                        <td colSpan={5} className="px-5 py-4 text-right">
+                        <td colSpan={6} className="px-5 py-4 text-right">
                           <span className="text-slate-800 text-base">Grand Total:</span>
                         </td>
                         <td className="px-5 py-4 text-right">
@@ -2162,10 +2165,15 @@ export default function ClosedSalesPage() {
                             {productRows.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0)}
                           </span>
                         </td>
-                        <td colSpan={4} className="px-5 py-4"></td>
+                        <td colSpan={3} className="px-5 py-4"></td>
                       </tr>
                     </tbody>
                   </table>
+                </div>
+                <div className="mt-3">
+                  <AbacusMaterialsSummary
+                    materials={(selectedDeal as any)?.abacusMaterials || (selectedDeal as any)?.dcRequestData?.abacusMaterials}
+                  />
                 </div>
               </div>
 
@@ -2345,6 +2353,8 @@ export default function ClosedSalesPage() {
         </DialogContent>
       </Dialog>
 
+      {canApproveDC && <SentToSeniorList />}
+
       {/* View Location Modal */}
       <Dialog open={openLocationDialog} onOpenChange={setOpenLocationDialog}>
         <DialogContent className="sm:max-w-[600px] border-slate-200 shadow-xl">
@@ -2356,25 +2366,18 @@ export default function ClosedSalesPage() {
           </DialogHeader>
           {selectedDeal && (
             <div className="space-y-4 py-4">
-              <div>
-                <Label>Address</Label>
-                <Textarea value={selectedDeal.address || selectedDeal.location || 'N/A'} disabled rows={4} />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Zone</Label>
-                  <Input value={selectedDeal.zone || '-'} disabled />
-                </div>
-                <div>
-                  <Label>Location/Town</Label>
-                  <Input value={selectedDeal.location || '-'} disabled />
-                </div>
-              </div>
+              <SchoolAddressSection
+                dcOrderId={selectedDeal._id}
+                details={selectedDeal}
+                canEdit={canEditTransportDetails(currentUser?.role)}
+                onSaved={(saved) => setSelectedDeal((prev) => (prev ? { ...prev, ...saved } : prev))}
+              />
               <TransportDetailsSection
                 title="Transport details"
                 dcOrderId={selectedDeal._id}
                 details={selectedDeal}
-                canEdit={false}
+                canEdit={canEditTransportDetails(currentUser?.role)}
+                onSaved={(saved) => setSelectedDeal((prev) => (prev ? { ...prev, ...saved } : prev))}
               />
               {selectedDeal.address && (
                 <div>

@@ -1,4 +1,5 @@
 'use client'
+import { AbacusMaterialsSummary } from '@/components/dc/AbacusMaterialsSummary'
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -1243,6 +1244,9 @@ export default function PendingDCPage() {
                   </tr>
                 </tbody>
               </table>
+            </div>
+            <div className="mt-3">
+              <AbacusMaterialsSummary materials={(selectedDC as any)?.abacusMaterials} />
             </div>
           </div>
 

@@ -27,6 +27,7 @@ import { abacusStudentStrength, defaultMasterAbacusQuantity } from '@/lib/abacus
 import { AbacusMaterialsFields } from '@/components/dc/AbacusMaterialsFields'
 import { buildRelatedItemRows, buildSpecimenRows, isRelatedItemRow, isSpecimenRow, specimenCopiesValue } from '@/lib/dcRowCategory'
 import { renewalLinesToSections } from '@/lib/renewalCloseSections'
+import { SpecimenProductPicker, specimenCandidateProducts } from '@/components/dc/SpecimenProductPicker'
 import { Checkbox } from '@/components/ui/checkbox'
 
 type Lead = {
@@ -101,6 +102,8 @@ export default function CloseLeadPage() {
   const [masterUnitPrice, setMasterUnitPrice] = useState('')
   const [specimenRequested, setSpecimenRequested] = useState(false)
   const [specimenCopies, setSpecimenCopies] = useState('1')
+  /** Products that get specimen copies; null = every product. */
+  const [specimenProducts, setSpecimenProducts] = useState<string[] | null>(null)
 
   const productConfig = useCloseLeadProductConfig({ schoolType: lead?.school_type })
   const {
@@ -541,7 +544,10 @@ export default function CloseLeadPage() {
     // Product related items (Tensmat, Teacher Books, Flash Cards, ...) always ship with the product.
     const withRelatedItems = [...rows, ...buildRelatedItemRows(rows, getProductRelatedItems)]
     return specimenRequested
-      ? [...withRelatedItems, ...buildSpecimenRows(rows, specimenCopiesValue(specimenCopies)).map((row) => ({ ...row, deliverables: [] }))]
+      ? [...withRelatedItems, ...buildSpecimenRows(
+          specimenProducts ? rows.filter((row) => specimenProducts.includes(String(row.product || ''))) : rows,
+          specimenCopiesValue(specimenCopies)
+        ).map((row) => ({ ...row, deliverables: [] }))]
       : withRelatedItems
   }
 
@@ -1025,6 +1031,13 @@ export default function CloseLeadPage() {
                     </span>
                   </span>
                 </label>
+                {specimenRequested && (
+                  <SpecimenProductPicker
+                    products={specimenCandidateProducts(childProductRows)}
+                    selected={specimenProducts ?? specimenCandidateProducts(childProductRows)}
+                    onChange={setSpecimenProducts}
+                  />
+                )}
                 {specimenRequested && (
                   <div className="w-36">
                     <Label className="text-xs">Copies per book *</Label>

@@ -1,3 +1,4 @@
+import { isBillableDcRow, isSpecimenRow } from '@/lib/dcRowCategory'
 import { apiRequest } from '@/lib/api'
 import { applyPaymentDivisorsToBreakdown } from '@/lib/dcPaymentDivisors'
 import { displayProductLevel, findPricedOrderProduct, collectPoUnitPriceSources, resolvePersistedUnitPrice } from '@/lib/clientDcProductRows'
@@ -377,10 +378,13 @@ export function aggregateInvoicePaymentTerms(
     unitPrice?: number
     price?: number
     term?: string
+    category?: string
+    itemType?: string
   }>
 ): AggregatedInvoiceTerm[] {
   const map = new Map<string, AggregatedInvoiceTerm>()
   for (const line of paymentBreakdown || []) {
+    if (isSpecimenRow(line) || !isBillableDcRow(line)) continue
     const product = String(line.product || 'Product').trim() || 'Product'
     const unitPrice = Number(
       line.unitPrice !== undefined && line.unitPrice !== null

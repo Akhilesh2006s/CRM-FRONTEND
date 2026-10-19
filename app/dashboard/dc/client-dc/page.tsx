@@ -25,6 +25,8 @@ import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
 import { sanitizePhoneInput, validatePhoneDigits } from '@/lib/phone'
 import { ContractPeriod } from '@/components/clients/ContractPeriod'
+import { AbacusMaterialsSummary } from '@/components/dc/AbacusMaterialsSummary'
+import { SpecimenProductPicker, specimenCandidateProducts } from '@/components/dc/SpecimenProductPicker'
 import { useProducts } from '@/hooks/useProducts'
 import { applyPaymentDivisorsToBreakdown } from '@/lib/dcPaymentDivisors'
 import { aggregateInvoicePaymentTerms } from '@/lib/dcInvoiceData'
@@ -66,7 +68,7 @@ import {
 import { useRouter } from 'next/navigation'
 import { abacusStudentStrength, defaultMasterAbacusQuantity } from '@/lib/abacusMaterials'
 import { AbacusMaterialsFields } from '@/components/dc/AbacusMaterialsFields'
-import { DC_ROW_CATEGORIES, DC_ROW_CATEGORY_BILLING, buildRelatedItemRows, buildSpecimenRows, dcRowCategoryOrDefault, isBillableDcRow, isRelatedItemRow, isSpecimenRow, specimenCopiesValue } from '@/lib/dcRowCategory'
+import { DC_ROW_CATEGORIES, buildRelatedItemRows, buildSpecimenRows, dcRowCategoryOrDefault, isBillableDcRow, isRelatedItemRow, isSpecimenRow, specimenCopiesValue } from '@/lib/dcRowCategory'
 
 type DC = {
   _id: string
@@ -255,6 +257,8 @@ export default function ClientDCPage() {
   // Client DC Dialog (Full DC Management)
   const [clientDCDialogOpen, setClientDCDialogOpen] = useState(false)
   const [specimenCopiesInput, setSpecimenCopiesInput] = useState('1')
+  /** Products that get specimen copies; null = every product. */
+  const [specimenProducts, setSpecimenProducts] = useState<string[] | null>(null)
   const [dcProductRows, setDcProductRows] = useState<Array<{
     id: string
     product: string
@@ -385,6 +389,7 @@ export default function ClientDCPage() {
     lineId?: string
     itemType?: string // 'Specimen Copy' / 'Related Item'
     subjectPackage?: boolean // CW + HW etc. for the same students are billed once
+    dispatchMode?: string // 'both_levels_together' keeps Level/Term 2 on this DC
     section?: string // IIT assignment
     program?: string
     stream?: string
@@ -394,6 +399,16 @@ export default function ClientDCPage() {
   const [addProductSelectedSpec, setAddProductSelectedSpec] = useState<Record<string, string>>({})
   const [addProductSelectedCategory, setAddProductSelectedCategory] = useState<Record<string, string>>({})
   const [highlightedEditProductRowId, setHighlightedEditProductRowId] = useState<string | null>(null)
+  /** Books plus specimen copies for the chosen products (all products when none chosen yet). */
+  const withSpecimenRows = <T extends { product?: string }>(books: T[], products: string[] | null): T[] => {
+    const chosen = products ? new Set(products) : null
+    const source = chosen ? books.filter((row) => chosen.has(String(row.product || ''))) : books
+    return [
+      ...books,
+      ...buildSpecimenRows(source as any[], specimenCopiesValue(specimenCopiesInput))
+        .map((row, i) => ({ ...row, id: `specimen-${Date.now()}-${i}` })),
+    ] as T[]
+  }
   const [originalPOProducts, setOriginalPOProducts] = useState<string[]>([])
   // Track original state for change detection
   const [originalPDFUrl, setOriginalPDFUrl] = useState<string>('')
@@ -1437,6 +1452,7 @@ export default function ClientDCPage() {
       ]
       setDcProductRows(productsToShow)
       setSpecimenCopiesInput(String(specimenCopiesValue(savedSpecimens[0]?.quantity ?? savedSpecimens[0]?.strength)))
+      setSpecimenProducts(savedSpecimens.length ? specimenCandidateProducts(savedSpecimens) : null)
 
       setDcDate(fullDC.dcDate ? new Date(fullDC.dcDate).toISOString().split('T')[0] : '')
       setDcRemarks(fullDC.dcRemarks || '')
@@ -1884,6 +1900,7 @@ export default function ClientDCPage() {
           strength: Number(row.strength) || 0,
           level: row.level && row.level !== '-' ? row.level : '',
           term: resolveClientDCRowTerm(row),
+          dispatchMode: (row as any).dispatchMode || undefined,
           // Related items carry their catalog price (₹0 when non-billable); book prices resolve server-side.
           ...(isRelatedItemRow(row) ? { unit_price: Number((row as any).unit_price) || 0 } : {}),
         }))
@@ -2539,6 +2556,7 @@ export default function ClientDCPage() {
                 term,
                 itemType: merged.itemType || undefined,
                 subjectPackage: Boolean(merged.subjectPackage ?? order?.subjectPackage),
+                dispatchMode: merged.dispatchMode ?? order?.dispatchMode,
                 section: merged.section || undefined,
                 program: merged.program || undefined,
                 stream: merged.stream || undefined,
@@ -2660,6 +2678,7 @@ export default function ClientDCPage() {
             class: row.class && String(row.class).trim() !== '' ? String(row.class).trim() : '1',
             itemType: row.itemType || undefined,
             subjectPackage: Boolean(row.subjectPackage),
+            dispatchMode: row.dispatchMode || undefined,
             section: row.section || undefined,
             program: row.program || undefined,
             stream: row.stream || undefined,
@@ -2745,6 +2764,7 @@ export default function ClientDCPage() {
             total: editPoBill.totals.get(row.id) ?? 0,
             itemType: row.itemType || undefined,
             subjectPackage: Boolean(row.subjectPackage),
+            dispatchMode: row.dispatchMode || undefined,
             section: row.section || undefined,
             program: row.program || undefined,
             stream: row.stream || undefined,
@@ -4244,7 +4264,7 @@ export default function ClientDCPage() {
                           <SelectTrigger className="h-10 text-sm"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             {DC_ROW_CATEGORIES.map((cat) => (
-                              <SelectItem key={cat} value={cat}>{cat} ({DC_ROW_CATEGORY_BILLING[cat]})</SelectItem>
+                              <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -4490,9 +4510,7 @@ export default function ClientDCPage() {
                     onCheckedChange={(checked) =>
                       setDcProductRows((rows) => {
                         const books = rows.filter((row) => !isSpecimenRow(row))
-                        return checked
-                          ? [...books, ...buildSpecimenRows(books, specimenCopiesValue(specimenCopiesInput)).map((row, i) => ({ ...row, id: `specimen-${Date.now()}-${i}` }))]
-                          : books
+                        return checked ? withSpecimenRows(books, specimenProducts) : books
                       })
                     }
                   />
@@ -4503,6 +4521,16 @@ export default function ClientDCPage() {
                     </span>
                   </span>
                 </label>
+                {dcProductRows.some((row) => isSpecimenRow(row)) && (
+                  <SpecimenProductPicker
+                    products={specimenCandidateProducts(dcProductRows.filter((row) => !isSpecimenRow(row) && !isRelatedItemRow(row)))}
+                    selected={specimenProducts ?? specimenCandidateProducts(dcProductRows.filter((row) => !isSpecimenRow(row) && !isRelatedItemRow(row)))}
+                    onChange={(next) => {
+                      setSpecimenProducts(next)
+                      setDcProductRows((rows) => withSpecimenRows(rows.filter((row) => !isSpecimenRow(row)), next))
+                    }}
+                  />
+                )}
                 {dcProductRows.some((row) => isSpecimenRow(row)) && (
                   <div className="w-36">
                     <Label className="text-xs">Copies per book *</Label>
@@ -5096,7 +5124,7 @@ export default function ClientDCPage() {
                               }}
                               min="0"
                             required
-                            className={row.product_name && (!row.quantity || row.quantity <= 0) ? "border-red-500" : ""}
+                            className={`min-w-[90px] ${row.product_name && (!row.quantity || row.quantity <= 0) ? "border-red-500" : ""}`}
                             placeholder="Required"
                             />
                           </TableCell>
@@ -5116,7 +5144,7 @@ export default function ClientDCPage() {
                               step="0.01"
                             required
                             readOnly={isOriginalLine || isFreeEditPoRow(row)}
-                            className={`${row.product_name && !isFreeEditPoRow(row) && (!row.unit_price || Number(row.unit_price) <= 0) ? "border-red-500" : ""} ${isOriginalLine ? "bg-neutral-50 cursor-not-allowed" : ""} [appearance:textfield] [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-inner-spin-button]:m-0`}
+                            className={`min-w-[90px] ${row.product_name && !isFreeEditPoRow(row) && (!row.unit_price || Number(row.unit_price) <= 0) ? "border-red-500" : ""} ${isOriginalLine ? "bg-neutral-50 cursor-not-allowed" : ""} [appearance:textfield] [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-inner-spin-button]:m-0`}
                             placeholder=""
                             title={isOriginalLine ? "Unit price cannot be changed for original PO products" : ""}
                             />
@@ -5278,6 +5306,9 @@ export default function ClientDCPage() {
                     Total Amount ={' '}
                     {editPoBill.totalAmount.toFixed(2)}
                   </span>
+                </div>
+                <div className="mt-3">
+                  <AbacusMaterialsSummary materials={selectedDcOrder?.abacusMaterials || selectedDC?.abacusMaterials} />
                 </div>
               </div>
             </div>

@@ -199,6 +199,8 @@ export function orderProductToClientDcDetail(p: Record<string, any>) {
     unit_price: p.unit_price ?? p.price,
     total: p.total,
     selected_subjects: Array.isArray(p.selected_subjects) ? p.selected_subjects : undefined,
+    itemType: p.itemType || undefined,
+    dispatchMode: p.dispatchMode || undefined,
   }
 }
 
@@ -579,6 +581,7 @@ function mapToClientDCProductRow(
     term: resolveClientDCRowTerm(raw),
     subject: raw.subject || undefined,
     price: raw.price ?? raw.unit_price,
+    dispatchMode: raw.dispatchMode || undefined,
   }
 }
 
@@ -615,6 +618,7 @@ export function buildClientDCProductRows(
             subject: p.subject ?? order.subject,
             price: p.price ?? order.unit_price,
             lineId: productRowLineId(p) || productRowLineId(order),
+            dispatchMode: p.dispatchMode ?? order.dispatchMode,
           }
         : p
       return mapToClientDCProductRow(
@@ -641,6 +645,7 @@ export function buildClientDCProductRows(
           term: p.term,
           subject: p.subject,
           lineId: productRowLineId(p),
+          dispatchMode: p.dispatchMode,
         },
         ensureProductLineId(p, idx),
         opts,

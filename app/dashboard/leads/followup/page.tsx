@@ -1188,7 +1188,7 @@ export default function FollowupLeadsPage() {
                               )}
                             </SelectContent>
                           </Select>
-                          {(product.sale_type || lineDetailLabel(product)) && (
+                          {product.sale_type && (
                             <div className="mt-1 flex flex-wrap items-center gap-1 text-[11px] leading-tight text-neutral-600">
                               {product.sale_type && (
                                 <span className={`rounded px-1.5 py-0.5 font-medium ${product.sale_type === 'renewal' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}`}>
