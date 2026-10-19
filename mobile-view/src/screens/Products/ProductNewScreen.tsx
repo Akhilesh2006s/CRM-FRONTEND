@@ -168,7 +168,7 @@ export default function ProductNewScreen({ navigation }: any) {
       return;
     }
     if (form.calculationType === 'subject_based' && !form.hasSubjects) {
-      setErrorMessage('Subject-based payment requires subjects to be enabled');
+      setErrorMessage('Subject-based payment requires at least one Special Note');
       setSubmitting(false);
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       return;
@@ -288,7 +288,7 @@ export default function ProductNewScreen({ navigation }: any) {
           </View>
 
           <View style={styles.formSection}>
-            <Text style={styles.label}>Term</Text>
+            <Text style={styles.label}>Term / Level</Text>
             <Text style={styles.hint}>
               Type a custom name (e.g. hi), then tap Add Term 1 / Term 2 — or edit names below.
             </Text>
@@ -340,7 +340,7 @@ export default function ProductNewScreen({ navigation }: any) {
 
           <View style={styles.formSection}>
             <View style={styles.switchRow}>
-              <Text style={styles.label}>Has Subjects</Text>
+              <Text style={styles.label}>Special Notes</Text>
               <Switch
                 value={form.hasSubjects}
                 onValueChange={(value) => setForm({ ...form, hasSubjects: value })}
@@ -352,12 +352,12 @@ export default function ProductNewScreen({ navigation }: any) {
 
           {form.hasSubjects && (
             <View style={styles.formSection}>
-              <Text style={styles.label}>Subjects *</Text>
-              <Text style={styles.hint}>Add one or multiple subjects</Text>
+              <Text style={styles.label}>Special Notes *</Text>
+              <Text style={styles.hint}>Add one or multiple special notes</Text>
               <View style={styles.addRow}>
                 <WebInput
                   style={[styles.input, styles.addInput]}
-                  placeholder="Enter subject name"
+                  placeholder="Enter special note"
                   value={form.newSubject}
                   onChangeText={(text) => setForm({ ...form, newSubject: text })}
                   onSubmitEditing={addSubject}
@@ -426,7 +426,7 @@ export default function ProductNewScreen({ navigation }: any) {
 
           <View style={styles.formSection}>
             <View style={styles.switchRow}>
-              <Text style={styles.label}>Has Product Category</Text>
+              <Text style={styles.label}>Series</Text>
               <Switch
                 value={form.hasCategory}
                 onValueChange={(value) => setForm({ ...form, hasCategory: value })}
@@ -438,12 +438,12 @@ export default function ProductNewScreen({ navigation }: any) {
 
           {form.hasCategory && (
             <View style={styles.formSection}>
-              <Text style={styles.label}>Product Categories *</Text>
-              <Text style={styles.hint}>Add one or multiple product categories</Text>
+              <Text style={styles.label}>Series *</Text>
+              <Text style={styles.hint}>Add one or multiple series</Text>
               <View style={styles.addRow}>
                 <WebInput
                   style={[styles.input, styles.addInput]}
-                  placeholder="Enter product category name"
+                  placeholder="Enter series name"
                   value={form.newCategory}
                   onChangeText={(text) => setForm({ ...form, newCategory: text })}
                   onSubmitEditing={addCategory}

@@ -538,7 +538,7 @@ export default function DCCaptureScreen({ navigation, route }: any) {
 
               <View style={styles.productRow}>
                 <View style={styles.productField}>
-                  <Text style={styles.fieldLabel}>Product Category *</Text>
+                  <Text style={styles.fieldLabel}>Series *</Text>
                   <View style={styles.categoryGrid}>
                     {PRODUCT_CATEGORIES.map((cat) => (
                       <TouchableOpacity

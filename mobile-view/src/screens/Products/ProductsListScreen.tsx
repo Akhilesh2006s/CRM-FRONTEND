@@ -199,9 +199,9 @@ export default function ProductsListScreen({ navigation }: any) {
                   </View>
                 </View>
 
-                <InfoRow label="Levels" value={formatList(product.productLevels)} />
+                <InfoRow label="Term / Level" value={formatList(product.productLevels)} />
                 <InfoRow
-                  label="Subjects"
+                  label="Special Notes"
                   value={
                     product.hasSubjects ? formatList(product.subjects) : '-'
                   }
@@ -209,6 +209,10 @@ export default function ProductsListScreen({ navigation }: any) {
                 <InfoRow
                   label="Specs"
                   value={product.hasSpecs ? formatList(product.specs) : '-'}
+                />
+                <InfoRow
+                  label="Series"
+                  value={product.hasCategory ? formatList(product.categories) : '-'}
                 />
                 <InfoRow label="Created Date" value={formatCreatedDate(product.createdAt)} />
 

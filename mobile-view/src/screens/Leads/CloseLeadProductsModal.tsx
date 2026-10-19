@@ -206,29 +206,30 @@ function expandSectionsToRows(
         levelsToUse.forEach((level) => {
           subjectsToUse.forEach((subject) => {
             specsToUse.forEach((specs) => {
-            rows.push({
-              id: `${sec.id}_${sp.product}_${cls}_${specs}_${idx++}`,
-              product: sp.product,
-              class: cls,
-              category: entry?.category || sp.selectedCategory || '',
-              quantity: strength,
-              strength,
-              price,
-              total: strength * price,
-              level: level || '',
-              specs,
-              subject: subject || undefined,
-              deliverables: sp.selectedDeliverables?.length
-                ? [...sp.selectedDeliverables]
-                : undefined,
-              term: 'Term 1', // reassigned in assignTermsByLevelCombination
-              isParentRow: false,
-              sameRateForAllClasses: sp.sameRateForAllClasses,
-            });
+              rows.push({
+                id: `${sec.id}_${sp.product}_${cls}_${specs}_${idx++}`,
+                product: sp.product,
+                class: cls,
+                category: entry?.category || sp.selectedCategory || '',
+                quantity: strength,
+                strength,
+                price,
+                total: strength * price,
+                level: level || '',
+                specs,
+                subject: subject || undefined,
+                deliverables: sp.selectedDeliverables?.length
+                  ? [...sp.selectedDeliverables]
+                  : undefined,
+                term: 'Term 1', // reassigned in assignTermsByLevelCombination
+                isParentRow: false,
+                sameRateForAllClasses: sp.sameRateForAllClasses,
+              });
           });
         });
       });
     });
+  });
   });
   return assignTermsByLevelCombination(rows, (product) =>
     getProductLevelsOptions(catalogProducts, product),
@@ -444,7 +445,7 @@ export default function CloseLeadProductsModal({
       }
       const subjects = getProductSubjectsOptions(catalogProducts, sp.product);
       if (subjects.length > 0 && (!sp.selectedSubjects || sp.selectedSubjects.length === 0)) {
-        Alert.alert('Subjects required', `Select at least one subject for "${sp.product}".`);
+        Alert.alert('Special Notes required', `Select at least one special note for "${sp.product}".`);
         return;
       }
       const levels = getProductLevelsOptions(catalogProducts, sp.product);
@@ -733,7 +734,7 @@ export default function CloseLeadProductsModal({
                             {/* p2 → subjects */}
                             {subjectOptions.length > 0 ? (
                               <View style={styles.specsBlock}>
-                                <Text style={styles.classesTitle}>Select Subjects *</Text>
+                                <Text style={styles.classesTitle}>Select Special Notes *</Text>
                                 <View style={styles.specsRow}>
                                   {subjectOptions.map((name) => {
                                     const selected = (sp.selectedSubjects || []).includes(name);
@@ -776,7 +777,7 @@ export default function CloseLeadProductsModal({
                             {/* p3 / p5 → select levels */}
                             {levelOptions.length > 0 ? (
                               <View style={styles.specsBlock}>
-                                <Text style={styles.classesTitle}>Select Levels *</Text>
+                                <Text style={styles.classesTitle}>Select Term / Level *</Text>
                                 <View style={styles.specsRow}>
                                   {levelOptions.map((name) => {
                                     const selected = (sp.selectedLevels || []).includes(name);
@@ -866,7 +867,7 @@ export default function CloseLeadProductsModal({
 
                             {getProductCategoryOptions(catalogProducts, sp.product).length > 0 ? (
                               <WebSelect
-                                label="Product Category *"
+                                label="Series *"
                                 value={sp.selectedCategory}
                                 onValueChange={(v) =>
                                   updateSectionProduct(section.id, sp.product, {
@@ -975,16 +976,16 @@ export default function CloseLeadProductsModal({
                     <View>
                       <View style={styles.detailsHeaderRow}>
                         <Text style={[styles.dCell, styles.dProduct, styles.dHeader]}>Product</Text>
-                        <Text style={[styles.dCell, styles.dLevel, styles.dHeader]}>Level</Text>
+                        <Text style={[styles.dCell, styles.dLevel, styles.dHeader]}>Term / Level</Text>
                         <Text style={[styles.dCell, styles.dClass, styles.dHeader]}>Class</Text>
                         <Text style={[styles.dCell, styles.dCat, styles.dHeader]}>
-                          Product Category
+                          Series
                         </Text>
                         {showSpecs ? (
                           <Text style={[styles.dCell, styles.dSpecs, styles.dHeader]}>Specs</Text>
                         ) : null}
                         {showSubjects ? (
-                          <Text style={[styles.dCell, styles.dSpecs, styles.dHeader]}>Subjects</Text>
+                          <Text style={[styles.dCell, styles.dSpecs, styles.dHeader]}>Special Notes</Text>
                         ) : null}
                         <Text style={[styles.dCell, styles.dQty, styles.dHeader]}>
                           Quantity (Strength) *

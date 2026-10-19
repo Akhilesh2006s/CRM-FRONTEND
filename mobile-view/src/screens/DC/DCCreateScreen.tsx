@@ -1293,11 +1293,11 @@ function RaiseDCForm({
                 <Text style={[styles.th, styles.colProduct]}>Product</Text>
                 <Text style={[styles.th, styles.colClass]}>Class</Text>
                 <Text style={[styles.th, styles.colCategory]}>Category</Text>
-                <Text style={[styles.th, styles.colProductCategory]}>Product Category</Text>
+                <Text style={[styles.th, styles.colProductCategory]}>Series</Text>
                 <Text style={[styles.th, styles.colSpecs]}>Specs</Text>
-                <Text style={[styles.th, styles.colSubject]}>Subject</Text>
+                <Text style={[styles.th, styles.colSubject]}>Special Notes</Text>
                 <Text style={[styles.th, styles.colQty]}>Quantity</Text>
-                <Text style={[styles.th, styles.colLevel]}>Level</Text>
+                <Text style={[styles.th, styles.colLevel]}>Term / Level</Text>
                 <Text style={[styles.th, styles.colTerm]}>Term</Text>
                 <Text style={[styles.th, styles.colAction]}>Action</Text>
               </View>
@@ -1429,7 +1429,7 @@ function RaiseDCForm({
                           style={styles.cellInput}
                           value={row.level || ''}
                           onChangeText={(v) => updateProductRow(row.id, 'level', v)}
-                          placeholder="Level"
+                          placeholder="Term / Level"
                         />
                       )}
                     </View>
