@@ -49,8 +49,8 @@ export default function HoldPaymentsPage() {
   async function load() {
     setLoading(true)
     const qs = new URLSearchParams()
-    // Always filter for Hold/Duplicate status
-    qs.append('status', 'hold/duplicate')
+    // Held and rejected payments (the backend also matches legacy 'hold/duplicate').
+    qs.append('status', 'Hold,Rejected')
 
     Object.entries(filters).forEach(([k, v]) => {
       if (v) {
@@ -155,14 +155,15 @@ export default function HoldPaymentsPage() {
                 <TableHead>Added By</TableHead>
                 <TableHead>Payment Mode</TableHead>
                 <TableHead>Payment Fin Year</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead>Remarks</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {!loading && rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={13} className="text-center text-neutral-500">
-                    No HOLD payments found
+                  <TableCell colSpan={14} className="text-center text-neutral-500">
+                    No held or rejected payments found
                   </TableCell>
                 </TableRow>
               )}
@@ -191,7 +192,14 @@ export default function HoldPaymentsPage() {
                   <TableCell className="whitespace-nowrap">{r.createdBy?.name || '-'}</TableCell>
                   <TableCell className="whitespace-nowrap">{r.paymentMethod || '-'}</TableCell>
                   <TableCell className="whitespace-nowrap">{r.financialYear || '-'}</TableCell>
-                  <TableCell className="truncate max-w-[220px]">{r.description || '-'}</TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${(r as any).status === 'Rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>
+                      {(r as any).status === 'Rejected' ? 'Rejected' : 'Hold'}
+                    </span>
+                  </TableCell>
+                  <TableCell className="truncate max-w-[220px]" title={(r as any).rejectionReason || (r as any).adminRemarks || r.description || ''}>
+                    {(r as any).rejectionReason || (r as any).adminRemarks || r.description || '-'}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

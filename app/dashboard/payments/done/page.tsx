@@ -82,8 +82,9 @@ export default function PaymentsDonePage() {
         return
       }
 
-      // Fetch only approved/completed payments
-      const data = await apiRequest<Payment[]>(`/payments?status=Approved`)
+      // Every status, so the BDE sees payments that were held or rejected (with the reason).
+      const isBde = ['Executive', 'Sales BDE', 'Employee'].includes(String(currentUser.role || ''))
+      const data = await apiRequest<Payment[]>(isBde ? `/payments?createdBy=${currentUser._id}` : `/payments`)
       setPayments(data || [])
     } catch (err: any) {
       toast.error(err?.message || 'Failed to load payments')
@@ -94,8 +95,7 @@ export default function PaymentsDonePage() {
   }
 
   function filterPayments() {
-    // Only show approved payments (already filtered in loadPayments)
-    let filtered = payments.filter(p => p.status === 'Approved')
+    let filtered = statusFilter === 'all' ? [...payments] : payments.filter((p) => p.status === statusFilter)
 
     // Search filter
     if (searchTerm.trim()) {
@@ -296,8 +296,13 @@ export default function PaymentsDonePage() {
                     </TableCell>
                     <TableCell>{getStatusBadge(payment)}</TableCell>
                     <TableCell>{payment.financialYear || '-'}</TableCell>
-                    <TableCell className="text-sm text-neutral-600 max-w-xs truncate">
-                      {payment.description || '-'}
+                    <TableCell
+                      className="text-sm text-neutral-600 max-w-xs truncate"
+                      title={(payment as any).rejectionReason || (payment as any).adminRemarks || payment.description || ''}
+                    >
+                      {payment.status === 'Rejected' || payment.status === 'Hold'
+                        ? (payment as any).rejectionReason || (payment as any).adminRemarks || payment.description || '-'
+                        : payment.description || '-'}
                     </TableCell>
                   </TableRow>
                 ))}

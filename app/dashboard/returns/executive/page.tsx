@@ -123,6 +123,16 @@ type DcOrderProductSource = {
   unit_price?: number
   price?: number
   unitPrice?: number
+  productCategory?: string
+  specs?: string
+  category?: string
+  itemType?: string
+}
+
+/** Specimen copies and other Training Material went out free; they are not returned against a sale. */
+function isFreeDcLine(p: { category?: string; itemType?: string }): boolean {
+  const cat = String(p.category || '').toLowerCase().replace(/[^a-z]/g, '')
+  return String(p.itemType || '') === 'Specimen Copy' || cat.startsWith('training') || cat === 'shortage'
 }
 
 /** Per-line prices from DC productDetails + matched DcOrder row (no cross-product fallback). */
@@ -146,6 +156,10 @@ function mergeDcProductLines(
     class: String(raw.class ?? matchedOrder?.class ?? '').trim(),
     level: String(raw.level ?? matchedOrder?.level ?? '').trim(),
     subject: String(raw.subject ?? matchedOrder?.subject ?? '').trim(),
+    productCategory: String(raw.productCategory ?? matchedOrder?.productCategory ?? '').trim(),
+    specs: String(raw.specs ?? matchedOrder?.specs ?? '').trim(),
+    category: raw.category ?? matchedOrder?.category,
+    itemType: raw.itemType ?? matchedOrder?.itemType,
     quantity:
       Number(
         raw.quantity ??
@@ -196,6 +210,10 @@ type DcOrder = {
     class?: string
     level?: string
     subject?: string
+    productCategory?: string
+    specs?: string
+    category?: string
+    itemType?: string
     quantity: number
     unit_price?: number
   }>
@@ -208,6 +226,8 @@ type ProductRow = {
   class: string
   level: string
   subject: string
+  productCategory?: string
+  specs?: string
   soldQty: number
   returnQty: number
   unitPrice: number
@@ -253,6 +273,9 @@ export default function ExecutiveStockReturnsPage() {
   const [returnDate, setReturnDate] = useState('')
   const [returnType, setReturnType] = useState('')
   const [productRows, setProductRows] = useState<ProductRow[]>([])
+  /** Every line delivered on the selected DC (books only); the return is for one product of these. */
+  const [dcLines, setDcLines] = useState<ProductRow[]>([])
+  const [returnProduct, setReturnProduct] = useState('')
   const [evidencePhotos, setEvidencePhotos] = useState<File[]>([])
   const [evidencePhotoUrls, setEvidencePhotoUrls] = useState<string[]>([])
   const [executiveRemarks, setExecutiveRemarks] = useState('')
@@ -462,24 +485,29 @@ export default function ExecutiveStockReturnsPage() {
     setTransport(order.transport_name || '')
     if (order.year?.trim()) setFinYear(order.year.trim())
     else setFinYear(defaultFinYear())
-    const products = order.products && order.products.length > 0 ? order.products : []
-    if (products.length > 0) {
-      setProductRows(
-        products.map((p, idx) => ({
-          id: `product-${idx}`,
-          product: p.product_name || '',
-          class: p.class || '',
-          level: p.level || '',
-          subject: p.subject || '',
-          soldQty: p.quantity || 0,
-          returnQty: 0,
-          unitPrice: resolvePersistedUnitPrice(p.unit_price),
-          reason: '',
-          remarks: '',
-        }))
-      )
-    } else {
-      setProductRows([])
+    const products = (order.products && order.products.length > 0 ? order.products : []).filter(
+      (p) => !isFreeDcLine(p)
+    )
+    const lines: ProductRow[] = products.map((p, idx) => ({
+      id: `product-${idx}`,
+      product: p.product_name || '',
+      class: p.class || '',
+      level: p.level || '',
+      subject: p.subject || '',
+      productCategory: p.productCategory || '',
+      specs: p.specs || '',
+      soldQty: p.quantity || 0,
+      returnQty: 0,
+      unitPrice: resolvePersistedUnitPrice(p.unit_price),
+      reason: '',
+      remarks: '',
+    }))
+    setDcLines(lines)
+    // Choose the product first; a DC with a single product selects it straight away.
+    const names = [...new Set(lines.map((l) => l.product).filter(Boolean))]
+    setReturnProduct(names.length === 1 ? names[0] : '')
+    setProductRows(names.length === 1 ? lines : [])
+    if (lines.length === 0) {
       toast.info('No products on this DC — use Add Product to enter return lines.')
     }
   }
@@ -692,6 +720,8 @@ export default function ExecutiveStockReturnsPage() {
       class: row.class,
       level: row.level,
       subject: row.subject,
+      productCategory: row.productCategory || undefined,
+      specs: row.specs || undefined,
       soldQty: row.soldQty,
       returnQty: row.returnQty,
       unitPrice: row.unitPrice,
@@ -1105,9 +1135,34 @@ export default function ExecutiveStockReturnsPage() {
                 <h3 className="text-lg font-semibold">Product Selection</h3>
               </div>
               
+              {dcLines.length > 0 && (
+                <div className="max-w-xs">
+                  <Label className="text-sm">Product to return *</Label>
+                  <Select
+                    value={selectValueOrUndefined(returnProduct)}
+                    onValueChange={(value) => {
+                      setReturnProduct(value)
+                      setProductRows(dcLines.filter((line) => line.product === value).map((line) => ({ ...line })))
+                    }}
+                  >
+                    <SelectTrigger aria-label="Product to return">
+                      <SelectValue placeholder="Select product (e.g. EEL, IIT)" />
+                    </SelectTrigger>
+                    <SelectContent className={SELECT_IN_DIALOG_CLASS}>
+                      {[...new Set(dcLines.map((line) => line.product).filter(Boolean))].map((name) => (
+                        <SelectItem key={name} value={name}>{name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-neutral-500 mt-1">Only the classes, series and levels sent for this product are listed.</p>
+                </div>
+              )}
+
               {productRows.length === 0 ? (
                 <p className="text-sm text-neutral-500 p-4 bg-neutral-50 rounded text-center">
-                  No products added. Click "Add Product" to add products.
+                  {dcLines.length > 0 && !returnProduct
+                    ? 'Select the product to return.'
+                    : 'No products added. Click "Add Product" to add products.'}
                 </p>
               ) : (
                 <div className="overflow-x-auto">
@@ -1115,6 +1170,10 @@ export default function ExecutiveStockReturnsPage() {
                     <thead>
                       <tr className="bg-neutral-100">
                         <th className="py-2 px-3 text-left">Product</th>
+                        <th className="py-2 px-3 text-left">Class</th>
+                        <th className="py-2 px-3 text-left">Series</th>
+                        <th className="py-2 px-3 text-left">Term / Level</th>
+                        <th className="py-2 px-3 text-left">Special Notes</th>
                         <th className="py-2 px-3 text-left">Sold Qty</th>
                         <th className="py-2 px-3 text-left">Return Qty</th>
                         <th className="py-2 px-3 text-left">Unit Price</th>
@@ -1136,6 +1195,10 @@ export default function ExecutiveStockReturnsPage() {
                               className="min-w-[140px]"
                             />
                           </td>
+                          <td className="py-2 px-3 whitespace-nowrap">{row.class || '-'}</td>
+                          <td className="py-2 px-3 whitespace-nowrap">{row.productCategory || '-'}</td>
+                          <td className="py-2 px-3 whitespace-nowrap">{row.level || '-'}</td>
+                          <td className="py-2 px-3 whitespace-nowrap">{row.subject || row.specs || '-'}</td>
                           <td className="py-2 px-3">
                             <Input
                               type="text"

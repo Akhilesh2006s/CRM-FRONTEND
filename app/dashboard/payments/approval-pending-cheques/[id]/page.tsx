@@ -37,7 +37,7 @@ type PaymentData = {
   depositedBankBranch?: string
 }
 
-const STATUS_OPTIONS = ['Pending', 'hold/duplicate', 'Approved']
+const STATUS_OPTIONS = ['Pending', 'Hold', 'Rejected', 'Approved']
 
 export default function PaymentDetailPage() {
   const router = useRouter()
@@ -60,7 +60,7 @@ export default function PaymentDetailPage() {
       setFormData({
         referenceNumber: payment.referenceNumber || payment.refNo || '',
         remarks: payment.description || '',
-        status: payment.status || 'Pending',
+        status: payment.status === 'hold/duplicate' ? 'Hold' : payment.status || 'Pending',
       })
     } catch (err: any) {
       toast.error(err?.message || 'Failed to load payment')
@@ -75,6 +75,10 @@ export default function PaymentDetailPage() {
   }, [id])
 
   async function handleUpdate() {
+    if ((formData.status === 'Hold' || formData.status === 'Rejected') && !formData.remarks.trim()) {
+      toast.error(`Enter remarks explaining why the payment is ${formData.status === 'Hold' ? 'on hold' : 'rejected'}`)
+      return
+    }
     setSaving(true)
     try {
       await apiRequest(`/payments/${id}`, {
