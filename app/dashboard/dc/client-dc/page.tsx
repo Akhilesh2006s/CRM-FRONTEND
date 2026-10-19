@@ -4517,7 +4517,7 @@ export default function ClientDCPage() {
                   <span>
                     <span className="font-semibold block">Specimen copies requested</span>
                     <span className="text-xs text-neutral-600">
-                      Adds the entered number of copies of each selected book for every class as Training Material (no billing).
+                      Adds one specimen set line per product (class NA, set as per DC list) as Training Material (no billing).
                     </span>
                   </span>
                 </label>
@@ -4533,9 +4533,9 @@ export default function ClientDCPage() {
                 )}
                 {dcProductRows.some((row) => isSpecimenRow(row)) && (
                   <div className="w-36">
-                    <Label className="text-xs">Copies per book *</Label>
+                    <Label className="text-xs">Sets per product *</Label>
                     <Input
-                      aria-label="Specimen copies per book"
+                      aria-label="Specimen sets per product"
                       type="number"
                       min={1}
                       step={1}

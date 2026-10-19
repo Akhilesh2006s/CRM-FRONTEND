@@ -64,20 +64,34 @@ export function specimenCopiesValue(input: unknown): number {
   return Number.isFinite(n) && n >= 1 ? n : 1
 }
 
-/** `copies` of each book (product + class + series/level/specs) the school selected, as Training Material. */
+/** Class / specs shown on a specimen line: one set of the product's books as per the DC list. */
+export const SPECIMEN_CLASS = 'NA'
+export const SPECIMEN_SET_SPECS = 'Set as per DC list'
+
+/**
+ * Specimen copies as Training Material: one line per product ("<product> set as per DC list",
+ * class NA) with `copies` sets, not one copy per class / series / book.
+ */
 export function buildSpecimenRows<T extends Record<string, any>>(rows: T[], copies = 1): T[] {
   const qty = specimenCopiesValue(copies)
-  const seen = new Set<string>()
-  const out: T[] = []
+  const byProduct = new Map<string, T>()
   for (const row of rows) {
     if (isSpecimenRow(row) || isRelatedItemRow(row) || canonicalDcRowCategory(row.category) === 'Training Material') continue
-    const key = [row.product || row.productName, row.class, row.productCategory, row.level, row.specs, row.subject, row.term]
-      .map((v) => String(v ?? '').trim().toLowerCase()).join('|')
-    if (seen.has(key)) continue
-    seen.add(key)
-    const { lineId: _lineId, _id: _rowId, id: _id, ...rest } = row as Record<string, any>
+    const product = String(row.product || row.productName || row.product_name || '').trim()
+    if (product && !byProduct.has(product.toLowerCase())) byProduct.set(product.toLowerCase(), row)
+  }
+  const out: T[] = []
+  for (const row of Array.from(byProduct.values())) {
+    const {
+      lineId: _lineId, _id: _rowId, id: _id, section: _section, program: _program, stream: _stream,
+      subject: _subject, selected_subjects: _subjects, productCategory: _series, subjectPackage: _pkg,
+      ...rest
+    } = row as Record<string, any>
     out.push({
       ...rest,
+      class: SPECIMEN_CLASS,
+      level: '',
+      specs: SPECIMEN_SET_SPECS,
       category: 'Training Material',
       itemType: SPECIMEN_ITEM_TYPE,
       quantity: qty,
