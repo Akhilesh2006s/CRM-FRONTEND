@@ -47,6 +47,8 @@ export default function AddPaymentPage() {
   const [chequeNumber, setChequeNumber] = useState('')
   const [chequeDate, setChequeDate] = useState('')
   const [bankName, setBankName] = useState('')
+  const [depositedBank, setDepositedBank] = useState('')
+  const [depositedBankBranch, setDepositedBankBranch] = useState('')
   const [accountNumber, setAccountNumber] = useState('')
   const [ifscCode, setIfscCode] = useState('')
   const [cardLast4, setCardLast4] = useState('')
@@ -219,6 +221,8 @@ export default function AddPaymentPage() {
         paymentDetails.referenceNumber = chequeNumber
         paymentDetails.chqDate = chequeDate ? new Date(chequeDate).toISOString() : undefined
         paymentDetails.bankName = bankName || undefined
+        paymentDetails.depositedBank = depositedBank.trim() || undefined
+        paymentDetails.depositedBankBranch = depositedBankBranch.trim() || undefined
       } else if (mode === 'Bank Transfer') {
         paymentDetails.transactionId = transactionId
         paymentDetails.referenceNumber = transactionId
@@ -434,6 +438,24 @@ export default function AddPaymentPage() {
                     placeholder="Enter Bank Name" 
                     value={bankName} 
                     onChange={(e) => setBankName(e.target.value)}
+                    className="bg-white text-neutral-900"
+                  />
+                </div>
+                <div>
+                  <Label>Deposited Bank</Label>
+                  <Input
+                    placeholder="Bank where the cheque was deposited"
+                    value={depositedBank}
+                    onChange={(e) => setDepositedBank(e.target.value)}
+                    className="bg-white text-neutral-900"
+                  />
+                </div>
+                <div>
+                  <Label>Deposited Bank Branch</Label>
+                  <Input
+                    placeholder="Branch of the deposited bank"
+                    value={depositedBankBranch}
+                    onChange={(e) => setDepositedBankBranch(e.target.value)}
                     className="bg-white text-neutral-900"
                   />
                 </div>

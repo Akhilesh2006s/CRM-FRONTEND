@@ -30,6 +30,11 @@ type PaymentData = {
   town?: string
   zone?: string
   cluster?: string
+  chequeNumber?: string
+  chqDate?: string
+  bankName?: string
+  depositedBank?: string
+  depositedBankBranch?: string
 }
 
 const STATUS_OPTIONS = ['Pending', 'hold/duplicate', 'Approved']
@@ -175,6 +180,30 @@ export default function PaymentDetailPage() {
                 <label className="text-sm text-neutral-500">Payment Mode</label>
                 <Input value={data.paymentMethod || '-'} readOnly className="bg-neutral-50" />
               </div>
+              {data.paymentMethod === 'Cheque' && (
+                <>
+                  <div>
+                    <label className="text-sm text-neutral-500">Cheque Number</label>
+                    <Input value={data.chequeNumber || '-'} readOnly className="bg-neutral-50" />
+                  </div>
+                  <div>
+                    <label className="text-sm text-neutral-500">Cheque Date</label>
+                    <Input value={data.chqDate ? new Date(data.chqDate).toLocaleDateString('en-IN') : '-'} readOnly className="bg-neutral-50" />
+                  </div>
+                  <div>
+                    <label className="text-sm text-neutral-500">Cheque Bank</label>
+                    <Input value={data.bankName || '-'} readOnly className="bg-neutral-50" />
+                  </div>
+                  <div>
+                    <label className="text-sm text-neutral-500">Deposited Bank</label>
+                    <Input value={data.depositedBank || '-'} readOnly className="bg-neutral-50" />
+                  </div>
+                  <div>
+                    <label className="text-sm text-neutral-500">Deposited Bank Branch</label>
+                    <Input value={data.depositedBankBranch || '-'} readOnly className="bg-neutral-50" />
+                  </div>
+                </>
+              )}
               <div>
                 <label className="text-sm text-neutral-500">Reference No *</label>
                 <Input
