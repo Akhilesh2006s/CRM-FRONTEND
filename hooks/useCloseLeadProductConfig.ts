@@ -103,24 +103,8 @@ export function useCloseLeadProductConfig(options: UseCloseLeadProductConfigOpti
     (pd) => String(pd.subject || '').trim().length > 0
   )
 
-  // Fetch deliverables for parent-row products when Product Configuration is shown
-  const parentProductNames = productSections.flatMap((s) => s.lines.map((l) => l.product))
-  useEffect(() => {
-    parentProductNames.forEach(async (productName) => {
-      const productId = getProductId(productName)
-      if (!productId) return
-      try {
-        const items = await apiRequest<Array<{ deliverableName: string }>>(
-          `/deliverables/by-product/${productId}`
-        )
-        const names = Array.isArray(items) ? items.map((d) => d.deliverableName) : []
-        setDeliverablesByProduct((prev) => ({ ...prev, [productName]: names }))
-      } catch {
-        setDeliverablesByProduct((prev) => ({ ...prev, [productName]: [] }))
-      }
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [parentProductNames.join(',')])
+  // Deliverables are now the product's own list (formerly "Special Notes"), chosen in the
+  // product line itself; the separate per-product deliverables lookup is no longer used.
 
   const filteredProducts = availableProducts
 

@@ -754,7 +754,7 @@ function CloseLeadProductConfigView({
                               {!isIit && hasSubjects && productSubjects.length > 0 && (
                                 <div className="mt-2 pt-2 border-t">
                                   <Label className="text-xs font-semibold mb-2 block">
-                                    Select Special Notes:
+                                    Select Deliverables:
                                   </Label>
                                   <div className="flex flex-wrap gap-2">
                                     {productSubjects.map((subject) => (
@@ -838,7 +838,7 @@ function CloseLeadProductConfigView({
                         <th className="px-3 py-2 text-left">Class</th>
                         <th className="min-w-[280px] px-3 py-2 text-left">Series</th>
                         {showSpecsColumn && <th className="px-3 py-2 text-left">Specs</th>}
-                        {showSubjectsColumn && <th className="px-3 py-2 text-left">Special Notes</th>}
+                        {showSubjectsColumn && <th className="px-3 py-2 text-left">Deliverables</th>}
                         <th className="px-3 py-2 text-left">Quantity (Strength) *</th>
                         <th className="px-3 py-2 text-left">Action</th>
                       </tr>

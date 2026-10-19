@@ -1893,7 +1893,7 @@ export default function ClosedSalesPage() {
                         <th className="py-4 px-5 text-left text-slate-700 font-bold text-xs uppercase tracking-wider">Enrollment Category</th>
                         <th className="py-4 px-5 text-left text-slate-700 font-bold text-xs uppercase tracking-wider">Series</th>
                         <th className="py-4 px-5 text-left text-slate-700 font-bold text-xs uppercase tracking-wider">Specs</th>
-                        <th className="py-4 px-5 text-left text-slate-700 font-bold text-xs uppercase tracking-wider">Special Notes</th>
+                        <th className="py-4 px-5 text-left text-slate-700 font-bold text-xs uppercase tracking-wider">Deliverables</th>
                         <th className="py-4 px-5 text-left text-slate-700 font-bold text-xs uppercase tracking-wider">Quantity</th>
                         <th className="py-4 px-5 text-left text-slate-700 font-bold text-xs uppercase tracking-wider">Term / Level</th>
                         <th className="py-4 px-5 text-left text-slate-700 font-bold text-xs uppercase tracking-wider">Term</th>
@@ -2042,7 +2042,7 @@ export default function ClosedSalesPage() {
                               }}
                               >
                                 <SelectTrigger className="h-9 text-sm bg-white border-slate-200 w-32">
-                                  <SelectValue placeholder="Special Note" />
+                                  <SelectValue placeholder="Deliverable" />
                                 </SelectTrigger>
                                 <SelectContent>
                                   {getProductSubjects(row.product).map((subj) => (

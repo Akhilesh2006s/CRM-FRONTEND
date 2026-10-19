@@ -76,8 +76,16 @@ export function applyPaymentDivisorsToBreakdown(
   const keyToBucketTotal = new Map<string, number>()
   const keyToSumStrength = new Map<string, number>()
   const packageSubjects = new Map<string, Set<string>>()
+  // Deliverables (CW / HW, Workbook / Phonetic Book ...) have no cost of their own: the student
+  // pays the product price once. IIT and subject-based products keep per-subject billing.
+  const isPackageLine = (line: PaymentBreakdownLine) => {
+    if (!line.subject) return false
+    if (line.subjectPackage) return true
+    const product = String(line.product || '')
+    return !/\bIIT\b/i.test(product) && getCalculationType(product) !== 'subject_based'
+  }
   for (const line of lines) {
-    if (!line.subjectPackage || !line.subject) continue
+    if (!isPackageLine(line)) continue
     const key = packageKey(line)
     const subjects = packageSubjects.get(key) || new Set<string>()
     subjects.add(String(line.subject).trim().toLowerCase())
@@ -116,7 +124,7 @@ export function applyPaymentDivisorsToBreakdown(
       String(line.specs || '').trim().toLowerCase())).size || 1
     const afterSpecs = roundToTwo(bucketTotal / specCount)
     const pkgKey = packageKey(bucketLines[0])
-    const subjectCount = bucketLines.some((line) => line.subjectPackage)
+    const subjectCount = bucketLines.some((line) => isPackageLine(line))
       ? Math.max(1, packageSubjects.get(pkgKey)?.size || 1) : 1
     keyToBucketTotal.set(k, roundToTwo(afterSpecs / subjectCount))
     if (subjectCount > 1) {

@@ -278,7 +278,7 @@ export default function ProductsPage() {
       return
     }
     if (editForm.calculationType === 'subject_based' && !editForm.hasSubjects) {
-      toast.error('Subject-based payment requires at least one Special Note')
+      toast.error('Subject-based payment requires at least one Deliverable')
       return
     }
 
@@ -386,7 +386,7 @@ export default function ProductsPage() {
                 <tr className="border-b border-neutral-200">
                   <th className="text-left py-3 px-4 font-semibold text-neutral-700">Product Name</th>
                   <th className="text-left py-3 px-4 font-semibold text-neutral-700">Term / Level</th>
-                  <th className="text-left py-3 px-4 font-semibold text-neutral-700">Special Notes</th>
+                  <th className="text-left py-3 px-4 font-semibold text-neutral-700">Deliverables</th>
                   <th className="text-left py-3 px-4 font-semibold text-neutral-700">Specs</th>
                   <th className="text-left py-3 px-4 font-semibold text-neutral-700">Series</th>
                   <th className="text-left py-3 px-4 font-semibold text-neutral-700">Status</th>
@@ -587,22 +587,22 @@ export default function ProductsPage() {
                 }
               />
               <Label htmlFor="hasSubjects" className="cursor-pointer">
-                Special Notes
+                Deliverables
               </Label>
             </div>
 
             {editForm.hasSubjects && (
               <div>
-                <Label>Special Notes</Label>
+                <Label>Deliverables</Label>
                 <div className="flex gap-2 mb-2">
                   <Input
-                    placeholder="Enter special note"
+                    placeholder="Enter deliverable"
                     value={editForm.newSubject}
                     onChange={(e) => setEditForm({ ...editForm, newSubject: e.target.value })}
                     onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addSubject())}
                   />
                   <Button type="button" onClick={addSubject} variant="outline">
-                    Add Special Note
+                    Add Deliverable
                   </Button>
                 </div>
                 {editForm.subjects.length > 0 && (

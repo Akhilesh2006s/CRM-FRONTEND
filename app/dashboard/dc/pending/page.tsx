@@ -1041,7 +1041,7 @@ export default function PendingDCPage() {
                     <th className="py-2 px-3 text-left border-r text-gray-900">Series</th>
                     <th className="py-2 px-3 text-left border-r text-gray-900">Enrollment Category</th>
                     <th className="py-2 px-3 text-left border-r text-gray-900">Specs</th>
-                    <th className="py-2 px-3 text-left border-r text-gray-900">Special Notes</th>
+                    <th className="py-2 px-3 text-left border-r text-gray-900">Deliverables</th>
                     <th className="py-2 px-3 text-left border-r text-gray-900">Strength</th>
                     <th className="py-2 px-3 text-left border-r text-gray-900">Term / Level</th>
                     <th className="py-2 px-3 text-center text-gray-900">Action</th>
@@ -1171,7 +1171,7 @@ export default function PendingDCPage() {
                             setProductRows(updated)
                           }}>
                             <SelectTrigger className="h-8 text-xs bg-white">
-                              <SelectValue placeholder="Select Special Note" />
+                              <SelectValue placeholder="Select Deliverable" />
                             </SelectTrigger>
                             <SelectContent>
                               {getProductSubjects(row.product).map(subject => (

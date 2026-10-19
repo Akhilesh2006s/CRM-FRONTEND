@@ -423,7 +423,6 @@ const NAV: NavItem[] = [
     children: [
       { label: 'All Products', href: '/dashboard/products', icon: Database },
       { label: 'Add New Product', href: '/dashboard/products/new', icon: PlusCircle },
-      { label: 'Deliverables', href: '/dashboard/products/deliverables', icon: Eye, adminOnly: true },
     ],
   },
   {

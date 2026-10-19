@@ -38,7 +38,7 @@ const unique = (values: string[]) => [...new Set(values.filter(Boolean))]
 
 /**
  * Close Lead sections for a renewal lead's class lines (last year's grid): exactly the classes,
- * strengths, series, levels, specs, special notes and prices the school had, one section per
+ * strengths, series, levels, specs, deliverables and prices the school had, one section per
  * product. Not Renewed / Not Interested lines are left out. Lines without a class (e.g. a
  * cross-sale product) are not handled here; their product names are returned as `remaining`.
  */

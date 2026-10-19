@@ -5222,7 +5222,7 @@ export default function ClientDCPage() {
                               <TableHead>Category</TableHead>
                               <TableHead>Series</TableHead>
                               <TableHead>Class</TableHead>
-                              <TableHead>Special Notes</TableHead>
+                              <TableHead>Deliverables</TableHead>
                               <TableHead>Term / Level</TableHead>
                               <TableHead>Specs</TableHead>
                               <TableHead>Quantity</TableHead>
@@ -5271,7 +5271,7 @@ export default function ClientDCPage() {
                                 <TableHead>Category</TableHead>
                                 <TableHead>Series</TableHead>
                                 <TableHead>Class</TableHead>
-                                <TableHead>Special Notes</TableHead>
+                                <TableHead>Deliverables</TableHead>
                                 <TableHead>Term / Level</TableHead>
                                 <TableHead>Specs</TableHead>
                                 <TableHead>Quantity</TableHead>
@@ -5306,7 +5306,7 @@ export default function ClientDCPage() {
                                 <TableHead>Category</TableHead>
                                 <TableHead>Series</TableHead>
                                 <TableHead>Class</TableHead>
-                                <TableHead>Special Notes</TableHead>
+                                <TableHead>Deliverables</TableHead>
                                 <TableHead>Term / Level</TableHead>
                                 <TableHead>Specs</TableHead>
                                 <TableHead>Quantity</TableHead>

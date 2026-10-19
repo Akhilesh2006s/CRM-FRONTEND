@@ -199,7 +199,6 @@ export const RBAC_NAV_MODULES: RbacNavModule[] = [
     pages: [
       { label: 'All Products', href: '/dashboard/products' },
       { label: 'Add New Product', href: '/dashboard/products/new' },
-      { label: 'Deliverables', href: '/dashboard/products/deliverables' },
     ],
   },
   {

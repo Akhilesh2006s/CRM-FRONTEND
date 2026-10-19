@@ -151,7 +151,7 @@ export default function NewProductPage() {
       return
     }
     if (form.hasSubjects && form.subjects.length === 0) {
-      setError('At least one special note is required when special notes are enabled')
+      setError('At least one deliverable is required when deliverables are enabled')
       setSubmitting(false)
       return
     }
@@ -171,7 +171,7 @@ export default function NewProductPage() {
       return
     }
     if (form.calculationType === 'subject_based' && !form.hasSubjects) {
-      setError('Subject-based payment requires at least one Special Note')
+      setError('Subject-based payment requires at least one Deliverable')
       setSubmitting(false)
       return
     }
@@ -274,7 +274,7 @@ export default function NewProductPage() {
               <DialogHeader>
                 <DialogTitle>Manage payment logic</DialogTitle>
                 <DialogDescription>
-                  Choose how the payable amount is divided. Configure terms/levels and special notes/subjects on the main form.
+                  Choose how the payable amount is divided. Configure terms/levels and deliverables/subjects on the main form.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-2 py-2">
@@ -386,25 +386,25 @@ export default function NewProductPage() {
               }
             />
             <Label htmlFor="hasSubjects" className="cursor-pointer font-medium">
-              Special Notes
+              Deliverables
             </Label>
           </div>
 
           {form.hasSubjects && (
             <div>
-              <Label>Special Notes *</Label>
-              <p className="text-xs text-neutral-500 mb-2">Add one or multiple special notes</p>
+              <Label>Deliverables *</Label>
+              <p className="text-xs text-neutral-500 mb-2">Add one or multiple deliverables</p>
               <div className="flex gap-2 mb-2">
                 <Input
                   type="text"
                   className="bg-white text-neutral-900"
-                  placeholder="Enter special note"
+                  placeholder="Enter deliverable"
                   value={form.newSubject}
                   onChange={(e) => setForm({ ...form, newSubject: e.target.value })}
                   onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addSubject())}
                 />
                 <Button type="button" onClick={addSubject} variant="outline">
-                  Add Special Note
+                  Add Deliverable
                 </Button>
               </div>
               {form.subjects.length > 0 && (

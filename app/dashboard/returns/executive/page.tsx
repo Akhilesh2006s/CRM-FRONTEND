@@ -1173,7 +1173,7 @@ export default function ExecutiveStockReturnsPage() {
                         <th className="py-2 px-3 text-left">Class</th>
                         <th className="py-2 px-3 text-left">Series</th>
                         <th className="py-2 px-3 text-left">Term / Level</th>
-                        <th className="py-2 px-3 text-left">Special Notes</th>
+                        <th className="py-2 px-3 text-left">Deliverables</th>
                         <th className="py-2 px-3 text-left">Sold Qty</th>
                         <th className="py-2 px-3 text-left">Return Qty</th>
                         <th className="py-2 px-3 text-left">Unit Price</th>
