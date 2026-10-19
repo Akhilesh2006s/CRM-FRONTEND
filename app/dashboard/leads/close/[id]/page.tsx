@@ -26,6 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { abacusStudentStrength, defaultMasterAbacusQuantity } from '@/lib/abacusMaterials'
 import { AbacusMaterialsFields } from '@/components/dc/AbacusMaterialsFields'
 import { buildRelatedItemRows, buildSpecimenRows, isRelatedItemRow, isSpecimenRow, specimenCopiesValue } from '@/lib/dcRowCategory'
+import { renewalLinesToSections } from '@/lib/renewalCloseSections'
 import { Checkbox } from '@/components/ui/checkbox'
 
 type Lead = {
@@ -312,7 +313,11 @@ export default function CloseLeadPage() {
             return normalized
           }
 
+          // Renewal leads carry last year's class lines: open with exactly those classes,
+          // strengths and series instead of a default class range.
+          const renewal = renewalLinesToSections(Array.isArray(leadData.products) ? leadData.products : [])
           const parentRows: ProductDetailRow[] = validProducts
+            .filter((product) => !renewal.handledProducts.has(product.toLowerCase()))
             .flatMap((product, productIdx): ProductDetailRow[] => {
             const productData = Array.isArray(leadData.products)
               ? leadData.products.find((p: any) => {
@@ -321,7 +326,7 @@ export default function CloseLeadPage() {
                 })
               : undefined
             // Skip Not Interested products when closing (no sale line)
-            if (productData?.status === 'Not Interested') {
+            if (productData?.status === 'Not Interested' || productData?.status === 'Not Renewed') {
               return []
             }
             // Load saved quantity/strength and unit_price from follow-up
@@ -361,7 +366,7 @@ export default function CloseLeadPage() {
               dispatchMode: productData?.dispatchMode,
             }]
           })
-          setProductSections(productDetailsToSections(parentRows))
+          setProductSections([...renewal.sections, ...productDetailsToSections(parentRows)])
         } else {
           setProductSections([])
         }

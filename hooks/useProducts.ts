@@ -89,7 +89,7 @@ export function useProducts() {
 
   // Check if product exists and is active
   const isProductActive = (productName: string): boolean => {
-    return products.some(p => p.productName === productName && p.prodStatus === 1)
+    return findProduct(productName)?.prodStatus === 1
   }
 
   return {
@@ -117,7 +117,7 @@ export function useProducts() {
     },
     // Get product subjects for a specific product
     getProductSubjects: (productName: string): string[] => {
-      const product = products.find(p => p.productName === productName)
+      const product = findProduct(productName)
       if (product && product.hasSubjects && product.subjects && Array.isArray(product.subjects)) {
         return product.subjects
       }
@@ -125,7 +125,7 @@ export function useProducts() {
     },
     // Check if product has subjects
     hasProductSubjects: (productName: string): boolean => {
-      const product = products.find(p => p.productName === productName)
+      const product = findProduct(productName)
       return product?.hasSubjects === true && product?.subjects && Array.isArray(product.subjects) && product.subjects.length > 0
     },
     // IIT subject combinations configured on the product (e.g. MBiPC, MPC, M)
@@ -140,7 +140,7 @@ export function useProducts() {
     },
     // Get product categories for a specific product
     getProductCategories: (productName: string): string[] => {
-      const product = products.find(p => p.productName === productName)
+      const product = findProduct(productName)
       if (product && product.hasCategory && product.categories && Array.isArray(product.categories)) {
         return product.categories
       }
@@ -148,7 +148,7 @@ export function useProducts() {
     },
     // Check if product has categories
     hasProductCategories: (productName: string): boolean => {
-      const product = products.find(p => p.productName === productName)
+      const product = findProduct(productName)
       return product?.hasCategory === true && product?.categories && Array.isArray(product.categories) && product.categories.length > 0
     },
     // Get product _id by name (for API calls that need productId)
@@ -158,11 +158,11 @@ export function useProducts() {
       return product?._id
     },
     getCalculationType: (productName: string): CalculationType => {
-      const product = products.find(p => p.productName === productName)
+      const product = findProduct(productName)
       return normalizeCalculationType(product?.calculationType)
     },
     getCatalogFallbackCount: (productName: string, ct: CalculationType): number => {
-      const product = products.find(p => p.productName === productName)
+      const product = findProduct(productName)
       if (!product) return 0
       if (ct === 'level_based')
         return Array.isArray(product.productLevels) ? product.productLevels.length : 0

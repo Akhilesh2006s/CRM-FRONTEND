@@ -7,7 +7,47 @@ const LINE_STATUSES = new Set([
   'Yet to Visit',
   'Not Met Management',
   'Not Interested',
+  'Renewed',
+  'Not Renewed',
 ])
+
+/** Statuses that take the line out of the sale and need a reason. */
+export const DROPPED_LINE_STATUSES = new Set(['Not Interested', 'Not Renewed'])
+/** Statuses that carry strength / unit price / chance into the sale. */
+export const PRICED_LINE_STATUSES = new Set(['Hot', 'Warm', 'Renewed'])
+
+/** Grid details a renewal or cross-sale line keeps between follow-ups (class, series, level...). */
+export type LeadProductLineDetails = {
+  class?: string
+  productCategory?: string
+  specs?: string
+  level?: string
+  subject?: string
+  section?: string
+  program?: string
+  stream?: string
+  /** renewal = continues last year's product; cross_sale = new product for an existing school */
+  sale_type?: 'renewal' | 'cross_sale'
+}
+
+const DETAIL_KEYS: Array<keyof LeadProductLineDetails> = [
+  'class', 'productCategory', 'specs', 'level', 'subject', 'section', 'program', 'stream', 'sale_type',
+]
+
+export function pickLineDetails(p: Record<string, any> | null | undefined): LeadProductLineDetails {
+  const out: Record<string, string> = {}
+  for (const key of DETAIL_KEYS) {
+    const v = p?.[key]
+    if (v != null && String(v).trim() && String(v).trim() !== '-') out[key] = String(v).trim()
+  }
+  return out as LeadProductLineDetails
+}
+
+/** "Cl 3 · Star Juniors L1 · Term1" for a renewal line; '' when it has no grid details. */
+export function lineDetailLabel(d: LeadProductLineDetails): string {
+  const cls = d.class ? `Cl ${d.class}${d.section && d.section !== 'ALL' ? d.section : ''}` : ''
+  return [cls, d.program, d.stream, d.productCategory, d.level, d.subject, d.specs].filter(Boolean).join(' · ')
+}
 
 export function normalizeLeadProductLineStatus(status?: string): string {
   const s = (status || '').trim()
@@ -16,7 +56,7 @@ export function normalizeLeadProductLineStatus(status?: string): string {
   return ''
 }
 
-export type LeadProductInterestedRow = {
+export type LeadProductInterestedRow = LeadProductLineDetails & {
   product_name: string
   term: string
   status: string
@@ -40,7 +80,7 @@ export function leadProductsToInterestedRows(
       quantity?: number
       unit_price?: number
       not_interested_reason?: string
-    }> | string
+    } & LeadProductLineDetails> | string
   },
   fallbackSchoolStatus?: string
 ): LeadProductInterestedRow[] {
@@ -63,6 +103,7 @@ export function leadProductsToInterestedRows(
             Number(p.unit_price ?? 0) > 0 ? String(Number(p.unit_price ?? 0)) : '',
           chance: Number(p.chance ?? 0) > 0 ? String(Number(p.chance ?? 0)) : '',
           not_interested_reason: String(p.not_interested_reason || '').trim(),
+          ...pickLineDetails(p),
         }
       })
   }
@@ -89,8 +130,12 @@ export function leadProductsToInterestedRows(
 export function isFollowUpProductLineComplete(row: LeadProductInterestedRow): boolean {
   if (!row.product_name?.trim()) return false
 
-  if (row.status === 'Not Interested') {
+  if (DROPPED_LINE_STATUSES.has(row.status)) {
     return Boolean(String(row.not_interested_reason || '').trim())
+  }
+
+  if (row.status === 'Renewed') {
+    return (Number(row.strength) || 0) > 0 && (Number(row.unit_price) || 0) > 0
   }
 
   if (row.status !== 'Hot' && row.status !== 'Warm') return true

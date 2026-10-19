@@ -25,6 +25,10 @@ import {
   isFollowUpProductLineComplete,
   leadProductsToInterestedRows,
   normalizeLeadProductLineStatus,
+  DROPPED_LINE_STATUSES,
+  PRICED_LINE_STATUSES,
+  lineDetailLabel,
+  type LeadProductLineDetails,
 } from '@/lib/leadProductsInterested'
 
 type Lead = { 
@@ -47,7 +51,8 @@ type Lead = {
   assignedToId?: string
   assignedToName?: string
   sourceType?: 'lead' | 'dc-order'
-  products?: Array<{
+  lead_type?: 'new' | 'renewal' | 'cross_sale'
+  products?: Array<LeadProductLineDetails & {
     product_name?: string
     product?: string
     term?: string
@@ -58,7 +63,7 @@ type Lead = {
   }> | string
 }
 
-type ProductInterested = {
+type ProductInterested = LeadProductLineDetails & {
   product_name: string
   term: string
   status: string
@@ -72,7 +77,11 @@ type ProductInterested = {
 
 const ALL_FOLLOWUP_STATUSES = ['Hot', 'Warm', 'Visit Again', 'Yet to Visit', 'Not Interested'] as const
 
-function followUpStatusOptions(savedStatus?: string): string[] {
+/** Last year's product on a renewal: renewed, not renewed, or still being discussed. */
+const RENEWAL_LINE_STATUSES = ['Renewed', 'Not Renewed', 'Hot', 'Warm', 'Visit Again'] as const
+
+function followUpStatusOptions(savedStatus?: string, saleType?: string): string[] {
+  if (saleType === 'renewal') return [...RENEWAL_LINE_STATUSES]
   const status = normalizeProductLineStatus(savedStatus)
   if (status === 'Hot') return ['Hot', 'Not Interested']
   if (status === 'Warm') return ['Warm', 'Hot', 'Not Interested']
@@ -86,6 +95,9 @@ const SCHOOL_LEAD_STATUSES = new Set(['Hot', 'Warm', 'Cold'])
 function normalizeProductLineStatus(status?: string): string {
   const s = (status || '').trim()
   if (s === 'Management Not Met' || s === 'Not Met Management') return 'Yet to Visit'
+  // For deal priority a renewed product counts as Hot, a not-renewed one as Not Interested.
+  if (s === 'Renewed') return 'Hot'
+  if (s === 'Not Renewed') return 'Not Interested'
   return s
 }
 
@@ -486,7 +498,10 @@ export default function FollowupLeadsPage() {
       status: displayLeadDealPriority(lead), // Reflects per-product + deal priority
       remarks: '',
       productsInterested: leadProductsToInterestedRows(lead).map((row) => {
-        const savedStatus = normalizeProductLineStatus(row.status) || row.status || 'Warm'
+        const savedStatus =
+          row.sale_type === 'renewal'
+            ? row.status || 'Warm'
+            : normalizeProductLineStatus(row.status) || row.status || 'Warm'
         return { ...row, status: savedStatus, savedStatus }
       }),
     })
@@ -530,6 +545,7 @@ export default function FollowupLeadsPage() {
     }
     const illegalMove = selectedProducts.find((p) => {
       const next = normalizeProductLineStatus(p.status) || p.status
+      if (p.sale_type === 'renewal' || (p.sale_type === 'cross_sale' && !p.savedStatus)) return false
       return !followUpStatusOptions(p.savedStatus).includes(next)
     })
     if (illegalMove) {
@@ -547,6 +563,8 @@ export default function FollowupLeadsPage() {
         toast.error(
           `Enter a reason why the school is not interested in "${incomplete.product_name}"`
         )
+      } else if (incomplete.status === 'Not Renewed') {
+        toast.error(`Enter a reason why "${incomplete.product_name}" was not renewed`)
       } else if ((Number(incomplete.unit_price) || 0) <= 0) {
         toast.error(`Enter Unit Price for "${incomplete.product_name}"`)
       } else if (
@@ -571,20 +589,29 @@ export default function FollowupLeadsPage() {
       // All fields are required, so include them all
       const validProducts = selectedProducts
         .map((p) => {
-          const priced = p.status === 'Hot' || p.status === 'Warm'
+          const priced = PRICED_LINE_STATUSES.has(p.status)
           return {
           product_name: p.product_name.trim(),
           term: p.term || 'Term 1',
           status: normalizeLeadProductLineStatus(p.status) || p.status || 'Warm',
           strength: priced ? Number(p.strength) || 0 : 0,
-          chance: priced ? Number(p.chance) || 0 : 0,
+          chance: p.status === 'Renewed' ? 100 : priced ? Number(p.chance) || 0 : 0,
           important: false,
           quantity: priced ? Number(p.strength) || 1 : 1,
           unit_price: priced ? Number(p.unit_price) || 0 : 0,
-          not_interested_reason:
-            p.status === 'Not Interested'
-              ? String(p.not_interested_reason || '').trim()
-              : '',
+          not_interested_reason: DROPPED_LINE_STATUSES.has(p.status)
+            ? String(p.not_interested_reason || '').trim()
+            : '',
+          // Keep class / series / level and Renewal vs Cross-Sale on the line.
+          class: p.class,
+          productCategory: p.productCategory,
+          specs: p.specs,
+          level: p.level,
+          subject: p.subject,
+          section: p.section,
+          program: p.program,
+          stream: p.stream,
+          sale_type: p.sale_type,
           }
         })
 
@@ -789,6 +816,27 @@ export default function FollowupLeadsPage() {
           unit_price: '',
           chance: '',
           not_interested_reason: '',
+        },
+      ],
+    }))
+  }
+
+  /** Renewal schools: add a product the school did not buy last year (Cross-Sale). */
+  const addCrossSaleProduct = () => {
+    setUpdateForm((prev) => ({
+      ...prev,
+      productsInterested: [
+        ...prev.productsInterested,
+        {
+          product_name: '',
+          term: 'Term 1',
+          status: 'Warm',
+          savedStatus: '',
+          strength: '',
+          unit_price: '',
+          chance: '',
+          not_interested_reason: '',
+          sale_type: 'cross_sale',
         },
       ],
     }))
@@ -1120,9 +1168,11 @@ export default function FollowupLeadsPage() {
                       {updateForm.productsInterested.map((product, index) => (
                         <div key={`product-${index}`} className="space-y-2">
                           <div className="grid grid-cols-[minmax(120px,1.6fr)_minmax(110px,1.2fr)_minmax(72px,0.8fr)_minmax(80px,0.9fr)_minmax(72px,0.8fr)] gap-2 items-center">
+                          <div className="min-w-0">
                           <Select
                             value={product.product_name || undefined}
-                            disabled
+                            disabled={!(product.sale_type === 'cross_sale' && !product.savedStatus)}
+                            onValueChange={(v) => updateInterestedProduct(index, 'product_name', v)}
                           >
                             <SelectTrigger className="h-9 bg-neutral-50">
                               <SelectValue placeholder="Select product" />
@@ -1138,6 +1188,17 @@ export default function FollowupLeadsPage() {
                               )}
                             </SelectContent>
                           </Select>
+                          {(product.sale_type || lineDetailLabel(product)) && (
+                            <div className="mt-1 flex flex-wrap items-center gap-1 text-[11px] leading-tight text-neutral-600">
+                              {product.sale_type && (
+                                <span className={`rounded px-1.5 py-0.5 font-medium ${product.sale_type === 'renewal' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}`}>
+                                  {product.sale_type === 'renewal' ? 'Renewal' : 'Cross-Sale'}
+                                </span>
+                              )}
+                              <span className="truncate" title={lineDetailLabel(product)}>{lineDetailLabel(product)}</span>
+                            </div>
+                          )}
+                          </div>
                           <Select
                             value={product.status}
                             onValueChange={(v) => {
@@ -1146,14 +1207,16 @@ export default function FollowupLeadsPage() {
                                 productsInterested: prev.productsInterested.map((item, i) => {
                                   if (i !== index) return item
                                   const next = { ...item, status: v }
-                                  if (v !== 'Hot' && v !== 'Warm') {
+                                  if (!PRICED_LINE_STATUSES.has(v)) {
                                     next.strength = ''
                                     next.unit_price = ''
-                                    next.chance = v === 'Not Interested' ? '0' : ''
+                                    next.chance = DROPPED_LINE_STATUSES.has(v) ? '0' : ''
+                                  } else if (v === 'Renewed') {
+                                    next.chance = '100'
                                   } else if (next.chance === '0') {
                                     next.chance = ''
                                   }
-                                  if (v !== 'Not Interested') next.not_interested_reason = ''
+                                  if (!DROPPED_LINE_STATUSES.has(v)) next.not_interested_reason = ''
                                   return next
                                 }),
                               }))
@@ -1163,7 +1226,10 @@ export default function FollowupLeadsPage() {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              {followUpStatusOptions(product.savedStatus || product.status).map((status) => (
+                              {(product.sale_type === 'cross_sale' && !product.savedStatus
+                                ? [...ALL_FOLLOWUP_STATUSES]
+                                : followUpStatusOptions(product.savedStatus || product.status, product.sale_type)
+                              ).map((status) => (
                                 <SelectItem key={status} value={status}>{status}</SelectItem>
                               ))}
                             </SelectContent>
@@ -1174,7 +1240,7 @@ export default function FollowupLeadsPage() {
                             className="h-9 text-center bg-white"
                             placeholder="Qty"
                             value={product.strength}
-                            disabled={product.status !== 'Hot' && product.status !== 'Warm'}
+                            disabled={!PRICED_LINE_STATUSES.has(product.status)}
                             onChange={(e) =>
                               updateInterestedProduct(index, 'strength', e.target.value)
                             }
@@ -1185,7 +1251,7 @@ export default function FollowupLeadsPage() {
                             className="h-9 text-center bg-white"
                             placeholder="₹"
                             value={product.unit_price}
-                            disabled={product.status !== 'Hot' && product.status !== 'Warm'}
+                            disabled={!PRICED_LINE_STATUSES.has(product.status)}
                             onChange={(e) =>
                               updateInterestedProduct(index, 'unit_price', e.target.value)
                             }
@@ -1196,16 +1262,16 @@ export default function FollowupLeadsPage() {
                             className="h-9 text-center bg-white"
                             placeholder="% "
                             value={product.chance}
-                            disabled={product.status !== 'Hot' && product.status !== 'Warm'}
+                            disabled={!PRICED_LINE_STATUSES.has(product.status)}
                             onChange={(e) =>
                               updateInterestedProduct(index, 'chance', e.target.value)
                             }
                           />
                           </div>
-                          {product.status === 'Not Interested' && (
+                          {DROPPED_LINE_STATUSES.has(product.status) && (
                             <Input
                               className="h-9 bg-white text-sm"
-                              placeholder="Reason not interested *"
+                              placeholder={product.status === 'Not Renewed' ? 'Reason not renewed *' : 'Reason not interested *'}
                               value={product.not_interested_reason}
                               onChange={(e) =>
                                 updateInterestedProduct(
@@ -1227,8 +1293,15 @@ export default function FollowupLeadsPage() {
                     Scroll inside the products list to view all {updateForm.productsInterested.length} products.
                   </p>
                 )}
+                {selectedLead?.lead_type === 'renewal' && (
+                  <Button type="button" variant="outline" size="sm" onClick={addCrossSaleProduct}>
+                    + Add cross-sale product
+                  </Button>
+                )}
                 <p className="text-xs text-neutral-500">
-                  Products are locked. Hot can only stay Hot or become Not Interested. Warm can stay Warm, become Hot, or become Not Interested. Yet to Visit can change to any status.
+                  {selectedLead?.lead_type === 'renewal'
+                    ? 'Mark each of last year\'s products Renewed (continues) or Not Renewed (stopped, with a reason). New products added here are Cross-Sale and follow the same rules as a new school.'
+                    : 'Products are locked. Hot can only stay Hot or become Not Interested. Warm can stay Warm, become Hot, or become Not Interested. Yet to Visit can change to any status.'}
                 </p>
               </div>
               
