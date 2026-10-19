@@ -32,13 +32,15 @@ const bucketKey = (line: PaymentBreakdownLine) =>
     String(line.program || '').trim().toLowerCase(),
     String(line.stream || '').trim().toLowerCase(),
     String(line.subject || '').trim().toLowerCase(),
+    String(line.itemType || '').trim().toLowerCase(),
   ].join('::')
 
 const packageKey = (line: PaymentBreakdownLine) =>
   [String(line.product || '').trim(), String(line.class || '').trim(),
     String(line.section || '').trim().toLowerCase(),
     String(line.program || '').trim().toLowerCase(),
-    String(line.stream || '').trim().toLowerCase()].join('::')
+    String(line.stream || '').trim().toLowerCase(),
+    String(line.itemType || '').trim().toLowerCase()].join('::')
 
 /**
  * Adjust per-line totals so each product+class+subject bucket matches

@@ -66,7 +66,7 @@ import {
 import { useRouter } from 'next/navigation'
 import { abacusStudentStrength, defaultMasterAbacusQuantity } from '@/lib/abacusMaterials'
 import { AbacusMaterialsFields } from '@/components/dc/AbacusMaterialsFields'
-import { DC_ROW_CATEGORIES, DC_ROW_CATEGORY_BILLING, buildRelatedItemRows, buildSpecimenRows, dcRowCategoryOrDefault, isRelatedItemRow, isSpecimenRow, specimenCopiesValue } from '@/lib/dcRowCategory'
+import { DC_ROW_CATEGORIES, DC_ROW_CATEGORY_BILLING, buildRelatedItemRows, buildSpecimenRows, dcRowCategoryOrDefault, isBillableDcRow, isRelatedItemRow, isSpecimenRow, specimenCopiesValue } from '@/lib/dcRowCategory'
 
 type DC = {
   _id: string
@@ -383,6 +383,11 @@ export default function ClientDCPage() {
     level?: string // Level configured on Products master; shown in Edit PO
     term?: string // Academic term (Term 1 / 2 / Both) for split tables
     lineId?: string
+    itemType?: string // 'Specimen Copy' / 'Related Item'
+    subjectPackage?: boolean // CW + HW etc. for the same students are billed once
+    section?: string // IIT assignment
+    program?: string
+    stream?: string
   }>>([])
   const [addProductDialogOpen, setAddProductDialogOpen] = useState(false)
   const [addNewProductDialogOpen, setAddNewProductDialogOpen] = useState(false)
@@ -412,6 +417,7 @@ export default function ClientDCPage() {
     getProductCategories,
     hasProductCategories,
     getCalculationType,
+    getCatalogFallbackCount,
     getProductId,
     getProductRelatedItems,
   } = useProducts()
@@ -809,17 +815,48 @@ export default function ClientDCPage() {
     load()
   }, [])
 
-  // Keep Edit PO Total Amount in sync with sum of product row totals (qty × unit price)
+  /**
+   * Edit PO billing, same rules as Close Lead: CW + HW (multiple specs) for the same students
+   * are one package, level/subject divisors apply, and specimen / Training Material rows are free.
+   */
+  const editPoBilling = (rows: typeof editProductRows) => {
+    const named = rows.filter((row) => row.product_name && row.product_name.trim() !== '')
+    const { paymentBreakdown, totalAmount } = applyPaymentDivisorsToBreakdown(
+      named.map((row) => ({
+        rowId: row.id,
+        product: row.product_name,
+        class: row.class || '1',
+        section: row.section,
+        program: row.program,
+        stream: row.stream,
+        category: row.category,
+        itemType: row.itemType,
+        strength: Number(row.quantity) || 0,
+        unitPrice: Number(row.unit_price) || 0,
+        level: row.level && row.level !== '-' ? row.level : undefined,
+        subject: row.subject && row.subject !== '-' ? row.subject : undefined,
+        subjectPackage: Boolean(row.subjectPackage),
+        specs: row.specs,
+      })),
+      getCalculationType,
+      getCatalogFallbackCount
+    )
+    const totals = new Map<string, number>()
+    paymentBreakdown.forEach((line) => totals.set(String(line.rowId), Number(line.total) || 0))
+    return { totals, totalAmount: Math.round((Number(totalAmount) || 0) * 100) / 100 }
+  }
+  const editPoBill = useMemo(() => editPoBilling(editProductRows), [editProductRows, catalogProducts])
+  const isFreeEditPoRow = (row: { category?: string; itemType?: string }) =>
+    isSpecimenRow(row) || !isBillableDcRow(row)
+
+  // Keep Edit PO Total Amount in sync with the billed total
   useEffect(() => {
     if (!editPODialogOpen) return
-    const total = editProductRows.reduce(
-      (sum, p) => sum + (Number(p.quantity) || 0) * (Number(p.unit_price) || 0),
-      0
-    )
+    const total = editPoBill.totalAmount
     setEditFormData((prev) =>
       prev.total_amount === total ? prev : { ...prev, total_amount: total }
     )
-  }, [editProductRows, editPODialogOpen])
+  }, [editPoBill, editPODialogOpen])
 
   useEffect(() => {
     if (!highlightedEditProductRowId) return
@@ -2500,6 +2537,11 @@ export default function ClientDCPage() {
                 selected_subjects: Array.isArray(merged.selected_subjects) ? merged.selected_subjects : undefined,
                 level,
                 term,
+                itemType: merged.itemType || undefined,
+                subjectPackage: Boolean(merged.subjectPackage ?? order?.subjectPackage),
+                section: merged.section || undefined,
+                program: merged.program || undefined,
+                stream: merged.stream || undefined,
               }
             })
           : []
@@ -2577,7 +2619,9 @@ export default function ClientDCPage() {
       const invalidProducts = editProductRows.filter(row => {
         const hasProductName = row.product_name && row.product_name.trim() !== ''
         if (!hasProductName) return false // Skip empty rows
-        return !row.quantity || row.quantity <= 0 || !row.unit_price || Number(row.unit_price) <= 0
+        if (!row.quantity || row.quantity <= 0) return true
+        // Specimen copies and Training Material go free; only billed rows need a price.
+        return !isFreeEditPoRow(row) && (!row.unit_price || Number(row.unit_price) <= 0)
       })
       
       if (invalidProducts.length > 0) {
@@ -2611,9 +2655,14 @@ export default function ClientDCPage() {
             lineId: ensureProductLineId(row),
             product_name: row.product_name,
             quantity: qty,
-            unit_price: Number(row.unit_price) || 0,
-            total: qty * (Number(row.unit_price) || 0),
+            unit_price: isFreeEditPoRow(row) ? 0 : Number(row.unit_price) || 0,
+            total: editPoBill.totals.get(row.id) ?? 0,
             class: row.class && String(row.class).trim() !== '' ? String(row.class).trim() : '1',
+            itemType: row.itemType || undefined,
+            subjectPackage: Boolean(row.subjectPackage),
+            section: row.section || undefined,
+            program: row.program || undefined,
+            stream: row.stream || undefined,
             specs: persistEditPoSpecs(row.product_name || row.product, row.specs),
             productCategory: hasProductCategories(row.product_name)
               ? (String(row.productCategory || '').trim() || getProductCategories(row.product_name)[0] || undefined)
@@ -2631,8 +2680,8 @@ export default function ClientDCPage() {
           }
         })
 
-      // Calculate total amount
-      const totalAmount = products.reduce((sum, p) => sum + (p.quantity * p.unit_price), 0)
+      // Billed total, same rules as Close Lead (packages, divisors, free specimen rows)
+      const totalAmount = editPoBill.totalAmount
 
       // Check if PDF changed or new products were added (compared to original Close Lead state)
       const pdfChanged = editFormData.pod_proof_url !== originalPDFUrl
@@ -2691,9 +2740,14 @@ export default function ClientDCPage() {
             productCategory: hasProductCategories(row.product_name)
               ? (String(row.productCategory || '').trim() || getProductCategories(row.product_name)[0] || undefined)
               : undefined,
-            price: Number(row.unit_price) || 0,
-            unit_price: Number(row.unit_price) || 0,
-            total: qty * (Number(row.unit_price) || 0),
+            price: isFreeEditPoRow(row) ? 0 : Number(row.unit_price) || 0,
+            unit_price: isFreeEditPoRow(row) ? 0 : Number(row.unit_price) || 0,
+            total: editPoBill.totals.get(row.id) ?? 0,
+            itemType: row.itemType || undefined,
+            subjectPackage: Boolean(row.subjectPackage),
+            section: row.section || undefined,
+            program: row.program || undefined,
+            stream: row.stream || undefined,
             closeLeadDestination: 'MY_CLIENT',
           }
         })
@@ -4790,6 +4844,22 @@ export default function ClientDCPage() {
                             placeholder="Enter product name"
                             className={row.product_name && availableProducts.includes(row.product_name) ? "bg-neutral-50" : ""}
                           />
+                          {isSpecimenRow(row) && (
+                            <div className="mt-1 text-xs text-amber-700">Specimen copy · no billing</div>
+                          )}
+                          {isRelatedItemRow(row) && (
+                            <div className="mt-1 text-xs text-blue-700">
+                              Related item{isFreeEditPoRow(row) ? ' · no billing' : ''}
+                            </div>
+                          )}
+                          {!isSpecimenRow(row) && !isRelatedItemRow(row) && isFreeEditPoRow(row) && (
+                            <div className="mt-1 text-xs text-amber-700">Training Material · no billing</div>
+                          )}
+                          {(row.section || row.program || row.stream) && (
+                            <div className="mt-1 text-xs text-neutral-600">
+                              {[row.section && row.section !== 'ALL' ? `Sec ${row.section}` : 'Whole class', row.program, row.stream].filter(Boolean).join(' · ')}
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell>
                           {(() => {
@@ -5021,7 +5091,7 @@ export default function ClientDCPage() {
                               updated[actualIdx].quantity = Number(e.target.value) || 0
                                 setEditProductRows(updated)
                                 // Update total amount
-                              const total = updated.reduce((sum, p) => sum + ((Number(p.quantity) || 0) * (Number(p.unit_price) || 0)), 0)
+                              const total = editPoBilling(updated).totalAmount
                                 setEditFormData({ ...editFormData, total_amount: total })
                               }}
                               min="0"
@@ -5039,20 +5109,20 @@ export default function ClientDCPage() {
                               updated[actualIdx].unit_price = e.target.value === '' ? '' : e.target.value
                                 setEditProductRows(updated)
                                 // Update total amount
-                              const total = updated.reduce((sum, p) => sum + ((Number(p.quantity) || 0) * (Number(p.unit_price) || 0)), 0)
+                              const total = editPoBilling(updated).totalAmount
                                 setEditFormData({ ...editFormData, total_amount: total })
                               }}
                               min="0"
                               step="0.01"
                             required
-                            readOnly={isOriginalLine}
-                            className={`${row.product_name && (!row.unit_price || Number(row.unit_price) <= 0) ? "border-red-500" : ""} ${isOriginalLine ? "bg-neutral-50 cursor-not-allowed" : ""} [appearance:textfield] [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-inner-spin-button]:m-0`}
+                            readOnly={isOriginalLine || isFreeEditPoRow(row)}
+                            className={`${row.product_name && !isFreeEditPoRow(row) && (!row.unit_price || Number(row.unit_price) <= 0) ? "border-red-500" : ""} ${isOriginalLine ? "bg-neutral-50 cursor-not-allowed" : ""} [appearance:textfield] [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-inner-spin-button]:m-0`}
                             placeholder=""
                             title={isOriginalLine ? "Unit price cannot be changed for original PO products" : ""}
                             />
                           </TableCell>
                           <TableCell>
-                            {((Number(row.quantity) || 0) * (Number(row.unit_price) || 0)).toFixed(2)}
+                            {(editPoBill.totals.get(row.id) ?? 0).toFixed(2)}
                           </TableCell>
                           <TableCell>
                             <Button
@@ -5063,7 +5133,7 @@ export default function ClientDCPage() {
                               const updated = editProductRows.filter((_, i) => i !== actualIdx)
                                 setEditProductRows(updated)
                                 // Recalculate total
-                                const total = updated.reduce((sum, p) => sum + ((Number(p.quantity) || 0) * (Number(p.unit_price) || 0)), 0)
+                                const total = editPoBilling(updated).totalAmount
                                 setEditFormData({ ...editFormData, total_amount: total })
                               }}
                             >
@@ -5206,13 +5276,7 @@ export default function ClientDCPage() {
                   </span>
                   <span>
                     Total Amount ={' '}
-                    {editProductRows
-                      .reduce(
-                        (sum, row) =>
-                          sum + (Number(row.quantity) || 0) * (Number(row.unit_price) || 0),
-                        0
-                      )
-                      .toFixed(2)}
+                    {editPoBill.totalAmount.toFixed(2)}
                   </span>
                 </div>
               </div>

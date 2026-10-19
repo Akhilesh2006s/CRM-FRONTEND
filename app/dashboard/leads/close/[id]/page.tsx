@@ -25,7 +25,7 @@ import { sanitizePhoneInput, validatePhoneDigits } from '@/lib/phone'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { abacusStudentStrength, defaultMasterAbacusQuantity } from '@/lib/abacusMaterials'
 import { AbacusMaterialsFields } from '@/components/dc/AbacusMaterialsFields'
-import { buildRelatedItemRows, buildSpecimenRows, specimenCopiesValue } from '@/lib/dcRowCategory'
+import { buildRelatedItemRows, buildSpecimenRows, isRelatedItemRow, isSpecimenRow, specimenCopiesValue } from '@/lib/dcRowCategory'
 import { Checkbox } from '@/components/ui/checkbox'
 
 type Lead = {
@@ -540,6 +540,14 @@ export default function CloseLeadPage() {
       : withRelatedItems
   }
 
+  /** Split dialog line: product, class/section/stream and level, flagging specimen and related-item rows. */
+  const splitPreviewName = (p: any) => {
+    const where = [p.class ? `Cl ${p.class}${p.section && p.section !== 'ALL' ? p.section : ''}` : '', p.program, p.stream].filter(Boolean).join(' ')
+    const stage = p.level ? p.level : p.term || ''
+    const kind = isSpecimenRow(p) ? ' · Specimen copy' : isRelatedItemRow(p) ? ` · ${p.specs || 'Related item'}` : ''
+    return `${p.productName || p.product}${where ? ` ${where}` : ''}${stage ? ` (${stage})` : ''}${kind}`
+  }
+
   /** Mark lead/order closed, then raise DC. Only call after user confirms any split dialog. */
   const closeRecordAndRaiseDc = async (dcProductDetails: any[], totalQuantity: number) => {
     if (!currentUser?._id) {
@@ -772,11 +780,11 @@ export default function CloseLeadPage() {
     if (needsTermWiseSplit) {
       setSplitPreview({
         term1: myClientsProducts.map((p: any) => ({
-          productName: `${p.productName || p.product}${p.level ? ` (${p.level})` : p.term ? ` (${p.term})` : ''}`,
+          productName: splitPreviewName(p),
           strength: p.strength || p.quantity || 0,
         })),
         term2: termWiseProducts.map((p: any) => ({
-          productName: `${p.productName || p.product}${p.level ? ` (${p.level})` : p.term ? ` (${p.term})` : ''}`,
+          productName: splitPreviewName(p),
           strength: p.strength || p.quantity || 0,
         })),
       })
