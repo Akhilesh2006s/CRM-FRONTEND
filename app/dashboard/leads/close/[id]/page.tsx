@@ -329,7 +329,14 @@ export default function CloseLeadPage() {
                 })
               : undefined
             // Skip Not Interested products when closing (no sale line)
-            if (productData?.status === 'Not Interested' || productData?.status === 'Not Renewed') {
+            // Pre-add only products the school is buying: Hot / Warm / Renewed with a real strength
+            // and price. Everything else (Not Interested, Visit Again, placeholder rows) is left out;
+            // the BDE can still tick it in a section.
+            const committed =
+              ['Hot', 'Warm', 'Renewed'].includes(String(productData?.status || '')) &&
+              Number(productData?.strength) > 1 &&
+              Number(productData?.unit_price) > 0
+            if (!committed) {
               return []
             }
             // Load saved quantity/strength and unit_price from follow-up

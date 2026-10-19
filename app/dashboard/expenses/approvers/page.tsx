@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { apiRequest } from '@/lib/api'
+import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
 import { Trash2, UserCheck } from 'lucide-react'
 
@@ -20,6 +21,7 @@ type User = {
   role?: string
   zone?: string
   cluster?: string
+  executiveManagerId?: string | { _id?: string } | null
 }
 
 type Zone = { _id: string; name: string }
@@ -98,13 +100,25 @@ export default function ExpenseApproversPage() {
     })()
   }, [])
 
+  // A Zonal Manager assigns approvers only for the BDEs in their own team.
+  const currentUser = getCurrentUser()
+  const isZonalManager = currentUser?.role === 'Executive Manager'
+  const assignableEmployees = useMemo(() => {
+    if (!isZonalManager) return users
+    const me = String(currentUser?._id || '')
+    return users.filter((u) => {
+      const zm = u.executiveManagerId
+      return String(typeof zm === 'object' && zm ? zm._id : zm || '') === me
+    })
+  }, [users, isZonalManager, currentUser?._id])
+
   const filteredEmployees = useMemo(() => {
     const q = employeeSearch.trim().toLowerCase()
-    if (!q) return users
-    return users.filter((u) =>
+    if (!q) return assignableEmployees
+    return assignableEmployees.filter((u) =>
       [u.name, u.empCode, u.role, u.zone, u.cluster].some((v) => String(v || '').toLowerCase().includes(q))
     )
-  }, [users, employeeSearch])
+  }, [assignableEmployees, employeeSearch])
 
   const toggleEmployee = (id: string) => {
     setEmployeeIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
@@ -173,7 +187,7 @@ export default function ExpenseApproversPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {(Object.keys(SCOPE_LABELS) as Scope[]).map((s) => (
+                {(isZonalManager ? (['employee'] as Scope[]) : (Object.keys(SCOPE_LABELS) as Scope[])).map((s) => (
                   <SelectItem key={s} value={s}>
                     {SCOPE_LABELS[s]}
                   </SelectItem>

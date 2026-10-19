@@ -40,7 +40,9 @@ const BDE_ROLES = new Set(['executive', 'sales bde', 'sales executive', 'employe
  */
 function expenseApprovalAccess(user: AuthUserWithPermissions, pathname: string): boolean | undefined {
   const under = (p: string) => pathname === p || pathname.startsWith(p + '/')
-  if (under('/dashboard/expenses/approvers')) return user.role === 'Admin'
+  if (under('/dashboard/expenses/approvers')) {
+    return ['Admin', 'Finance Manager', 'Executive Manager'].includes(String(user.role || ''))
+  }
   if (under('/dashboard/expenses/pending') || under('/dashboard/expenses/manager-update')) {
     return (
       ['Admin', 'Finance Manager', 'Executive Manager'].includes(String(user.role || '')) ||

@@ -99,7 +99,7 @@ function ensureExpenseApprovalNav(
   if (isAdmin || r === 'Finance Manager' || (permissions || []).includes('expenses.pending.page.view')) {
     wanted.push({ label: 'Pending Expenses List', href: '/dashboard/expenses/pending' })
   }
-  if (isAdmin) {
+  if (isAdmin || r === 'Finance Manager' || r === 'Executive Manager') {
     wanted.push({ label: 'Expense Approvers', href: '/dashboard/expenses/approvers' })
   }
   if (wanted.length === 0) return nav
