@@ -772,7 +772,7 @@ export default function ProductsPage() {
               </SelectContent>
             </Select>
             <p className="text-xs text-neutral-500 mt-1">
-              Level-Based: Total amount is divided by number of levels (terms). Subject-Based: Total amount is divided by number of selected subjects. Normal: Full amount is charged without division.
+              Level-Based: Total amount is divided by number of levels (terms). Subject-Based: each deliverable (subject) is charged separately; the total is divided by the number of selected subjects. Normal: Full amount is charged without division. With Normal and Level-Based, deliverables are included at no extra cost.
             </p>
           </div>
           <DialogFooter>

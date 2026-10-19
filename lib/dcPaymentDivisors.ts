@@ -76,14 +76,11 @@ export function applyPaymentDivisorsToBreakdown(
   const keyToBucketTotal = new Map<string, number>()
   const keyToSumStrength = new Map<string, number>()
   const packageSubjects = new Map<string, Set<string>>()
-  // Deliverables (CW / HW, Workbook / Phonetic Book ...) have no cost of their own: the student
-  // pays the product price once. IIT and subject-based products keep per-subject billing.
-  const isPackageLine = (line: PaymentBreakdownLine) => {
-    if (!line.subject) return false
-    if (line.subjectPackage) return true
-    const product = String(line.product || '')
-    return !/\bIIT\b/i.test(product) && getCalculationType(product) !== 'subject_based'
-  }
+  // Deliverables (CW / HW, Workbook / Phonetic Book ...) follow the product's billing setting,
+  // not its name: Subject-based products charge each deliverable; every other billing type
+  // includes them at no extra cost (the student pays the product price once).
+  const isPackageLine = (line: PaymentBreakdownLine) =>
+    Boolean(line.subject) && getCalculationType(String(line.product || '')) !== 'subject_based'
   for (const line of lines) {
     if (!isPackageLine(line)) continue
     const key = packageKey(line)

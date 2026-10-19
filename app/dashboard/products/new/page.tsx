@@ -256,11 +256,12 @@ export default function NewProductPage() {
             <div>
               <p className="text-sm font-medium text-neutral-900">Payment logic</p>
               <p className="text-xs text-neutral-600 mt-1">
-                {form.calculationType === 'normal' && 'Normal: full amount is charged without division.'}
+                {form.calculationType === 'normal' &&
+                  'Normal: full amount is charged without division. Deliverables are included (no extra cost).'}
                 {form.calculationType === 'level_based' &&
-                  'Level-based: amount = (total students × price) ÷ distinct levels in the sale (per class).'}
+                  'Level-based: amount = (total students × price) ÷ distinct levels in the sale (per class). Deliverables are included (no extra cost).'}
                 {form.calculationType === 'subject_based' &&
-                  'Subject-based: amount = (total students × price) ÷ distinct subjects in the sale (per class).'}
+                  'Subject-based: each deliverable (subject) is charged separately; amount = (total students × price) ÷ distinct subjects in the sale (per class).'}
               </p>
             </div>
             <Button type="button" variant="outline" onClick={() => setPaymentLogicOpen(true)} className="shrink-0">
