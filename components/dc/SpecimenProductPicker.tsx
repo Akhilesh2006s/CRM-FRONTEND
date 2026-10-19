@@ -7,16 +7,21 @@ export function SpecimenProductPicker({
   products,
   selected,
   onChange,
+  title = 'Specimen copies for',
+  minProducts = 2,
 }: {
   products: string[]
   selected: string[]
   onChange: (selected: string[]) => void
+  title?: string
+  /** Hide the picker when there are fewer products than this (one product needs no choice). */
+  minProducts?: number
 }) {
-  if (products.length < 2) return null
+  if (products.length < minProducts) return null
   const chosen = new Set(selected)
   return (
     <div className="basis-full">
-      <div className="text-xs font-medium text-neutral-700 mb-1">Specimen copies for</div>
+      <div className="text-xs font-medium text-neutral-700 mb-1">{title}</div>
       <div className="flex flex-wrap gap-x-4 gap-y-1">
         {products.map((product) => (
           <label key={product} className="flex items-center gap-2 text-sm cursor-pointer">
