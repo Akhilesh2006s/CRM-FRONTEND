@@ -4889,6 +4889,38 @@ export default function ClientDCPage() {
                             </div>
                           )}
                         </TableCell>
+                        <TableCell className="min-w-[170px]">
+                          {isSpecimenRow(row) || isRelatedItemRow(row) ? (
+                            <span className="text-xs text-neutral-600">Training Material</span>
+                          ) : (
+                            <Select
+                              value={dcRowCategoryOrDefault(row.category)}
+                              onValueChange={(value) => {
+                                const updated = editProductRows.map((r, i) => {
+                                  if (i !== actualIdx) return r
+                                  const free = !isBillableDcRow({ category: value })
+                                  const paid = (r as any).paidUnitPrice ?? r.unit_price
+                                  return {
+                                    ...r,
+                                    category: value,
+                                    // Training Material / Shortage are free; going back restores the price.
+                                    unit_price: free ? 0 : Number(paid) || r.unit_price,
+                                    paidUnitPrice: free ? paid : undefined,
+                                  } as typeof r
+                                })
+                                setEditProductRows(updated)
+                                setEditFormData({ ...editFormData, total_amount: editPoBilling(updated).totalAmount })
+                              }}
+                            >
+                              <SelectTrigger className="w-full" aria-label="Row category"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                {DC_ROW_CATEGORIES.map((cat) => (
+                                  <SelectItem key={cat} value={cat}>{cat}{isBillableDcRow({ category: cat }) ? '' : ' (free)'}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                        </TableCell>
                         <TableCell>
                           {(() => {
                             const productName = row.product_name || ''
@@ -5131,7 +5163,7 @@ export default function ClientDCPage() {
                           <TableCell>
                             <Input
                               type="number"
-                              value={row.unit_price === '' || row.unit_price === undefined || row.unit_price === null ? '' : row.unit_price}
+                              value={isFreeEditPoRow(row) ? 0 : row.unit_price === '' || row.unit_price === undefined || row.unit_price === null ? '' : row.unit_price}
                               onChange={(e) => {
                                 const updated = [...editProductRows]
                               updated[actualIdx].unit_price = e.target.value === '' ? '' : e.target.value
@@ -5187,6 +5219,7 @@ export default function ClientDCPage() {
                           <TableHeader>
                             <TableRow>
                               <TableHead>Product Name</TableHead>
+                              <TableHead>Category</TableHead>
                               <TableHead>Series</TableHead>
                               <TableHead>Class</TableHead>
                               <TableHead>Special Notes</TableHead>
@@ -5201,7 +5234,7 @@ export default function ClientDCPage() {
                           <TableBody>
                             {editProductRows.length === 0 ? (
                               <TableRow>
-                                <TableCell colSpan={10} className="text-center text-neutral-500 py-4">
+                                <TableCell colSpan={11} className="text-center text-neutral-500 py-4">
                                   No products added yet
                                 </TableCell>
                               </TableRow>
@@ -5235,6 +5268,7 @@ export default function ClientDCPage() {
                             <TableHeader>
                               <TableRow>
                                 <TableHead>Product Name</TableHead>
+                                <TableHead>Category</TableHead>
                                 <TableHead>Series</TableHead>
                                 <TableHead>Class</TableHead>
                                 <TableHead>Special Notes</TableHead>
@@ -5249,7 +5283,7 @@ export default function ClientDCPage() {
                             <TableBody>
                               {term1Products.length === 0 ? (
                                 <TableRow>
-                                  <TableCell colSpan={10} className="text-center text-neutral-500 py-4">
+                                  <TableCell colSpan={11} className="text-center text-neutral-500 py-4">
                                     No Level 1 products added yet
                                   </TableCell>
                                 </TableRow>
@@ -5269,6 +5303,7 @@ export default function ClientDCPage() {
                             <TableHeader>
                               <TableRow>
                                 <TableHead>Product Name</TableHead>
+                                <TableHead>Category</TableHead>
                                 <TableHead>Series</TableHead>
                                 <TableHead>Class</TableHead>
                                 <TableHead>Special Notes</TableHead>
@@ -5283,7 +5318,7 @@ export default function ClientDCPage() {
                             <TableBody>
                               {term2Products.length === 0 ? (
                                 <TableRow>
-                                  <TableCell colSpan={10} className="text-center text-neutral-500 py-4">
+                                  <TableCell colSpan={11} className="text-center text-neutral-500 py-4">
                                     No Level 2 products added yet
                                   </TableCell>
                                 </TableRow>
