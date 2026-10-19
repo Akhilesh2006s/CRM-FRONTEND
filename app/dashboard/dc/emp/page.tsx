@@ -10,9 +10,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner'
 import { CheckCircle2, XCircle } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { useProducts } from '@/hooks/useProducts'
 
 type Emp = { _id: string; name: string }
-type EmpDC = { _id: string; emp_dc_code: string; employee_id: Emp | string; kit_type: string; distribution_date: string; status: string }
+type EmpDC = {
+  _id: string
+  emp_dc_code: string
+  employee_id: Emp | string
+  kit_type: string
+  distribution_date: string
+  expected_return_date?: string
+  products?: Array<{ product: string; quantity: number }>
+  status: string
+}
+type KitProduct = { product: string; quantity: string }
+type EmployeeOption = { _id: string; name?: string; email?: string; role?: string; empCode?: string }
 
 type SampleRequest = {
   _id: string
@@ -43,6 +55,10 @@ export default function EmployeeDCPage() {
   const [loadingSamples, setLoadingSamples] = useState(true)
   const [form, setForm] = useState({ employee_id: '', kit_type: 'Sales', distribution_date: '', expected_return_date: '' })
   const [submitting, setSubmitting] = useState(false)
+  const [kitProducts, setKitProducts] = useState<KitProduct[]>([{ product: '', quantity: '1' }])
+  const [employees, setEmployees] = useState<EmployeeOption[]>([])
+  const [returningId, setReturningId] = useState<string | null>(null)
+  const { productNames } = useProducts()
   const [processingRequest, setProcessingRequest] = useState<string | null>(null)
 
   const load = async () => {
@@ -50,6 +66,8 @@ export default function EmployeeDCPage() {
     try {
       const data = await apiRequest<EmpDC[]>(`/emp-dc/list`)
       setList(data)
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to load employee kits')
     } finally {
       setLoading(false)
     }
@@ -71,7 +89,18 @@ export default function EmployeeDCPage() {
   useEffect(() => { 
     load()
     loadSampleRequests()
+    loadEmployees()
   }, [])
+
+  const loadEmployees = async () => {
+    try {
+      const res = await apiRequest<any>('/employees?isActive=true')
+      const rows: EmployeeOption[] = Array.isArray(res) ? res : res?.data || res?.employees || []
+      setEmployees(rows.filter((e) => e && e._id).sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''))))
+    } catch (err: any) {
+      toast.error(err?.message || 'Could not load employees')
+    }
+  }
 
   const handleAccept = async (requestId: string) => {
     setProcessingRequest(requestId)
@@ -105,15 +134,42 @@ export default function EmployeeDCPage() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!form.employee_id) {
+      toast.error('Select the employee who receives the kit.')
+      return
+    }
+    const products = kitProducts
+      .filter((p) => p.product.trim())
+      .map((p) => ({ product: p.product.trim(), quantity: Math.floor(Number(p.quantity)) || 0 }))
+    const badQty = products.find((p) => p.quantity < 1)
+    if (badQty) {
+      toast.error(`Enter a quantity of at least 1 for ${badQty.product}.`)
+      return
+    }
     setSubmitting(true)
     try {
-      await apiRequest(`/emp-dc/create`, { method: 'POST', body: JSON.stringify(form) })
+      await apiRequest(`/emp-dc/create`, { method: 'POST', body: JSON.stringify({ ...form, products }) })
+      toast.success('Employee kit created')
       setForm({ employee_id: '', kit_type: 'Sales', distribution_date: '', expected_return_date: '' })
+      setKitProducts([{ product: '', quantity: '1' }])
       load()
-    } catch (e) {
-      alert('Failed to create EMP DC. Ensure you are logged in.')
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to create the employee kit.')
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const markReturned = async (kit: EmpDC) => {
+    setReturningId(kit._id)
+    try {
+      await apiRequest(`/emp-dc/${kit._id}/return`, { method: 'PUT' })
+      toast.success(`${kit.emp_dc_code} marked returned`)
+      load()
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to mark the kit returned.')
+    } finally {
+      setReturningId(null)
     }
   }
 
@@ -213,8 +269,17 @@ export default function EmployeeDCPage() {
           <Card className="p-4 space-y-4 text-neutral-900">
             <form onSubmit={submit} className="grid grid-cols-1 md:grid-cols-4 gap-3">
               <div>
-                <Label>Employee ID</Label>
-                <Input value={form.employee_id} onChange={(e) => setForm({ ...form, employee_id: e.target.value })} placeholder="User ObjectId" required />
+                <Label>Employee *</Label>
+                <Select value={form.employee_id || undefined} onValueChange={(v) => setForm({ ...form, employee_id: v })}>
+                  <SelectTrigger aria-label="Employee"><SelectValue placeholder="Select employee" /></SelectTrigger>
+                  <SelectContent>
+                    {employees.map((emp) => (
+                      <SelectItem key={emp._id} value={emp._id}>
+                        {emp.name || emp.email || 'Employee'}{emp.empCode ? ` (${emp.empCode})` : ''}{emp.role ? ` · ${emp.role}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label>Kit Type</Label>
@@ -228,12 +293,49 @@ export default function EmployeeDCPage() {
                 </Select>
               </div>
               <div>
-                <Label>Distribution Date</Label>
+                <Label>Distribution Date *</Label>
                 <Input type="date" value={form.distribution_date} onChange={(e) => setForm({ ...form, distribution_date: e.target.value })} required />
               </div>
               <div>
                 <Label>Expected Return</Label>
                 <Input type="date" value={form.expected_return_date} onChange={(e) => setForm({ ...form, expected_return_date: e.target.value })} />
+              </div>
+              <div className="md:col-span-4 space-y-2">
+                <Label>Kit products</Label>
+                {kitProducts.map((item, idx) => (
+                  <div key={idx} className="flex flex-wrap items-center gap-2">
+                    <Select
+                      value={item.product || undefined}
+                      onValueChange={(v) => setKitProducts((rows) => rows.map((r, i) => (i === idx ? { ...r, product: v } : r)))}
+                    >
+                      <SelectTrigger className="w-56" aria-label="Kit product"><SelectValue placeholder="Select product" /></SelectTrigger>
+                      <SelectContent>
+                        {productNames.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      className="w-28"
+                      type="number"
+                      min={1}
+                      step={1}
+                      aria-label="Kit product quantity"
+                      placeholder="Qty"
+                      value={item.quantity}
+                      onChange={(e) => setKitProducts((rows) => rows.map((r, i) => (i === idx ? { ...r, quantity: e.target.value } : r)))}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setKitProducts((rows) => (rows.length > 1 ? rows.filter((_, i) => i !== idx) : [{ product: '', quantity: '1' }]))}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ))}
+                <Button type="button" variant="outline" size="sm" onClick={() => setKitProducts((rows) => [...rows, { product: '', quantity: '1' }])}>
+                  + Add product
+                </Button>
               </div>
               <div className="md:col-span-4">
                 <Button type="submit" disabled={submitting}>{submitting ? 'Creating…' : 'Create Kit'}</Button>
@@ -250,8 +352,11 @@ export default function EmployeeDCPage() {
                     <th className="py-2 px-3 text-left">Code</th>
                     <th className="py-2 px-3 text-left">Employee</th>
                     <th className="py-2 px-3">Kit</th>
+                    <th className="py-2 px-3 text-left">Products</th>
                     <th className="py-2 px-3">Date</th>
+                    <th className="py-2 px-3">Expected Return</th>
                     <th className="py-2 px-3">Status</th>
+                    <th className="py-2 px-3">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -260,8 +365,21 @@ export default function EmployeeDCPage() {
                       <td className="py-2 px-3">{k.emp_dc_code}</td>
                       <td className="py-2 px-3">{typeof k.employee_id === 'string' ? k.employee_id : k.employee_id?.name}</td>
                       <td className="py-2 px-3 text-center">{k.kit_type}</td>
+                      <td className="py-2 px-3">
+                        {k.products?.length ? k.products.map((p) => `${p.product} × ${p.quantity}`).join(', ') : '-'}
+                      </td>
                       <td className="py-2 px-3 text-center">{k.distribution_date ? new Date(k.distribution_date).toLocaleDateString() : '-'}</td>
-                      <td className="py-2 px-3 text-center">{k.status}</td>
+                      <td className="py-2 px-3 text-center">{k.expected_return_date ? new Date(k.expected_return_date).toLocaleDateString() : '-'}</td>
+                      <td className="py-2 px-3 text-center capitalize">{k.status}</td>
+                      <td className="py-2 px-3 text-center">
+                        {k.status === 'returned' ? (
+                          <span className="text-xs text-neutral-500">Returned</span>
+                        ) : (
+                          <Button type="button" size="sm" variant="outline" disabled={returningId === k._id} onClick={() => markReturned(k)}>
+                            {returningId === k._id ? 'Saving…' : 'Mark Returned'}
+                          </Button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
