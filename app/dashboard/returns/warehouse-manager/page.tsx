@@ -97,8 +97,9 @@ export default function WarehouseManagerStockReturnsPage() {
       const response = await apiRequest<any>(`/stock-returns/executive/list`)
       const returnsList = Array.isArray(response) ? response : (response?.data || [])
       // Filter to show only returns awaiting manager approval
-      const pendingReturns = returnsList.filter((r: any) => 
-        r.status === 'Received' || r.status === 'Pending Manager Approval'
+      // The Warehouse Executive's "submit to manager" sets WAREHOUSE_MANAGER_PENDING.
+      const pendingReturns = returnsList.filter((r: any) =>
+        ['WAREHOUSE_MANAGER_PENDING', 'Received', 'Pending Manager Approval'].includes(r.status)
       )
       setReturns(pendingReturns)
     } catch (e: any) {
@@ -418,11 +419,11 @@ export default function WarehouseManagerStockReturnsPage() {
                       <td className="py-3 px-4">{returnItem.returnId}</td>
                       <td className="py-3 px-4">
                         <span className={`px-2 py-1 rounded text-xs font-medium ${
-                          returnItem.status === 'Pending Manager Approval' ? 'bg-yellow-100 text-yellow-800' :
+                          returnItem.status === 'Pending Manager Approval' || returnItem.status === 'WAREHOUSE_MANAGER_PENDING' ? 'bg-yellow-100 text-yellow-800' :
                           returnItem.status === 'Received' ? 'bg-blue-100 text-blue-800' :
                           'bg-neutral-100 text-neutral-800'
                         }`}>
-                          {returnItem.status}
+                          {returnItem.status === 'WAREHOUSE_MANAGER_PENDING' ? 'Pending Manager Approval' : returnItem.status}
                         </span>
                       </td>
                       <td className="py-3 px-4">{returnItem.verifiedBy?.name || '-'}</td>

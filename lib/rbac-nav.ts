@@ -86,7 +86,6 @@ export const RBAC_NAV_MODULES: RbacNavModule[] = [
       { label: 'Move Schools', href: '/dashboard/employees/move-schools' },
       { label: 'Cluster Schools', href: '/dashboard/employees/cluster-schools' },
       { label: 'Chain', href: '/dashboard/employees/chain' },
-      { label: 'Employee Requests', href: '/dashboard/employees/requests' },
       { label: 'Salary', href: '/dashboard/employees/salary' },
       { label: 'Pay Slips', href: '/dashboard/employees/payslips' },
       { label: 'Employee History', href: '/dashboard/employees/history' },

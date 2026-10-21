@@ -1001,6 +1001,25 @@ export default function CompletedDCPage() {
     }
   }
 
+  /**
+   * The DC behind a school-order row. The list only links completed DCs, so a row whose DC is
+   * in another state has no dcId yet: look it up by the order (latest real DC first).
+   */
+  const resolveOrderDcId = async (row: { _id?: string; dcId?: string }): Promise<string | undefined> => {
+    if (row.dcId) return row.dcId
+    if (!row._id) return undefined
+    try {
+      const res = await apiRequest<any>(`/dc?dcOrderId=${encodeURIComponent(row._id)}&limit=50`)
+      const list: any[] = Array.isArray(res) ? res : res?.data || []
+      const best = list
+        .filter((dc) => dc && dc._id && dc.status !== 'scheduled_for_later')
+        .sort((a, b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')))[0]
+      return best?._id ? String(best._id) : undefined
+    } catch {
+      return undefined
+    }
+  }
+
   const handleReplacePdf = async () => {
     if (!replacingPdfFor || !uploadedPdf) {
       toast.error('Please select a PDF file to upload')
@@ -1011,11 +1030,11 @@ export default function CompletedDCPage() {
     let dcIdToUpdate: string | undefined
     
     if (replacingPdfFor.isDcOrder) {
-      if (!replacingPdfFor.dcId) {
-        toast.error('No corresponding DC found for this DcOrder entry. Cannot update.')
+      dcIdToUpdate = await resolveOrderDcId(replacingPdfFor)
+      if (!dcIdToUpdate) {
+        toast.error('No DC has been raised for this school order yet, so it cannot be updated.')
         return
       }
-      dcIdToUpdate = replacingPdfFor.dcId
     } else {
       dcIdToUpdate = replacingPdfFor._id || replacingPdfFor.dcId
     }
@@ -1111,11 +1130,11 @@ export default function CompletedDCPage() {
     
     if (editingDC.isDcOrder) {
       // This is a DcOrder entry - we need the corresponding DC ID
-      if (!editingDC.dcId) {
-        toast.error('No corresponding DC found for this DcOrder entry. Cannot update. Please ensure a DC exists for this order.')
+      dcIdToUpdate = await resolveOrderDcId(editingDC)
+      if (!dcIdToUpdate) {
+        toast.error('No DC has been raised for this school order yet, so the LR details cannot be saved.')
         return
       }
-      dcIdToUpdate = editingDC.dcId
     } else {
       // This is a DC entry - use its own ID
       dcIdToUpdate = editingDC._id || editingDC.dcId

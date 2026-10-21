@@ -184,7 +184,7 @@ export function canAccessPath(
   // received the refreshed RBAC permission catalog.
   const role = normalizedRole(user)
   if (
-    (role === 'hr manager' || role === 'hr executive') &&
+    (role === 'hr manager' || role === 'hr executive' || role === 'admin') &&
     (pathname === '/dashboard/employees/verification' ||
       pathname.startsWith('/dashboard/employees/verification/'))
   ) {

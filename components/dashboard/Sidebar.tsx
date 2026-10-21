@@ -157,6 +157,23 @@ const LEAVE_REPORT_NAV_ROLES = new Set(['HR Manager', 'HR Executive', 'Admin', '
  * Leave Management on every employee dashboard: Apply for Leave and My Leaves
  * for everyone, plus the approval queue / report for the roles that use them.
  */
+/**
+ * Admin approves new employees in the same Employee Verification queue as Super Admin and HR
+ * (the old "Employee Requests" page read a different, legacy queue).
+ */
+function ensureEmployeeVerificationNav(nav: NavItem[], role: string | undefined): NavItem[] {
+  if (String(role || '') !== 'Admin') return nav
+  const href = '/dashboard/employees/verification'
+  const has = (items: NavItem[] | undefined): boolean =>
+    (items || []).some((item) => item.href === href || has(item.children))
+  if (has(nav)) return nav
+  const index = nav.findIndex((item) => item.label === 'Users / Employees')
+  const link = { label: 'Employee Verification', href }
+  if (index < 0) return [...nav, { label: 'Employee Verification', icon: UserCircle2, href }]
+  const group = nav[index]
+  return nav.map((item, i) => (i === index ? { ...group, children: [...(group.children || []), link] } : item))
+}
+
 function ensureLeaveManagementNav(nav: NavItem[], role: string | undefined): NavItem[] {
   const r = String(role || '')
   if (!r || NON_EMPLOYEE_NAV_ROLES.has(r)) return nav
@@ -301,7 +318,6 @@ const NAV: NavItem[] = [
       { label: 'Move Schools', href: '/dashboard/employees/move-schools', icon: Database },
       { label: 'Cluster Schools', href: '/dashboard/employees/cluster-schools', icon: Database },
       { label: 'Chain', href: '/dashboard/employees/chain' },
-      { label: 'Employee Requests', href: '/dashboard/employees/requests' },
       { label: 'Salary', href: '/dashboard/employees/salary' },
       { label: 'Pay Slips', href: '/dashboard/employees/payslips' },
       { label: 'Employee History', href: '/dashboard/employees/history' },
@@ -1363,6 +1379,7 @@ export function Sidebar() {
 
   // Leave Management is on every employee dashboard.
   finalNav = ensureLeaveManagementNav(finalNav, user?.role || permUser?.role)
+  finalNav = ensureEmployeeVerificationNav(finalNav, user?.role || permUser?.role)
 
   finalNav = ensureExpenseApprovalNav(
     finalNav,

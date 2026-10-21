@@ -276,6 +276,11 @@ export default function ExecutiveStockReturnsPage() {
   /** Every line delivered on the selected DC (books only); the return is for one product of these. */
   const [dcLines, setDcLines] = useState<ProductRow[]>([])
   const [returnProduct, setReturnProduct] = useState('')
+  /** Every return line: DC lines (with edits made while their product was shown) plus added rows. */
+  const allReturnRows = (): ProductRow[] => [
+    ...dcLines.map((line) => productRows.find((r) => r.id === line.id) || line),
+    ...productRows.filter((r) => !dcLines.some((line) => line.id === r.id)),
+  ]
   const [evidencePhotos, setEvidencePhotos] = useState<File[]>([])
   const [evidencePhotoUrls, setEvidencePhotoUrls] = useState<string[]>([])
   const [executiveRemarks, setExecutiveRemarks] = useState('')
@@ -668,12 +673,12 @@ export default function ExecutiveStockReturnsPage() {
       toast.error(mobileCheck.message)
       return false
     }
-    if (productRows.length === 0) {
+    if (allReturnRows().length === 0) {
       toast.error('Please add at least one product')
       return false
     }
     // Only products with Return Qty > 0 are being returned; ignore 0 / empty.
-    const returningRows = productRows.filter((row) => Number(row.returnQty) > 0)
+    const returningRows = allReturnRows().filter((row) => Number(row.returnQty) > 0)
     if (forSubmit && returningRows.length === 0) {
       toast.error('Please enter a return quantity for at least one product.')
       return false
@@ -732,8 +737,8 @@ export default function ExecutiveStockReturnsPage() {
 
   const buildReturnPayload = (status: 'Draft' | 'Submitted') => {
     const onlyReturning = status === 'Submitted'
-    const mapped = mapProductsForApi(productRows, onlyReturning)
-    const totalItems = mapped.length
+    const mapped = mapProductsForApi(allReturnRows(), onlyReturning)
+    const totalItems = mapped.filter((row) => Number(row.returnQty) > 0).length
     const totalQuantity = mapped.reduce((sum, r) => sum + r.returnQty, 0)
     return {
       returnId,
@@ -1141,8 +1146,11 @@ export default function ExecutiveStockReturnsPage() {
                   <Select
                     value={selectValueOrUndefined(returnProduct)}
                     onValueChange={(value) => {
+                      // Keep what was entered for the previous product, then show this one.
+                      const merged = dcLines.map((line) => productRows.find((r) => r.id === line.id) || line)
+                      setDcLines(merged)
                       setReturnProduct(value)
-                      setProductRows(dcLines.filter((line) => line.product === value).map((line) => ({ ...line })))
+                      setProductRows(merged.filter((line) => line.product === value).map((line) => ({ ...line })))
                     }}
                   >
                     <SelectTrigger aria-label="Product to return">
@@ -1346,12 +1354,12 @@ export default function ExecutiveStockReturnsPage() {
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <Label>Total Items Returned</Label>
-                  <Input value={productRows.length} readOnly className="bg-neutral-50" />
+                  <Input value={allReturnRows().filter((r) => Number(r.returnQty) > 0).length} readOnly className="bg-neutral-50" />
                 </div>
                 <div>
                   <Label>Total Quantity</Label>
                   <Input 
-                    value={productRows.reduce((sum, r) => sum + r.returnQty, 0)} 
+                    value={allReturnRows().reduce((sum, r) => sum + (Number(r.returnQty) || 0), 0)} 
                     readOnly 
                     className="bg-neutral-50" 
                   />
@@ -1473,6 +1481,10 @@ export default function ExecutiveStockReturnsPage() {
                       <thead>
                         <tr className="bg-neutral-100">
                           <th className="py-2 px-3 text-left">Product</th>
+                          <th className="py-2 px-3 text-left">Class</th>
+                          <th className="py-2 px-3 text-left">Series</th>
+                          <th className="py-2 px-3 text-left">Term / Level</th>
+                          <th className="py-2 px-3 text-left">Deliverables</th>
                           <th className="py-2 px-3 text-left">Sold Qty</th>
                           <th className="py-2 px-3 text-left">Return Qty</th>
                           <th className="py-2 px-3 text-left">Reason</th>
@@ -1483,6 +1495,10 @@ export default function ExecutiveStockReturnsPage() {
                         {selectedReturn.products.map((p, idx) => (
                           <tr key={idx} className="border-b">
                             <td className="py-2 px-3">{p.product}</td>
+                            <td className="py-2 px-3">{(p as any).class || '-'}</td>
+                            <td className="py-2 px-3">{(p as any).productCategory || '-'}</td>
+                            <td className="py-2 px-3">{(p as any).level || '-'}</td>
+                            <td className="py-2 px-3">{(p as any).subject || (p as any).specs || '-'}</td>
                             <td className="py-2 px-3">{p.soldQty}</td>
                             <td className="py-2 px-3">{p.returnQty}</td>
                             <td className="py-2 px-3">{p.reason}</td>
