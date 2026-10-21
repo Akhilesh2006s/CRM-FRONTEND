@@ -56,8 +56,13 @@ const STATUS_ICONS = {
   Rejected: XCircle,
 }
 
+type SchoolBalance = { schoolCode: string; schoolName: string; total: number; paid: number; balance: number }
+
+const inr = (n: number) => `₹${(Number(n) || 0).toLocaleString('en-IN')}`
+
 export default function PaymentsDonePage() {
   const [payments, setPayments] = useState<Payment[]>([])
+  const [balances, setBalances] = useState<SchoolBalance[]>([])
   const [filteredPayments, setFilteredPayments] = useState<Payment[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -86,6 +91,10 @@ export default function PaymentsDonePage() {
       const isBde = ['Executive', 'Sales BDE', 'Employee'].includes(String(currentUser.role || ''))
       const data = await apiRequest<Payment[]>(isBde ? `/payments?createdBy=${currentUser._id}` : `/payments`)
       setPayments(data || [])
+      // Order total vs approved payments per school (own schools for a BDE).
+      apiRequest<SchoolBalance[]>('/payments/school-balances')
+        .then((rows) => setBalances(Array.isArray(rows) ? rows : []))
+        .catch(() => setBalances([]))
     } catch (err: any) {
       toast.error(err?.message || 'Failed to load payments')
       setPayments([])
@@ -252,6 +261,44 @@ export default function PaymentsDonePage() {
           </Select>
         </div>
       </Card>
+
+      {balances.length > 0 && (
+        <Card className="p-4">
+          <h2 className="text-lg font-semibold text-neutral-900 mb-1">School Balances</h2>
+          <p className="text-xs text-neutral-500 mb-3">Order total, approved payments and what is still due for each school.</p>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>School Name</TableHead>
+                  <TableHead>School Code</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="text-right">Paid</TableHead>
+                  <TableHead className="text-right">Balance</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {balances
+                  .filter((b) => {
+                    const q = searchTerm.trim().toLowerCase()
+                    return !q || b.schoolName.toLowerCase().includes(q) || b.schoolCode.toLowerCase().includes(q)
+                  })
+                  .map((b) => (
+                    <TableRow key={b.schoolCode}>
+                      <TableCell className="font-medium">{b.schoolName || '-'}</TableCell>
+                      <TableCell>{b.schoolCode}</TableCell>
+                      <TableCell className="text-right">{inr(b.total)}</TableCell>
+                      <TableCell className="text-right text-green-700">{inr(b.paid)}</TableCell>
+                      <TableCell className={`text-right font-semibold ${b.balance > 0 ? 'text-red-600' : 'text-green-700'}`}>
+                        {inr(b.balance)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
+      )}
 
       {/* Payments Table */}
       <Card>

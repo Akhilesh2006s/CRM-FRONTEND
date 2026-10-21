@@ -18,6 +18,7 @@ import { toast } from 'sonner'
 import { TransportDetailsSection, canEditTransportDetails } from '@/components/dc/TransportDetailsSection'
 import { SchoolAddressSection } from '@/components/dc/SchoolAddressSection'
 import { SentToSeniorList } from '@/components/dc/SentToSeniorList'
+import { uniqueProductNames } from '@/lib/productNames'
 import { AbacusMaterialsSummary } from '@/components/dc/AbacusMaterialsSummary'
 import { DC_ROW_CATEGORIES, canonicalDcRowCategory, type DcRowCategory } from '@/lib/dcRowCategory'
 import { sanitizeMobileInput, validateContactMobile, validateContactPerson } from '@/lib/saleFormValidation'
@@ -246,6 +247,7 @@ export default function ClosedSalesPage() {
   // Product rows for DC (like in the Raise DC form)
   type ProductRow = {
     id: string
+    itemType?: string
     product: string
     class: string
     category: string
@@ -308,12 +310,13 @@ export default function ClosedSalesPage() {
       productCategory: matchedSku || undefined,
       specs: p.specs || 'Regular',
       subject: p.subject || undefined,
+      itemType: p.itemType || undefined,
       section: p.section || undefined,
       program: p.program || undefined,
       stream: p.stream || undefined,
       quantity: Number.isFinite(quantityNum) && quantityNum >= 0 ? quantityNum : 1,
       strength: Number.isFinite(strengthNum) && strengthNum >= 0 ? strengthNum : 0,
-      level: p.level || getDefaultLevel(originalProduct || 'Abacus'),
+      level: p.itemType ? (p.level || '') : p.level || getDefaultLevel(originalProduct || 'Abacus'),
       term: resolveExistingProductTerm(p),
       unit_price: Number(p.unit_price) || Number(p.price) || 0,
     }
@@ -1041,6 +1044,7 @@ export default function ClosedSalesPage() {
         productCategory: row.productCategory || undefined,
         specs: row.specs || 'Regular',
         subject: row.subject || undefined,
+        itemType: (row as any).itemType || undefined,
         section: row.section || undefined,
         program: row.program || undefined,
         stream: row.stream || undefined,
@@ -1169,6 +1173,7 @@ export default function ClosedSalesPage() {
           productCategory: row.productCategory || undefined,
           specs: row.specs || 'Regular',
           subject: row.subject || undefined,
+          itemType: (row as any).itemType || undefined,
           section: row.section || undefined,
           program: row.program || undefined,
           stream: row.stream || undefined,
@@ -1275,6 +1280,7 @@ export default function ClosedSalesPage() {
               productCategory: row.productCategory || undefined,
           specs: row.specs || 'Regular',
           subject: row.subject || undefined,
+          itemType: (row as any).itemType || undefined,
           section: row.section || undefined,
           program: row.program || undefined,
           stream: row.stream || undefined,
@@ -1339,18 +1345,8 @@ export default function ClosedSalesPage() {
   const getProductsDisplay = (deal: DcOrder) => {
     const dc = dealDCs[deal._id] as any
     const lines = resolveClosedSalesProductLines(deal, dc)
-    if (!lines.length) return '-'
-    return lines.map((p: any) => {
-      const productName = p.product_name || p.product || 'Unknown'
-      const qty = typeof p.quantity === 'number' ? p.quantity : Number(p.quantity) || 0
-      const subject = typeof p.subject === 'string' && p.subject.trim() && p.subject !== '-'
-        ? ` ${p.subject.trim()}`
-        : ''
-      const level = typeof p.level === 'string' && p.level.trim() && p.level !== '-'
-        ? ` ${p.level.trim()}`
-        : ''
-      return `${productName}${subject}${level}${qty ? ` - ${qty}` : ''}`
-    }).join(', ')
+    // Product names only (each once); strengths are in the deal's own view.
+    return uniqueProductNames(lines).join(', ') || '-'
   }
 
   // Get unique zones and executives for dropdowns

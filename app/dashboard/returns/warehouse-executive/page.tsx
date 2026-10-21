@@ -1,5 +1,6 @@
 'use client'
 
+import { printReturnSlip } from '@/lib/returnSlipPdf'
 import { useEffect, useState } from 'react'
 import { apiRequest, API_BASE_URL } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
@@ -32,6 +33,11 @@ type StockReturn = {
   returnDate?: string
   products?: Array<{
     product: string
+    class?: string
+    productCategory?: string
+    level?: string
+    subject?: string
+    specs?: string
     soldQty: number
     returnQty: number
     reason: string
@@ -53,6 +59,12 @@ type StockReturn = {
 type ProductVerificationRow = {
   id: string
   product: string
+  class?: string
+  productCategory?: string
+  level?: string
+  subject?: string
+  specs?: string
+
   soldQty: number
   returnQty: number
   reason: string
@@ -92,7 +104,9 @@ function resolveInitialReceivedQty(
     return received
   }
 
-  return Number.isFinite(expected) ? expected : 0
+  // Blind count: the warehouse counts what arrived without being shown the BDE's quantity.
+  void expected
+  return 0
 }
 
 function canVerifyReturn(status: string): boolean {
@@ -141,6 +155,11 @@ export default function WarehouseExecutiveStockReturnsPage() {
         return {
           id: `product-${idx}`,
           product: p.product,
+          class: p.class || '',
+          productCategory: p.productCategory || '',
+          level: p.level || '',
+          subject: p.subject || '',
+          specs: p.specs || '',
           soldQty: p.soldQty,
           returnQty: p.returnQty,
           reason: p.reason,
@@ -234,10 +253,6 @@ export default function WarehouseExecutiveStockReturnsPage() {
         toast.error(`Please select condition for ${row.product}`)
         return false
       }
-      if (isQuantityMismatch(row.returnQty, receivedQty) && !row.mismatchRemark?.trim()) {
-        toast.error(`Please provide remark for quantity mismatch in ${row.product}`)
-        return false
-      }
     }
     return true
   }
@@ -272,8 +287,12 @@ export default function WarehouseExecutiveStockReturnsPage() {
             condition: row.condition,
             batchLot: row.batchLot,
             storageLocation: row.storageLocation,
+            class: row.class,
+            productCategory: row.productCategory,
+            level: row.level,
+            subject: row.subject,
             quantityMismatch: mismatch,
-            mismatchRemark: mismatch ? (row.mismatchRemark || '').trim() : '',
+            mismatchRemark: (row.mismatchRemark || '').trim(),
           }
         }),
         warehousePhotos: warehousePhotoUrls,
@@ -302,7 +321,8 @@ export default function WarehouseExecutiveStockReturnsPage() {
     }
   }
 
-  const conditionOptions = ['Sellable', 'Damaged', 'Expired', 'Missing', 'Short received']
+  // "Marked by students": books came back written in — counted, but not sellable.
+  const conditionOptions = ['Sellable', 'Marked by students', 'Damaged', 'Expired', 'Missing', 'Short received']
 
   return (
     <div className="space-y-6">
@@ -319,7 +339,6 @@ export default function WarehouseExecutiveStockReturnsPage() {
                 <th className="py-3 px-4 font-semibold">Return ID</th>
                 <th className="py-3 px-4 font-semibold">Customer</th>
                 <th className="py-3 px-4 font-semibold">BDE Name</th>
-                <th className="py-3 px-4 font-semibold">Expected Qty</th>
                 <th className="py-3 px-4 font-semibold">Return Type</th>
                 <th className="py-3 px-4 font-semibold">Status</th>
                 <th className="py-3 px-4 font-semibold">Action</th>
@@ -328,13 +347,13 @@ export default function WarehouseExecutiveStockReturnsPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="py-8 text-center text-neutral-500" colSpan={7}>
+                  <td className="py-8 text-center text-neutral-500" colSpan={6}>
                     Loading...
                   </td>
                 </tr>
               ) : returns.length === 0 ? (
                 <tr>
-                  <td className="py-8 text-center text-neutral-500" colSpan={7}>
+                  <td className="py-8 text-center text-neutral-500" colSpan={6}>
                     No return requests found
                   </td>
                 </tr>
@@ -344,7 +363,6 @@ export default function WarehouseExecutiveStockReturnsPage() {
                     <td className="py-3 px-4">{returnItem.returnId}</td>
                     <td className="py-3 px-4">{returnItem.customerName || '-'}</td>
                     <td className="py-3 px-4">{returnItem.executiveName || '-'}</td>
-                    <td className="py-3 px-4">{returnItem.totalQuantity || returnItem.returnQty || 0}</td>
                     <td className="py-3 px-4">{returnItem.returnType || '-'}</td>
                     <td className="py-3 px-4">
                       <span className={`text-xs px-2 py-1 rounded ${
@@ -428,8 +446,10 @@ export default function WarehouseExecutiveStockReturnsPage() {
                     <thead>
                       <tr className="bg-neutral-100">
                         <th className="py-2 px-3 text-left">Product</th>
-                        <th className="py-2 px-3 text-left">Sold Qty</th>
-                        <th className="py-2 px-3 text-left">Return Qty</th>
+                        <th className="py-2 px-3 text-left">Class</th>
+                        <th className="py-2 px-3 text-left">Series</th>
+                        <th className="py-2 px-3 text-left">Term / Level</th>
+                        <th className="py-2 px-3 text-left">Deliverables</th>
                         <th className="py-2 px-3 text-left">Reason</th>
                         <th className="py-2 px-3 text-left">Remarks</th>
                       </tr>
@@ -439,15 +459,17 @@ export default function WarehouseExecutiveStockReturnsPage() {
                         selectedReturn.products.map((p, idx) => (
                           <tr key={idx} className="border-b">
                             <td className="py-2 px-3">{p.product}</td>
-                            <td className="py-2 px-3">{p.soldQty}</td>
-                            <td className="py-2 px-3">{p.returnQty}</td>
+                            <td className="py-2 px-3">{p.class || '-'}</td>
+                            <td className="py-2 px-3">{p.productCategory || '-'}</td>
+                            <td className="py-2 px-3">{p.level || '-'}</td>
+                            <td className="py-2 px-3">{p.subject || p.specs || '-'}</td>
                             <td className="py-2 px-3">{p.reason}</td>
                             <td className="py-2 px-3">{p.remarks || '-'}</td>
                           </tr>
                         ))
                       ) : (
                         <tr>
-                          <td className="py-4 text-center text-neutral-500" colSpan={5}>
+                          <td className="py-4 text-center text-neutral-500" colSpan={7}>
                             No products found
                           </td>
                         </tr>
@@ -485,21 +507,23 @@ export default function WarehouseExecutiveStockReturnsPage() {
                     <thead>
                       <tr className="bg-neutral-100">
                         <th className="py-2 px-3 text-left">Product</th>
-                        <th className="py-2 px-3 text-left">Expected Qty</th>
+                        <th className="py-2 px-3 text-left">Class</th>
+                        <th className="py-2 px-3 text-left">Series</th>
+                        <th className="py-2 px-3 text-left">Deliverables</th>
                         <th className="py-2 px-3 text-left">Received Qty *</th>
                         <th className="py-2 px-3 text-left">Condition *</th>
                         <th className="py-2 px-3 text-left">Batch / Lot</th>
-                        <th className="py-2 px-3 text-left">Storage Location</th>
-                        <th className="py-2 px-3 text-left">Mismatch Remark</th>
+                        <th className="py-2 px-3 text-left">Remark</th>
                       </tr>
                     </thead>
                     <tbody>
                       {productVerificationRows.map((row) => {
-                        const hasMismatch = isQuantityMismatch(row.returnQty, row.receivedQty)
                         return (
-                          <tr key={row.id} className={`border-b ${hasMismatch ? 'bg-yellow-50' : ''}`}>
+                          <tr key={row.id} className="border-b">
                             <td className="py-2 px-3">{row.product}</td>
-                            <td className="py-2 px-3">{row.returnQty}</td>
+                            <td className="py-2 px-3">{row.class || '-'}</td>
+                            <td className="py-2 px-3">{row.productCategory || '-'}</td>
+                            <td className="py-2 px-3">{row.subject || row.specs || '-'}</td>
                             <td className="py-2 px-3">
                               <Input
                                 type="number"
@@ -508,9 +532,6 @@ export default function WarehouseExecutiveStockReturnsPage() {
                                 className="w-24"
                                 min="0"
                               />
-                              {hasMismatch && (
-                                <span className="text-xs text-yellow-600 block mt-1">⚠️ Mismatch</span>
-                              )}
                             </td>
                             <td className="py-2 px-3">
                               <Select
@@ -520,7 +541,7 @@ export default function WarehouseExecutiveStockReturnsPage() {
                                 <SelectTrigger className="w-40">
                                   <SelectValue placeholder="Select condition" />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent className="z-[9999]">
                                   {conditionOptions.map((opt) => (
                                     <SelectItem key={opt} value={opt}>
                                       {opt}
@@ -538,25 +559,13 @@ export default function WarehouseExecutiveStockReturnsPage() {
                               />
                             </td>
                             <td className="py-2 px-3">
-                              <Input
-                                value={row.storageLocation}
-                                onChange={(e) => updateProductVerification(row.id, 'storageLocation', e.target.value)}
-                                placeholder="Storage location"
-                                className="w-32"
+                              <Textarea
+                                value={row.mismatchRemark}
+                                onChange={(e) => updateProductVerification(row.id, 'mismatchRemark', e.target.value)}
+                                placeholder="Optional remark"
+                                className="w-48"
+                                rows={2}
                               />
-                            </td>
-                            <td className="py-2 px-3">
-                              {hasMismatch ? (
-                                <Textarea
-                                  value={row.mismatchRemark}
-                                  onChange={(e) => updateProductVerification(row.id, 'mismatchRemark', e.target.value)}
-                                  placeholder="Mandatory remark for mismatch"
-                                  className="w-48"
-                                  rows={2}
-                                />
-                              ) : (
-                                <span className="text-neutral-400 text-xs">-</span>
-                              )}
                             </td>
                           </tr>
                         )
@@ -611,27 +620,11 @@ export default function WarehouseExecutiveStockReturnsPage() {
                     <Input value={productVerificationRows.length} readOnly className="bg-neutral-50" />
                   </div>
                   <div>
-                    <Label>Total Expected Quantity</Label>
-                    <Input 
-                      value={productVerificationRows.reduce((sum, r) => sum + r.returnQty, 0)} 
-                      readOnly 
-                      className="bg-neutral-50" 
-                    />
-                  </div>
-                  <div>
                     <Label>Total Received Quantity</Label>
                     <Input 
                       value={productVerificationRows.reduce((sum, r) => sum + (normalizeQty(r.receivedQty) || 0), 0)} 
                       readOnly 
                       className="bg-neutral-50" 
-                    />
-                  </div>
-                  <div>
-                    <Label>Has Quantity Mismatch</Label>
-                    <Input 
-                      value={productVerificationRows.some((r) => isQuantityMismatch(r.returnQty, r.receivedQty)) ? 'Yes - Requires Manager Review' : 'No'} 
-                      readOnly 
-                      className={`bg-neutral-50 ${productVerificationRows.some((r) => isQuantityMismatch(r.returnQty, r.receivedQty)) ? 'text-yellow-600 font-semibold' : ''}`}
                     />
                   </div>
                 </div>
@@ -640,6 +633,19 @@ export default function WarehouseExecutiveStockReturnsPage() {
           )}
 
           <DialogFooter>
+            {selectedReturn && (
+              <Button
+                variant="outline"
+                onClick={() =>
+                  printReturnSlip(
+                    { ...(selectedReturn as any), products: productVerificationRows.map((r) => ({ ...r, returnQty: undefined })) },
+                    { showReceived: true }
+                  )
+                }
+              >
+                Print
+              </Button>
+            )}
             <Button variant="outline" onClick={() => setViewReturnDialogOpen(false)}>
               Cancel
             </Button>

@@ -964,6 +964,12 @@ export function expandEditPoRowsBySubject<T extends Record<string, any>>(
   for (const row of source) {
     const name = String(row.product_name || row.product || row.productName || '').trim()
     const currentSubject = String(row.subject || '').trim()
+    // Specimen sets and related items are single lines: never split or give them a deliverable.
+    const marker = String(row.itemType || '')
+    if (marker === 'Specimen Copy' || marker === 'Related Item' || String(row.specs || '') === 'Set as per DC list') {
+      out.push({ ...row, lineId: ensureProductLineId(row) })
+      continue
+    }
     // IIT rows carry a combination (stream, e.g. MPC / MBiPC) — never split it or invent a subject.
     if (String(row.stream || '').trim()) {
       out.push({ ...row, lineId: ensureProductLineId(row) })

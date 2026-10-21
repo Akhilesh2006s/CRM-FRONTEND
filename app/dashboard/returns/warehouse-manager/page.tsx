@@ -1,5 +1,6 @@
 'use client'
 
+import { printReturnSlip } from '@/lib/returnSlipPdf'
 import { useEffect, useState } from 'react'
 import { apiRequest, API_BASE_URL } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
@@ -35,6 +36,11 @@ type StockReturn = {
   }
   products?: Array<{
     product: string
+    class?: string
+    productCategory?: string
+    level?: string
+    subject?: string
+    specs?: string
     soldQty: number
     returnQty: number
     reason: string
@@ -129,7 +135,11 @@ export default function WarehouseManagerStockReturnsPage() {
         mismatchRemark: p.mismatchRemark || '',
         managerDecision: p.managerDecision || '',
         approvedQty: p.approvedQty || 0,
-        stockBucket: p.stockBucket || '',
+        // Default the bucket from the warehouse's condition (Sellable / Marked / Damaged / Expired).
+        stockBucket:
+          p.stockBucket ||
+          (['Sellable', 'Marked by students', 'Damaged', 'Expired'].includes(String(p.condition || '')) ? String(p.condition) : ''),
+        lineInfo: [p.class ? `Cl ${p.class}` : '', p.productCategory, p.level, p.subject || p.specs].filter(Boolean).join(' · '),
         managerRemark: p.managerRemark || '',
         quantityMismatch: p.quantityMismatch || false,
       }))
@@ -370,7 +380,8 @@ export default function WarehouseManagerStockReturnsPage() {
     }
   }
 
-  const stockBuckets = ['Sellable', 'Damaged', 'Expired', 'QC / Hold']
+  // Only Sellable goes back into stock; the others are recorded on the return only.
+  const stockBuckets = ['Sellable', 'Marked by students', 'Damaged', 'Expired', 'QC / Hold']
   const decisionOptions = ['Approve', 'Partial Approve', 'Reject', 'Send Back']
 
   return (
@@ -561,7 +572,12 @@ export default function WarehouseManagerStockReturnsPage() {
                     <tbody>
                       {productDecisionRows.map((row) => (
                         <tr key={row.id} className={`border-b ${row.quantityMismatch ? 'bg-yellow-50' : ''}`}>
-                          <td className="py-2 px-3">{row.product}</td>
+                          <td className="py-2 px-3">
+                            {row.product}
+                            {(row as any).lineInfo && (
+                              <div className="text-xs text-neutral-500">{(row as any).lineInfo}</div>
+                            )}
+                          </td>
                           <td className="py-2 px-3">{row.soldQty}</td>
                           <td className="py-2 px-3">{row.returnQty}</td>
                           <td className="py-2 px-3">{row.receivedQty}</td>
@@ -687,6 +703,11 @@ export default function WarehouseManagerStockReturnsPage() {
           )}
 
           <DialogFooter className="flex gap-2">
+            {selectedReturn && (
+              <Button variant="outline" onClick={() => printReturnSlip(selectedReturn as any, { showReceived: true })}>
+                Print
+              </Button>
+            )}
             <Button variant="outline" onClick={() => setViewReturnDialogOpen(false)}>
               Cancel
             </Button>

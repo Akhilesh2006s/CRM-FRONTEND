@@ -188,7 +188,7 @@ function leadProductsToHistorySnapshot(products: Lead['products']) {
         product_name: String(p.product_name || p.product || '').trim(),
         term: String(p.term || 'Term 1').trim(),
         status,
-        strength: Number(p.strength ?? p.quantity ?? 0) || 0,
+        strength: Number(p.strength ?? 0) || 0,
         chance: Number(p.chance ?? 0) || 0,
       }
     })

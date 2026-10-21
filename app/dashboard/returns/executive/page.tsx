@@ -1,5 +1,6 @@
 'use client'
 
+import { printReturnSlip } from '@/lib/returnSlipPdf'
 import { useEffect, useMemo, useState } from 'react'
 import { apiRequest, API_BASE_URL, resolveUploadUrl } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
@@ -241,7 +242,7 @@ function selectValueOrUndefined(value: string | undefined | null): string | unde
   return v.length > 0 ? v : undefined
 }
 
-const SELECT_IN_DIALOG_CLASS = 'z-[200]'
+const SELECT_IN_DIALOG_CLASS = 'z-[9999]'
 
 function productsFromEmployeeDc(dc: {
   productDetails?: DcOrderProductSource[]
@@ -1019,7 +1020,7 @@ export default function ExecutiveStockReturnsPage() {
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Select return type" />
                     </SelectTrigger>
-                    <SelectContent className={SELECT_IN_DIALOG_CLASS}>
+                    <SelectContent className={SELECT_IN_DIALOG_CLASS} position="item-aligned">
                       {returnTypes.map((type) => (
                         <SelectItem key={type} value={type}>
                           {type}
@@ -1543,6 +1544,9 @@ export default function ExecutiveStockReturnsPage() {
           )}
 
           <DialogFooter>
+            {selectedReturn && (
+              <Button variant="outline" onClick={() => printReturnSlip(selectedReturn as any)}>Print</Button>
+            )}
             <Button onClick={() => setViewReturnDialogOpen(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>

@@ -12,12 +12,23 @@ type SentOrder = {
   dc_code?: string
   zone?: string
   updatedAt?: string
+  status?: string
+  workflowStage?: string
   assigned_to?: { name?: string } | string | null
 }
 
+/** Where a raised DC is now: Senior Coordinator, warehouse, or delivered. */
+function stageLabel(row: SentOrder): { label: string; className: string } {
+  if (row.status === 'completed' || row.workflowStage === 'CompletedDC') {
+    return { label: 'Completed', className: 'bg-green-100 text-green-800' }
+  }
+  if (row.workflowStage === 'EmpDC') return { label: 'At Warehouse', className: 'bg-blue-100 text-blue-800' }
+  return { label: 'With Senior Coordinator', className: 'bg-amber-100 text-amber-800' }
+}
+
 /**
- * Read-only list of DCs the Coordinator raised that now sit with the Senior Coordinator
- * (DcOrder status dc_sent_to_senior), so the Coordinator can still see where they are.
+ * Read-only list of DCs the Coordinator raised after they leave Closed Sales (with the Senior
+ * Coordinator, at the warehouse, or completed), so the Coordinator can follow each DC's status.
  */
 export function SentToSeniorList({ refreshKey = 0 }: { refreshKey?: number }) {
   const [rows, setRows] = useState<SentOrder[]>([])
@@ -28,11 +39,15 @@ export function SentToSeniorList({ refreshKey = 0 }: { refreshKey?: number }) {
     setLoading(true)
     setError('')
     try {
-      const res = await apiRequest<any>('/dc-orders?status=dc_sent_to_senior&limit=200')
-      const list: SentOrder[] = Array.isArray(res) ? res : res?.data || []
+      const lists = await Promise.all(
+        ['dc_sent_to_senior', 'completed'].map((status) =>
+          apiRequest<any>(`/dc-orders?status=${status}&limit=200`).catch(() => [])
+        )
+      )
+      const list: SentOrder[] = lists.flatMap((res) => (Array.isArray(res) ? res : res?.data || []))
       setRows(list.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''))))
     } catch (e: any) {
-      setError(e?.message || 'Could not load DCs sent to the Senior Coordinator.')
+      setError(e?.message || 'Could not load DC status.')
     } finally {
       setLoading(false)
     }
@@ -46,8 +61,8 @@ export function SentToSeniorList({ refreshKey = 0 }: { refreshKey?: number }) {
     <Card className="p-4">
       <div className="flex items-center justify-between gap-2 mb-3">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">Sent to Senior Coordinator</h2>
-          <p className="text-xs text-slate-500">DCs you raised that are waiting for the Senior Coordinator to submit them to the warehouse.</p>
+          <h2 className="text-lg font-semibold text-slate-900">DC Status</h2>
+          <p className="text-xs text-slate-500">DCs you raised and where each one is now: with the Senior Coordinator, at the warehouse, or completed.</p>
         </div>
         <Button type="button" size="sm" variant="outline" onClick={load}>Refresh</Button>
       </div>
@@ -56,7 +71,7 @@ export function SentToSeniorList({ refreshKey = 0 }: { refreshKey?: number }) {
       ) : error ? (
         <p className="text-sm text-red-600 py-4 text-center">{error}</p>
       ) : rows.length === 0 ? (
-        <p className="text-sm text-slate-500 py-4 text-center">Nothing is waiting with the Senior Coordinator.</p>
+        <p className="text-sm text-slate-500 py-4 text-center">No DCs raised yet.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -66,7 +81,7 @@ export function SentToSeniorList({ refreshKey = 0 }: { refreshKey?: number }) {
                 <th className="py-2 pr-3 font-semibold">Code</th>
                 <th className="py-2 pr-3 font-semibold">Zone</th>
                 <th className="py-2 pr-3 font-semibold">BDE</th>
-                <th className="py-2 pr-3 font-semibold">Sent on</th>
+                <th className="py-2 pr-3 font-semibold">Updated</th>
                 <th className="py-2 font-semibold">Status</th>
               </tr>
             </thead>
@@ -83,8 +98,8 @@ export function SentToSeniorList({ refreshKey = 0 }: { refreshKey?: number }) {
                     {row.updatedAt ? new Date(row.updatedAt).toLocaleDateString('en-IN') : '-'}
                   </td>
                   <td className="py-2">
-                    <span className="inline-block rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-xs font-medium">
-                      With Senior Coordinator
+                    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${stageLabel(row).className}`}>
+                      {stageLabel(row).label}
                     </span>
                   </td>
                 </tr>

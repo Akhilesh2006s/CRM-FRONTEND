@@ -410,9 +410,6 @@ export default function CompletedDCPage() {
             row.lrCost = matchingDC.lrCost || row.lrCost
             row.remarks = listRemarks(matchingDC)
             row.isChain = matchingDC.isChain === true || matchingDC.dcOrderId?.isChain === true || row.isChain
-            console.log(`Found DC ${row.dcId} for DcOrder ${row._id}`)
-          } else {
-            console.warn(`No DC found for DcOrder ${row._id} - this entry cannot be updated`)
           }
         } catch (e) {
           console.warn('Error finding DC for DcOrder:', e)
@@ -439,10 +436,8 @@ export default function CompletedDCPage() {
             allDataMap.set(dcOrder._id, dcOrder)
           }
           // If DC entry exists, we skip the DcOrder entry (DC is authoritative)
-        } else {
-          // No DC found, add the DcOrder entry
-          allDataMap.set(dcOrder._id, dcOrder)
         }
+        // A sale with no DC behind it has nothing to show or update here, so it is left out.
       })
       
       const allData = Array.from(allDataMap.values())

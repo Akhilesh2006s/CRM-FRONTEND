@@ -54,8 +54,9 @@ export function zeroNonBillableRows<T extends Record<string, any>>(rows: T[], op
   return rows.map((row) => (isBillableDcRow(row, opts) ? row : { ...row, unitPrice: 0, unit_price: 0, price: 0, total: 0 }))
 }
 
-export function isSpecimenRow(row: { itemType?: unknown } | null | undefined): boolean {
-  return String(row?.itemType || '') === SPECIMEN_ITEM_TYPE
+export function isSpecimenRow(row: { itemType?: unknown; specs?: unknown } | null | undefined): boolean {
+  // Older saves lost the marker; the specimen line is still recognisable by its specs text.
+  return String(row?.itemType || '') === SPECIMEN_ITEM_TYPE || String(row?.specs || '') === 'Set as per DC list'
 }
 
 /** Parse a specimen copies input; blank/invalid falls back to 1. */

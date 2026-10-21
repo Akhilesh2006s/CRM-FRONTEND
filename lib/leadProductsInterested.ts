@@ -95,9 +95,10 @@ export function leadProductsToInterestedRows(
           product_name: String(p.product_name || p.product || '').trim(),
           term: String(p.term || 'Term 1').trim(),
           status: lineStatus,
+          // Strength is entered only for priced lines; the default quantity of 1 is not a strength.
           strength:
-            Number(p.strength ?? p.quantity ?? 0) > 0
-              ? String(Number(p.strength ?? p.quantity ?? 0))
+            PRICED_LINE_STATUSES.has(lineStatus) && Number(p.strength ?? 0) > 0
+              ? String(Number(p.strength))
               : '',
           unit_price:
             Number(p.unit_price ?? 0) > 0 ? String(Number(p.unit_price ?? 0)) : '',

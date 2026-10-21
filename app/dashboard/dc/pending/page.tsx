@@ -120,6 +120,7 @@ type DC = {
 
 type ProductRow = {
   id: string
+  itemType?: string
   product: string
   class: string
   // Student category (New/Existing/Both)
@@ -372,9 +373,10 @@ export default function PendingDCPage() {
             productName: p.productName || p.product || matchedProduct, // Use productName or product or matched product
             quantity: Number(p.quantity) || Number(p.strength) || 0,
             strength: Number(p.strength) || Number(p.quantity) || 0,
-            level: p.level || getDefaultLevel(matchedProduct),
+            level: p.itemType ? (p.level || '') : p.level || getDefaultLevel(matchedProduct),
             specs: p.specs || 'Regular',
             subject: p.subject || undefined,
+            itemType: p.itemType || undefined,
             section: p.section || undefined,
             program: p.program || undefined,
             stream: p.stream || undefined,
@@ -449,9 +451,10 @@ export default function PendingDCPage() {
                 productName: matchedProduct, // Use matched product
                 quantity: Number(p.quantity) || 0,
                 strength: Number(p.strength) || Number(p.quantity) || 0,
-                level: p.level || getDefaultLevel(matchedProduct),
+                level: p.itemType ? (p.level || '') : p.level || getDefaultLevel(matchedProduct),
                 specs: p.specs || 'Regular',
                 subject: p.subject || undefined,
+                itemType: p.itemType || undefined,
                 section: p.section || undefined,
                 program: p.program || undefined,
                 stream: p.stream || undefined,
@@ -606,6 +609,7 @@ export default function PendingDCPage() {
             level: row.level,
             specs: row.specs || '',
             subject: row.subject || undefined,
+            itemType: (row as any).itemType || undefined,
             section: row.section || undefined,
             program: row.program || undefined,
             stream: row.stream || undefined,
@@ -682,6 +686,7 @@ export default function PendingDCPage() {
             level: row.level,
             specs: row.specs || '',
             subject: row.subject || undefined,
+            itemType: (row as any).itemType || undefined,
             section: row.section || undefined,
             program: row.program || undefined,
             stream: row.stream || undefined,
