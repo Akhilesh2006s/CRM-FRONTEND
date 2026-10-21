@@ -698,8 +698,8 @@ export default function ExecutiveStockReturnsPage() {
         return false
       }
     }
-    if ((returnType === 'Damaged' || returnType === 'Expired') && evidencePhotoUrls.length === 0) {
-      toast.error('Photo evidence is mandatory for Damaged or Expired returns')
+    if ((returnType === 'Damaged' || returnType === 'Expired' || returnType === 'Wrong Print') && evidencePhotoUrls.length === 0) {
+      toast.error('Photo evidence is mandatory for Damaged, Expired or Wrong Print returns')
       return false
     }
     if (forSubmit) {
@@ -834,8 +834,8 @@ export default function ExecutiveStockReturnsPage() {
     }
   }
 
-  const returnTypes = ['Damaged', 'Expired', 'Excess', 'Wrong item', 'Replacement']
-  const returnReasons = ['Damaged', 'Expired', 'Excess', 'Wrong item', 'Replacement', 'Customer request', 'Quality issue', 'Other']
+  const returnTypes = ['Damaged', 'Expired', 'Wrong Print', 'Excess', 'Wrong item', 'Replacement']
+  const returnReasons = ['Damaged', 'Expired', 'Wrong Print', 'Excess', 'Wrong item', 'Replacement', 'Customer request', 'Quality issue', 'Other']
 
   return (
     <div className="space-y-6">
@@ -1303,7 +1303,7 @@ export default function ExecutiveStockReturnsPage() {
             <div className="space-y-4 border-b pb-4">
               <h3 className="text-lg font-semibold">
                 Evidence & Remarks
-                {(returnType === 'Damaged' || returnType === 'Expired') && (
+                {(returnType === 'Damaged' || returnType === 'Expired' || returnType === 'Wrong Print') && (
                   <span className="text-red-600 ml-2">*</span>
                 )}
               </h3>

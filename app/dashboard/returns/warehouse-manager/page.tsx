@@ -138,7 +138,7 @@ export default function WarehouseManagerStockReturnsPage() {
         // Default the bucket from the warehouse's condition (Sellable / Marked / Damaged / Expired).
         stockBucket:
           p.stockBucket ||
-          (['Sellable', 'Marked by students', 'Damaged', 'Expired'].includes(String(p.condition || '')) ? String(p.condition) : ''),
+          (['Sellable', 'Marked by students', 'Wrong Print', 'Damaged', 'Expired'].includes(String(p.condition || '')) ? String(p.condition) : ''),
         lineInfo: [p.class ? `Cl ${p.class}` : '', p.productCategory, p.level, p.subject || p.specs].filter(Boolean).join(' · '),
         managerRemark: p.managerRemark || '',
         quantityMismatch: p.quantityMismatch || false,
@@ -381,7 +381,7 @@ export default function WarehouseManagerStockReturnsPage() {
   }
 
   // Only Sellable goes back into stock; the others are recorded on the return only.
-  const stockBuckets = ['Sellable', 'Marked by students', 'Damaged', 'Expired', 'QC / Hold']
+  const stockBuckets = ['Sellable', 'Marked by students', 'Wrong Print', 'Damaged', 'Expired', 'QC / Hold']
   const decisionOptions = ['Approve', 'Partial Approve', 'Reject', 'Send Back']
 
   return (

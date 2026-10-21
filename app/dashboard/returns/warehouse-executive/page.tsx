@@ -322,7 +322,7 @@ export default function WarehouseExecutiveStockReturnsPage() {
   }
 
   // "Marked by students": books came back written in — counted, but not sellable.
-  const conditionOptions = ['Sellable', 'Marked by students', 'Damaged', 'Expired', 'Missing', 'Short received']
+  const conditionOptions = ['Sellable', 'Marked by students', 'Wrong Print', 'Damaged', 'Expired', 'Missing', 'Short received']
 
   return (
     <div className="space-y-6">

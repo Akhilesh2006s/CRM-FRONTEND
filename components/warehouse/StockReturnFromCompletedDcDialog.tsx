@@ -22,10 +22,11 @@ import { Loader2, Plus, Trash2 } from 'lucide-react'
 
 const SELECT_IN_DIALOG_CLASS = 'z-[200]'
 const MAIN_WAREHOUSE = 'Main Warehouse'
-const RETURN_TYPES = ['Damaged', 'Expired', 'Excess', 'Wrong item', 'Replacement']
+const RETURN_TYPES = ['Damaged', 'Expired', 'Wrong Print', 'Excess', 'Wrong item', 'Replacement']
 const RETURN_REASONS = [
   'Damaged',
   'Expired',
+  'Wrong Print',
   'Excess',
   'Wrong item',
   'Replacement',
