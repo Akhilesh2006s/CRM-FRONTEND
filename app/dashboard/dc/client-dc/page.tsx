@@ -68,7 +68,7 @@ import {
 import { useRouter } from 'next/navigation'
 import { abacusStudentStrength, defaultMasterAbacusQuantity } from '@/lib/abacusMaterials'
 import { AbacusMaterialsFields } from '@/components/dc/AbacusMaterialsFields'
-import { DC_ROW_CATEGORIES, buildRelatedItemRows, buildSpecimenRows, dcRowCategoryOrDefault, isBillableDcRow, isRelatedItemRow, isSpecimenRow, specimenCopiesValue } from '@/lib/dcRowCategory'
+import { DC_ROW_CATEGORIES, canonicalDcRowCategory, buildRelatedItemRows, buildSpecimenRows, dcRowCategoryOrDefault, isBillableDcRow, isRelatedItemRow, isSpecimenRow, specimenCopiesValue } from '@/lib/dcRowCategory'
 
 type DC = {
   _id: string
@@ -2545,6 +2545,10 @@ export default function ClientDCPage() {
                 product_name: name,
                 quantity: Number(merged.quantity ?? merged.strength) || 0,
                 unit_price: Number(merged.price ?? order?.unit_price) || 0,
+                // A billed line saved without a price (e.g. sent free by mistake) keeps its price box open.
+                priceUnlocked:
+                  !(Number(merged.price ?? order?.unit_price) > 0) &&
+                  !(canonicalDcRowCategory(merged.category) === 'Training Material' || isSpecimenRow(merged)),
                 class: resolved.class,
                 specs: persistEditPoSpecs(name, resolved.specs),
                 productCategory: resolved.productCategory,

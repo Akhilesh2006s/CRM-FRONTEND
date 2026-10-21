@@ -104,10 +104,6 @@ export default function CloseLeadPage() {
   const [specimenCopies, setSpecimenCopies] = useState('1')
   /** Products that get specimen copies; null = every product. */
   const [specimenProducts, setSpecimenProducts] = useState<string[] | null>(null)
-  /** Products sent free as Training Material (₹0, not billed) instead of New Students. */
-  const [trainingMaterialProducts, setTrainingMaterialProducts] = useState<string[]>([])
-  const isTrainingMaterialProduct = (product?: string) =>
-    trainingMaterialProducts.includes(String(product || ''))
 
   const productConfig = useCloseLeadProductConfig({ schoolType: lead?.school_type })
   const {
@@ -551,12 +547,7 @@ export default function CloseLeadPage() {
         }),
         dispatchMode: p.dispatchMode || parentRow?.dispatchMode,
       }
-    }).map((row) =>
-      // Free Training Material lines: delivered, never billed.
-      isTrainingMaterialProduct(row.product)
-        ? { ...row, category: 'Training Material', price: 0, total: 0 }
-        : row
-    )
+    })
     // Product related items (Tensmat, Teacher Books, Flash Cards, ...) always ship with the product.
     const withRelatedItems = [...rows, ...buildRelatedItemRows(rows, getProductRelatedItems)]
     return specimenRequested
@@ -611,11 +602,7 @@ export default function CloseLeadPage() {
         : undefined,
       year: currentAcademicYear,
       assigned_to: closingEmployeeId,
-      products: buildDcOrderProducts().map((p: any) =>
-        isTrainingMaterialProduct(p.product_name || p.product)
-          ? { ...p, category: 'Training Material', unit_price: 0, total: 0 }
-          : p
-      ),
+      products: buildDcOrderProducts(),
     }
 
     if (isDcOrder) {
@@ -1040,7 +1027,6 @@ export default function CloseLeadPage() {
           <CloseLeadProductConfig
             config={productConfig}
             schoolType={lead?.school_type}
-            freeProducts={trainingMaterialProducts}
             dialogExtra={childProductRows.length > 0 && <>
               <div className="flex flex-wrap items-start gap-3 rounded-lg border p-4">
                 <label className="flex flex-1 min-w-[240px] items-start gap-3 cursor-pointer">
@@ -1072,27 +1058,6 @@ export default function CloseLeadPage() {
                       onBlur={() => setSpecimenCopies(String(specimenCopiesValue(specimenCopies)))}
                     />
                   </div>
-                )}
-              </div>
-              <div className="rounded-lg border p-4 space-y-2">
-                <div>
-                  <span className="font-semibold block">Training Material (free)</span>
-                  <span className="text-xs text-neutral-600">
-                    Tick only products the school gets free (no billing). Ticked products go on the DC and the school's
-                    order as Training Material at ₹0; leave books for paying students unticked.
-                  </span>
-                </div>
-                <SpecimenProductPicker
-                  title="Send free as Training Material"
-                  minProducts={1}
-                  products={specimenCandidateProducts(childProductRows)}
-                  selected={trainingMaterialProducts}
-                  onChange={setTrainingMaterialProducts}
-                />
-                {trainingMaterialProducts.length > 0 && (
-                  <p className="text-xs text-amber-700">
-                    {trainingMaterialProducts.join(', ')} will be sent free; the DC bill leaves them out.
-                  </p>
                 )}
               </div>
               {abacusStrength > 0 && <AbacusMaterialsFields
