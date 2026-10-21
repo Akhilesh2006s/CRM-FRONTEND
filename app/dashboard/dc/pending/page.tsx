@@ -1,6 +1,8 @@
 'use client'
 import { uniqueProductNames } from '@/lib/productNames'
 import { AbacusMaterialsSummary } from '@/components/dc/AbacusMaterialsSummary'
+import { splitDeliverableRows } from '@/lib/deliverableStockRows'
+import { withBilledTotals } from '@/lib/dcPaymentDivisors'
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -142,6 +144,12 @@ type ProductRow = {
   term: string
 }
 
+/** Catalogue spelling of a saved product name; an unknown name (e.g. a specimen item) is kept as saved. */
+function matchCatalogProductName(availableProducts: string[], raw: string): string {
+  const key = raw.trim().toLowerCase()
+  return availableProducts.find((ap) => ap.toLowerCase() === key) || raw.trim()
+}
+
 function pendingRowQty(row: { quantity?: number; strength?: number }) {
   const q = Number(row.quantity)
   if (Number.isFinite(q) && q > 0) return q
@@ -185,7 +193,8 @@ export default function PendingDCPage() {
   
   const availableClasses = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
   const categoryOptions: string[] = [...DC_ROW_CATEGORIES]
-  const { productNames: availableProducts, getProductLevels, getDefaultLevel, getProductSpecs, getProductSubjects, getProductCategories, hasProductCategories, hasProductSpecs } = useProducts()
+  const { productNames: availableProducts, getProductLevels, getDefaultLevel, getProductSpecs, getProductSubjects, getProductCategories, hasProductCategories, hasProductSpecs, getCalculationType, getCatalogFallbackCount } = useProducts()
+  const matchCatalogProduct = (raw: string) => matchCatalogProductName(availableProducts, raw)
   const availableDCCategories = ['Term 1', 'Term 2', 'Term 3', 'Full Year']
 
   const load = async () => {
@@ -311,15 +320,11 @@ export default function PendingDCPage() {
       if (validProductDetails.length > 0) {
         // Use existing productDetails from DC
         console.log('✅ Using DC.productDetails:', validProductDetails)
-        const mappedProductRows = validProductDetails.map((p: any, idx: number) => {
+        const mappedProductRows = splitDeliverableRows(validProductDetails).map((p: any, idx: number) => {
           // Normalize product value to match dropdown options (case-insensitive matching)
           const rawProduct = (p.product || p.productName || '').trim()
           // Find matching product (case-insensitive)
-          const matchedProduct = availableProducts.find(ap => 
-            ap.toLowerCase() === rawProduct.toLowerCase() || 
-            rawProduct.toLowerCase().includes(ap.toLowerCase()) ||
-            ap.toLowerCase().includes(rawProduct.toLowerCase())
-          ) || (rawProduct || 'ABACUS')
+          const matchedProduct = matchCatalogProduct(rawProduct)
 
           const rawProductCategory =
             typeof p.productCategory === 'string' ? p.productCategory.trim() : ''
@@ -401,16 +406,10 @@ export default function PendingDCPage() {
           setProductRows([])
         } else {
           setProductRows(
-            productsToUse.map((p: any, idx: number) => {
+            splitDeliverableRows(productsToUse).map((p: any, idx: number) => {
               const rawProduct = p.product_name || p.product || 'ABACUS'
               // Find matching product (case-insensitive)
-              const matchedProduct =
-                availableProducts.find(
-                  (ap) =>
-                    ap.toLowerCase() === String(rawProduct).toLowerCase() ||
-                    String(rawProduct).toLowerCase().includes(ap.toLowerCase()) ||
-                    ap.toLowerCase().includes(String(rawProduct).toLowerCase())
-                ) || 'ABACUS'
+              const matchedProduct = matchCatalogProduct(String(rawProduct))
 
               const skuCategories = getProductCategories(matchedProduct)
               const normalizeSku = (v: any) =>
@@ -446,7 +445,7 @@ export default function PendingDCPage() {
                 class: p.class || '1',
                 category: isShortageDc
                   ? 'Shortage'
-                  : 'New Students',
+                  : canonicalDcRowCategory(p.category) || 'New Students',
                 productCategory: finalProductCategory || undefined,
                 productName: matchedProduct, // Use matched product
                 quantity: Number(p.quantity) || 0,
@@ -598,7 +597,11 @@ export default function PendingDCPage() {
           dcNotes,
           smeRemarks,
           status: statusToUse, // Preserve Term 2 status
-          productDetails: productRows.map(row => ({
+          productDetails: withBilledTotals(
+            productRows.map((r) => (selectedDC.dcType === 'shortage' ? { ...r, category: 'Shortage' } : r)) as any[],
+            getCalculationType,
+            getCatalogFallbackCount
+          ).map((row: any) => ({
             product: row.product,
             class: row.class || '1',
             category: selectedDC.dcType === 'shortage' ? 'Shortage' : row.category,
@@ -616,9 +619,7 @@ export default function PendingDCPage() {
             term: row.term || 'Term 1',
             unit_price: Number(row.price) || Number(row.unit_price) || 0,
             price: Number(row.price) || Number(row.unit_price) || 0,
-            total:
-              pendingRowQty(row) *
-              (Number(row.price) || Number(row.unit_price) || 0),
+            total: Number(row.total) || 0,
           })),
         }),
       })
@@ -675,7 +676,11 @@ export default function PendingDCPage() {
           dcCategory,
           dcNotes,
           smeRemarks,
-          productDetails: productRows.map(row => ({
+          productDetails: withBilledTotals(
+            productRows.map((r) => (selectedDC.dcType === 'shortage' ? { ...r, category: 'Shortage' } : r)) as any[],
+            getCalculationType,
+            getCatalogFallbackCount
+          ).map((row: any) => ({
             product: row.product,
             class: row.class || '1',
             category: selectedDC.dcType === 'shortage' ? 'Shortage' : row.category,
@@ -693,9 +698,7 @@ export default function PendingDCPage() {
             term: row.term || 'Term 1',
             unit_price: Number(row.price) || Number(row.unit_price) || 0,
             price: Number(row.price) || Number(row.unit_price) || 0,
-            total:
-              pendingRowQty(row) *
-              (Number(row.price) || Number(row.unit_price) || 0),
+            total: Number(row.total) || 0,
           })),
           requestedQuantity: totalQuantity,
         }),

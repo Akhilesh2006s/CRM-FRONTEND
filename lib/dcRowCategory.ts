@@ -25,6 +25,9 @@ export type ProductRelatedItem = {
   quantity: number
 }
 
+/** One product of a product's specimen set (configured on the product). */
+export type ProductSpecimenItem = { product: string; quantity: number }
+
 /** Map legacy labels ('new Students', 'Old Students', 'Training-Material', 'Excess-NewStudents', ...)
  * to one of DC_ROW_CATEGORIES. Unknown values (e.g. a book series) return ''. */
 export function canonicalDcRowCategory(raw: unknown): DcRowCategory | '' {
@@ -44,8 +47,9 @@ export function dcRowCategoryOrDefault(raw: unknown): DcRowCategory {
   return canonicalDcRowCategory(raw) || 'New Students'
 }
 
-export function isBillableDcRow(row: { category?: unknown } | null | undefined, opts: { dcType?: string } = {}): boolean {
+export function isBillableDcRow(row: { category?: unknown; itemType?: unknown } | null | undefined, opts: { dcType?: string } = {}): boolean {
   if (opts.dcType === 'shortage') return false
+  if (String(row?.itemType || '') === SPECIMEN_ITEM_TYPE) return false
   return !NON_BILLABLE.has(canonicalDcRowCategory(row?.category))
 }
 
@@ -56,8 +60,62 @@ export function zeroNonBillableRows<T extends Record<string, any>>(rows: T[], op
 
 export function isSpecimenRow(row: { itemType?: unknown; specs?: unknown } | null | undefined): boolean {
   // Older saves lost the marker; the specimen line is still recognisable by its specs text.
-  return String(row?.itemType || '') === SPECIMEN_ITEM_TYPE || String(row?.specs || '') === 'Set as per DC list'
+  const specs = String(row?.specs || '')
+  return String(row?.itemType || '') === SPECIMEN_ITEM_TYPE || specs === 'Set as per DC list' || specs.startsWith(SPECIMEN_FOR_PREFIX)
 }
+
+/** Specs of a specimen line taken from a product's specimen set: "Specimen for <product>". */
+export const SPECIMEN_FOR_PREFIX = 'Specimen for '
+
+/** The product a specimen line was requested for (the line's own product for a "set as per DC list" line). */
+export function specimenParentProduct(row: { specs?: unknown; product?: unknown; productName?: unknown; product_name?: unknown }): string {
+  const specs = String(row?.specs || '')
+  if (specs.startsWith(SPECIMEN_FOR_PREFIX)) return specs.slice(SPECIMEN_FOR_PREFIX.length).trim()
+  return String(row?.product || row?.productName || row?.product_name || '').trim()
+}
+
+/** Quantity of a specimen line for `sets` sets: an item of a product's specimen set counts its own per-set quantity. */
+export function specimenRowQuantity(
+  row: Record<string, any>,
+  sets: number,
+  getSpecimenItems?: (productName: string) => ProductSpecimenItem[],
+): number {
+  const n = specimenCopiesValue(sets)
+  if (!String(row?.specs || '').startsWith(SPECIMEN_FOR_PREFIX)) return n
+  const name = String(row.product || row.productName || row.product_name || '').trim().toLowerCase()
+  const item = (getSpecimenItems?.(specimenParentProduct(row)) || []).find((i) => String(i.product).trim().toLowerCase() === name)
+  return n * Math.max(1, Math.floor(Number(item?.quantity)) || 1)
+}
+
+/** Sets a saved specimen line stands for (its quantity divided by the item's per-set quantity). */
+export function specimenSetsOfRow(
+  row: Record<string, any> | undefined,
+  getSpecimenItems?: (productName: string) => ProductSpecimenItem[],
+): number {
+  if (!row) return 1
+  const qty = Number(row.quantity ?? row.strength) || 1
+  return specimenCopiesValue(Math.round(qty / specimenRowQuantity(row, 1, getSpecimenItems)))
+}
+
+/**
+ * Specs that name the line rather than a catalogue spec: a specimen line ("Set as per DC list",
+ * "Specimen for <product>") or a related item (Tensmat, Flash Cards ...). Never replace these
+ * with the product's default spec.
+ */
+export function isMarkerSpecs(
+  productName: string,
+  specs: unknown,
+  getRelatedItems?: (productName: string) => ProductRelatedItem[],
+): boolean {
+  const text = String(specs || '').trim()
+  if (!text) return false
+  if (text === SPECIMEN_SET_SPECS || text.startsWith(SPECIMEN_FOR_PREFIX)) return true
+  const key = text.toLowerCase()
+  return (getRelatedItems?.(productName) || []).some((item) => String(item?.name || '').trim().toLowerCase() === key)
+}
+
+/** Specimen items chosen per product: product name → ticked item products (missing = all items). */
+export type SpecimenItemChoice = Record<string, string[]>
 
 /** Parse a specimen copies input; blank/invalid falls back to 1. */
 export function specimenCopiesValue(input: unknown): number {
@@ -73,7 +131,15 @@ export const SPECIMEN_SET_SPECS = 'Set as per DC list'
  * Specimen copies as Training Material: one line per product ("<product> set as per DC list",
  * class NA) with `copies` sets, not one copy per class / series / book.
  */
-export function buildSpecimenRows<T extends Record<string, any>>(rows: T[], copies = 1): T[] {
+export function buildSpecimenRows<T extends Record<string, any>>(
+  rows: T[],
+  copies = 1,
+  opts: {
+    /** The product's specimen set; when it has items, one line per ticked item replaces the set line. */
+    getSpecimenItems?: (productName: string) => ProductSpecimenItem[]
+    chosenItems?: SpecimenItemChoice
+  } = {},
+): T[] {
   const qty = specimenCopiesValue(copies)
   const byProduct = new Map<string, T>()
   for (const row of rows) {
@@ -88,6 +154,33 @@ export function buildSpecimenRows<T extends Record<string, any>>(rows: T[], copi
       subject: _subject, selected_subjects: _subjects, productCategory: _series, subjectPackage: _pkg,
       ...rest
     } = row as Record<string, any>
+    const parent = String(row.product || row.productName || row.product_name || '').trim()
+    const items = (opts.getSpecimenItems?.(parent) || []).filter((item) => String(item?.product || '').trim())
+    if (items.length) {
+      const ticked = opts.chosenItems?.[parent]
+      for (const item of items) {
+        const name = String(item.product).trim()
+        if (ticked && !ticked.includes(name)) continue
+        const itemQty = qty * Math.max(1, Math.floor(Number(item.quantity)) || 1)
+        out.push({
+          ...rest,
+          ...('product' in rest || !('productName' in rest) ? { product: name } : {}),
+          ...('productName' in rest ? { productName: name } : {}),
+          ...('product_name' in rest ? { product_name: name } : {}),
+          class: SPECIMEN_CLASS,
+          level: '',
+          specs: `${SPECIMEN_FOR_PREFIX}${parent}`,
+          category: 'Training Material',
+          itemType: SPECIMEN_ITEM_TYPE,
+          quantity: itemQty,
+          strength: itemQty,
+          unit_price: 0,
+          price: 0,
+          total: 0,
+        } as unknown as T)
+      }
+      continue
+    }
     out.push({
       ...rest,
       class: SPECIMEN_CLASS,

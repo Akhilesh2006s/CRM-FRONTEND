@@ -23,9 +23,13 @@ export type PaymentBreakdownLine = {
 const lineStrength = (line: PaymentBreakdownLine) =>
   Number(line.strength) || Number(line.quantity) || 0
 
-/** One bucket per product + class + subject so P2 Physics and P2 Maths are not merged. */
+const isRelatedLine = (line: PaymentBreakdownLine) => String(line.itemType || '') === 'Related Item'
+
+/** One bucket per product + class + subject so P2 Physics and P2 Maths are not merged.
+ * Each related item (Tensmat, Flash Cards ...) is its own bucket, billed at quantity × price. */
 const bucketKey = (line: PaymentBreakdownLine) =>
   [
+    isRelatedLine(line) ? String(line.specs || '').trim().toLowerCase() : '',
     String(line.product || '').trim(),
     String(line.class || '').trim(),
     String(line.section || '').trim().toLowerCase(),
@@ -116,8 +120,8 @@ export function applyPaymentDivisorsToBreakdown(
       unitPrice,
       catalogFallbackCount: fallback,
     })
-    // Multiple specs (e.g. CW + HW) are books in one billed package.
-    const specCount = new Set(bucketLines.map((line) =>
+    // Multiple specs (e.g. CW + HW) are books in one billed package; a related item is its own line.
+    const specCount = isRelatedLine(bucketLines[0]) ? 1 : new Set(bucketLines.map((line) =>
       String(line.specs || '').trim().toLowerCase())).size || 1
     const afterSpecs = roundToTwo(bucketTotal / specCount)
     const pkgKey = packageKey(bucketLines[0])
@@ -163,4 +167,26 @@ export function applyPaymentDivisorsToBreakdown(
   )
 
   return { paymentBreakdown, totalAmount }
+}
+
+/**
+ * Row totals as billed (deliverables of a package charged once, free rows ₹0) for DC / order rows
+ * that carry quantity and unit_price / price. Use this for every `total` sent to the server.
+ */
+export function withBilledTotals<T extends Record<string, any>>(
+  rows: T[],
+  getCalculationType: (productName: string) => CalculationType,
+  getCatalogFallbackCount: (productName: string, ct: CalculationType) => number = () => 0,
+): T[] {
+  const lines = rows.map((row, index) => ({
+    ...row,
+    __row: index,
+    product: String(row.product || row.productName || row.product_name || ''),
+    class: String(row.class ?? ''),
+    strength: Number(row.quantity) || Number(row.strength) || 0,
+    unitPrice: Number(row.unit_price) || Number(row.unitPrice) || Number(row.price) || 0,
+  })) as unknown as PaymentBreakdownLine[]
+  const { paymentBreakdown } = applyPaymentDivisorsToBreakdown(lines, getCalculationType, getCatalogFallbackCount)
+  const totals = new Map(paymentBreakdown.map((line) => [Number(line.__row), Number(line.total) || 0]))
+  return rows.map((row, index) => ({ ...row, total: totals.get(index) ?? 0 }))
 }

@@ -14,12 +14,15 @@ import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
 import { ProductStreamsField } from '@/components/products/ProductStreamsField'
 import { ProductRelatedItemsField, relatedItemsError } from '@/components/products/ProductRelatedItemsField'
-import type { ProductRelatedItem } from '@/lib/dcRowCategory'
+import type { ProductRelatedItem, ProductSpecimenItem } from '@/lib/dcRowCategory'
+import { ProductSpecimenItemsField, specimenItemsError } from '@/components/products/ProductSpecimenItemsField'
+import { useProducts } from '@/hooks/useProducts'
 import { ArrowLeft, Save, SlidersHorizontal } from 'lucide-react'
 import Link from 'next/link'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 export default function NewProductPage() {
+  const { productNames: catalogueProductNames } = useProducts()
   const router = useRouter()
   const currentUser = getCurrentUser()
   const [submitting, setSubmitting] = useState(false)
@@ -42,6 +45,7 @@ export default function NewProductPage() {
     categories: [] as string[],
     streams: [] as string[],
     relatedItems: [] as ProductRelatedItem[],
+    specimenItems: [] as ProductSpecimenItem[],
     newCategory: '',
     prodStatus: 1,
     calculationType: 'normal' as 'normal' | 'level_based' | 'subject_based',
@@ -176,7 +180,7 @@ export default function NewProductPage() {
       return
     }
 
-    const itemsError = relatedItemsError(form.relatedItems)
+    const itemsError = relatedItemsError(form.relatedItems) || specimenItemsError(form.specimenItems)
     if (itemsError) {
       setError(itemsError)
       setSubmitting(false)
@@ -196,6 +200,7 @@ export default function NewProductPage() {
         categories: form.hasCategory ? form.categories : [],
         streams: form.streams,
         relatedItems: form.relatedItems,
+        specimenItems: form.specimenItems,
         prodStatus: form.prodStatus,
         calculationType: form.calculationType,
       }
@@ -377,6 +382,11 @@ export default function NewProductPage() {
 
           <ProductStreamsField value={form.streams} onChange={(streams) => setForm({ ...form, streams })} />
           <ProductRelatedItemsField value={form.relatedItems} onChange={(relatedItems) => setForm({ ...form, relatedItems })} />
+          <ProductSpecimenItemsField
+            value={form.specimenItems}
+            onChange={(specimenItems) => setForm({ ...form, specimenItems })}
+            productOptions={catalogueProductNames}
+          />
 
           <div className="flex items-center space-x-2">
             <Checkbox

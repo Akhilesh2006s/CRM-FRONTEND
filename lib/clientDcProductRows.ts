@@ -360,6 +360,8 @@ export function dedupeSavedPoRows(rows: any[]): any[] {
   }
 
   const filtered = list.filter((row) => {
+    // Specimen and related-item lines have no subject or level of their own; never treat them as leftovers.
+    if (blankPoPart(row.itemType)) return true
     if (!blankPoPart(row.subject) && hasSplitSubject.has(productClassLevelKey(row))) return false
     if (!hasUsableProductLevel(row.level) && hasFilledLevel.has(productClassBaseKey(row))) return false
     return true
@@ -947,9 +949,7 @@ function expandSubjectCoverKey(row: Record<string, any>, subject?: string): stri
  */
 export function expandEditPoRowsBySubject<T extends Record<string, any>>(
   rows: T[],
-  getProductSubjects: (productName: string) => string[],
-  /** Deliverables of products that are not Subject-based stay on one row ("CW, HW"). */
-  keepDeliverablesTogether?: (productName: string) => boolean
+  getProductSubjects: (productName: string) => string[]
 ): T[] {
   const source = Array.isArray(rows) ? rows : []
   const covered = new Set<string>()
@@ -966,7 +966,8 @@ export function expandEditPoRowsBySubject<T extends Record<string, any>>(
     const currentSubject = String(row.subject || '').trim()
     // Specimen sets and related items are single lines: never split or give them a deliverable.
     const marker = String(row.itemType || '')
-    if (marker === 'Specimen Copy' || marker === 'Related Item' || String(row.specs || '') === 'Set as per DC list') {
+    const rowSpecs = String(row.specs || '')
+    if (marker === 'Specimen Copy' || marker === 'Related Item' || rowSpecs === 'Set as per DC list' || rowSpecs.startsWith('Specimen for ')) {
       out.push({ ...row, lineId: ensureProductLineId(row) })
       continue
     }
@@ -975,11 +976,15 @@ export function expandEditPoRowsBySubject<T extends Record<string, any>>(
       out.push({ ...row, lineId: ensureProductLineId(row) })
       continue
     }
-    if (currentSubject.includes(',') && keepDeliverablesTogether?.(name)) {
-      out.push({
-        ...row,
-        selected_subjects: currentSubject.split(',').map((s) => s.trim()).filter(Boolean),
-        lineId: ensureProductLineId(row),
+    // A combined "CW, HW" row (saved by an earlier version): every deliverable at the row's
+    // quantity — the students each get all of them, so the quantity is not divided.
+    if (currentSubject.includes(',')) {
+      currentSubject.split(',').map((s) => s.trim()).filter(Boolean).forEach((s, i) => {
+        if (covered.has(expandSubjectCoverKey(row, s))) return
+        covered.add(expandSubjectCoverKey(row, s))
+        const { lineId: _lineId, ...rest } = row as Record<string, any>
+        const part = { ...rest, subject: s, selected_subjects: [s] } as unknown as T
+        out.push({ ...part, id: `${row.id || 'row'}-${s}-${i}`, lineId: ensureProductLineId(part, i) })
       })
       continue
     }

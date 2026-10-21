@@ -430,7 +430,9 @@ export const groupProductDetailsByProductAndClass = (
     byProductClass.set(key, list)
   }
   for (const [key, rows] of byProductClass) {
-    const subjectCount = rows.some((row) => row.subjectPackage) && getCt(rows[0].product) !== 'normal'
+    // Subject-based products charge every deliverable, so their subjects are never divided out.
+    const ct = getCt(rows[0].product)
+    const subjectCount = rows.some((row) => row.subjectPackage) && ct !== 'normal' && ct !== 'subject_based'
       ? Math.max(1, packageSubjects.get(key)?.size || 1) : 1
     if (rows.length <= 1 && subjectCount <= 1) continue
     const divisor = rows.length * subjectCount
@@ -859,13 +861,9 @@ export function expandSectionsToProductDetails(
       const selectedSubjects = line.selectedSubjects || []
       const hasSubjects =
         ctx.hasProductSubjects(line.product) && selectedSubjects.length > 0
-      // Deliverables (CW, HW ...) of a product that isn't Subject-based go on ONE row per class
-      // ("CW, HW"): the students pay once. Subject-based products keep a row per subject.
-      const combineDeliverables =
-        hasSubjects && ctx.getCalculationType?.(line.product) !== 'subject_based'
-      const subjectsToUse = combineDeliverables
-        ? [selectedSubjects.join(', ')]
-        : hasSubjects && selectedSubjects.length > 0 ? selectedSubjects : [undefined]
+      // One row per deliverable (CW, HW ...). Billing still charges the student once for
+      // non Subject-based products (payment divisors treat the rows as one package).
+      const subjectsToUse = hasSubjects && selectedSubjects.length > 0 ? selectedSubjects : [undefined]
 
       let rowIdx = 0
       const parentId = line.parentRowId
@@ -897,14 +895,14 @@ export function expandSectionsToProductDetails(
               )
               const subjectDefault = hasSkuCategories
                 ? pickGridProductCategory(line.product, classValue, skuCategories, {
-                    subject: !combineDeliverables && typeof subject === 'string' ? subject : undefined,
+                    subject: typeof subject === 'string' ? subject : undefined,
                     level,
                     selectedCategories,
                   }) || skuCategories[0] || ''
                 : enrollmentDefault
               // Drop stale defaults that don't match this row's subject (e.g. Star junior on a junior row).
               const subjectNorm = normalizeCategoryMatchText(
-                !combineDeliverables && typeof subject === 'string' ? subject : ''
+                typeof subject === 'string' ? subject : ''
               )
               const existingNorm = normalizeCategoryMatchText(existingCategory)
               const existingFitsSubject =
@@ -934,7 +932,6 @@ export function expandSectionsToProductDetails(
                 level,
                 specs: spec || '',
                 subject,
-                selectedSubjects: combineDeliverables ? [...selectedSubjects] : undefined,
                 subjectPackage: hasSubjects,
                 isParentRow: false,
                 sameRateForAllClasses: false,

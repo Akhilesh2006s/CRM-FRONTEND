@@ -26,7 +26,7 @@ import { toast } from 'sonner'
 import { sanitizePhoneInput, validatePhoneDigits } from '@/lib/phone'
 import { ContractPeriod } from '@/components/clients/ContractPeriod'
 import { AbacusMaterialsSummary } from '@/components/dc/AbacusMaterialsSummary'
-import { SpecimenProductPicker, specimenCandidateProducts } from '@/components/dc/SpecimenProductPicker'
+import { SpecimenProductPicker, specimenCandidateProducts, specimenChoiceFromRows } from '@/components/dc/SpecimenProductPicker'
 import { useProducts } from '@/hooks/useProducts'
 import { applyPaymentDivisorsToBreakdown } from '@/lib/dcPaymentDivisors'
 import { aggregateInvoicePaymentTerms } from '@/lib/dcInvoiceData'
@@ -68,7 +68,7 @@ import {
 import { useRouter } from 'next/navigation'
 import { abacusStudentStrength, defaultMasterAbacusQuantity } from '@/lib/abacusMaterials'
 import { AbacusMaterialsFields } from '@/components/dc/AbacusMaterialsFields'
-import { DC_ROW_CATEGORIES, canonicalDcRowCategory, buildRelatedItemRows, buildSpecimenRows, dcRowCategoryOrDefault, isBillableDcRow, isRelatedItemRow, isSpecimenRow, specimenCopiesValue } from '@/lib/dcRowCategory'
+import { DC_ROW_CATEGORIES, canonicalDcRowCategory, buildRelatedItemRows, buildSpecimenRows, dcRowCategoryOrDefault, isBillableDcRow, isRelatedItemRow, isSpecimenRow, specimenCopiesValue, specimenRowQuantity, specimenSetsOfRow, isMarkerSpecs, type SpecimenItemChoice } from '@/lib/dcRowCategory'
 
 type DC = {
   _id: string
@@ -259,6 +259,8 @@ export default function ClientDCPage() {
   const [specimenCopiesInput, setSpecimenCopiesInput] = useState('1')
   /** Products that get specimen copies; null = every product. */
   const [specimenProducts, setSpecimenProducts] = useState<string[] | null>(null)
+  /** Items ticked from each product's specimen set; a product missing here sends its whole set. */
+  const [specimenItemChoice, setSpecimenItemChoice] = useState<SpecimenItemChoice>({})
   const [dcProductRows, setDcProductRows] = useState<Array<{
     id: string
     product: string
@@ -400,12 +402,19 @@ export default function ClientDCPage() {
   const [addProductSelectedCategory, setAddProductSelectedCategory] = useState<Record<string, string>>({})
   const [highlightedEditProductRowId, setHighlightedEditProductRowId] = useState<string | null>(null)
   /** Books plus specimen copies for the chosen products (all products when none chosen yet). */
-  const withSpecimenRows = <T extends { product?: string }>(books: T[], products: string[] | null): T[] => {
+  const withSpecimenRows = <T extends { product?: string }>(
+    books: T[],
+    products: string[] | null,
+    items: SpecimenItemChoice = specimenItemChoice,
+  ): T[] => {
     const chosen = products ? new Set(products) : null
     const source = chosen ? books.filter((row) => chosen.has(String(row.product || ''))) : books
     return [
       ...books,
-      ...buildSpecimenRows(source as any[], specimenCopiesValue(specimenCopiesInput))
+      ...buildSpecimenRows(source as any[], specimenCopiesValue(specimenCopiesInput), {
+        getSpecimenItems: getProductSpecimenItems,
+        chosenItems: items,
+      })
         .map((row, i) => ({ ...row, id: `specimen-${Date.now()}-${i}` })),
     ] as T[]
   }
@@ -435,6 +444,7 @@ export default function ClientDCPage() {
     getCatalogFallbackCount,
     getProductId,
     getProductRelatedItems,
+    getProductSpecimenItems,
   } = useProducts()
   
   // Get available levels for a specific product, default to L1 if product not found
@@ -463,6 +473,8 @@ export default function ClientDCPage() {
   const catalogSpecsForProduct = (productName: string): string[] => getProductSpecs(productName)
 
   const persistEditPoSpecs = (productName: string, savedSpec?: string): string => {
+    // Specimen and related-item lines keep their own text (it names the line).
+    if (isMarkerSpecs(productName, savedSpec, getProductRelatedItems)) return String(savedSpec).trim()
     const catalog = catalogSpecsForProduct(productName)
     if (catalog.length === 0) return ''
     const current = String(savedSpec || '').trim()
@@ -1451,8 +1463,10 @@ export default function ClientDCPage() {
           : []),
       ]
       setDcProductRows(productsToShow)
-      setSpecimenCopiesInput(String(specimenCopiesValue(savedSpecimens[0]?.quantity ?? savedSpecimens[0]?.strength)))
-      setSpecimenProducts(savedSpecimens.length ? specimenCandidateProducts(savedSpecimens) : null)
+      setSpecimenCopiesInput(String(specimenSetsOfRow(savedSpecimens[0], getProductSpecimenItems)))
+      const savedChoice = specimenChoiceFromRows(savedSpecimens)
+      setSpecimenProducts(savedSpecimens.length ? savedChoice.products : null)
+      setSpecimenItemChoice(savedChoice.items)
 
       setDcDate(fullDC.dcDate ? new Date(fullDC.dcDate).toISOString().split('T')[0] : '')
       setDcRemarks(fullDC.dcRemarks || '')
@@ -2568,11 +2582,7 @@ export default function ClientDCPage() {
             })
           : []
 
-      const expandedDetails = expandEditPoRowsBySubject(
-        rowsFromDetails,
-        getProductSubjects,
-        (product) => getCalculationType(product) !== 'subject_based'
-      )
+      const expandedDetails = expandEditPoRowsBySubject(rowsFromDetails, getProductSubjects)
       // This DC's productDetails are the source of truth. Never substitute DcOrder.products —
       // that array still holds the unsplit lead (P3 L1+L2 summed to 14).
       setEditProductRows(expandedDetails)
@@ -4525,7 +4535,7 @@ export default function ClientDCPage() {
                   <span>
                     <span className="font-semibold block">Specimen copies requested</span>
                     <span className="text-xs text-neutral-600">
-                      Adds one specimen set line per product (class NA, set as per DC list) as Training Material (no billing).
+                      Adds each product's specimen set (the products set on the product, or one set as per DC list) as Training Material (no billing).
                     </span>
                   </span>
                 </label>
@@ -4536,6 +4546,12 @@ export default function ClientDCPage() {
                     onChange={(next) => {
                       setSpecimenProducts(next)
                       setDcProductRows((rows) => withSpecimenRows(rows.filter((row) => !isSpecimenRow(row)), next))
+                    }}
+                    getItems={getProductSpecimenItems}
+                    chosenItems={specimenItemChoice}
+                    onItemsChange={(next) => {
+                      setSpecimenItemChoice(next)
+                      setDcProductRows((rows) => withSpecimenRows(rows.filter((row) => !isSpecimenRow(row)), specimenProducts, next))
                     }}
                   />
                 )}
@@ -4551,7 +4567,11 @@ export default function ClientDCPage() {
                       onChange={(e) => {
                         setSpecimenCopiesInput(e.target.value)
                         const qty = specimenCopiesValue(e.target.value)
-                        setDcProductRows((rows) => rows.map((row) => (isSpecimenRow(row) ? { ...row, quantity: qty, strength: qty } : row)))
+                        setDcProductRows((rows) => rows.map((row) => {
+                          if (!isSpecimenRow(row)) return row
+                          const rowQty = specimenRowQuantity(row, qty, getProductSpecimenItems)
+                          return { ...row, quantity: rowQty, strength: rowQty }
+                        }))
                       }}
                       onBlur={() => setSpecimenCopiesInput(String(specimenCopiesValue(specimenCopiesInput)))}
                     />

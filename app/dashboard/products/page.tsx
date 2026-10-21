@@ -11,7 +11,8 @@ import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
 import { ProductStreamsField } from '@/components/products/ProductStreamsField'
 import { ProductRelatedItemsField, relatedItemsError } from '@/components/products/ProductRelatedItemsField'
-import type { ProductRelatedItem } from '@/lib/dcRowCategory'
+import type { ProductRelatedItem, ProductSpecimenItem } from '@/lib/dcRowCategory'
+import { ProductSpecimenItemsField, specimenItemsError } from '@/components/products/ProductSpecimenItemsField'
 import { PlusCircle, Edit, Search, Package, SlidersHorizontal, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -32,6 +33,7 @@ type Product = {
   categories?: string[]
   streams?: string[]
   relatedItems?: ProductRelatedItem[]
+  specimenItems?: ProductSpecimenItem[]
   prodStatus: number
   calculationType?: 'normal' | 'none' | 'level_based' | 'subject_based'
   createdAt: string
@@ -70,6 +72,7 @@ export default function ProductsPage() {
     categories: [] as string[],
     streams: [] as string[],
     relatedItems: [] as ProductRelatedItem[],
+    specimenItems: [] as ProductSpecimenItem[],
     newCategory: '',
     prodStatus: 1,
     calculationType: 'normal' as 'normal' | 'level_based' | 'subject_based',
@@ -153,6 +156,7 @@ export default function ProductsPage() {
       categories: product.categories || [],
       streams: product.streams || [],
       relatedItems: (product.relatedItems || []).map((item) => ({ ...item })),
+      specimenItems: (product.specimenItems || []).map((item) => ({ ...item })),
       newCategory: '',
       prodStatus: product.prodStatus,
       calculationType: (product.calculationType === 'none' ? 'normal' : product.calculationType) || 'normal',
@@ -179,6 +183,7 @@ export default function ProductsPage() {
       categories: [],
       streams: [],
       relatedItems: [],
+      specimenItems: [],
       newCategory: '',
       prodStatus: 1,
       calculationType: 'normal',
@@ -282,7 +287,7 @@ export default function ProductsPage() {
       return
     }
 
-    const itemsError = relatedItemsError(editForm.relatedItems)
+    const itemsError = relatedItemsError(editForm.relatedItems) || specimenItemsError(editForm.specimenItems)
     if (itemsError) {
       toast.error(itemsError)
       return
@@ -302,6 +307,7 @@ export default function ProductsPage() {
         categories: editForm.hasCategory ? editForm.categories : [],
         streams: editForm.streams,
         relatedItems: editForm.relatedItems,
+        specimenItems: editForm.specimenItems,
         prodStatus: editForm.prodStatus,
         calculationType: editForm.calculationType,
       }
@@ -577,6 +583,11 @@ export default function ProductsPage() {
 
             <ProductStreamsField value={editForm.streams} onChange={(streams) => setEditForm({ ...editForm, streams })} />
             <ProductRelatedItemsField value={editForm.relatedItems} onChange={(relatedItems) => setEditForm({ ...editForm, relatedItems })} />
+            <ProductSpecimenItemsField
+              value={editForm.specimenItems}
+              onChange={(specimenItems) => setEditForm({ ...editForm, specimenItems })}
+              productOptions={products.map((p) => p.productName)}
+            />
 
             <div className="flex items-center space-x-2">
               <Checkbox

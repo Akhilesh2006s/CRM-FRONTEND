@@ -1,5 +1,8 @@
 'use client'
 
+import { isMarkerSpecs } from '@/lib/dcRowCategory'
+import { withBilledTotals } from '@/lib/dcPaymentDivisors'
+
 import { expandDeliverableStockRows } from '@/lib/deliverableStockRows'
 import { useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
@@ -248,8 +251,10 @@ export default function WarehouseDcAtWarehouse() {
   const [insufficientStockMessage, setInsufficientStockMessage] = useState('')
   const [warehouseInventory, setWarehouseInventory] = useState<WarehouseItem[]>([])
   
-  const { productNames: availableProducts, getProductSpecs } = useProducts()
+  const { productNames: availableProducts, getProductSpecs, getProductRelatedItems, getCalculationType, getCatalogFallbackCount } = useProducts()
   const resolveProductMasterSpec = (productName: string, currentSpec: unknown): string => {
+    // Specimen and related-item lines keep their own text (it names the line).
+    if (isMarkerSpecs(productName, currentSpec, getProductRelatedItems)) return String(currentSpec).trim()
     const masterSpecs = getProductSpecs(productName)
     if (!Array.isArray(masterSpecs) || masterSpecs.length === 0) return ''
 
@@ -380,6 +385,10 @@ export default function WarehouseDcAtWarehouse() {
               (Number(p.unit_price) || Number(p.price) || 0),
             level: mapped.level,
             term: (p as any).term,
+            itemType: (p as any).itemType || undefined,
+            lineId: (p as any).lineId || undefined,
+            subjectPackage: (p as any).subjectPackage,
+            dispatchMode: (p as any).dispatchMode,
           }
         }))
       } else {
@@ -626,7 +635,7 @@ export default function WarehouseDcAtWarehouse() {
       await apiRequest(`/dc/${selectedDC._id}`, {
         method: 'PUT',
         body: JSON.stringify({
-          productDetails: updatedProductRows.map(p => ({
+          productDetails: withBilledTotals(updatedProductRows as any[], getCalculationType, getCatalogFallbackCount).map((p: any) => ({
             product: p.product,
             productName: p.productName || p.product,
             productCategory: p.productCategory,
@@ -644,10 +653,13 @@ export default function WarehouseDcAtWarehouse() {
             strength: p.strength,
             price: Number(p.price) || Number(p.unit_price) || 0,
             unit_price: Number(p.unit_price) || Number(p.price) || 0,
-            total:
-              (Number(p.quantity) || 0) *
-              (Number(p.price) || Number(p.unit_price) || 0),
+            total: Number(p.total) || 0,
             level: p.level || '',
+            term: p.term || undefined,
+            itemType: p.itemType || undefined,
+            lineId: p.lineId || undefined,
+            subjectPackage: p.subjectPackage,
+            dispatchMode: p.dispatchMode,
           })),
           requestedQuantity: totalRequestedQty,
           availableQuantity: totalAvailableQty,
@@ -672,7 +684,7 @@ export default function WarehouseDcAtWarehouse() {
         }),
       })
 
-      const productPayload = updatedProductRows.map(p => ({
+      const productPayload = withBilledTotals(updatedProductRows as any[], getCalculationType, getCatalogFallbackCount).map((p: any) => ({
         product: p.product,
         productName: p.productName || p.product,
         productCategory: p.productCategory,
@@ -690,10 +702,13 @@ export default function WarehouseDcAtWarehouse() {
         strength: p.strength,
         price: Number(p.price) || Number(p.unit_price) || 0,
         unit_price: Number(p.unit_price) || Number(p.price) || 0,
-        total:
-          (Number(p.quantity) || 0) *
-          (Number(p.price) || Number(p.unit_price) || 0),
+        total: Number(p.total) || 0,
         level: p.level || '',
+        term: p.term || undefined,
+        itemType: p.itemType || undefined,
+        lineId: p.lineId || undefined,
+        subjectPackage: p.subjectPackage,
+        dispatchMode: p.dispatchMode,
       }))
 
       if (mode === 'approve') {
@@ -815,7 +830,7 @@ export default function WarehouseDcAtWarehouse() {
       await apiRequest(`/dc/${selectedDC._id}`, {
         method: 'PUT',
         body: JSON.stringify({
-          productDetails: updatedProductRows.map(p => ({
+          productDetails: withBilledTotals(updatedProductRows as any[], getCalculationType, getCatalogFallbackCount).map((p: any) => ({
             product: p.product,
             class: p.class,
             category: p.category,
@@ -832,10 +847,13 @@ export default function WarehouseDcAtWarehouse() {
             strength: p.strength,
             price: Number(p.price) || Number(p.unit_price) || 0,
             unit_price: Number(p.unit_price) || Number(p.price) || 0,
-            total:
-              (Number(p.quantity) || 0) *
-              (Number(p.price) || Number(p.unit_price) || 0),
+            total: Number(p.total) || 0,
             level: p.level,
+            term: p.term || undefined,
+            itemType: p.itemType || undefined,
+            lineId: p.lineId || undefined,
+            subjectPackage: p.subjectPackage,
+            dispatchMode: p.dispatchMode,
           })),
           requestedQuantity: totalRequestedQty,
           availableQuantity: totalAvailableQty,

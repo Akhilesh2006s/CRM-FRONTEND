@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { apiRequest } from '@/lib/api'
 import { normalizeCalculationType, type CalculationType } from '@/lib/paymentDivisor'
-import type { ProductRelatedItem } from '@/lib/dcRowCategory'
+import type { ProductRelatedItem, ProductSpecimenItem } from '@/lib/dcRowCategory'
 
 type Product = {
   _id: string
@@ -16,6 +16,7 @@ type Product = {
   categories?: string[]
   streams?: string[]
   relatedItems?: ProductRelatedItem[]
+  specimenItems?: ProductSpecimenItem[]
   prodStatus: number
   calculationType?: 'normal' | 'none' | 'level_based' | 'subject_based'
 }
@@ -137,6 +138,11 @@ export function useProducts() {
     getProductRelatedItems: (productName: string): ProductRelatedItem[] => {
       const items = findProduct(productName)?.relatedItems
       return Array.isArray(items) ? items.filter((item) => item && String(item.name || '').trim()) : []
+    },
+    // Products sent as this product's specimen set (empty = one set as per the DC list)
+    getProductSpecimenItems: (productName: string): ProductSpecimenItem[] => {
+      const items = findProduct(productName)?.specimenItems
+      return Array.isArray(items) ? items.filter((item) => item && String(item.product || '').trim()) : []
     },
     // Get product categories for a specific product
     getProductCategories: (productName: string): string[] => {

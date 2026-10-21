@@ -25,7 +25,7 @@ import { sanitizePhoneInput, validatePhoneDigits } from '@/lib/phone'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { abacusStudentStrength, defaultMasterAbacusQuantity } from '@/lib/abacusMaterials'
 import { AbacusMaterialsFields } from '@/components/dc/AbacusMaterialsFields'
-import { buildRelatedItemRows, buildSpecimenRows, isRelatedItemRow, isSpecimenRow, specimenCopiesValue } from '@/lib/dcRowCategory'
+import { buildRelatedItemRows, buildSpecimenRows, isRelatedItemRow, isSpecimenRow, specimenCopiesValue, type SpecimenItemChoice } from '@/lib/dcRowCategory'
 import { renewalLinesToSections } from '@/lib/renewalCloseSections'
 import { SpecimenProductPicker, specimenCandidateProducts } from '@/components/dc/SpecimenProductPicker'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -104,6 +104,8 @@ export default function CloseLeadPage() {
   const [specimenCopies, setSpecimenCopies] = useState('1')
   /** Products that get specimen copies; null = every product. */
   const [specimenProducts, setSpecimenProducts] = useState<string[] | null>(null)
+  /** Items ticked from each product's specimen set; a product missing here sends its whole set. */
+  const [specimenItemChoice, setSpecimenItemChoice] = useState<SpecimenItemChoice>({})
 
   const productConfig = useCloseLeadProductConfig({ schoolType: lead?.school_type })
   const {
@@ -120,6 +122,7 @@ export default function CloseLeadPage() {
     getCalculationType,
     getCatalogFallbackCount,
     getProductRelatedItems,
+    getProductSpecimenItems,
   } = productConfig
   const abacusStrength = lead?.school_type === 'Existing' ? 0 : abacusStudentStrength(childProductRows)
   const masterQuantity = masterQuantityOverride === null
@@ -553,7 +556,8 @@ export default function CloseLeadPage() {
     return specimenRequested
       ? [...withRelatedItems, ...buildSpecimenRows(
           specimenProducts ? rows.filter((row) => specimenProducts.includes(String(row.product || ''))) : rows,
-          specimenCopiesValue(specimenCopies)
+          specimenCopiesValue(specimenCopies),
+          { getSpecimenItems: getProductSpecimenItems, chosenItems: specimenItemChoice }
         ).map((row) => ({ ...row, deliverables: [] }))]
       : withRelatedItems
   }
@@ -1034,7 +1038,7 @@ export default function CloseLeadPage() {
                   <span>
                     <span className="font-semibold block">Specimen copies requested</span>
                     <span className="text-xs text-neutral-600">
-                      Adds one specimen set line per product (class NA, set as per DC list) as Training Material (no billing).
+                      Adds each product's specimen set (the products set on the product, or one set as per DC list) as Training Material (no billing).
                     </span>
                   </span>
                 </label>
@@ -1043,6 +1047,9 @@ export default function CloseLeadPage() {
                     products={specimenCandidateProducts(childProductRows)}
                     selected={specimenProducts ?? specimenCandidateProducts(childProductRows)}
                     onChange={setSpecimenProducts}
+                    getItems={getProductSpecimenItems}
+                    chosenItems={specimenItemChoice}
+                    onItemsChange={setSpecimenItemChoice}
                   />
                 )}
                 {specimenRequested && (

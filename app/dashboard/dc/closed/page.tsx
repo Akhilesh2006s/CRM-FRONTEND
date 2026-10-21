@@ -19,6 +19,8 @@ import { TransportDetailsSection, canEditTransportDetails } from '@/components/d
 import { SchoolAddressSection } from '@/components/dc/SchoolAddressSection'
 import { SentToSeniorList } from '@/components/dc/SentToSeniorList'
 import { uniqueProductNames } from '@/lib/productNames'
+import { splitDeliverableRows } from '@/lib/deliverableStockRows'
+import { withBilledTotals } from '@/lib/dcPaymentDivisors'
 import { AbacusMaterialsSummary } from '@/components/dc/AbacusMaterialsSummary'
 import { DC_ROW_CATEGORIES, canonicalDcRowCategory, type DcRowCategory } from '@/lib/dcRowCategory'
 import { sanitizeMobileInput, validateContactMobile, validateContactPerson } from '@/lib/saleFormValidation'
@@ -277,7 +279,7 @@ export default function ClosedSalesPage() {
     if (!v) return fallback
     return canonicalDcRowCategory(v) || fallback
   }
-  const { productNames: availableProducts, getProductLevels, getDefaultLevel, getProductSpecs, getProductSubjects, getProductCategories, hasProductCategories, hasProductSubjects, hasProductSpecs } = useProducts()
+  const { productNames: availableProducts, getProductLevels, getDefaultLevel, getProductSpecs, getProductSubjects, getProductCategories, hasProductCategories, hasProductSubjects, hasProductSpecs, getCalculationType, getCatalogFallbackCount } = useProducts()
 
   /** Map Create Sale / DcOrder / DC product lines into Closed Sales rows without mixing quantity ↔ strength. */
   const mapSourceProductToRow = (p: any, idx: number, schoolType?: string): ProductRow => {
@@ -853,7 +855,7 @@ export default function ClosedSalesPage() {
 
       if (poProducts.length > 0) {
         setProductRows(
-          poProducts.map((p: any, idx: number) =>
+          splitDeliverableRows(poProducts).map((p: any, idx: number) =>
             mapSourceProductToRow(p, idx, normalizedDeal.school_type)
           )
         )
@@ -883,7 +885,7 @@ export default function ClosedSalesPage() {
       )
       if (fallbackLines.length > 0) {
         setProductRows(
-          fallbackLines.map((p: any, idx: number) => mapSourceProductToRow(p, idx, deal.school_type))
+          splitDeliverableRows(fallbackLines).map((p: any, idx: number) => mapSourceProductToRow(p, idx, deal.school_type))
         )
       } else {
         setProductRows([{
@@ -1037,7 +1039,7 @@ export default function ClosedSalesPage() {
       raisePayload.requestedQuantity = totalQuantity || 1
       
       // Include product details in payload
-      raisePayload.productDetails = productRows.map(row => ({
+      raisePayload.productDetails = withBilledTotals(productRows as any[], getCalculationType, getCatalogFallbackCount).map((row: any) => ({
         product: row.product,
         class: row.class,
         category: row.category,
@@ -1054,9 +1056,7 @@ export default function ClosedSalesPage() {
         term: resolveExistingProductTerm(row),
         unit_price: Number(row.unit_price) || Number(row.price) || 0,
         price: Number(row.unit_price) || Number(row.price) || 0,
-        total:
-          (Number(row.quantity) || 0) *
-          (Number(row.unit_price) || Number(row.price) || 0),
+        total: Number(row.total) || 0,
         closeLeadDestination: CLOSE_LEAD_DESTINATION.MY_CLIENT,
       }))
 
@@ -1166,7 +1166,7 @@ export default function ClosedSalesPage() {
         dcRemarks: dcRemarks || undefined,
         dcCategory: dcCategory || undefined,
         requestedQuantity: totalQuantity || 1,
-        productDetails: productRows.map(row => ({
+        productDetails: withBilledTotals(productRows as any[], getCalculationType, getCatalogFallbackCount).map((row: any) => ({
           product: row.product,
           class: row.class,
           category: row.category,
@@ -1179,13 +1179,11 @@ export default function ClosedSalesPage() {
           stream: row.stream || undefined,
           strength: Number(row.strength) || 0,
           quantity: Number(row.quantity) || 0,
-          level: row.level || getDefaultLevel(row.product || 'Abacus'),
+          level: (row as any).itemType ? (row.level || '') : row.level || getDefaultLevel(row.product || 'Abacus'),
           term: row.term || 'Term 1',
           unit_price: Number(row.unit_price) || Number(row.price) || 0,
           price: Number(row.unit_price) || Number(row.price) || 0,
-          total:
-            (Number(row.quantity) || 0) *
-            (Number(row.unit_price) || Number(row.price) || 0),
+          total: Number(row.total) || 0,
           closeLeadDestination: CLOSE_LEAD_DESTINATION.MY_CLIENT,
         })),
         employeeId: employeeId,
@@ -1273,7 +1271,7 @@ export default function ClosedSalesPage() {
           : (dcRequestData.requestedQuantity || 1),
         // Always use current productRows to save all edited product details
         productDetails: productRows.length > 0 
-          ? productRows.map(row => ({
+          ? withBilledTotals(productRows as any[], getCalculationType, getCatalogFallbackCount).map((row: any) => ({
               product: row.product || '',
               class: row.class || '1',
               category: canonicalDcRowCategory(row.category) || 'New Students',
@@ -1286,13 +1284,11 @@ export default function ClosedSalesPage() {
           stream: row.stream || undefined,
           strength: Number(row.strength) || 0,
           quantity: Number(row.quantity) || 0,
-          level: row.level || getDefaultLevel(row.product || 'Abacus'),
+          level: (row as any).itemType ? (row.level || '') : row.level || getDefaultLevel(row.product || 'Abacus'),
               term: row.term || 'Term 1',
               unit_price: Number(row.unit_price) || Number(row.price) || 0,
               price: Number(row.unit_price) || Number(row.price) || 0,
-              total:
-                (Number(row.quantity) || 0) *
-                (Number(row.unit_price) || Number(row.price) || 0),
+              total: Number(row.total) || 0,
               closeLeadDestination: CLOSE_LEAD_DESTINATION.MY_CLIENT,
             }))
           : (dcRequestData.productDetails || []),

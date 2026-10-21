@@ -261,6 +261,7 @@ export async function fetchDcInvoiceData(dcId: string, opts: FetchOpts): Promise
           specs: matchingProduct?.specs || pd.specs || '',
           subject: pd.subject || undefined,
           subjectPackage: Boolean(pd.subjectPackage),
+          itemType: pd.itemType || undefined,
           quantity,
           strength,
           level: displayProductLevel(pd.level),
