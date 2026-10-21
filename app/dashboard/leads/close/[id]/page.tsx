@@ -1040,6 +1040,7 @@ export default function CloseLeadPage() {
           <CloseLeadProductConfig
             config={productConfig}
             schoolType={lead?.school_type}
+            freeProducts={trainingMaterialProducts}
             dialogExtra={childProductRows.length > 0 && <>
               <div className="flex flex-wrap items-start gap-3 rounded-lg border p-4">
                 <label className="flex flex-1 min-w-[240px] items-start gap-3 cursor-pointer">
@@ -1077,7 +1078,8 @@ export default function CloseLeadPage() {
                 <div>
                   <span className="font-semibold block">Training Material (free)</span>
                   <span className="text-xs text-neutral-600">
-                    Tick products sent as Training Material: they go on the DC at ₹0 and are not billed.
+                    Tick only products the school gets free (no billing). Ticked products go on the DC and the school's
+                    order as Training Material at ₹0; leave books for paying students unticked.
                   </span>
                 </div>
                 <SpecimenProductPicker

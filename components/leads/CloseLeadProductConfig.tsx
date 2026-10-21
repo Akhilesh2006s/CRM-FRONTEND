@@ -76,6 +76,8 @@ export type CloseLeadProductConfigProps = {
   className?: string
   /** Extra form content rendered inside the dialog, below the product table (e.g. Abacus materials). */
   dialogExtra?: ReactNode
+  /** Products sent free as Training Material: tagged in the table and left out of the total. */
+  freeProducts?: string[]
 }
 
 function CloseLeadProductConfigView({
@@ -85,6 +87,7 @@ function CloseLeadProductConfigView({
   hideTrigger = false,
   className,
   dialogExtra,
+  freeProducts = [],
 }: {
   cfg: CloseLeadProductConfigApi
   onChange?: (details: ProductDetailRow[], sections: CloseProductSection[]) => void
@@ -92,7 +95,9 @@ function CloseLeadProductConfigView({
   hideTrigger?: boolean
   className?: string
   dialogExtra?: ReactNode
+  freeProducts?: string[]
 }) {
+  const isFreeProduct = (product?: string) => freeProducts.includes(String(product || ''))
   useEffect(() => {
     onReady?.(cfg)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -846,7 +851,12 @@ function CloseLeadProductConfigView({
                     <tbody>
                       {childProductRows.map((pd) => (
                         <tr key={pd.id} className="border-t">
-                          <td className="px-3 py-2 font-medium">{pd.product}</td>
+                          <td className="px-3 py-2 font-medium">
+                            {pd.product}
+                            {isFreeProduct(pd.product) && (
+                              <div className="text-xs font-normal text-amber-700">Training Material · free</div>
+                            )}
+                          </td>
                           <td className="px-3 py-2 whitespace-nowrap">
                             {getProductLevels(pd.product).length > 0 ? pd.level || '-' : '-'}
                           </td>
@@ -930,7 +940,10 @@ function CloseLeadProductConfigView({
                         </td>
                         <td className="px-3 py-3 text-right">
                           ₹
-                          {computeProductDetailsDisplayTotal(childProductRows, cfg.groupProductOpts).toLocaleString(
+                          {computeProductDetailsDisplayTotal(
+                            childProductRows.filter((row) => !isFreeProduct(row.product)),
+                            cfg.groupProductOpts
+                          ).toLocaleString(
                             'en-IN',
                             {
                               minimumFractionDigits: 2,
@@ -978,6 +991,7 @@ function CloseLeadProductConfigInternal({
   hideTrigger,
   className,
   dialogExtra,
+  freeProducts,
 }: Omit<CloseLeadProductConfigProps, 'config'>) {
   const cfg = useCloseLeadProductConfig({ schoolType })
   return (
@@ -988,6 +1002,7 @@ function CloseLeadProductConfigInternal({
       hideTrigger={hideTrigger}
       className={className}
       dialogExtra={dialogExtra}
+      freeProducts={freeProducts}
     />
   )
 }
@@ -1005,11 +1020,13 @@ export function CloseLeadProductConfig({
   hideTrigger,
   className,
   dialogExtra,
+  freeProducts,
 }: CloseLeadProductConfigProps) {
   if (config) {
     return (
       <CloseLeadProductConfigView
         cfg={config}
+        freeProducts={freeProducts}
         onChange={onChange}
         onReady={onReady}
         hideTrigger={hideTrigger}
@@ -1026,6 +1043,7 @@ export function CloseLeadProductConfig({
       hideTrigger={hideTrigger}
       className={className}
       dialogExtra={dialogExtra}
+      freeProducts={freeProducts}
     />
   )
 }

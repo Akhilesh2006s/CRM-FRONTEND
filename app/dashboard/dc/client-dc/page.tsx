@@ -4904,12 +4904,15 @@ export default function ClientDCPage() {
                                   if (i !== actualIdx) return r
                                   const free = !isBillableDcRow({ category: value })
                                   const paid = (r as any).paidUnitPrice ?? r.unit_price
+                                  const restored = Number(paid) || 0
                                   return {
                                     ...r,
                                     category: value,
-                                    // Training Material / Shortage are free; going back restores the price.
-                                    unit_price: free ? 0 : Number(paid) || r.unit_price,
+                                    // Training Material / Shortage are free; going back restores the price,
+                                    // or opens the price box when the row never had one (it was saved free).
+                                    unit_price: free ? 0 : restored || '',
                                     paidUnitPrice: free ? paid : undefined,
+                                    priceUnlocked: !free && !(restored > 0) ? true : (r as any).priceUnlocked,
                                   } as typeof r
                                 })
                                 setEditProductRows(updated)
@@ -5179,10 +5182,10 @@ export default function ClientDCPage() {
                               min="0"
                               step="0.01"
                             required
-                            readOnly={isOriginalLine || isFreeEditPoRow(row)}
-                            className={`min-w-[90px] ${row.product_name && !isFreeEditPoRow(row) && (!row.unit_price || Number(row.unit_price) <= 0) ? "border-red-500" : ""} ${isOriginalLine ? "bg-neutral-50 cursor-not-allowed" : ""} [appearance:textfield] [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-inner-spin-button]:m-0`}
+                            readOnly={isFreeEditPoRow(row) || (isOriginalLine && !(row as any).priceUnlocked)}
+                            className={`min-w-[90px] ${row.product_name && !isFreeEditPoRow(row) && (!row.unit_price || Number(row.unit_price) <= 0) ? "border-red-500" : ""} ${isOriginalLine && !(row as any).priceUnlocked ? "bg-neutral-50 cursor-not-allowed" : ""} [appearance:textfield] [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-inner-spin-button]:m-0`}
                             placeholder=""
-                            title={isOriginalLine ? "Unit price cannot be changed for original PO products" : ""}
+                            title={isOriginalLine && !(row as any).priceUnlocked ? "Unit price cannot be changed for original PO products" : ""}
                             />
                           </TableCell>
                           <TableCell>
