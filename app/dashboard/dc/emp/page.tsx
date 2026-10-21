@@ -11,6 +11,8 @@ import { toast } from 'sonner'
 import { CheckCircle2, XCircle } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { useProducts } from '@/hooks/useProducts'
+import { getCurrentUser } from '@/lib/auth'
+import Link from 'next/link'
 
 type Emp = { _id: string; name: string }
 type EmpDC = {
@@ -59,6 +61,8 @@ export default function EmployeeDCPage() {
   const [employees, setEmployees] = useState<EmployeeOption[]>([])
   const [returningId, setReturningId] = useState<string | null>(null)
   const { productNames } = useProducts()
+  /** BDEs request samples and see their own requests / kits; reviewers accept, reject and issue kits. */
+  const isBde = ['Executive', 'Sales BDE', 'Employee'].includes(String(getCurrentUser()?.role || ''))
   const [processingRequest, setProcessingRequest] = useState<string | null>(null)
 
   const load = async () => {
@@ -76,7 +80,8 @@ export default function EmployeeDCPage() {
   const loadSampleRequests = async () => {
     setLoadingSamples(true)
     try {
-      const data = await apiRequest<SampleRequest[]>(`/sample-requests/pending`)
+      // A BDE sees all of their own requests with status; reviewers see the pending queue.
+      const data = await apiRequest<SampleRequest[]>(isBde ? `/sample-requests/my` : `/sample-requests/pending`)
       setSampleRequests(data)
     } catch (err: any) {
       toast.error('Failed to load sample requests')
@@ -184,11 +189,18 @@ export default function EmployeeDCPage() {
         </TabsList>
 
         <TabsContent value="samples">
+          {isBde && (
+            <div className="mb-3 flex justify-end">
+              <Link href="/dashboard/samples/request">
+                <Button type="button">+ Request samples</Button>
+              </Link>
+            </div>
+          )}
           <Card className="p-0 overflow-x-auto">
             {loadingSamples && <div className="p-4">Loading sample requests…</div>}
             {!loadingSamples && sampleRequests.length === 0 && (
               <div className="p-8 text-center text-neutral-500">
-                No pending sample requests
+                {isBde ? 'You have not requested any samples yet.' : 'No pending sample requests'}
               </div>
             )}
             {!loadingSamples && sampleRequests.length > 0 && (
@@ -202,7 +214,7 @@ export default function EmployeeDCPage() {
                     <th className="py-2 px-3 text-left">Delivery / Transport</th>
                     <th className="py-2 px-3 text-left">Purpose</th>
                     <th className="py-2 px-3">Date</th>
-                    <th className="py-2 px-3">Actions</th>
+                    <th className="py-2 px-3">{isBde ? 'Status' : 'Actions'}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -235,6 +247,13 @@ export default function EmployeeDCPage() {
                         {new Date(request.createdAt).toLocaleDateString()}
                       </td>
                       <td className="py-2 px-3">
+                        {isBde ? (
+                          <div className="text-center">
+                            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${request.status === 'Accepted' ? 'bg-green-100 text-green-700' : request.status === 'Rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>
+                              {request.status}
+                            </span>
+                          </div>
+                        ) : (
                         <div className="flex gap-2 justify-center">
                           <Button
                             size="sm"
@@ -256,6 +275,7 @@ export default function EmployeeDCPage() {
                             Reject
                           </Button>
                         </div>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -266,6 +286,7 @@ export default function EmployeeDCPage() {
         </TabsContent>
 
         <TabsContent value="kits">
+          {!isBde && (
           <Card className="p-4 space-y-4 text-neutral-900">
             <form onSubmit={submit} className="grid grid-cols-1 md:grid-cols-4 gap-3">
               <div>
@@ -342,6 +363,7 @@ export default function EmployeeDCPage() {
               </div>
             </form>
           </Card>
+          )}
 
           <Card className="p-0 overflow-x-auto">
             {loading && <div className="p-4">Loading…</div>}
@@ -372,7 +394,9 @@ export default function EmployeeDCPage() {
                       <td className="py-2 px-3 text-center">{k.expected_return_date ? new Date(k.expected_return_date).toLocaleDateString() : '-'}</td>
                       <td className="py-2 px-3 text-center capitalize">{k.status}</td>
                       <td className="py-2 px-3 text-center">
-                        {k.status === 'returned' ? (
+                        {isBde ? (
+                          <span className="text-xs text-neutral-500">{k.status === 'returned' ? 'Returned' : 'With you'}</span>
+                        ) : k.status === 'returned' ? (
                           <span className="text-xs text-neutral-500">Returned</span>
                         ) : (
                           <Button type="button" size="sm" variant="outline" disabled={returningId === k._id} onClick={() => markReturned(k)}>

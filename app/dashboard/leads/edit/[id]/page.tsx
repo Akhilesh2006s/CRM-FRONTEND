@@ -165,6 +165,25 @@ type Lead = {
 
 type RecordSource = 'leads' | 'dc-orders'
 
+/** Lead priority = the strongest product status (Hot > Warm > Visit Again > Yet to Visit > Not Interested). */
+function leadPriorityFromProducts(products: unknown): string {
+  if (!Array.isArray(products)) return ''
+  const order = ['Hot', 'Warm', 'Visit Again', 'Yet to Visit', 'Not Interested']
+  const alias: Record<string, string> = {
+    Renewed: 'Hot',
+    'Not Renewed': 'Not Interested',
+    'Not Met Management': 'Yet to Visit',
+    'Management Not Met': 'Yet to Visit',
+  }
+  let best = order.length
+  for (const p of products) {
+    const raw = String((p as { status?: string })?.status || '').trim()
+    const i = order.indexOf(alias[raw] || raw)
+    if (i !== -1 && i < best) best = i
+  }
+  return best < order.length ? order[best] : ''
+}
+
 export default function EditLeadPage() {
   const router = useRouter()
   const params = useParams()
@@ -213,7 +232,7 @@ export default function EditLeadPage() {
     cluster: '',
     latitude: '',
     longitude: '',
-    priority: 'Hot',
+    priority: 'Warm',
     zone: '',
     branches: '',
     strength: '',
@@ -318,7 +337,7 @@ export default function EditLeadPage() {
           cluster: lead.cluster || '',
           latitude: lead.latitude != null ? String(lead.latitude) : '',
           longitude: lead.longitude != null ? String(lead.longitude) : '',
-          priority: lead.priority || 'Hot',
+          priority: leadPriorityFromProducts(lead.products) || (lead as { lead_status?: string }).lead_status || lead.priority || 'Warm',
           zone: lead.zone || '',
           branches: (lead.no_of_branches ?? lead.branches)?.toString() || '',
           strength: lead.strength?.toString() || '',
@@ -577,7 +596,7 @@ export default function EditLeadPage() {
         latitude: form.latitude ? Number(form.latitude) : undefined,
         longitude: form.longitude ? Number(form.longitude) : undefined,
         zone: form.zone,
-        priority: form.priority || 'Hot',
+        priority: form.priority || 'Warm',
         branches: form.branches ? Number(form.branches) : undefined,
         no_of_branches: form.branches ? Number(form.branches) : undefined,
         strength: form.strength ? Number(form.strength) : undefined,

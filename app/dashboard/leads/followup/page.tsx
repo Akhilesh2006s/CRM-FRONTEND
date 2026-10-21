@@ -214,6 +214,7 @@ export default function FollowupLeadsPage() {
   const [zone, setZone] = useState('')
   const [schoolName, setSchoolName] = useState('')
   const [contactMobile, setContactMobile] = useState('')
+  const [schoolCode, setSchoolCode] = useState('')
   const [employeeFilter, setEmployeeFilter] = useState('')
   const [bdeOptions, setBdeOptions] = useState<{ _id: string; name: string }[]>([])
   const seesAllFollowups = currentUser?.role === 'Super Admin' || Boolean(currentUser?.isSuperAdmin)
@@ -240,7 +241,7 @@ export default function FollowupLeadsPage() {
 
   useEffect(() => {
     applyFilters()
-  }, [allLeads, zone, schoolName, contactMobile, employeeFilter, currentPage])
+  }, [allLeads, zone, schoolName, schoolCode, contactMobile, employeeFilter, currentPage])
 
   useEffect(() => {
     if (!seesAllFollowups) return
@@ -420,6 +421,10 @@ export default function FollowupLeadsPage() {
     if (zone && zone !== 'all') filtered = filtered.filter(l => l.zone?.toLowerCase().includes(zone.toLowerCase()))
     if (contactMobile) filtered = filtered.filter(l => l.contact_mobile?.includes(contactMobile))
     if (schoolName) filtered = filtered.filter(l => l.school_name?.toLowerCase().includes(schoolName.toLowerCase()))
+    if (schoolCode.trim()) {
+      const code = schoolCode.trim().toLowerCase()
+      filtered = filtered.filter((l) => String(l.school_code || '').toLowerCase().includes(code))
+    }
     if (employeeFilter) filtered = filtered.filter(l => l.assignedToId === employeeFilter)
 
     // Sort by createdAt descending so latest leads appear on top
@@ -880,7 +885,7 @@ export default function FollowupLeadsPage() {
 
       <Card className="p-4">
         {/* Filters */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
           {seesAllFollowups && (
             <div>
               <label className="text-sm font-medium text-neutral-700 mb-1 block">BDE</label>
@@ -919,6 +924,14 @@ export default function FollowupLeadsPage() {
               placeholder="Search school..."
               value={schoolName}
               onChange={(e) => setSchoolName(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium text-neutral-700 mb-1 block">School Code</label>
+            <Input
+              placeholder="Search code..."
+              value={schoolCode}
+              onChange={(e) => setSchoolCode(e.target.value)}
             />
           </div>
           <div>
@@ -980,6 +993,11 @@ export default function FollowupLeadsPage() {
                         <h3 className="text-lg font-bold text-orange-600">
                           {lead.school_name || 'Unnamed School'}
                         </h3>
+                        {lead.school_code && (
+                          <span className="rounded bg-blue-50 px-2 py-0.5 font-mono text-xs font-semibold text-blue-700">
+                            {lead.school_code}
+                          </span>
+                        )}
                       </div>
                       {seesAllFollowups && (lead.assignedToName || lead.assignedToId) && (
                         <p className="text-sm text-neutral-600">
