@@ -77,7 +77,8 @@ export default function EmployeeVerificationPage() {
   }
 
   const canActOn = (employee: Employee, roleKey: string) => {
-    if (roleKey === 'hr_manager' && !headApprovalsApproved(employee)) return false
+    // HR Manager can approve before or after the Vertical Head; both are needed to activate.
+    if (employee.verificationStatus === 'rejected') return false
     if (isAdmin) return true
     if (isHrManager) return roleKey === 'hr_manager'
     if (currentUser?.role === 'Executive Manager') return roleKey === 'zonal_manager'
@@ -92,12 +93,11 @@ export default function EmployeeVerificationPage() {
     if (employee.verificationStatus === 'rejected') return 'Rejected'
     const approvals = employee.approvals || []
     const heads = approvals.filter((approval) => approval.roleKey !== 'hr_manager')
-    if (heads.length === 0 || heads.some((approval) => approval.status === 'pending')) {
-      return 'Pending — Vertical Head'
-    }
-    if (approvals.some((approval) => approval.roleKey === 'hr_manager' && approval.status === 'pending')) {
-      return 'Pending — HR Manager'
-    }
+    const headPending = heads.length === 0 || heads.some((approval) => approval.status === 'pending')
+    const hrPending = approvals.some((approval) => approval.roleKey === 'hr_manager' && approval.status === 'pending')
+    if (headPending && hrPending) return 'Pending — Vertical Head and HR Manager'
+    if (headPending) return 'Pending — Vertical Head'
+    if (hrPending) return 'Pending — HR Manager'
     return 'Pending'
   }
 
@@ -360,7 +360,7 @@ export default function EmployeeVerificationPage() {
                       </p>
                     ) : null}
                   </div>
-                  {view === 'pending' && a.status === 'pending' && canActOn(emp, a.roleKey) && (
+                  {a.status === 'pending' && canActOn(emp, a.roleKey) && (
                     <div className="flex gap-2">
                       <Button
                         size="sm"
@@ -380,18 +380,16 @@ export default function EmployeeVerificationPage() {
                       </Button>
                     </div>
                   )}
-                  {view === 'pending' && isHr && a.status === 'pending' && !canActOn(emp, a.roleKey) && (
+                  {isHr && a.status === 'pending' && !canActOn(emp, a.roleKey) && (
                     <span className="text-xs font-medium text-neutral-500">
-                      {a.roleKey === 'hr_manager' && !headApprovalsApproved(emp)
-                        ? 'Waiting for Vertical Head background verification'
-                        : `View only — action assigned to ${ROLE_LABELS[a.roleKey] || a.roleKey}`}
+                      {`View only — action assigned to ${ROLE_LABELS[a.roleKey] || a.roleKey}`}
                     </span>
                   )}
                 </div>
               ))}
             </div>
 
-            {view === 'pending' && (emp.approvals || []).some(
+            {(emp.approvals || []).some(
               (approval) => approval.status === 'pending' && canActOn(emp, approval.roleKey)
             ) && (
               <div>

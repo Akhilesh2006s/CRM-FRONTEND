@@ -190,6 +190,10 @@ export function canAccessPath(
   ) {
     return true
   }
+  // Every employee sees and records their own attendance.
+  if (pathname === '/dashboard/attendance' || pathname.startsWith('/dashboard/attendance/')) {
+    return !['vendor', 'partner', 'franchise'].includes(role)
+  }
   // BDE operational pages are core role capabilities. Keep them available even
   // when a legacy BDE account has stale/missing RBAC permission keys.
   if (

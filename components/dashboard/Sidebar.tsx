@@ -126,6 +126,30 @@ function ensureExpenseApprovalNav(
   return signOut >= 0 ? [...nav.slice(0, signOut), group, ...nav.slice(signOut)] : [...nav, group]
 }
 
+/**
+ * Attendance (own check-in / check-out) on every login. A role whose menu already links the
+ * team roster keeps it as "Team Attendance" next to its own Attendance.
+ */
+function ensureAttendanceNav(nav: NavItem[], role: string | undefined): NavItem[] {
+  if (NON_EMPLOYEE_NAV_ROLES.has(String(role || ''))) return nav
+  const own = '/dashboard/attendance'
+  const roster = '/dashboard/employees/attendance'
+  const has = (items: NavItem[] | undefined): boolean =>
+    (items || []).some((item) => item.href === own || has(item.children))
+  const teamLabel = <T extends { label: string; href?: string }>(item: T): T =>
+    item.href === roster && item.label === 'Attendance' ? { ...item, label: 'Team Attendance' } : item
+  const relabel = (items: NavItem[]): NavItem[] =>
+    items.map((item) => ({ ...teamLabel(item), ...(item.children ? { children: item.children.map(teamLabel) } : {}) }))
+  const next = relabel(nav)
+  if (has(next)) return next
+  const item: NavItem = { label: 'Attendance', icon: Clock, href: own }
+  const rosterIndex = next.findIndex((entry) => entry.href === roster)
+  const insertAt = rosterIndex >= 0
+    ? rosterIndex
+    : next.findIndex((entry) => entry.label === 'Settings' || entry.label === 'Sign out')
+  return insertAt < 0 ? [...next, item] : [...next.slice(0, insertAt), item, ...next.slice(insertAt)]
+}
+
 function ensureRaiseTicketNav(nav: NavItem[]): NavItem[] {
   const href = '/dashboard/complaints/raise'
   const withoutNestedRaiseTicket = nav.flatMap((item) => {
@@ -1404,6 +1428,7 @@ export function Sidebar() {
 
   // Ticket raising is available to every authenticated role under one consistent name.
   finalNav = ensureRaiseTicketNav(finalNav)
+  finalNav = ensureAttendanceNav(finalNav, user?.role || permUser?.role)
 
   const navReady = mounted && (!rbacActive || permissionsReady)
 

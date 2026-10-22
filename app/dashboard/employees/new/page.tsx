@@ -56,6 +56,9 @@ export default function NewEmployeePage() {
     employeeRelationshipDetails: { fullName: '', relationship: '', department: '', designation: '' },
     dateOfBirth: '',
     dateOfJoining: '',
+    /** CTC per year (saved as the yearly salary) and the monthly take-home pay. */
+    yearlySalary: '',
+    monthlyTakeHome: '',
     passportPhotoUrl: '',
     onboardingChecklist: [] as string[],
     onboardingOtherNote: '',
@@ -503,6 +506,18 @@ export default function NewEmployeePage() {
         setSubmitting(false)
         return
       }
+      const ctc = Number(form.yearlySalary)
+      if (!(ctc > 0)) {
+        setError('CTC (per year) is required')
+        setSubmitting(false)
+        return
+      }
+      const takeHome = form.monthlyTakeHome.trim() === '' ? 0 : Number(form.monthlyTakeHome)
+      if (!Number.isFinite(takeHome) || takeHome < 0) {
+        setError('Monthly take-home must be a valid amount')
+        setSubmitting(false)
+        return
+      }
       if (!form.passportPhotoUrl.trim()) {
         setError('Passport size photo PDF is required')
         setSubmitting(false)
@@ -625,6 +640,8 @@ export default function NewEmployeePage() {
           identityCheck.values.firstName ||
           'Executive',
         address1: temporaryAddress,
+        yearlySalary: Number(form.yearlySalary),
+        monthlyTakeHome: form.monthlyTakeHome.trim() === '' ? 0 : Number(form.monthlyTakeHome),
         references: form.references.map((r) => {
           const m = validateStrictIndianMobile(r.mobile)
           return { ...r, mobile: m.ok ? m.digits : r.mobile }
@@ -780,6 +797,37 @@ export default function NewEmployeePage() {
                 </SelectContent>
               </Select>
             </div>
+          </div>
+          <div>
+            <Label htmlFor="yearlySalary">CTC (₹ per year) *</Label>
+            <Input
+              id="yearlySalary"
+              type="number"
+              min="0"
+              step="1"
+              className="bg-white text-neutral-900"
+              value={form.yearlySalary}
+              onChange={(e) => setForm({ ...form, yearlySalary: e.target.value })}
+              placeholder="e.g. 360000"
+            />
+            {Number(form.yearlySalary) > 0 && (
+              <p className="text-xs text-neutral-500 mt-1">
+                ₹{Math.round(Number(form.yearlySalary) / 12).toLocaleString('en-IN')} per month
+              </p>
+            )}
+          </div>
+          <div>
+            <Label htmlFor="monthlyTakeHome">Monthly take-home (₹)</Label>
+            <Input
+              id="monthlyTakeHome"
+              type="number"
+              min="0"
+              step="1"
+              className="bg-white text-neutral-900"
+              value={form.monthlyTakeHome}
+              onChange={(e) => setForm({ ...form, monthlyTakeHome: e.target.value })}
+              placeholder="After deductions"
+            />
           </div>
           <div>
             <Label>Contact No (Company) *</Label>
