@@ -131,10 +131,20 @@ export default function EmployeeTrackingReportPage() {
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
 
+  // Opened from an expense review (?search=<employee name>): start filtered to that employee.
+  const [ready, setReady] = useState(false)
   useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get('search')
+    if (q) setSearchText(q)
+    setReady(true)
+  }, [])
+
+  useEffect(() => {
+    if (!ready) return
     loadEmployees()
     loadTrackingData()
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready])
 
   const loadEmployees = async () => {
     try {

@@ -49,6 +49,7 @@ import {
   X,
   Phone,
   ChevronDown,
+  MapPin,
 } from 'lucide-react'
 
 function isChildRouteActive(
@@ -57,6 +58,11 @@ function isChildRouteActive(
   siblings?: { href?: string }[]
 ) {
   if (!pathname || !href) return false
+  // Links that pick a view by query (e.g. ?view=pending) match on path + query.
+  if (href.includes('?')) {
+    const [hrefPath, hrefQuery] = href.split('?')
+    return pathname === hrefPath && typeof window !== 'undefined' && window.location.search.includes(hrefQuery)
+  }
   if (pathname === href) return true
   if (href === '/dashboard' || !pathname.startsWith(href + '/')) return false
   const hasBetterMatch = siblings?.some(
@@ -880,8 +886,9 @@ export function Sidebar() {
         label: 'Expenses',
         icon: Calculator,
         children: [
-          { label: 'Create Expense', href: '/dashboard/expenses/create', icon: PlusCircle },
-          { label: 'My Expenses', href: '/dashboard/expenses/my', icon: FileText },
+          { label: 'Create Expenses', href: '/dashboard/expenses/create', icon: PlusCircle },
+          { label: 'Pending Expenses', href: '/dashboard/expenses/my?view=pending', icon: Clock },
+          { label: 'Completed Expenses', href: '/dashboard/expenses/my?view=completed', icon: CheckCircle2 },
         ],
       },
       {
@@ -943,8 +950,9 @@ export function Sidebar() {
         label: 'Expenses',
         icon: Calculator,
         children: [
-          { label: 'Create Expense', href: '/dashboard/expenses/create', icon: PlusCircle },
-          { label: 'My Expenses', href: '/dashboard/expenses/my', icon: FileText },
+          { label: 'Create Expenses', href: '/dashboard/expenses/create', icon: PlusCircle },
+          { label: 'Pending Expenses', href: '/dashboard/expenses/my?view=pending', icon: Clock },
+          { label: 'Completed Expenses', href: '/dashboard/expenses/my?view=completed', icon: CheckCircle2 },
         ],
       },
       {
@@ -1112,7 +1120,12 @@ export function Sidebar() {
         label: 'Expenses',
         icon: Calculator,
         children: [
-          { label: 'Pending Expenses', href: '/dashboard/expenses/executive-manager-pending', icon: Clock },
+          { label: 'Create Expenses', href: '/dashboard/expenses/create', icon: PlusCircle },
+          { label: 'My Pending Expenses', href: '/dashboard/expenses/my?view=pending', icon: Clock },
+          { label: 'My Completed Expenses', href: '/dashboard/expenses/my?view=completed', icon: CheckCircle2 },
+          { label: 'Team Expenses to Approve', href: '/dashboard/expenses/executive-manager-pending', icon: Clock },
+          { label: 'Team Approved / Rejected', href: '/dashboard/expenses/executive-manager-pending?tab=decided', icon: CheckCircle2 },
+          { label: 'Employee Track', href: '/dashboard/reports/employee-track', icon: MapPin },
         ],
       },
       {
@@ -1158,8 +1171,9 @@ export function Sidebar() {
         label: 'Expense',
         icon: Calculator,
         children: [
-          { label: 'Create Expense', href: '/dashboard/expenses/create', icon: PlusCircle },
-          { label: 'My Expenses', href: '/dashboard/expenses/my', icon: FileText },
+          { label: 'Create Expenses', href: '/dashboard/expenses/create', icon: PlusCircle },
+          { label: 'Pending Expenses', href: '/dashboard/expenses/my?view=pending', icon: Clock },
+          { label: 'Completed Expenses', href: '/dashboard/expenses/my?view=completed', icon: CheckCircle2 },
         ],
       },
       {
@@ -1236,8 +1250,9 @@ export function Sidebar() {
         label: 'Expenses',
         icon: Calculator,
         children: [
-          { label: 'Create Expense', href: '/dashboard/expenses/create', icon: PlusCircle },
-          { label: 'My Expenses', href: '/dashboard/expenses/my', icon: FileText },
+          { label: 'Create Expenses', href: '/dashboard/expenses/create', icon: PlusCircle },
+          { label: 'Pending Expenses', href: '/dashboard/expenses/my?view=pending', icon: Clock },
+          { label: 'Completed Expenses', href: '/dashboard/expenses/my?view=completed', icon: CheckCircle2 },
         ],
       },
       { label: 'Payslips', icon: FileText, href: '/dashboard/payslips' },

@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { apiRequest, resolveUploadUrl } from '@/lib/api'
+import { apiRequest } from '@/lib/api'
+import { ExpenseBillButton } from '@/components/expenses/ExpenseBillViewer'
 import { getCurrentUser } from '@/lib/auth'
 import {
   type ApprovalExpense,
@@ -20,7 +21,7 @@ import {
   firstLevelApprovedBy,
 } from '@/lib/expenseApproval'
 import { toast } from 'sonner'
-import { ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, ExternalLink, FileText } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown } from 'lucide-react'
 
 type Expense = ApprovalExpense & {
   _id: string
@@ -55,8 +56,6 @@ type ItemForm = {
 
 type SortKey = 'expItemId' | 'category' | 'gps' | 'date' | 'amount'
 
-const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp)(\?.*)?$/i
-
 const isTravel = (expense: Expense) => expense.category?.toLowerCase() === 'travel'
 
 const claimedAmount = (expense: Expense) => expense.employeeAmount ?? expense.amount
@@ -82,29 +81,9 @@ const pageTitle = (role: string) => {
   return 'Expense Review & Approval'
 }
 
+/** Bill / ticket, opened in the in-app viewer. */
 function BillLink({ label, url }: { label: string; url?: string }) {
-  const href = resolveUploadUrl(url)
-  if (!href) return null
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex flex-col items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
-      title={`Open ${label}`}
-    >
-      {IMAGE_EXT.test(href) ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={href} alt={label} className="h-14 w-14 rounded border border-neutral-200 object-cover" />
-      ) : (
-        <FileText className="h-8 w-8" />
-      )}
-      <span className="inline-flex items-center gap-0.5">
-        {label}
-        <ExternalLink className="h-3 w-3" />
-      </span>
-    </a>
-  )
+  return <ExpenseBillButton label={label} url={url} />
 }
 
 export default function ManagerExpenseUpdatePage() {
@@ -174,7 +153,6 @@ export default function ManagerExpenseUpdatePage() {
     return Number.isFinite(n) ? n : NaN
   }
 
-  const remarksRequired = (expense: Expense) => expenseStage(expense) === 'first'
 
   /** Why this item's decision cannot be submitted, or null. */
   const itemError = (expense: Expense): string | null => {
@@ -184,7 +162,6 @@ export default function ManagerExpenseUpdatePage() {
       const n = parsedAmount(expense)
       if (n === null || Number.isNaN(n) || n < 0) return 'enter a valid approval amount'
     }
-    if (remarksRequired(expense) && !form.remarks.trim()) return 'remarks are required'
     return null
   }
 
@@ -223,7 +200,7 @@ export default function ManagerExpenseUpdatePage() {
         return
       }
       toast.success(res?.message || 'Expenses updated')
-      router.push('/dashboard/expenses/pending')
+      router.push(listPath)
     } catch (error: any) {
       toast.error(error?.message || 'Failed to update expenses')
     } finally {
@@ -301,11 +278,16 @@ export default function ManagerExpenseUpdatePage() {
   ).values()].reduce((sum, km) => sum + km, 0)
 
   const hasFinanceItems = expenses.some((exp) => expenseStage(exp) === 'finance')
+  // After acting, a Zonal Manager lands on the list that shows each expense's new status.
+  const listPath = role === 'Executive Manager'
+    ? '/dashboard/expenses/executive-manager-pending?tab=decided'
+    : '/dashboard/expenses/pending'
+  const totalClaimedKm = expenses.filter(isTravel).reduce((sum, exp) => sum + (Number(exp.approxKms) || 0), 0)
 
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => router.push('/dashboard/expenses/pending')} aria-label="Back to pending expenses">
+        <Button variant="ghost" size="sm" onClick={() => router.push(role === 'Executive Manager' ? '/dashboard/expenses/executive-manager-pending' : '/dashboard/expenses/pending')} aria-label="Back to pending expenses">
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">{pageTitle(role)}</h1>
@@ -346,7 +328,9 @@ export default function ManagerExpenseUpdatePage() {
           <div className="flex items-center gap-4">
             <span className="text-neutral-600 font-medium">Manager Expense Update</span>
             <Button variant="outline" className="bg-white" asChild>
-              <Link href="/dashboard/reports/employee-track">View Employee Track</Link>
+              <Link href={`/dashboard/reports/employee-track${employee?.name ? `?search=${encodeURIComponent(employee.name)}` : ''}`}>
+                View Employee Track
+              </Link>
             </Button>
           </div>
           <div className="text-lg font-semibold text-neutral-900">
@@ -359,7 +343,7 @@ export default function ManagerExpenseUpdatePage() {
           </div>
         </div>
         <p className="text-xs text-neutral-500 mt-3">
-          First-level approval needs an approved amount and remarks. Final (Finance) approval needs the final amount; remarks are optional.
+          Approving needs an approved amount (first level) or the final amount (Finance); remarks are optional.
           Either level can reject an item.
         </p>
       </Card>
@@ -374,6 +358,7 @@ export default function ManagerExpenseUpdatePage() {
                 <SortHead k="expItemId" label="Exp Item ID" />
                 <SortHead k="category" label="Expense Type" />
                 <SortHead k="gps" label="GPS Dist" />
+                <TableHead className="font-semibold whitespace-nowrap">Kms Travelled</TableHead>
                 <TableHead className="font-semibold">Description</TableHead>
                 <SortHead k="date" label="Date of Expense" />
                 <SortHead k="amount" label="Amount" className="text-right" />
@@ -388,13 +373,13 @@ export default function ManagerExpenseUpdatePage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={13} className="text-center py-8 text-neutral-500">
+                  <TableCell colSpan={14} className="text-center py-8 text-neutral-500">
                     Loading expenses...
                   </TableCell>
                 </TableRow>
               ) : expenses.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={13} className="text-center py-8 text-neutral-500">
+                  <TableCell colSpan={14} className="text-center py-8 text-neutral-500">
                     No expenses awaiting your approval for this employee
                   </TableCell>
                 </TableRow>
@@ -421,6 +406,11 @@ export default function ManagerExpenseUpdatePage() {
                         </TableCell>
                         <TableCell className="whitespace-nowrap font-medium text-red-600">
                           {isTravel(expense) ? `${gpsKm(expense)} Kms` : <span className="text-neutral-400">-</span>}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap font-medium">
+                          {isTravel(expense) && expense.approxKms
+                            ? `${expense.approxKms} Kms${expense.transportType ? ` · ${expense.transportType}` : ''}`
+                            : <span className="text-neutral-400">-</span>}
                         </TableCell>
                         <TableCell className="min-w-[200px] max-w-xs">
                           <Textarea
@@ -483,10 +473,8 @@ export default function ManagerExpenseUpdatePage() {
                           <Textarea
                             value={form?.remarks || ''}
                             onChange={(e) => setForm(expense._id, { remarks: e.target.value })}
-                            placeholder={remarksRequired(expense) ? 'Remarks (required)' : 'Finance remarks (optional)'}
-                            className={`min-h-[60px] resize-none bg-white text-sm ${
-                              remarksRequired(expense) && !form?.remarks.trim() ? 'border-amber-400' : ''
-                            }`}
+                            placeholder="Remarks (optional)"
+                            className="min-h-[60px] resize-none bg-white text-sm"
                             rows={2}
                           />
                         </TableCell>
@@ -511,6 +499,7 @@ export default function ManagerExpenseUpdatePage() {
                     <TableCell className="text-red-600 whitespace-nowrap">
                       {totalGpsDistance.toFixed(2)} Kms
                     </TableCell>
+                    <TableCell className="whitespace-nowrap">{totalClaimedKm.toFixed(2)} Kms</TableCell>
                     <TableCell colSpan={2}></TableCell>
                     <TableCell className="text-right whitespace-nowrap">
                       Rs. {totalClaimed.toFixed(2)}

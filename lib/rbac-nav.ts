@@ -172,8 +172,9 @@ export const RBAC_NAV_MODULES: RbacNavModule[] = [
     pages: [
       { label: 'Pending Expenses List', href: '/dashboard/expenses/pending' },
       { label: 'Finance Approved Exp List', href: '/dashboard/expenses/finance-pending' },
-      { label: 'Create Expense', href: '/dashboard/expenses/create' },
-      { label: 'My Expenses', href: '/dashboard/expenses/my' },
+      { label: 'Create Expenses', href: '/dashboard/expenses/create' },
+      { label: 'Pending Expenses', href: '/dashboard/expenses/my?view=pending' },
+      { label: 'Completed Expenses', href: '/dashboard/expenses/my?view=completed' },
     ],
   },
   {

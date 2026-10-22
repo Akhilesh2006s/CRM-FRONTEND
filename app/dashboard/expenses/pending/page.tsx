@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react'
 import { Card } from '@/components/ui/card'
-import { apiRequest, resolveUploadUrl } from '@/lib/api'
+import { apiRequest } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
@@ -15,7 +15,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { CheckCircle, Eye, ExternalLink } from 'lucide-react'
+import { CheckCircle, Eye } from 'lucide-react'
+import { ExpenseBillButton } from '@/components/expenses/ExpenseBillViewer'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import {
@@ -316,7 +317,6 @@ export default function ManagerPendingExpensesPage() {
   )
 }
 
-const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp)(\?.*)?$/i
 
 function DetailRow({ label, value }: { label: string; value?: ReactNode }) {
   if (value === undefined || value === null || value === '' || value === '-') return null
@@ -328,28 +328,9 @@ function DetailRow({ label, value }: { label: string; value?: ReactNode }) {
   )
 }
 
+/** Bill / ticket, opened in the in-app viewer. */
 function Attachment({ label, url }: { label: string; url?: string }) {
-  const href = resolveUploadUrl(url)
-  if (!href) return null
-  return (
-    <div className="space-y-2">
-      <a
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-blue-600 hover:text-blue-700 inline-flex items-center gap-1 text-sm font-medium"
-      >
-        {label}
-        <ExternalLink className="h-3 w-3" />
-      </a>
-      {IMAGE_EXT.test(href) && (
-        <a href={href} target="_blank" rel="noopener noreferrer" className="block">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={href} alt={label} className="max-h-64 rounded-md border border-neutral-200 object-contain" />
-        </a>
-      )}
-    </div>
-  )
+  return <ExpenseBillButton label={label} url={url} />
 }
 
 function ExpenseDetailsDialog({
@@ -421,6 +402,10 @@ function ExpenseDetailsDialog({
                         : formatDay(expense.date)
                     }
                   />
+                  <DetailRow label="Hotel Name" value={(expense as any).hotelName} />
+                  <DetailRow label="Hotel Address" value={(expense as any).hotelAddress} />
+                  <DetailRow label="Check-in" value={(expense as any).checkInDate ? formatDay((expense as any).checkInDate) : undefined} />
+                  <DetailRow label="Check-out" value={(expense as any).checkOutDate ? formatDay((expense as any).checkOutDate) : undefined} />
                   <DetailRow label="Description" value={expense.description} />
                   <DetailRow label="Employee Remarks" value={expense.employeeRemarks} />
                   <DetailRow label="Receipt No." value={expense.receiptNumber} />

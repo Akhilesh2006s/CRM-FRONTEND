@@ -9,28 +9,22 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { apiRequest, apiUrl } from '@/lib/api'
+import {
+  calcTravelAmount,
+  isTravelAmountLocked,
+  perKmRateLabel,
+  type TravelPerKmRates,
+} from '@/lib/expenseTravelRates'
 import { toast } from 'sonner'
 
-type DC = {
-  _id: string
-  dcOrderId?: {
-    school_name?: string
-    school_code?: string
-    zone?: string
-  }
-  saleId?: {
-    customerName?: string
-  }
-}
+type FieldErrors = Partial<Record<'receiptNumber' | 'bill' | 'hotelName' | 'hotelAddress' | 'checkInDate' | 'checkOutDate' | 'approxKms', string>>
 
 export default function CreateExpensePage() {
   const router = useRouter()
   const [submitting, setSubmitting] = useState(false)
-  const [myDCs, setMyDCs] = useState<DC[]>([])
-  const [loadingDCs, setLoadingDCs] = useState(true)
-  const [billUrl, setBillUrl] = useState<string>('')
   const [billFile, setBillFile] = useState<File | null>(null)
-  const [fieldErrors, setFieldErrors] = useState<{ receiptNumber?: string; bill?: string }>({})
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
+  const [rates, setRates] = useState<Partial<TravelPerKmRates>>({})
 
   const [form, setForm] = useState({
     type: '', // travel, food, accommodation, others
@@ -38,173 +32,159 @@ export default function CreateExpensePage() {
     amount: '',
     receiptNumber: '',
     remarks: '',
-    // Travel-specific fields
+    // Travel
     transportType: '',
     travelFrom: '',
     travelTo: '',
     approxKms: '',
-    dcId: '',
+    // Food / Accommodation
+    hotelName: '',
+    hotelAddress: '',
+    checkInDate: '',
+    checkOutDate: '',
   })
 
-  // Fetch employee's assigned DCs
+  // Per-km rates for Bike / Car come from the expense policy (defaults ₹2.80 / ₹8).
   useEffect(() => {
-    const fetchMyDCs = async () => {
-      try {
-        setLoadingDCs(true)
-        const dcs = await apiRequest<DC[]>('/dc/employee/my')
-        setMyDCs(dcs || [])
-      } catch (error: any) {
-        console.error('Error fetching DCs:', error)
-      } finally {
-        setLoadingDCs(false)
-      }
-    }
-
-    fetchMyDCs()
+    apiRequest<Partial<TravelPerKmRates>>('/expenses/policy')
+      .then((policy) => setRates(policy || {}))
+      .catch(() => setRates({}))
   }, [])
 
-  const handleBillUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const amountLocked = isTravelAmountLocked(form.type, form.transportType)
+  const autoAmount = amountLocked ? calcTravelAmount(form.transportType, Number(form.approxKms) || 0, rates) : ''
+  const amountValue = amountLocked ? autoAmount : form.amount
+  // Auto rickshaws give no bill: bill and receipt number are optional for Auto travel.
+  const billOptional = form.type === 'travel' && form.transportType === 'Auto'
+  const needsHotel = form.type === 'food' || form.type === 'accommodation'
+  const isStay = form.type === 'accommodation'
+  const isTravelType = form.type === 'travel'
+
+  const update = (patch: Partial<typeof form>) => {
+    setForm((prev) => ({ ...prev, ...patch }))
+    const keys = Object.keys(patch) as (keyof FieldErrors)[]
+    if (keys.some((k) => fieldErrors[k])) {
+      setFieldErrors((prev) => {
+        const next = { ...prev }
+        keys.forEach((k) => delete next[k])
+        return next
+      })
+    }
+  }
+
+  const handleBillUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) {
       setBillFile(null)
       return
     }
-
-    // Validate file type
     if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
       toast.error('Only image files (JPG, PNG) and PDF files are allowed')
       e.target.value = ''
       setBillFile(null)
       return
     }
-
-    // Validate file size (5MB)
     if (file.size > 5 * 1024 * 1024) {
       toast.error('File size must be less than 5MB')
       e.target.value = ''
       setBillFile(null)
       return
     }
-
-    // File will be uploaded with the form submission
     setBillFile(file)
-    setBillUrl('')
     setFieldErrors((prev) => ({ ...prev, bill: undefined }))
+  }
+
+  const validate = (): FieldErrors => {
+    const errors: FieldErrors = {}
+    if (isTravelType && amountLocked && !(Number(form.approxKms) > 0)) errors.approxKms = 'Enter the kilometres travelled.'
+    if (needsHotel) {
+      if (!form.hotelName.trim()) errors.hotelName = 'Hotel Name is required.'
+      if (!form.hotelAddress.trim()) errors.hotelAddress = 'Hotel Address is required.'
+    }
+    if (isStay) {
+      if (!form.checkInDate) errors.checkInDate = 'Check-in Date is required.'
+      if (!form.checkOutDate) errors.checkOutDate = 'Check-out Date is required.'
+      else if (form.checkInDate && form.checkOutDate < form.checkInDate) {
+        errors.checkOutDate = 'Check-out must be on or after Check-in.'
+      }
+    }
+    if (!billOptional) {
+      if (!form.receiptNumber.trim()) errors.receiptNumber = 'Receipt No is required.'
+      if (!billFile) errors.bill = 'Bill upload is required.'
+    }
+    return errors
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!form.type || !form.date || !(Number(amountValue) > 0)) {
+      toast.error(amountLocked ? 'Enter the kilometres travelled to calculate the amount' : 'Please fill in Type, Date and Amount')
+      return
+    }
+    if (isTravelType && (!form.transportType || !form.travelFrom.trim() || !form.travelTo.trim())) {
+      toast.error('Please fill in all required travel fields (Travel mode, From, To)')
+      return
+    }
+    const errors = validate()
+    setFieldErrors(errors)
+    const firstError = Object.values(errors).find(Boolean)
+    if (firstError) {
+      toast.error(firstError)
+      return
+    }
+
     setSubmitting(true)
-
     try {
-      // Validate required fields
-      if (!form.type || !form.amount || !form.date) {
-        toast.error('Please fill in all required fields (Type, Date, Amount)')
-        setSubmitting(false)
-        return
-      }
-
-      // Validate travel-specific fields if type is travel
-      if (form.type === 'travel') {
-        if (!form.transportType || !form.travelFrom || !form.travelTo) {
-          toast.error('Please fill in all required travel fields (Transport Type, From, To)')
-          setSubmitting(false)
-          return
-        }
-      }
-
-      // Validate DC selection if DCs are available
-      if (myDCs.length > 0 && (!form.dcId || form.dcId === 'none')) {
-        toast.error('Please select a School/DC for this expense')
-        setSubmitting(false)
-        return
-      }
-
-      const nextErrors: { receiptNumber?: string; bill?: string } = {}
-      if (!form.receiptNumber.trim()) {
-        nextErrors.receiptNumber = 'Receipt No is required.'
-      }
-      const fileInput = document.getElementById('bill') as HTMLInputElement
-      const file = billFile || fileInput?.files?.[0] || null
-      if (!file && !billUrl) {
-        nextErrors.bill = 'Bill upload is required.'
-      }
-      setFieldErrors(nextErrors)
-      if (nextErrors.receiptNumber || nextErrors.bill) {
-        if (nextErrors.receiptNumber) toast.error(nextErrors.receiptNumber)
-        else if (nextErrors.bill) toast.error(nextErrors.bill)
-        setSubmitting(false)
-        return
-      }
-
-      const expenseData: any = {
+      const expenseData: Record<string, string | number | undefined> = {
         title: `${form.type.charAt(0).toUpperCase() + form.type.slice(1)} Expense`,
         category: form.type,
-        amount: parseFloat(form.amount),
-        date: form.date,
-        receiptNumber: form.receiptNumber.trim(),
-        employeeRemarks: form.remarks || undefined,
+        amount: Number(amountValue),
+        date: isStay ? form.checkInDate || form.date : form.date,
+        receiptNumber: form.receiptNumber.trim() || undefined,
+        employeeRemarks: form.remarks.trim() || undefined,
         status: 'Pending',
-        dcId: form.dcId && form.dcId !== 'none' ? form.dcId : undefined,
       }
-
-      // Add travel-specific fields
-      if (form.type === 'travel') {
+      if (isTravelType) {
         expenseData.transportType = form.transportType
-        expenseData.travelFrom = form.travelFrom
-        expenseData.travelTo = form.travelTo
-        if (form.approxKms) {
-          expenseData.approxKms = parseFloat(form.approxKms)
-        }
+        expenseData.travelFrom = form.travelFrom.trim()
+        expenseData.travelTo = form.travelTo.trim()
+        if (form.approxKms) expenseData.approxKms = Number(form.approxKms)
+      }
+      if (needsHotel) {
+        expenseData.hotelName = form.hotelName.trim()
+        expenseData.hotelAddress = form.hotelAddress.trim()
+      }
+      if (isStay) {
+        expenseData.checkInDate = form.checkInDate
+        expenseData.checkOutDate = form.checkOutDate
       }
 
-      // Add bill URL if uploaded separately
-      if (billUrl) {
-        expenseData.receipt = billUrl
-      }
-
-      // If we have a file, use FormData, otherwise use JSON
-      if (file) {
+      if (billFile) {
         const formData = new FormData()
-        Object.keys(expenseData).forEach((key) => {
-          if (expenseData[key] !== undefined && expenseData[key] !== null) {
-            formData.append(key, expenseData[key].toString())
-          }
+        Object.entries(expenseData).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) formData.append(key, String(value))
         })
-        formData.append('bill', file)
-
-        const token = typeof window !== "undefined" ? localStorage.getItem("authToken") : null
-        const headers: HeadersInit = {}
-        if (token) {
-          headers["Authorization"] = `Bearer ${token}`
-        }
-
+        formData.append('bill', billFile)
+        const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null
         const res = await fetch(apiUrl('/expenses/create'), {
           method: 'POST',
-          headers,
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
           body: formData,
         })
-
         if (!res.ok) {
-          let message = "Request failed"
+          let message = 'Request failed'
           try {
-            const data = await res.json()
-            message = data?.message || message
+            message = (await res.json())?.message || message
           } catch (_) {}
           throw new Error(message)
         }
-
         await res.json()
       } else {
-        // No file, use regular JSON request
-        await apiRequest('/expenses/create', {
-          method: 'POST',
-          body: JSON.stringify(expenseData),
-        })
+        await apiRequest('/expenses/create', { method: 'POST', body: JSON.stringify(expenseData) })
       }
 
       toast.success('Expense created successfully')
-      router.push('/dashboard/expenses/my')
+      router.push('/dashboard/expenses/my?view=pending')
     } catch (error: any) {
       toast.error(error?.message || 'Failed to create expense')
     } finally {
@@ -212,7 +192,9 @@ export default function CreateExpensePage() {
     }
   }
 
-  const isTravelType = form.type === 'travel'
+  const errorText = (key: keyof FieldErrors) =>
+    fieldErrors[key] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[key]}</p> : null
+  const errorClass = (key: keyof FieldErrors) => (fieldErrors[key] ? 'border-red-500' : '')
 
   return (
     <div className="space-y-6">
@@ -222,12 +204,13 @@ export default function CreateExpensePage() {
 
       <Card className="p-6 shadow-sm">
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Type Dropdown */}
           <div>
             <Label htmlFor="type">Type *</Label>
             <Select
               value={form.type}
-              onValueChange={(value) => setForm({ ...form, type: value, transportType: '', travelFrom: '', travelTo: '', approxKms: '' })}
+              onValueChange={(value) =>
+                update({ type: value, transportType: '', travelFrom: '', travelTo: '', approxKms: '', hotelName: '', hotelAddress: '', checkInDate: '', checkOutDate: '' })
+              }
               required
             >
               <SelectTrigger className="bg-white">
@@ -242,99 +225,27 @@ export default function CreateExpensePage() {
             </Select>
           </div>
 
-          {/* Date */}
-          <div>
-            <Label htmlFor="date">Date *</Label>
-            <Input
-              id="date"
-              type="date"
-              allowPastDates
-              value={form.date}
-              onChange={(e) => setForm({ ...form, date: e.target.value })}
-              required
-              className="bg-white"
-            />
-          </div>
+          {!isStay && (
+            <div>
+              <Label htmlFor="date">Date *</Label>
+              <Input
+                id="date"
+                type="date"
+                allowPastDates
+                value={form.date}
+                onChange={(e) => update({ date: e.target.value })}
+                required
+                className="bg-white"
+              />
+            </div>
+          )}
 
-          {/* Amount */}
-          <div>
-            <Label htmlFor="amount">Amount *</Label>
-            <Input
-              id="amount"
-              type="number"
-              step="0.01"
-              value={form.amount}
-              onChange={(e) => setForm({ ...form, amount: e.target.value })}
-              required
-              className="bg-white"
-              placeholder="0.00"
-            />
-          </div>
-
-          {/* Receipt Number */}
-          <div>
-            <Label htmlFor="receiptNumber">Receipt No. *</Label>
-            <Input
-              id="receiptNumber"
-              type="text"
-              value={form.receiptNumber}
-              onChange={(e) => {
-                setForm({ ...form, receiptNumber: e.target.value })
-                if (fieldErrors.receiptNumber) {
-                  setFieldErrors((prev) => ({ ...prev, receiptNumber: undefined }))
-                }
-              }}
-              className={`bg-white ${fieldErrors.receiptNumber ? 'border-red-500' : ''}`}
-              placeholder="Enter receipt number"
-            />
-            {fieldErrors.receiptNumber && (
-              <p className="text-xs text-red-600 mt-1">{fieldErrors.receiptNumber}</p>
-            )}
-          </div>
-
-          {/* Remarks */}
-          <div>
-            <Label htmlFor="remarks">Remarks</Label>
-            <Textarea
-              id="remarks"
-              value={form.remarks}
-              onChange={(e) => setForm({ ...form, remarks: e.target.value })}
-              className="bg-white"
-              placeholder="Enter remarks"
-              rows={3}
-            />
-          </div>
-
-          {/* Bill Upload */}
-          <div>
-            <Label htmlFor="bill">Upload Bill *</Label>
-            <Input
-              id="bill"
-              type="file"
-              accept="image/*,.pdf"
-              onChange={handleBillUpload}
-              disabled={submitting}
-              className={`bg-white ${fieldErrors.bill ? 'border-red-500' : ''}`}
-            />
-            {fieldErrors.bill && (
-              <p className="text-xs text-red-600 mt-1">{fieldErrors.bill}</p>
-            )}
-            <p className="text-sm text-neutral-500 mt-1">Accepted formats: JPG, PNG, PDF (Max 5MB)</p>
-          </div>
-
-          {/* Travel-specific fields - shown conditionally */}
           {isTravelType && (
             <div className="space-y-4 p-4 border border-blue-200 rounded-lg bg-blue-50">
               <h3 className="font-semibold text-blue-900">Travel Details</h3>
-              
-              {/* Travel mode — same options as navbar-landing reimbursement flow */}
               <div>
                 <Label htmlFor="transportType">Travel mode *</Label>
-                <Select
-                  value={form.transportType}
-                  onValueChange={(value) => setForm({ ...form, transportType: value })}
-                  required
-                >
+                <Select value={form.transportType} onValueChange={(value) => update({ transportType: value })} required>
                   <SelectTrigger className="bg-white">
                     <SelectValue placeholder="Select mode" />
                   </SelectTrigger>
@@ -342,108 +253,123 @@ export default function CreateExpensePage() {
                     {['Bike', 'Car', 'Bus', 'Train', 'Flight', 'Auto'].map((m) => (
                       <SelectItem key={m} value={m}>
                         {m}
+                        {m === 'Bike' || m === 'Car' ? ` (${perKmRateLabel(m, rates)})` : ''}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-
-              {/* From */}
               <div>
                 <Label htmlFor="travelFrom">From *</Label>
-                <Input
-                  id="travelFrom"
-                  type="text"
-                  value={form.travelFrom}
-                  onChange={(e) => setForm({ ...form, travelFrom: e.target.value })}
-                  required
-                  className="bg-white"
-                  placeholder="Enter origin location"
-                />
+                <Input id="travelFrom" value={form.travelFrom} onChange={(e) => update({ travelFrom: e.target.value })} required className="bg-white" placeholder="Enter origin location" />
               </div>
-
-              {/* To */}
               <div>
                 <Label htmlFor="travelTo">To *</Label>
-                <Input
-                  id="travelTo"
-                  type="text"
-                  value={form.travelTo}
-                  onChange={(e) => setForm({ ...form, travelTo: e.target.value })}
-                  required
-                  className="bg-white"
-                  placeholder="Enter destination location"
-                />
+                <Input id="travelTo" value={form.travelTo} onChange={(e) => update({ travelTo: e.target.value })} required className="bg-white" placeholder="Enter destination location" />
               </div>
-
-              {/* Approx Kms */}
               <div>
-                <Label htmlFor="approxKms">Approx Kms</Label>
+                <Label htmlFor="approxKms">Kilometres{amountLocked ? ' *' : ''}</Label>
                 <Input
                   id="approxKms"
                   type="number"
                   step="0.01"
+                  min="0"
                   value={form.approxKms}
-                  onChange={(e) => setForm({ ...form, approxKms: e.target.value })}
-                  className="bg-white"
-                  placeholder="Enter approximate kilometers"
+                  onChange={(e) => update({ approxKms: e.target.value })}
+                  className={`bg-white ${errorClass('approxKms')}`}
+                  placeholder="Enter kilometres travelled"
                 />
+                {errorText('approxKms')}
               </div>
             </div>
           )}
 
-          {/* School/DC Selection */}
-          {myDCs.length > 0 && (
-            <div>
-              <Label htmlFor="dcId">
-                School / DC *
-              </Label>
-              <Select
-                value={form.dcId}
-                onValueChange={(value) => setForm({ ...form, dcId: value })}
-                required
-                disabled={loadingDCs}
-              >
-                <SelectTrigger className="bg-white">
-                  <SelectValue placeholder={
-                    loadingDCs 
-                      ? "Loading assigned DCs..." 
-                      : "Select school/DC"
-                  } />
-                </SelectTrigger>
-                <SelectContent>
-                  {myDCs.map((dc) => {
-                    const schoolName = dc.dcOrderId?.school_name || dc.saleId?.customerName || 'Unknown School'
-                    const schoolCode = dc.dcOrderId?.school_code || ''
-                    const zone = dc.dcOrderId?.zone || ''
-                    const displayName = schoolCode ? `${schoolCode} - ${schoolName}` : schoolName
-                    const displayText = zone ? `${displayName} (${zone})` : displayName
-                    
-                    return (
-                      <SelectItem key={dc._id} value={dc._id}>
-                        {displayText}
-                      </SelectItem>
-                    )
-                  })}
-                </SelectContent>
-              </Select>
+          {needsHotel && (
+            <div className="space-y-4 p-4 border border-amber-200 rounded-lg bg-amber-50">
+              <h3 className="font-semibold text-amber-900">{isStay ? 'Stay Details' : 'Hotel Details'}</h3>
+              {isStay && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="checkInDate">Check-in Date *</Label>
+                    <Input id="checkInDate" type="date" allowPastDates value={form.checkInDate} onChange={(e) => update({ checkInDate: e.target.value })} className={`bg-white ${errorClass('checkInDate')}`} />
+                    {errorText('checkInDate')}
+                  </div>
+                  <div>
+                    <Label htmlFor="checkOutDate">Check-out Date *</Label>
+                    <Input id="checkOutDate" type="date" allowPastDates value={form.checkOutDate} min={form.checkInDate || undefined} onChange={(e) => update({ checkOutDate: e.target.value })} className={`bg-white ${errorClass('checkOutDate')}`} />
+                    {errorText('checkOutDate')}
+                  </div>
+                </div>
+              )}
+              <div>
+                <Label htmlFor="hotelName">Hotel Name *</Label>
+                <Input id="hotelName" value={form.hotelName} onChange={(e) => update({ hotelName: e.target.value })} className={`bg-white ${errorClass('hotelName')}`} placeholder="Enter hotel name" />
+                {errorText('hotelName')}
+              </div>
+              <div>
+                <Label htmlFor="hotelAddress">Hotel Address *</Label>
+                <Textarea id="hotelAddress" value={form.hotelAddress} onChange={(e) => update({ hotelAddress: e.target.value })} className={`bg-white ${errorClass('hotelAddress')}`} placeholder="Enter hotel address" rows={2} />
+                {errorText('hotelAddress')}
+              </div>
             </div>
           )}
 
-          <div className="flex gap-4">
-            <Button
-              type="submit"
+          <div>
+            <Label htmlFor="amount">Amount *</Label>
+            <Input
+              id="amount"
+              type="number"
+              step="0.01"
+              value={amountValue}
+              onChange={(e) => update({ amount: e.target.value })}
+              readOnly={amountLocked}
+              required
+              className={amountLocked ? 'bg-neutral-100 font-semibold' : 'bg-white'}
+              placeholder={amountLocked ? 'Calculated from kilometres' : '0.00'}
+            />
+            {amountLocked && (
+              <p className="text-xs text-neutral-500 mt-1">
+                Calculated automatically: kilometres × {perKmRateLabel(form.transportType, rates)}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <Label htmlFor="receiptNumber">Receipt No.{billOptional ? '' : ' *'}</Label>
+            <Input
+              id="receiptNumber"
+              value={form.receiptNumber}
+              onChange={(e) => update({ receiptNumber: e.target.value })}
+              className={`bg-white ${errorClass('receiptNumber')}`}
+              placeholder={billOptional ? 'Optional for Auto' : 'Enter receipt number'}
+            />
+            {errorText('receiptNumber')}
+          </div>
+
+          <div>
+            <Label htmlFor="remarks">Remarks</Label>
+            <Textarea id="remarks" value={form.remarks} onChange={(e) => update({ remarks: e.target.value })} className="bg-white" placeholder="Enter remarks" rows={3} />
+          </div>
+
+          <div>
+            <Label htmlFor="bill">Upload Bill{billOptional ? ' (optional for Auto)' : ' *'}</Label>
+            <Input
+              id="bill"
+              type="file"
+              accept="image/*,.pdf"
+              onChange={handleBillUpload}
               disabled={submitting}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
+              className={`bg-white ${errorClass('bill')}`}
+            />
+            {errorText('bill')}
+            <p className="text-sm text-neutral-500 mt-1">Accepted formats: JPG, PNG, PDF (Max 5MB)</p>
+          </div>
+
+          <div className="flex gap-4">
+            <Button type="submit" disabled={submitting} className="bg-blue-600 hover:bg-blue-700 text-white">
               {submitting ? 'Creating...' : 'Create Expense'}
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => router.back()}
-              disabled={submitting}
-            >
+            <Button type="button" variant="outline" onClick={() => router.back()} disabled={submitting}>
               Cancel
             </Button>
           </div>

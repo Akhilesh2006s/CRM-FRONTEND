@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { apiRequest } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
@@ -8,10 +8,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Pencil, CheckCircle } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
+import { type ApprovalExpense, expenseStatusColor, expenseStatusText } from '@/lib/expenseApproval'
 import { toast } from 'sonner'
 
-type Expense = {
+type Expense = ApprovalExpense & {
   _id: string
   title: string
   amount: number
@@ -32,6 +34,8 @@ type Expense = {
   /** Backend-resolved employee: employeeId, else trainerId, else submitter */
   employee?: { _id: string; name: string } | null
   pendingMonth?: string
+  date?: string
+  approvedAmount?: number
 }
 
 const getEmployee = (expense: Expense) =>
@@ -43,7 +47,17 @@ type Employee = {
 }
 
 export default function ExecutiveManagerPendingExpensesPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-neutral-500">Loading...</div>}>
+      <ExecutiveManagerExpenses />
+    </Suspense>
+  )
+}
+
+/** Team expenses: awaiting this Zonal Manager, or already approved / rejected by them (with status now). */
+function ExecutiveManagerExpenses() {
   const router = useRouter()
+  const tab: 'pending' | 'decided' = useSearchParams()?.get('tab') === 'decided' ? 'decided' : 'pending'
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
   const [employees, setEmployees] = useState<Employee[]>([])
@@ -67,7 +81,7 @@ export default function ExecutiveManagerPendingExpensesPage() {
 
   useEffect(() => {
     loadExpenses()
-  }, [filters])
+  }, [filters, tab])
 
   const loadExpenses = async () => {
     setLoading(true)
@@ -77,9 +91,8 @@ export default function ExecutiveManagerPendingExpensesPage() {
         params.append('employeeId', filters.employeeId)
       }
 
-      const data = await apiRequest<Expense[]>(
-        `/expenses/executive-manager-pending${params.toString() ? `?${params.toString()}` : ''}`
-      )
+      const base = tab === 'decided' ? '/expenses/my-decisions' : '/expenses/executive-manager-pending'
+      const data = await apiRequest<Expense[]>(`${base}${params.toString() ? `?${params.toString()}` : ''}`)
       console.log('Loaded expenses:', data)
       setExpenses(data || [])
       
@@ -142,7 +155,17 @@ export default function ExecutiveManagerPendingExpensesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Pending Expenses List</h1>
+        <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">
+          {tab === 'decided' ? 'Team Expenses: Approved / Rejected' : 'Team Expenses to Approve'}
+        </h1>
+        <div className="flex gap-2 mt-3">
+          <Link href="/dashboard/expenses/executive-manager-pending">
+            <Button size="sm" variant={tab === 'pending' ? 'default' : 'outline'}>To Approve</Button>
+          </Link>
+          <Link href="/dashboard/expenses/executive-manager-pending?tab=decided">
+            <Button size="sm" variant={tab === 'decided' ? 'default' : 'outline'}>Approved / Rejected</Button>
+          </Link>
+        </div>
       </div>
 
       {/* Filter Section */}
@@ -182,8 +205,59 @@ export default function ExecutiveManagerPendingExpensesPage() {
         )}
       </Card>
 
+      {tab === 'decided' && (
+        <Card className="shadow-sm">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-neutral-50">
+                  <TableHead className="font-semibold">S.No</TableHead>
+                  <TableHead className="font-semibold">Employee Name</TableHead>
+                  <TableHead className="font-semibold">Expense Date</TableHead>
+                  <TableHead className="font-semibold">Exp Type</TableHead>
+                  <TableHead className="font-semibold text-right">Claimed</TableHead>
+                  <TableHead className="font-semibold text-right">Approved</TableHead>
+                  <TableHead className="font-semibold">Status</TableHead>
+                  <TableHead className="font-semibold">Your Remarks</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8 text-neutral-500">Loading expenses...</TableCell>
+                  </TableRow>
+                ) : expenses.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8 text-neutral-500">You have not approved or rejected any expenses yet.</TableCell>
+                  </TableRow>
+                ) : (
+                  expenses.map((expense, index) => (
+                    <TableRow key={expense._id} className={index % 2 === 0 ? 'bg-white' : 'bg-neutral-50/50'}>
+                      <TableCell>{index + 1}</TableCell>
+                      <TableCell className="font-medium">{getEmployee(expense)?.name || '-'}</TableCell>
+                      <TableCell>{expense.date ? new Date(expense.date).toLocaleDateString('en-IN') : '-'}</TableCell>
+                      <TableCell>{getExpenseType(expense.category)}</TableCell>
+                      <TableCell className="text-right">{Number(expense.employeeAmount ?? expense.amount).toFixed(2)}</TableCell>
+                      <TableCell className="text-right font-medium">
+                        {expense.status === 'Rejected' ? '-' : Number(expense.firstLevelApprovedAmount ?? expense.approvedAmount ?? 0).toFixed(2)}
+                      </TableCell>
+                      <TableCell>
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${expenseStatusColor(expense.status)}`}>
+                          {expenseStatusText(expense)}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-sm text-neutral-600 max-w-xs">{expense.managerRemarks || expense.rejectionReason || '-'}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
+      )}
+
       {/* Expenses Table */}
-      <Card className="shadow-sm">
+      {tab === 'pending' && <Card className="shadow-sm">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -238,7 +312,7 @@ export default function ExecutiveManagerPendingExpensesPage() {
                       </button>
                     </TableCell>
                     <TableCell>
-                      {/* Approval needs an amount and remarks per item, entered on the review page. */}
+                      {/* Approval needs an amount per item (remarks optional), entered on the review page. */}
                       <Button
                         onClick={() => handleEdit(expense._id, getEmployee(expense)?._id)}
                         size="sm"
@@ -255,7 +329,7 @@ export default function ExecutiveManagerPendingExpensesPage() {
             </TableBody>
           </Table>
         </div>
-      </Card>
+      </Card>}
     </div>
   )
 }
