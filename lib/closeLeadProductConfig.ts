@@ -1191,7 +1191,7 @@ export function validateCloseLeadProductConfig(
   if (missingDispatchChoice) {
     return {
       ok: false,
-      message: 'Choose whether to dispatch one level at a time or both levels together for each multi-level product.',
+      message: 'Choose Term 1 only or Both Terms Together for each multi-level product.',
     }
   }
 

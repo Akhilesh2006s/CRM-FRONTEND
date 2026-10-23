@@ -43,6 +43,8 @@ type Lead = {
   lead_status?: string
   follow_up_date?: string
   location?: string
+  city?: string
+  area?: string
   strength?: number
   createdAt?: string
   remarks?: string
@@ -360,6 +362,8 @@ export default function FollowupLeadsPage() {
           status: order.status,
           follow_up_date: order.follow_up_date || order.estimated_delivery_date,
           location: order.location,
+          city: order.city,
+          area: order.area,
           strength: order.strength,
           createdAt: order.createdAt,
           remarks: order.remarks,
@@ -996,6 +1000,12 @@ export default function FollowupLeadsPage() {
                         {lead.school_code && (
                           <span className="rounded bg-blue-50 px-2 py-0.5 font-mono text-xs font-semibold text-blue-700">
                             {lead.school_code}
+                          </span>
+                        )}
+                        {/* Town / area next to the code, so schools with similar names are easy to tell apart. */}
+                        {(lead.location || lead.city || lead.area) && (
+                          <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-700">
+                            {lead.location || lead.city || lead.area}
                           </span>
                         )}
                       </div>

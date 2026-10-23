@@ -322,64 +322,9 @@ export default function CloseLeadPage() {
           // Renewal leads carry last year's class lines: open with exactly those classes,
           // strengths and series instead of a default class range.
           const renewal = renewalLinesToSections(Array.isArray(leadData.products) ? leadData.products : [])
-          const parentRows: ProductDetailRow[] = validProducts
-            .filter((product) => !renewal.handledProducts.has(product.toLowerCase()))
-            .flatMap((product, productIdx): ProductDetailRow[] => {
-            const productData = Array.isArray(leadData.products)
-              ? leadData.products.find((p: any) => {
-                  const raw = p?.product_name || p?.product || p?.productName || p
-                  return normalizeName(String(raw || '')) === product
-                })
-              : undefined
-            // Skip Not Interested products when closing (no sale line)
-            // Pre-add only products the school is buying: Hot / Warm / Renewed with a real strength
-            // and price. Everything else (Not Interested, Visit Again, placeholder rows) is left out;
-            // the BDE can still tick it in a section.
-            const committed =
-              ['Hot', 'Warm', 'Renewed'].includes(String(productData?.status || '')) &&
-              Number(productData?.strength) > 1 &&
-              Number(productData?.unit_price) > 0
-            if (!committed) {
-              return []
-            }
-            // Load saved quantity/strength and unit_price from follow-up
-            const savedStrength =
-              Number(productData?.strength) || Number(productData?.quantity) || 0
-            const savedUnitPrice = Number(productData?.unit_price) || 0
-            
-            return [{
-              id: Date.now().toString() + productIdx,
-              product: product,
-              class: '1',
-              fromClass: productData?.fromClass || productData?.class || '1',
-              toClass: productData?.toClass || '10',
-              category: hasProductCategories(product)
-                ? (getProductCategories(product)[0] || '')
-                : (leadData.school_type === 'Existing' ? 'Existing Students' : 'New Students'),
-              quantity: savedStrength || 1,
-              strength: savedStrength || 0,
-              price: savedUnitPrice || 0,
-              total: (savedStrength || 0) * (savedUnitPrice || 0),
-              level: productData?.level || getDefaultLevel(product),
-              specs: getProductSpecs(product)[0] || '',
-              isParentRow: true,
-              sameRateForAllClasses: false,
-              selectedSubjects: [],
-              selectedSpecs: getProductSpecs(product).slice(0, 1),
-              selectedDeliverables: productData?.deliverables || [],
-              selectedCategories: hasProductCategories(product) 
-                ? getProductCategories(product) 
-                : undefined,
-              term: normalizeProductTerm(productData?.term),
-              levels_snapshot: Array.isArray(productData?.levels_snapshot)
-                ? productData.levels_snapshot
-                : productData?.level
-                  ? [productData.level]
-                  : [],
-              dispatchMode: productData?.dispatchMode,
-            }]
-          })
-          setProductSections([...renewal.sections, ...productDetailsToSections(parentRows)])
+          // Fresh leads open with no sections: the BDE adds each section with "Add Section".
+          // Renewal leads still open with last year's class lines.
+          setProductSections(renewal.sections)
         } else {
           setProductSections([])
         }

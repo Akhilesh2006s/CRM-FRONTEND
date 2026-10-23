@@ -628,16 +628,16 @@ function CloseLeadProductConfigView({
                                         </SelectTrigger>
                                         <SelectContent>
                                           <SelectItem value="one_level_at_a_time">
-                                            Term 1 at a Time
+                                            Term 1 only
                                           </SelectItem>
                                           <SelectItem value="both_levels_together">
-                                            Both Terms at a Time
+                                            Both Terms Together
                                           </SelectItem>
                                         </SelectContent>
                                       </Select>
                                       <p className="text-xs text-neutral-500">
-                                        Term 1 at a Time keeps the next level in Term-Wise DC.
-                                        Both Terms at a Time creates one current DC.
+                                        Term 1 only keeps the next level in Term-Wise DC.
+                                        Both Terms Together creates one current DC.
                                       </p>
                                     </div>
                                   )}
