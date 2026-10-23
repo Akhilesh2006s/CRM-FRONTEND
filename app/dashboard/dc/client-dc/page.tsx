@@ -103,6 +103,7 @@ type DC = {
     contract_end?: string
     location?: string
     city?: string
+    area?: string
   }
   customerName?: string
   customerPhone?: string
@@ -3365,8 +3366,8 @@ export default function ClientDCPage() {
                         <TableCell className="font-semibold text-blue-600">
                           {schoolCode}
                           {/* Town / area under the code, as on the follow-up cards. */}
-                          {typeof d.dcOrderId === 'object' && (d.dcOrderId?.location || d.dcOrderId?.city) && (
-                            <div className="text-xs font-normal text-neutral-500">{d.dcOrderId?.location || d.dcOrderId?.city}</div>
+                          {typeof d.dcOrderId === 'object' && (d.dcOrderId?.area || d.dcOrderId?.city || d.dcOrderId?.location) && (
+                            <div className="text-xs font-normal text-neutral-500">{d.dcOrderId?.area || d.dcOrderId?.city || d.dcOrderId?.location}</div>
                           )}
                         </TableCell>
                         <TableCell className="font-semibold text-neutral-900">{customerName}</TableCell>

@@ -189,7 +189,12 @@ export default function LeadCloseScreen({ route }: any) {
         if (hasProducts) {
           // Fresh leads open with no sections (BDE adds them with "Add section").
           // Renewal leads open with last year's class lines.
-          const renewal = renewalLinesToSections(Array.isArray(leadData.products) ? leadData.products : []);
+          // Only renewal leads: every saved product line carries a class (it defaults to "1"),
+          // so pre-filling from any lead would add a section per product.
+          const leadProducts: any[] = Array.isArray(leadData.products) ? leadData.products : [];
+          const isRenewalLead =
+            leadData.lead_type === 'renewal' || leadProducts.some((p) => p?.sale_type === 'renewal');
+          const renewal = renewalLinesToSections(isRenewalLead ? leadProducts.filter((p) => p?.sale_type !== 'cross_sale') : []);
           setProductSections(renewal.sections);
         } else {
           setProductSections([]);

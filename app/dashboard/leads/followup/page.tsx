@@ -45,6 +45,8 @@ type Lead = {
   location?: string
   city?: string
   area?: string
+  address?: string
+  pincode?: string
   strength?: number
   createdAt?: string
   remarks?: string
@@ -194,6 +196,12 @@ function leadProductsToHistorySnapshot(products: Lead['products']) {
         chance: Number(p.chance ?? 0) || 0,
       }
     })
+}
+
+/** Town / area for the card: the picked area, else city, else location, else the address's first part, else pincode. */
+function leadTown(lead: Lead): string {
+  const firstPart = String(lead.address || '').split(',')[0].trim()
+  return String(lead.area || lead.city || lead.location || firstPart || lead.pincode || '').trim()
 }
 
 export default function FollowupLeadsPage() {
@@ -362,6 +370,8 @@ export default function FollowupLeadsPage() {
           status: order.status,
           follow_up_date: order.follow_up_date || order.estimated_delivery_date,
           location: order.location,
+          address: order.address,
+          pincode: order.pincode,
           city: order.city,
           area: order.area,
           strength: order.strength,
@@ -1003,9 +1013,9 @@ export default function FollowupLeadsPage() {
                           </span>
                         )}
                         {/* Town / area next to the code, so schools with similar names are easy to tell apart. */}
-                        {(lead.location || lead.city || lead.area) && (
+                        {leadTown(lead) && (
                           <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-700">
-                            {lead.location || lead.city || lead.area}
+                            {leadTown(lead)}
                           </span>
                         )}
                       </div>

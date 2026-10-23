@@ -157,6 +157,12 @@ function isFollowUpDateOverdue(dateString?: string): boolean {
   }
 }
 
+/** Town / area for the card: the picked area, else city, else location, else the address's first part, else pincode. */
+function leadTown(lead: any): string {
+  const firstPart = String(lead?.address || '').split(',')[0].trim();
+  return String(lead?.area || lead?.city || lead?.location || firstPart || lead?.pincode || '').trim();
+}
+
 export default function LeadFollowupScreen({ navigation }: any) {
   const { user } = useAuth();
   const seesAllFollowups =
@@ -303,6 +309,8 @@ export default function LeadFollowupScreen({ navigation }: any) {
             location: order.location,
             city: order.city,
             area: order.area,
+            address: order.address,
+            pincode: order.pincode,
             strength: order.strength,
             createdAt: order.createdAt,
             updatedAt: order.updatedAt,
@@ -766,14 +774,14 @@ export default function LeadFollowupScreen({ navigation }: any) {
                       <Text style={styles.schoolName} numberOfLines={2}>
                         {lead.school_name || 'Unnamed School'}
                       </Text>
-                      {lead.school_code || lead.location || lead.city || lead.area ? (
+                      {lead.school_code || leadTown(lead) ? (
                         <View style={styles.schoolTagRow}>
                           {lead.school_code ? (
                             <Text style={styles.schoolCodeBadge}>{lead.school_code}</Text>
                           ) : null}
                           {/* Town / area next to the code, so schools with similar names are easy to tell apart. */}
-                          {lead.location || lead.city || lead.area ? (
-                            <Text style={styles.schoolTownBadge}>{lead.location || lead.city || lead.area}</Text>
+                          {leadTown(lead) ? (
+                            <Text style={styles.schoolTownBadge}>{leadTown(lead)}</Text>
                           ) : null}
                         </View>
                       ) : null}
