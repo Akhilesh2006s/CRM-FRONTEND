@@ -4,7 +4,7 @@
  * - Request PO Change (new PDF + remarks) → requires Manager approval; DC Request locked until resolved
  * - Edit products & quantities (saved directly)
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -35,6 +35,29 @@ import {
   type EditPOProductCatalogMeta,
   type EditPOProductVariant,
 } from '../../utils/editPOProductIdentity';
+import { useDcCatalog } from '../../hooks/useDcCatalog';
+import { DcCategoryPicker } from '../../components/dc/DcCategoryPicker';
+import {
+  collectOriginalEditPoVariantKeys,
+  dedupeProductDetailLines,
+  editPoHasNewCommercialLines,
+  ensureProductLineId,
+  expandEditPoRowsBySubject,
+  findMatchingOrderProduct,
+  isOriginalEditPoLine,
+  orderProductToClientDcDetail,
+  resolveClientDCRowFields,
+  type ResolveClientDCRowOpts,
+} from '../../lib/crm/clientDcProductRows';
+import {
+  canonicalDcRowCategory,
+  isBillableDcRow,
+  isMarkerSpecs,
+  isRelatedItemRow,
+  isSpecimenRow,
+} from '../../lib/crm/dcRowCategory';
+import { applyPaymentDivisorsToBreakdown } from '../../lib/crm/dcPaymentDivisors';
+import { persistProductTerm } from '../../lib/crm/productTerm';
 
 let WebView: any;
 try {
@@ -65,91 +88,51 @@ function buildPdfUrl(raw: string | undefined): string | null {
   return `${base}${path}`;
 }
 
+/** Edit PO row, same shape as the web Edit PO dialog rows. */
 type ProductRow = {
   id: string;
+  lineId?: string;
   product_name: string;
+  product?: string;
   quantity: number;
-  unit_price: number;
+  unit_price: number | string;
   term?: string;
   level?: string;
   class?: string;
   specs?: string;
   subject?: string;
+  selected_subjects?: string[];
   productCategory?: string;
+  category?: string;
+  strength?: number;
+  itemType?: string;
+  subjectPackage?: boolean;
+  dispatchMode?: string;
+  section?: string;
+  program?: string;
+  stream?: string;
+  /** A billed line saved without a price keeps its price box open. */
+  priceUnlocked?: boolean;
+  /** Price kept while the row is switched to a free category. */
+  paidUnitPrice?: number | string;
   isNew?: boolean;
-  /** Original order product fields preserved on save */
-  _source?: Record<string, unknown>;
 };
 
 function normalizeProductName(name: string): string {
   return String(name || '').trim().toLowerCase();
 }
 
-function normalizeLevelKey(level: unknown): string {
-  return String(level ?? '')
-    .trim()
-    .toLowerCase()
-    .replace(/[\s_-]+/g, '');
-}
-
-function isLevelOne(level: unknown): boolean {
-  const k = normalizeLevelKey(level);
-  return k === 'level1' || k === 'l1' || k.startsWith('level1');
-}
-
-function isLevelTwo(level: unknown): boolean {
-  const k = normalizeLevelKey(level);
-  return k === 'level2' || k === 'l2' || k.startsWith('level2');
-}
-
-function resolveRowTerm(p: { term?: string; level?: string }, hasLevel1: boolean): 'Term 1' | 'Term 2' {
-  const t = String(p?.term ?? '').trim();
-  if (t === 'Term 2') return 'Term 2';
-  const collapsed = t.toLowerCase().replace(/[\s_-]+/g, '');
-  if (collapsed === 'term2' || collapsed === 't2') return 'Term 2';
-  // Level 2 only counts as Term 2 when Level 1 is also on the PO
-  if (isLevelTwo(p.level) && hasLevel1) return 'Term 2';
-  return 'Term 1';
-}
-
-type CatalogProduct = {
-  productName: string;
-  productLevels?: string[];
-  hasSubjects?: boolean;
-  subjects?: string[];
-  hasSpecs?: boolean;
-  specs?: string | string[];
-  hasCategory?: boolean;
-  categories?: string[];
+const idOf = (v: any): string | null => {
+  if (!v) return null;
+  if (typeof v === 'object') return v._id ? String(v._id) : null;
+  return String(v);
 };
-
-function normalizeCatalogProduct(raw: any): CatalogProduct | null {
-  const productName = String(
-    raw?.productName || raw?.name || raw?.product || raw?.product_name || '',
-  ).trim();
-  if (!productName) return null;
-  const specsRaw = raw?.specs;
-  const specs = Array.isArray(specsRaw)
-    ? specsRaw
-    : typeof specsRaw === 'string' && specsRaw.trim()
-      ? [specsRaw.trim()]
-      : [];
-  return {
-    productName,
-    productLevels: Array.isArray(raw?.productLevels) ? raw.productLevels : [],
-    hasSubjects: raw?.hasSubjects === true,
-    subjects: Array.isArray(raw?.subjects) ? raw.subjects : [],
-    hasSpecs: raw?.hasSpecs === true,
-    specs,
-    hasCategory: raw?.hasCategory === true,
-    categories: Array.isArray(raw?.categories) ? raw.categories : [],
-  };
-}
 
 /** Fixed column widths — header and body must use the same values */
 const EDIT_PO_TABLE_COLUMNS = [
-  { id: 'product', label: 'Product', width: 88 },
-  { id: 'category', label: 'Category', width: 84 },
+  { id: 'product', label: 'Product', width: 110 },
+  { id: 'dcCategory', label: 'Category', width: 130 },
+  { id: 'category', label: 'Series', width: 84 },
   { id: 'class', label: 'Class', width: 56 },
   { id: 'subject', label: 'Subject', width: 76 },
   { id: 'level', label: 'Level', width: 76 },
@@ -160,6 +143,7 @@ const EDIT_PO_TABLE_COLUMNS = [
   { id: 'action', label: '', width: 32 },
 ];
 const EDIT_PO_TABLE_WIDTH = EDIT_PO_TABLE_COLUMNS.reduce((sum, col) => sum + col.width, 0);
+const COL = Object.fromEntries(EDIT_PO_TABLE_COLUMNS.map((c) => [c.id, c.width])) as Record<string, number>;
 
 function EditPOTableCell({
   width,
@@ -186,17 +170,28 @@ function EditPOTableCell({
 
 export default function ClientEditPOScreen({ navigation, route }: any) {
   const orderId = route?.params?.orderId as string | undefined;
+  const paramDcId = route?.params?.dcId as string | undefined;
+  const catalog = useDcCatalog();
+  const {
+    findProduct,
+    getProductId,
+    getProductSubjects,
+    getProductCategories,
+    hasProductCategories,
+    getProductSpecs,
+    getProductLevels,
+    getProductRelatedItems,
+    getCalculationType,
+    getCatalogFallbackCount,
+  } = catalog;
   const [order, setOrder] = useState<any>(null);
+  const [dcId, setDcId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [products, setProducts] = useState<ProductRow[]>([]);
-  /** Term 2 lines are edited in Term-Wise DC — hidden here but kept on save */
-  const [term2Products, setTerm2Products] = useState<any[]>([]);
   const [originalProductNames, setOriginalProductNames] = useState<string[]>([]);
-  const [originalEditRowIds, setOriginalEditRowIds] = useState<Set<string>>(new Set());
-  const [originalEditRowPrices, setOriginalEditRowPrices] = useState<Record<string, number>>({});
-  const [catalogProducts, setCatalogProducts] = useState<string[]>([]);
-  const [catalogMeta, setCatalogMeta] = useState<CatalogProduct[]>([]);
+  const [originalVariantKeys, setOriginalVariantKeys] = useState<string[]>([]);
+  const [originalPdfUrl, setOriginalPdfUrl] = useState('');
   const [showAddProductModal, setShowAddProductModal] = useState(false);
   const [transport, setTransport] = useState({
     transport_name: '',
@@ -210,42 +205,18 @@ export default function ClientEditPOScreen({ navigation, route }: any) {
   const [submittingChange, setSubmittingChange] = useState(false);
   const [previewPdfUrl, setPreviewPdfUrl] = useState<string | null>(null);
 
+  const catalogProducts = useMemo(
+    () => Array.from(new Set(catalog.products.filter((p: any) => p.prodStatus !== 0).map((p) => p.productName))),
+    [catalog.products],
+  );
+
   useEffect(() => {
-    if (orderId) {
-      loadOrder();
-      loadCatalogProducts();
-    }
-  }, [orderId]);
-
-  const loadCatalogProducts = async () => {
-    try {
-      let data: any;
-      try {
-        data = await apiService.get('/products/active');
-      } catch {
-        data = await apiService.get('/products');
-      }
-      const list = Array.isArray(data) ? data : data?.data || data?.products || [];
-      const meta = list
-        .filter((p: any) => p.prodStatus !== 0 && p.prodStatus !== false)
-        .map(normalizeCatalogProduct)
-        .filter(Boolean) as CatalogProduct[];
-      setCatalogMeta(meta);
-      setCatalogProducts([...new Set(meta.map((p) => p.productName))]);
-    } catch {
-      setCatalogProducts([]);
-      setCatalogMeta([]);
-    }
-  };
-
-  const findCatalogProduct = (productName: string) => {
-    const key = String(productName || '').trim().toLowerCase();
-    if (!key) return undefined;
-    return catalogMeta.find((p) => p.productName.trim().toLowerCase() === key);
-  };
+    if (orderId && !catalog.loading) loadOrder();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderId, catalog.loading]);
 
   const getCatalogMeta = (productName: string): EditPOProductCatalogMeta | null => {
-    const p = findCatalogProduct(productName);
+    const p = findProduct(productName);
     if (!p) return null;
     return {
       hasCategory: p.hasCategory,
@@ -258,31 +229,54 @@ export default function ClientEditPOScreen({ navigation, route }: any) {
     };
   };
 
-  const getEditPOCategoryOptions = (productName: string) => {
-    const p = findCatalogProduct(productName);
-    if (!p?.hasCategory || !p.categories?.length) return [];
-    return p.categories;
-  };
-
-  const getEditPOSubjectOptions = (productName: string) => {
-    const p = findCatalogProduct(productName);
-    if (!p?.hasSubjects || !p.subjects?.length) return [];
-    return p.subjects;
-  };
-
-  const getEditPOLevelOptions = (productName: string) => {
-    const p = findCatalogProduct(productName);
-    if (!p?.productLevels?.length) return [];
-    return p.productLevels;
-  };
-
-  const getEditPOSpecOptions = (productName: string) => {
-    const p = findCatalogProduct(productName);
-    if (!p?.hasSpecs || !Array.isArray(p.specs) || p.specs.length === 0) return [];
-    return p.specs.map(String);
-  };
+  const getEditPOCategoryOptions = (productName: string) => getProductCategories(productName);
+  const getEditPOSubjectOptions = (productName: string) => getProductSubjects(productName);
+  const getEditPOLevelOptions = (productName: string) => getProductLevels(productName);
+  const getEditPOSpecOptions = (productName: string) => getProductSpecs(productName);
 
   const CLASS_OPTIONS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
+
+  /** Specimen / related-item lines keep their own text; others fall back to the catalogue spec (web persistEditPoSpecs). */
+  const persistEditPoSpecs = (productName: string, savedSpec?: string): string => {
+    if (isMarkerSpecs(productName, savedSpec, getProductRelatedItems)) return String(savedSpec).trim();
+    const specs = getProductSpecs(productName);
+    if (specs.length === 0) return '';
+    const current = String(savedSpec || '').trim();
+    if (current && specs.includes(current)) return current;
+    return specs[0] || '';
+  };
+
+  const isFreeEditPoRow = (row: { category?: string; itemType?: string; specs?: string }) =>
+    isSpecimenRow(row) || !isBillableDcRow(row);
+
+  /** Edit PO billing, same rules as Close Lead (packages, divisors, free specimen / Training Material rows). */
+  const editPoBilling = (rows: ProductRow[]) => {
+    const named = rows.filter((row) => row.product_name && row.product_name.trim() !== '');
+    const { paymentBreakdown, totalAmount } = applyPaymentDivisorsToBreakdown(
+      named.map((row) => ({
+        rowId: row.id,
+        product: row.product_name,
+        class: row.class || '1',
+        section: row.section,
+        program: row.program,
+        stream: row.stream,
+        category: row.category,
+        itemType: row.itemType,
+        strength: Number(row.quantity) || 0,
+        unitPrice: Number(row.unit_price) || 0,
+        level: row.level && row.level !== '-' ? row.level : undefined,
+        subject: row.subject && row.subject !== '-' ? row.subject : undefined,
+        subjectPackage: Boolean(row.subjectPackage),
+        specs: row.specs,
+      })),
+      getCalculationType,
+      getCatalogFallbackCount,
+    );
+    const totals = new Map<string, number>();
+    paymentBreakdown.forEach((line) => totals.set(String(line.rowId), Number(line.total) || 0));
+    return { totals, totalAmount: Math.round((Number(totalAmount) || 0) * 100) / 100 };
+  };
+  const editPoBill = useMemo(() => editPoBilling(products), [products, catalog.products]);
 
   const loadOrder = async () => {
     if (!orderId) return;
@@ -290,59 +284,120 @@ export default function ClientEditPOScreen({ navigation, route }: any) {
       setLoading(true);
       const data = await apiService.get(`/dc-orders/${orderId}`);
       setOrder(data);
+      const pe = data.pendingEdit?.status === 'pending' ? data.pendingEdit : null;
       setTransport({
-        transport_name: data.transport_name || data.pendingEdit?.transport_name || '',
-        transport_location: data.transport_location || data.pendingEdit?.transport_location || '',
-        transportation_landmark:
-          data.transportation_landmark || data.pendingEdit?.transportation_landmark || '',
-        pincode: data.pincode || data.pendingEdit?.pincode || '',
+        transport_name: pe?.transport_name ?? data.transport_name ?? '',
+        transport_location: pe?.transport_location ?? data.transport_location ?? '',
+        transportation_landmark: pe?.transportation_landmark ?? data.transportation_landmark ?? '',
+        pincode: pe?.pincode ?? data.pincode ?? '',
       });
-      const rawProducts: any[] =
-        data.products && Array.isArray(data.products) && data.products.length > 0
-          ? data.products
-          : [{ product_name: 'Abacus', quantity: 1, unit_price: 0, term: 'Term 1' }];
-      const hasLevel1 = rawProducts.some((p) => isLevelOne(p.level));
-      const term1Rows: ProductRow[] = [];
-      const term2Raw: any[] = [];
-      rawProducts.forEach((p: any, idx: number) => {
-        const term = resolveRowTerm(
-          { term: p.term, level: p.level },
-          hasLevel1,
-        );
-        if (term === 'Term 2') {
-          term2Raw.push({
-            ...(typeof p === 'object' ? p : {}),
-            product_name: p.product_name || p.product || 'Abacus',
-            quantity: Number(p.quantity) || 1,
-            unit_price: Number(p.unit_price) || 0,
-            level: p.level,
-            term: 'Term 2',
-          });
-          return;
+
+      // This client's DC (My Clients): params first, else the non Term-Wise DC on the order.
+      let resolvedDcId: string | null = paramDcId || null;
+      if (!resolvedDcId) {
+        try {
+          const res = await apiService.get(`/dc?dcOrderId=${encodeURIComponent(orderId)}`);
+          const list: any[] = Array.isArray(res) ? res : Array.isArray(res?.data) ? res.data : [];
+          resolvedDcId = idOf(list.find((d: any) => d?.status !== 'scheduled_for_later' && !d?.parentDcId));
+        } catch {
+          resolvedDcId = null;
         }
-        term1Rows.push({
-          id: `existing_${idx}_${p.product_name || p.product || idx}`,
-          product_name: p.product_name || p.product || 'Abacus',
-          quantity: Number(p.quantity) || 1,
-          unit_price: Number(p.unit_price) || 0,
-          term: 'Term 1',
-          level: p.level,
-          class: p.class != null ? String(p.class) : undefined,
-          specs: p.specs,
-          subject: p.subject,
-          productCategory: p.productCategory || p.category,
-          isNew: false,
-          _source: typeof p === 'object' ? { ...p } : undefined,
-        });
-      });
-      setProducts(term1Rows);
-      setTerm2Products(term2Raw);
-      setOriginalEditRowIds(new Set(term1Rows.map((r) => r.id)));
-      setOriginalEditRowPrices(
-        Object.fromEntries(term1Rows.map((r) => [r.id, r.unit_price])),
+      }
+      setDcId(resolvedDcId);
+      let fullDC: any = null;
+      if (resolvedDcId) {
+        try {
+          fullDC = await apiService.get(`/dc/${resolvedDcId}`);
+        } catch {
+          fullDC = null;
+        }
+      }
+
+      const orderProducts: any[] = (pe?.products?.length ? pe.products : data.products) || [];
+      const dcDetailsRaw = dedupeProductDetailLines(
+        (Array.isArray(fullDC?.productDetails) ? fullDC.productDetails : []).filter(
+          (p: any) => p?.closeLeadDestination !== 'TERM_WISE_DC',
+        ),
       );
-      setOriginalProductNames(
-        rawProducts.map((p) => normalizeProductName(p.product_name || p.product)).filter(Boolean),
+      // Last submitted Edit PO (pending) is what the user just saved.
+      let dcDetails: any[] =
+        pe?.products?.length > 0
+          ? pe.products.map((p: any) => orderProductToClientDcDetail(p)).filter((p: any) => p.product)
+          : dcDetailsRaw;
+      if (!dcDetails.length && !fullDC) {
+        // No DC linked: fall back to the saved order lines.
+        dcDetails = orderProducts.map((p: any) => orderProductToClientDcDetail(p)).filter((p: any) => p.product);
+      }
+      const rowOpts: ResolveClientDCRowOpts = { hasProductCategories, getProductCategories };
+      const usedOrderIdx = new Set<number>();
+      const rowsFromDetails: ProductRow[] = dcDetails.map((p: any, idx: number) => {
+        const name = p.product || p.productName || p.product_name || '';
+        const ord = findMatchingOrderProduct(orderProducts, p, idx, usedOrderIdx);
+        const merged = ord
+          ? {
+              ...p,
+              product: name,
+              class: p.class ?? ord.class,
+              specs: p.specs ?? ord.specs,
+              productCategory: p.productCategory ?? ord.productCategory,
+              strength: Number(p.strength) || Number(p.quantity) || 0,
+              quantity: Number(p.quantity) || Number(p.strength) || 0,
+              price: p.price ?? ord.unit_price,
+              level: p.level || ord.level,
+              term: p.term ?? ord.term,
+              subject: p.subject ?? ord.subject,
+              selected_subjects: p.selected_subjects ?? ord.selected_subjects,
+              lineId: p.lineId || ord.lineId,
+            }
+          : p;
+        const resolved = resolveClientDCRowFields(merged, name, rowOpts);
+        const savedLevel = (merged.level && String(merged.level).trim()) || '';
+        const level = savedLevel && savedLevel !== '-' ? savedLevel : '-';
+        const term = persistProductTerm({ term: merged.term, level: savedLevel || level });
+        const lineId = ensureProductLineId(merged, idx);
+        const price = Number(merged.price ?? merged.unit_price ?? ord?.unit_price) || 0;
+        return {
+          id: lineId,
+          lineId,
+          product_name: name,
+          quantity: Number(merged.quantity ?? merged.strength) || 0,
+          unit_price: price,
+          priceUnlocked:
+            !(price > 0) &&
+            !(canonicalDcRowCategory(merged.category) === 'Training Material' || isSpecimenRow(merged)),
+          class: resolved.class,
+          specs: persistEditPoSpecs(name, resolved.specs),
+          productCategory: resolved.productCategory,
+          category: merged.category,
+          strength: Number(merged.strength ?? merged.quantity) || 0,
+          subject: merged.subject,
+          selected_subjects: Array.isArray(merged.selected_subjects) ? merged.selected_subjects : undefined,
+          level,
+          term,
+          itemType: merged.itemType || undefined,
+          subjectPackage: Boolean(merged.subjectPackage ?? ord?.subjectPackage),
+          dispatchMode: merged.dispatchMode ?? ord?.dispatchMode,
+          section: merged.section || undefined,
+          program: merged.program || undefined,
+          stream: merged.stream || undefined,
+          isNew: false,
+        };
+      });
+      const expanded = expandEditPoRowsBySubject(rowsFromDetails, getProductSubjects);
+      setProducts(expanded);
+
+      const originalNames: string[] = Array.from(
+        new Set((data.products || []).map((p: any) => normalizeProductName(p.product_name)).filter(Boolean)),
+      );
+      setOriginalProductNames(originalNames);
+      setOriginalPdfUrl(data.pod_proof_url || fullDC?.poPhotoUrl || '');
+      setOriginalVariantKeys(
+        Array.from(
+          new Set([
+            ...collectOriginalEditPoVariantKeys(data.products || [], getProductId, getProductCategories),
+            ...(pe ? [] : collectOriginalEditPoVariantKeys(expanded, getProductId, getProductCategories)),
+          ]),
+        ),
       );
     } catch (e: any) {
       showAlert('Error', e?.message || 'Failed to load order');
@@ -414,21 +469,39 @@ export default function ClientEditPOScreen({ navigation, route }: any) {
     }
   };
 
-  const updateProduct = (index: number, field: 'quantity' | 'unit_price', value: number) => {
+  const isOriginalRow = (row: ProductRow) => isOriginalEditPoLine(row, originalVariantKeys, getProductId);
+  const priceLocked = (row: ProductRow) => isFreeEditPoRow(row) || (isOriginalRow(row) && !row.priceUnlocked);
+
+  const updateProduct = (index: number, field: 'quantity' | 'unit_price', value: number | string) => {
     const row = products[index];
-    if (
-      field === 'unit_price' &&
-      (!row?.isNew || originalEditRowIds.has(row.id))
-    ) {
-      return;
-    }
+    if (field === 'unit_price' && row && priceLocked(row)) return;
     const next = [...products];
     if (field === 'quantity') {
-      next[index] = { ...next[index], quantity: value, strength: value };
+      const n = Number(value) || 0;
+      next[index] = { ...next[index], quantity: n, strength: n };
     } else {
-      next[index] = { ...next[index], [field]: value };
+      next[index] = { ...next[index], unit_price: value };
     }
     setProducts(next);
+  };
+
+  /** Row DC category; Training Material / Shortage are free, switching back restores the price (web). */
+  const updateRowCategory = (index: number, value: string) => {
+    setProducts((rows) =>
+      rows.map((r, i) => {
+        if (i !== index) return r;
+        const free = !isBillableDcRow({ category: value });
+        const paid = r.paidUnitPrice ?? r.unit_price;
+        const restored = Number(paid) || 0;
+        return {
+          ...r,
+          category: value,
+          unit_price: free ? 0 : restored || '',
+          paidUnitPrice: free ? paid : undefined,
+          priceUnlocked: !free && !(restored > 0) ? true : r.priceUnlocked,
+        };
+      }),
+    );
   };
 
   const updateProductField = (
@@ -437,12 +510,10 @@ export default function ClientEditPOScreen({ navigation, route }: any) {
     value: string,
   ) => {
     const next = [...products];
-    const candidate = { ...next[index], [field]: value };
+    const candidate: ProductRow = { ...next[index], [field]: value };
+    if (field === 'subject') candidate.selected_subjects = value ? [value] : [];
     if (
-      (field === 'productCategory' ||
-        field === 'subject' ||
-        field === 'level' ||
-        field === 'specs') &&
+      (field === 'productCategory' || field === 'subject' || field === 'level' || field === 'specs') &&
       editPORowIdentityPatchIsDuplicate(next, candidate, getCatalogMeta, next[index]?.id)
     ) {
       showAlert('Already exists', EDIT_PO_DUPLICATE_MESSAGE);
@@ -457,16 +528,22 @@ export default function ClientEditPOScreen({ navigation, route }: any) {
     const specOptions = getEditPOSpecOptions(name);
     const subjectOptions = getEditPOSubjectOptions(name);
     const levelOptions = getEditPOLevelOptions(name);
-    const level = variant.level ?? levelOptions[0];
+    const level = variant.level ?? levelOptions[0] ?? '-';
+    const subject = variant.subject ?? subjectOptions[0];
+    const id = `new_${Date.now()}_${name}`;
     return {
-      id: `new_${Date.now()}_${name}`,
+      id,
+      lineId: id,
       product_name: name,
       quantity: 1,
       unit_price: 0,
-      term: 'Term 1',
+      priceUnlocked: true,
+      term: persistProductTerm({ level }),
       class: '1',
+      category: 'New Students',
       productCategory: variant.productCategory ?? catOptions[0],
-      subject: variant.subject ?? subjectOptions[0],
+      subject,
+      selected_subjects: subject ? [subject] : undefined,
       level,
       specs: variant.specs ?? specOptions[0],
       isNew: true,
@@ -474,12 +551,7 @@ export default function ClientEditPOScreen({ navigation, route }: any) {
   };
 
   const addCatalogProduct = (name: string) => {
-    const variant = pickUnusedEditPOVariant(
-      name,
-      getCatalogMeta(name),
-      products,
-      getCatalogMeta,
-    );
+    const variant = pickUnusedEditPOVariant(name, getCatalogMeta(name), products, getCatalogMeta);
     if (variant === null) {
       showAlert('Already exists', EDIT_PO_DUPLICATE_MESSAGE);
       return;
@@ -493,14 +565,11 @@ export default function ClientEditPOScreen({ navigation, route }: any) {
     setShowAddProductModal(false);
   };
 
-  const editPORowNeedsApproval = (row: { id: string; isNew?: boolean }) =>
-    row.isNew === true || !originalEditRowIds.has(row.id);
-
-  const hasNewProducts = products.some(editPORowNeedsApproval);
+  const hasNewProducts = editPoHasNewCommercialLines(products, originalVariantKeys, getProductId);
 
   const removeProduct = (index: number) => {
     const row = products[index];
-    if (!row?.isNew && originalProductNames.includes(normalizeProductName(row.product_name))) {
+    if (!row?.isNew && isOriginalRow(row)) {
       showAlert('Not allowed', 'Original PO products cannot be removed here.');
       return;
     }
@@ -509,10 +578,6 @@ export default function ClientEditPOScreen({ navigation, route }: any) {
 
   const handleSave = async () => {
     if (!orderId) return;
-    if (order?.pendingEdit?.status === 'pending') {
-      showAlert('Pending', 'There is already a PO edit request waiting for manager approval.');
-      return;
-    }
     const transport_name = (transport.transport_name || '').trim();
     const transport_location = (transport.transport_location || '').trim();
     const transportation_landmark = (transport.transportation_landmark || '').trim();
@@ -524,118 +589,147 @@ export default function ClientEditPOScreen({ navigation, route }: any) {
       );
       return;
     }
-    const invalid = products.filter(
-      (p) =>
-        p.product_name?.trim() &&
-        ((Number(p.quantity) || 0) <= 0 || (Number(p.unit_price) || 0) <= 0),
-    );
+    // Quantity always; unit price only for billed rows (specimen / Training Material go free).
+    const invalid = products.filter((row) => {
+      if (!row.product_name?.trim()) return false;
+      if (!row.quantity || row.quantity <= 0) return true;
+      return !isFreeEditPoRow(row) && (!row.unit_price || Number(row.unit_price) <= 0);
+    });
     if (invalid.length > 0) {
-      showAlert('Required', 'Each product must have quantity and unit price greater than 0.');
+      showAlert('Required', 'Please fill in Quantity and Unit Price for all products');
+      return;
+    }
+    const missingSpecs = products.filter((row) => {
+      if (!row.product_name?.trim()) return false;
+      if (getProductSpecs(row.product_name).length === 0) return false;
+      return !persistEditPoSpecs(row.product_name, row.specs);
+    });
+    if (missingSpecs.length > 0) {
+      showAlert('Required', 'Please select Specs for all products that require it');
       return;
     }
 
-    const term1Payload = products
-      .filter((p) => p.product_name?.trim())
-      .map((p) => {
-        const src = p._source || {};
-        // Edit PO is a commercial update. Do not send lead qualification fields,
-        // otherwise a historical Warm status can trigger Chance % validation here.
-        const { status: _status, chance: _chance, lead_status: _leadStatus, ...commercialSrc } = src;
-        const priceEditable = p.isNew === true && !originalEditRowIds.has(p.id);
-        const unit_price = priceEditable
-          ? Number(p.unit_price) || 0
-          : Number(originalEditRowPrices[p.id] ?? p.unit_price) || 0;
-        return {
-          ...commercialSrc,
-          product_name: p.product_name.trim(),
-          quantity: Number(p.quantity) || 0,
-          unit_price,
-          strength: Number(p.quantity) || 0,
-          class: p.class || (src as any).class,
-          level: p.level || (src as any).level,
-          specs: p.specs || (src as any).specs,
-          subject: p.subject || (src as any).subject,
-          productCategory: p.productCategory || (src as any).productCategory,
-          term: 'Term 1',
-        };
-      });
-    // Keep Term 2 lines on the order (managed via Term-Wise DC, not this screen)
-    const term2Payload = term2Products.map((p) => {
-      const { status: _status, chance: _chance, lead_status: _leadStatus, ...commercialProduct } = p;
+    const named = products.filter((row) => row.product_name && row.product_name.trim() !== '');
+    const subjectOf = (row: ProductRow) =>
+      row.subject && String(row.subject).trim() !== '-' ? String(row.subject).trim() : undefined;
+    const subjectsOf = (row: ProductRow) =>
+      subjectOf(row) ? String(row.subject).split(',').map((d) => d.trim()).filter(Boolean) : [];
+    const seriesOf = (row: ProductRow) =>
+      hasProductCategories(row.product_name)
+        ? String(row.productCategory || '').trim() || getProductCategories(row.product_name)[0] || undefined
+        : undefined;
+    const levelOf = (row: ProductRow) => {
+      const raw = String(row.level || '').trim();
+      return !raw || raw === '-' ? '' : raw;
+    };
+    const unitPriceOf = (row: ProductRow) => (isFreeEditPoRow(row) ? 0 : Number(row.unit_price) || 0);
+
+    const productsPayload = named.map((row) => {
+      const level = levelOf(row);
+      const qty = Number(row.quantity) || 0;
       return {
-        ...commercialProduct,
-        product_name: p.product_name || p.product || 'Abacus',
-        quantity: Number(p.quantity) || 0,
-        unit_price: Number(p.unit_price) || 0,
-        term: 'Term 2',
+        lineId: ensureProductLineId(row),
+        product_name: row.product_name,
+        quantity: qty,
+        unit_price: unitPriceOf(row),
+        total: editPoBill.totals.get(row.id) ?? 0,
+        class: row.class && String(row.class).trim() !== '' ? String(row.class).trim() : '1',
+        itemType: row.itemType || undefined,
+        subjectPackage: Boolean(row.subjectPackage),
+        dispatchMode: row.dispatchMode || undefined,
+        section: row.section || undefined,
+        program: row.program || undefined,
+        stream: row.stream || undefined,
+        specs: persistEditPoSpecs(row.product_name || row.product || '', row.specs),
+        productCategory: seriesOf(row),
+        category: row.category || undefined,
+        strength: qty,
+        term: persistProductTerm({ term: row.term, level }),
+        level,
+        subject: subjectOf(row),
+        selected_subjects: subjectsOf(row),
+        closeLeadDestination: 'MY_CLIENT',
       };
     });
-    const productsPayload = [...term1Payload, ...term2Payload];
-    const total_amount = productsPayload.reduce(
-      (s, p) => s + (Number(p.quantity) || 0) * (Number(p.unit_price) || 0),
-      0,
-    );
+    const total_amount = editPoBill.totalAmount;
+    const pe = order?.pendingEdit?.status === 'pending' ? order.pendingEdit : null;
+    const pick = (key: string) => pe?.[key] ?? order?.[key] ?? '';
+    const pod_proof_url = pick('pod_proof_url');
     const payload = {
-      school_name: order?.school_name || '',
-      contact_person: order?.contact_person || '',
-      contact_mobile: order?.contact_mobile || '',
-      contact_person2: order?.contact_person2 || '',
-      contact_mobile2: order?.contact_mobile2 || '',
-      email: order?.email || '',
-      address: order?.address || '',
-      school_type: order?.school_type || '',
-      zone: order?.zone || '',
-      location: order?.location || '',
-      remarks: order?.remarks || '',
+      school_name: pick('school_name'),
+      contact_person: pick('contact_person'),
+      contact_mobile: pick('contact_mobile'),
+      contact_person2: pick('contact_person2'),
+      contact_mobile2: pick('contact_mobile2'),
+      email: pick('email'),
+      address: pick('address'),
+      school_type: pick('school_type'),
+      zone: pick('zone'),
+      location: pick('location'),
+      remarks: pick('remarks'),
+      pod_proof_url,
       products: productsPayload,
       total_amount,
       transport_name,
       transport_location,
       transportation_landmark,
       pincode,
-      pod_proof_url: order?.pod_proof_url || '',
+      originatingDcId: dcId || undefined,
     };
+    const dcProductDetailsPayload = named.map((row) => {
+      const level = levelOf(row);
+      const qty = Number(row.quantity) || 0;
+      return {
+        lineId: ensureProductLineId(row),
+        product: row.product_name,
+        class: row.class && String(row.class).trim() !== '' ? String(row.class).trim() : '1',
+        specs: persistEditPoSpecs(row.product_name || row.product || '', row.specs),
+        quantity: qty,
+        strength: qty,
+        level,
+        term: persistProductTerm({ term: row.term, level }),
+        subject: subjectOf(row),
+        selected_subjects: subjectsOf(row),
+        category: row.category || undefined,
+        productCategory: seriesOf(row),
+        price: unitPriceOf(row),
+        unit_price: unitPriceOf(row),
+        total: editPoBill.totals.get(row.id) ?? 0,
+        itemType: row.itemType || undefined,
+        subjectPackage: Boolean(row.subjectPackage),
+        dispatchMode: row.dispatchMode || undefined,
+        section: row.section || undefined,
+        program: row.program || undefined,
+        stream: row.stream || undefined,
+        closeLeadDestination: 'MY_CLIENT',
+      };
+    });
 
+    const pdfChanged = String(pod_proof_url || '') !== String(originalPdfUrl || '') && !!originalPdfUrl;
     setSaving(true);
     try {
-      if (hasNewProducts) {
-        // New products require Executive Manager approval (PO Edit Request)
+      if (pdfChanged || hasNewProducts) {
+        // New commercial lines need Executive Manager approval (PO Edit Request).
         await apiService.post(`/dc-orders/${orderId}/submit-edit`, payload);
-        showAlert('Sent to executive manager for approval');
       } else {
-        await apiService.put(`/dc-orders/${orderId}`, {
-          products: productsPayload,
-          total_amount,
-          transport_name,
-          transport_location,
-          transportation_landmark,
-          pincode,
-        });
-        const dcId = route?.params?.dcId as string | undefined;
-        if (dcId) {
-          try {
-            await apiService.put(`/dc/${dcId}`, {
-              productDetails: productsPayload.map((p) => ({
-                product: p.product_name,
-                quantity: p.quantity,
-                strength: p.quantity,
-                unit_price: p.unit_price,
-                price: p.unit_price,
-                term: p.term || 'Term 1',
-              })),
-              status: 'po_submitted',
-            });
-          } catch {
-            /* optional sync */
-          }
-        }
-        showAlert('PO submitted');
+        await apiService.put(`/dc-orders/${orderId}`, payload);
       }
+      if (dcId) {
+        await apiService.put(`/dc/${dcId}`, {
+          productDetails: dcProductDetailsPayload,
+          requestedQuantity: dcProductDetailsPayload.reduce((s, p) => s + (Number(p.quantity) || 0), 0),
+        });
+      }
+      showAlert(
+        pdfChanged || hasNewProducts
+          ? 'PO edit request submitted! Zonal Manager will review and approve.'
+          : 'PO updated successfully!',
+      );
       if (!navigateRoot('DCClient')) {
         navigation.navigate('DCClient');
       }
     } catch (e: any) {
-      showAlert('Error', e?.message || 'Failed to save');
+      showAlert('Error', e?.message || 'Failed to update PO');
     } finally {
       setSaving(false);
     }
@@ -672,13 +766,8 @@ export default function ClientEditPOScreen({ navigation, route }: any) {
   );
   }
 
-  const grandTotal = products.reduce((s, p) => {
-    const priceEditable = p.isNew === true && !originalEditRowIds.has(p.id);
-    const unitPrice = priceEditable
-      ? Number(p.unit_price) || 0
-      : Number(originalEditRowPrices[p.id] ?? p.unit_price) || 0;
-    return s + (Number(p.quantity) || 0) * unitPrice;
-  }, 0);
+  // Billed total, same rules as Close Lead (packages, divisors, free rows ₹0).
+  const grandTotal = editPoBill.totalAmount;
 
   return (
     <ScreenShell title={`Edit PO - ${order.school_name || 'Client'}`}>
@@ -785,12 +874,6 @@ export default function ClientEditPOScreen({ navigation, route }: any) {
               <Text style={styles.addProductBtnText}>+ Add Product</Text>
             </TouchableOpacity>
           </View>
-          {term2Products.length > 0 ? (
-            <Text style={styles.hint}>
-              {term2Products.length} Term 2 product
-              {term2Products.length === 1 ? '' : 's'} hidden here — manage in Term-Wise DC.
-            </Text>
-          ) : null}
           {hasNewProducts ? (
             <Text style={styles.hint}>
               New products require Executive Manager approval (PO Edit Request) when you save.
@@ -812,12 +895,11 @@ export default function ClientEditPOScreen({ navigation, route }: any) {
                 const subjectOptions = getEditPOSubjectOptions(p.product_name);
                 const levelOptions = getEditPOLevelOptions(p.product_name);
                 const specOptions = getEditPOSpecOptions(p.product_name);
-                const lockedUnitPrice = Number(originalEditRowPrices[p.id] ?? p.unit_price) || 0;
-                const priceEditable = p.isNew === true && !originalEditRowIds.has(p.id);
-                const displayUnitPrice = priceEditable ? Number(p.unit_price) || 0 : lockedUnitPrice;
-                const lineTotal = (p.quantity || 0) * displayUnitPrice;
-                const canRemove =
-                  !!p.isNew || !originalProductNames.includes(normalizeProductName(p.product_name));
+                const locked = priceLocked(p);
+                const free = isFreeEditPoRow(p);
+                const lineTotal = editPoBill.totals.get(p.id) ?? 0;
+                const marker = isSpecimenRow(p) || isRelatedItemRow(p);
+                const canRemove = !!p.isNew || !isOriginalRow(p);
 
                 const renderMetaCell = (
                   width: number,
@@ -826,64 +908,70 @@ export default function ClientEditPOScreen({ navigation, route }: any) {
                   onChange: (v: string) => void,
                 ) => (
                   <EditPOTableCell width={width}>
-                    {options.length > 0 ? (
+                    {options.length > 0 && !marker ? (
                       <WebSelect
                         compact
                         value={value || options[0]}
                         onValueChange={onChange}
-                        items={options.map((o) => ({ label: o, value: o }))}
+                        items={(value && !options.includes(value) ? [value, ...options] : options).map((o) => ({
+                          label: o,
+                          value: o,
+                        }))}
                       />
                     ) : (
-                      <Text style={styles.emptyMeta}>-</Text>
+                      <Text style={styles.emptyMeta}>{value && value !== '-' ? value : '-'}</Text>
                     )}
                   </EditPOTableCell>
                 );
 
                 return (
                   <View key={p.id} style={[styles.productRowWide, { width: EDIT_PO_TABLE_WIDTH }]}>
-                    <EditPOTableCell width={EDIT_PO_TABLE_COLUMNS[0].width}>
+                    <EditPOTableCell width={COL.product}>
                       <Text style={styles.productName} numberOfLines={2}>
                         {p.product_name}
                       </Text>
+                      {isSpecimenRow(p) ? <Text style={styles.freeTag}>Specimen copy · no billing</Text> : null}
+                      {isRelatedItemRow(p) ? (
+                        <Text style={styles.relatedTag}>Related item{free ? ' · no billing' : ''}</Text>
+                      ) : null}
+                      {!marker && free ? <Text style={styles.freeTag}>Training Material · no billing</Text> : null}
+                      {p.section || p.program || p.stream ? (
+                        <Text style={styles.emptyMeta}>
+                          {[p.section && p.section !== 'ALL' ? `Sec ${p.section}` : 'Whole class', p.program, p.stream]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </Text>
+                      ) : null}
                       {canRemove ? <Text style={styles.newBadge}>New</Text> : null}
                     </EditPOTableCell>
-                    {renderMetaCell(
-                      EDIT_PO_TABLE_COLUMNS[1].width,
-                      catOptions,
-                      p.productCategory,
-                      (v) => updateProductField(idx, 'productCategory', v),
+                    <EditPOTableCell width={COL.dcCategory}>
+                      {marker ? (
+                        <Text style={styles.emptyMeta}>Training Material</Text>
+                      ) : (
+                        <DcCategoryPicker value={p.category} onChange={(v) => updateRowCategory(idx, v)} />
+                      )}
+                    </EditPOTableCell>
+                    {renderMetaCell(COL.category, catOptions, p.productCategory, (v) =>
+                      updateProductField(idx, 'productCategory', v),
                     )}
-                    <EditPOTableCell width={EDIT_PO_TABLE_COLUMNS[2].width}>
-                      {p.isNew || p.class ? (
+                    <EditPOTableCell width={COL.class}>
+                      {!marker && (p.isNew || p.class) ? (
                         <WebSelect
                           compact
                           value={p.class || CLASS_OPTIONS[0]}
                           onValueChange={(v) => updateProductField(idx, 'class', v)}
-                          items={CLASS_OPTIONS.map((c) => ({ label: c, value: c }))}
+                          items={(p.class && !CLASS_OPTIONS.includes(p.class) ? [p.class, ...CLASS_OPTIONS] : CLASS_OPTIONS).map(
+                            (c) => ({ label: c, value: c }),
+                          )}
                         />
                       ) : (
-                        <Text style={styles.emptyMeta}>-</Text>
+                        <Text style={styles.emptyMeta}>{p.class || '-'}</Text>
                       )}
                     </EditPOTableCell>
-                    {renderMetaCell(
-                      EDIT_PO_TABLE_COLUMNS[3].width,
-                      subjectOptions,
-                      p.subject,
-                      (v) => updateProductField(idx, 'subject', v),
-                    )}
-                    {renderMetaCell(
-                      EDIT_PO_TABLE_COLUMNS[4].width,
-                      levelOptions,
-                      p.level,
-                      (v) => updateProductField(idx, 'level', v),
-                    )}
-                    {renderMetaCell(
-                      EDIT_PO_TABLE_COLUMNS[5].width,
-                      specOptions,
-                      p.specs,
-                      (v) => updateProductField(idx, 'specs', v),
-                    )}
-                    <EditPOTableCell width={EDIT_PO_TABLE_COLUMNS[6].width} align="center">
+                    {renderMetaCell(COL.subject, subjectOptions, p.subject, (v) => updateProductField(idx, 'subject', v))}
+                    {renderMetaCell(COL.level, levelOptions, p.level, (v) => updateProductField(idx, 'level', v))}
+                    {renderMetaCell(COL.specs, specOptions, p.specs, (v) => updateProductField(idx, 'specs', v))}
+                    <EditPOTableCell width={COL.qty} align="center">
                       <WebInput
                         style={[styles.tableInput, styles.qtyInput]}
                         value={String(p.quantity)}
@@ -897,23 +985,23 @@ export default function ClientEditPOScreen({ navigation, route }: any) {
                         selectTextOnFocus
                       />
                     </EditPOTableCell>
-                    <EditPOTableCell width={EDIT_PO_TABLE_COLUMNS[7].width} align="right">
-                      {priceEditable ? (
+                    <EditPOTableCell width={COL.price} align="right">
+                      {!locked ? (
                         <WebInput
                           style={styles.tableInput}
-                          value={String(p.unit_price)}
-                          onChangeText={(t) => updateProduct(idx, 'unit_price', parseFloat(t) || 0)}
+                          value={String(p.unit_price ?? '')}
+                          onChangeText={(t) => updateProduct(idx, 'unit_price', t.replace(/[^0-9.]/g, ''))}
                           keyboardType="decimal-pad"
                           placeholder="Price"
                         />
                       ) : (
-                        <Text style={styles.tablePriceLocked}>{lockedUnitPrice.toFixed(2)}</Text>
+                        <Text style={styles.tablePriceLocked}>{(free ? 0 : Number(p.unit_price) || 0).toFixed(2)}</Text>
                       )}
                     </EditPOTableCell>
-                    <EditPOTableCell width={EDIT_PO_TABLE_COLUMNS[8].width} align="right">
+                    <EditPOTableCell width={COL.total} align="right">
                       <Text style={styles.lineTotal}>{lineTotal.toFixed(2)}</Text>
                     </EditPOTableCell>
-                    <EditPOTableCell width={EDIT_PO_TABLE_COLUMNS[9].width} align="center">
+                    <EditPOTableCell width={COL.action} align="center">
                       {canRemove ? (
                         <TouchableOpacity style={styles.removeBtn} onPress={() => removeProduct(idx)}>
                           <Text style={styles.removeBtnText}>✕</Text>
@@ -1178,6 +1266,8 @@ const styles = StyleSheet.create({
   },
   addProductBtnText: { ...typography.body.small, color: colors.textLight, fontWeight: '700' },
   productNameCol: { flex: 1, marginRight: 4 },
+  freeTag: { fontSize: 11, color: '#B45309', marginTop: 2 },
+  relatedTag: { fontSize: 11, color: '#1D4ED8', marginTop: 2 },
   newBadge: {
     ...typography.label.small,
     color: colors.warning,

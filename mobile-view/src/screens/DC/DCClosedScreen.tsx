@@ -5,13 +5,17 @@ import { colors, radii, spacing } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebButton, WebInput, WebSelect } from '../../ui/WebPrimitives';
+import { useAuth } from '../../context/AuthContext';
+import { SentToSeniorList } from '../../components/dc/SentToSeniorList';
+import { uniqueProductNames } from '../../lib/crm/productNames';
+import { resolveClosedSalesProductLines } from '../../components/dc/closedSalesLines';
 
 type Product = { product_name?: string; product?: string; quantity?: number; strength?: number };
 type DcOrder = {
   _id: string; school_name?: string; school_code?: string; school_type?: string; contact_mobile?: string;
   zone?: string; location?: string; city?: string; address?: string; products?: Product[];
   assigned_to?: { _id?: string; name?: string } | string; createdAt?: string; created_at?: string;
-  status?: string; pod_proof_url?: string;
+  status?: string; pod_proof_url?: string; dcRequestData?: any; pendingEdit?: any;
 };
 type Filters = { school: string; mobile: string; from: string; to: string; zone: string; executive: string; town: string };
 const EMPTY_FILTERS: Filters = { school: '', mobile: '', from: '', to: '', zone: '', executive: '', town: '' };
@@ -20,10 +24,18 @@ const listFromResponse = (response: any): DcOrder[] => Array.isArray(response) ?
 const assignedId = (item: DcOrder) => typeof item.assigned_to === 'string' ? item.assigned_to : item.assigned_to?._id || '';
 const executiveName = (item: DcOrder) => typeof item.assigned_to === 'object' ? item.assigned_to?.name || '-' : '-';
 const townOf = (item: DcOrder) => item.city || item.location || item.address?.split(',')[0]?.trim() || '-';
-const productsOf = (item: DcOrder) => !item.products?.length ? '-' : item.products.map((p) => {
-  const quantity = Number(p.quantity ?? p.strength ?? 0);
-  return `${p.product_name || p.product || 'Product'}${quantity ? ` - ${quantity}` : ''}`;
-}).join(', ');
+/** Product names only, each once (web getProductsDisplay). */
+const productsOf = (item: DcOrder) => uniqueProductNames(resolveClosedSalesProductLines(item)).join(', ') || '-';
+
+/** Term-Wise / Term 2 split entries belong on Clients -> Term Wise DC, not Closed Sales (web load). */
+const isTerm2SplitEntry = (item: DcOrder) => {
+  const req = item.dcRequestData || {};
+  if (!(req.isSplit || req.term2DCId)) return false;
+  const lines: any[] = Array.isArray(req.productDetails) && req.productDetails.length ? req.productDetails : item.products || [];
+  if (!lines.length) return false;
+  const term = (p: any) => p.term || 'Term 1';
+  return lines.every((p) => term(p) === 'Term 2') && !lines.some((p) => term(p) === 'Term 1' || p.term === 'Both');
+};
 const formatDate = (value?: string) => {
   if (!value) return '-';
   const date = new Date(value);
@@ -36,6 +48,10 @@ const poUrl = (raw?: string) => {
 };
 
 export default function DCClosedScreen({ navigation }: any) {
+  const { user } = useAuth();
+  // Coordinator (or Super Admin) accepts DCs and follows their status (web canApproveDC).
+  const canApproveDC = user?.role === 'Super Admin' || user?.role === 'Coordinator';
+  const [statusRefreshKey, setStatusRefreshKey] = useState(0);
   const [items, setItems] = useState<DcOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -48,7 +64,9 @@ export default function DCClosedScreen({ navigation }: any) {
         apiService.get('/dc-orders?status=dc_accepted&limit=1000'),
       ]);
       const byId = new Map<string, DcOrder>();
-      [...listFromResponse(requested), ...listFromResponse(accepted)].forEach((item) => byId.set(item._id, item));
+      [...listFromResponse(requested), ...listFromResponse(accepted)]
+        .filter((item) => (item.status === 'dc_requested' || item.status === 'dc_accepted') && !isTerm2SplitEntry(item))
+        .forEach((item) => byId.set(item._id, item));
       setItems(Array.from(byId.values()).sort((a, b) => new Date(b.createdAt || b.created_at || 0).getTime() - new Date(a.createdAt || a.created_at || 0).getTime()));
     } catch (error: any) {
       Alert.alert('Error', error?.message || 'Failed to load closed sales');
@@ -86,7 +104,7 @@ export default function DCClosedScreen({ navigation }: any) {
     if (!url) return Alert.alert('PO not available', 'No PO document has been uploaded for this sale.');
     try { await Linking.openURL(url); } catch { Alert.alert('Unable to open PO', 'The PO document could not be opened.'); }
   };
-  const refresh = () => { setRefreshing(true); loadData(); };
+  const refresh = () => { setRefreshing(true); setStatusRefreshKey((k) => k + 1); loadData(); };
 
   return (
     <ScreenShell title="Closed Sales" loading={loading && !refreshing} refreshing={refreshing} onRefresh={refresh}>
@@ -127,6 +145,7 @@ export default function DCClosedScreen({ navigation }: any) {
             </View>
           </View>
         ))}
+        {canApproveDC ? <SentToSeniorList refreshKey={statusRefreshKey} /> : null}
       </ScrollView>
     </ScreenShell>
   );

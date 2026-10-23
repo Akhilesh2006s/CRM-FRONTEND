@@ -20,23 +20,25 @@ import MessageBanner from '../../components/MessageBanner';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
 import { navigateRoot } from '../../navigation/navigationRef';
+import {
+  DROPPED_LINE_STATUSES,
+  PRICED_LINE_STATUSES,
+  isFollowUpProductLineComplete,
+  leadProductsToInterestedRows,
+  lineDetailLabel,
+  normalizeLeadProductLineStatus,
+  type LeadProductInterestedRow,
+} from '../../lib/crm/leadProductsInterested';
 
-const DEAL_PRODUCT_STATUS_ORDER = ['Hot', 'Warm', 'Visit Again', 'Not Met Management', 'Not Interested'] as const;
+const DEAL_PRODUCT_STATUS_ORDER = ['Hot', 'Warm', 'Visit Again', 'Yet to Visit', 'Not Interested'] as const;
 const SCHOOL_LEAD_STATUSES = new Set(['Hot', 'Warm', 'Cold']);
-const PRODUCT_LINE_STATUS_OPTIONS = [
-  { label: 'Hot', value: 'Hot' },
-  { label: 'Warm', value: 'Warm' },
-  { label: 'Visit Again', value: 'Visit Again' },
-  { label: 'Not Met Management', value: 'Not Met Management' },
-  { label: 'Not Interested', value: 'Not Interested' },
-];
+const ALL_FOLLOWUP_STATUSES = ['Hot', 'Warm', 'Visit Again', 'Yet to Visit', 'Not Interested'] as const;
+/** Last year's product on a renewal: renewed, not renewed, or still being discussed. */
+const RENEWAL_LINE_STATUSES = ['Renewed', 'Not Renewed', 'Hot', 'Warm', 'Visit Again'] as const;
 
-type ProductInterested = {
-  product_name: string;
-  term: string;
-  status: string;
-  strength: string;
-  chance: string;
+type ProductInterested = LeadProductInterestedRow & {
+  /** Status already saved on the lead. Follow-up choices are based on this, not the value being edited. */
+  savedStatus: string;
 };
 
 function todayDateString(): string {
@@ -47,15 +49,27 @@ function todayDateString(): string {
   return `${y}-${m}-${day}`;
 }
 
+/** Align product-line enums across Lead/DcOrder schemas (same as web follow-up page). */
 function normalizeProductLineStatus(status?: string): string {
   const s = (status || '').trim();
-  if (s === 'Management Not Met') return 'Not Met Management';
+  if (s === 'Management Not Met' || s === 'Not Met Management') return 'Yet to Visit';
+  // For deal priority a renewed product counts as Hot, a not-renewed one as Not Interested.
+  if (s === 'Renewed') return 'Hot';
+  if (s === 'Not Renewed') return 'Not Interested';
   return s;
+}
+
+function followUpStatusOptions(savedStatus?: string, saleType?: string): string[] {
+  if (saleType === 'renewal') return [...RENEWAL_LINE_STATUSES];
+  const status = normalizeProductLineStatus(savedStatus);
+  if (status === 'Hot') return ['Hot', 'Not Interested'];
+  if (status === 'Warm') return ['Warm', 'Hot', 'Not Interested'];
+  return [...ALL_FOLLOWUP_STATUSES];
 }
 
 function deriveLeadPriorityFromDealProducts(products: { status?: string }[]): string | null {
   let best = '';
-  let bestIdx = DEAL_PRODUCT_STATUS_ORDER.length;
+  let bestIdx: number = DEAL_PRODUCT_STATUS_ORDER.length;
   for (const p of products) {
     const st = normalizeProductLineStatus(p.status);
     const i = (DEAL_PRODUCT_STATUS_ORDER as readonly string[]).indexOf(st);
@@ -83,91 +97,29 @@ function displayLeadDealPriority(lead: {
   return 'Warm';
 }
 
-function normalizeLineStatus(status?: string): string {
-  const s = (status || '').trim();
-  if (s === 'Management Not Met') return 'Not Met Management';
-  if (['Hot', 'Warm', 'Visit Again', 'Not Met Management', 'Not Interested'].includes(s)) {
-    return s;
-  }
-  return '';
-}
-
-function leadProductsToInterested(lead: any): ProductInterested[] {
-  const schoolFallback = (lead.lead_status || lead.priority || 'Warm').trim();
-  if (Array.isArray(lead.products) && lead.products.length > 0) {
-    return lead.products.map((p: any) => ({
-      product_name: p.product_name || p.product || '',
-      term: p.term || 'Term 1',
-      status: normalizeLineStatus(p.status) || schoolFallback || 'Warm',
-      strength:
-        Number(p.strength ?? p.quantity ?? 0) > 0
-          ? String(Number(p.strength ?? p.quantity ?? 0))
-          : '',
-      chance: Number(p.chance ?? 0) > 0 ? String(Number(p.chance ?? 0)) : '',
-    }));
-  }
-  if (typeof lead.products === 'string' && lead.products.trim()) {
-    return lead.products
-      .split(',')
-      .map((name: string) => name.trim())
-      .filter(Boolean)
-      .map((name: string) => ({
-        product_name: name,
-        term: 'Term 1',
-        status: schoolFallback || 'Warm',
-        strength: '',
-        chance: '',
-      }));
-  }
-  return [];
-}
-
-function isFollowUpLineComplete(p: ProductInterested): boolean {
-  if (!p.product_name?.trim()) return false;
-  const strength = Number(p.strength) || 0;
-  const chance = Number(p.chance) || 0;
-  if (strength <= 0 || chance <= 0) return false;
-  if (p.status === 'Hot' && chance < 80) return false;
-  if (p.status === 'Warm' && chance < 20) return false;
-  return true;
-}
-
-function uniqueLeadProducts(lead: any): ProductInterested[] {
-  const rows = leadProductsToInterested(lead);
-  const map = new Map<string, ProductInterested>();
-  for (const row of rows) {
-    const key = (row.product_name || '').trim().toLowerCase();
-    if (!key) continue;
-    const prev = map.get(key);
-    if (!prev) {
-      map.set(key, row);
-      continue;
+function assigneeFromRecord(record: any): { id: string; name: string } {
+  const candidates = [record?.assigned_to, record?.managed_by, record?.createdBy];
+  for (const value of candidates) {
+    if (!value) continue;
+    if (typeof value === 'string' && value.trim()) return { id: value.trim(), name: '' };
+    if (typeof value === 'object' && value._id) {
+      return { id: String(value._id), name: String(value.name || '').trim() };
     }
-    const prevScore = (Number(prev.strength) || 0) + (Number(prev.chance) || 0);
-    const nextScore = (Number(row.strength) || 0) + (Number(row.chance) || 0);
-    if (nextScore >= prevScore) map.set(key, row);
   }
-  return Array.from(map.values());
+  return { id: '', name: '' };
 }
 
-/** Statuses that mean the school is already a client / in DC flow — not open follow-up leads. */
+/** Statuses that mean the school is already a client / in DC flow — not open follow-up leads (web list). */
 const CONVERTED_OR_CLOSED_STATUSES = new Set([
-  'saved',
-  'completed',
-  'closed',
-  'hold',
-  'dc_requested',
-  'dc_accepted',
-  'dc_approved',
-  'dc_sent_to_senior',
-  'in_transit',
+  'saved', 'completed', 'closed', 'converted', 'client',
+  'in_transit', 'dc_requested', 'dc_accepted', 'dc_approved', 'dc_sent_to_senior',
 ]);
 
 function isOpenFollowUpLead(lead: any): boolean {
   const status = String(lead?.status || '').trim().toLowerCase();
+  if (!status) return true;
   if (CONVERTED_OR_CLOSED_STATUSES.has(status)) return false;
-  // Only open pipeline leads (not yet converted to clients)
-  return status === 'pending' || status === 'processing' || status === '';
+  return status === 'pending' || status === 'processing';
 }
 
 function formatDateOnly(dateString?: string) {
@@ -207,12 +159,17 @@ function isFollowUpDateOverdue(dateString?: string): boolean {
 
 export default function LeadFollowupScreen({ navigation }: any) {
   const { user } = useAuth();
+  const seesAllFollowups =
+    user?.role === 'Super Admin' || Boolean((user as any)?.isSuperAdmin);
   const [allLeads, setAllLeads] = useState<any[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
   const [zones, setZones] = useState<string[]>([]);
   const [zoneFilter, setZoneFilter] = useState('');
   const [schoolFilter, setSchoolFilter] = useState('');
+  const [schoolCodeFilter, setSchoolCodeFilter] = useState('');
   const [mobileFilter, setMobileFilter] = useState('');
+  const [employeeFilter, setEmployeeFilter] = useState('');
+  const [bdeOptions, setBdeOptions] = useState<{ _id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -240,22 +197,39 @@ export default function LeadFollowupScreen({ navigation }: any) {
 
   useEffect(() => {
     applyFilters();
-  }, [allLeads, zoneFilter, schoolFilter, mobileFilter]);
+  }, [allLeads, zoneFilter, schoolFilter, schoolCodeFilter, mobileFilter, employeeFilter]);
+
+  useEffect(() => {
+    if (!seesAllFollowups) return;
+    const roles = ['Executive', 'Sales BDE', 'Employee', 'BDE'];
+    Promise.all(
+      roles.map((role) =>
+        apiService.get(`/employees?isActive=true&role=${encodeURIComponent(role)}`).catch(() => []),
+      ),
+    ).then((batches) => {
+      const seen = new Set<string>();
+      const list: { _id: string; name: string }[] = [];
+      for (const batch of batches) {
+        const rows = Array.isArray(batch) ? batch : batch?.data || [];
+        for (const u of Array.isArray(rows) ? rows : []) {
+          const id = String(u?._id || u?.id || '');
+          const name = String(u?.name || '').trim();
+          if (!id || !name || seen.has(id)) continue;
+          seen.add(id);
+          list.push({ _id: id, name });
+        }
+      }
+      list.sort((a, b) => a.name.localeCompare(b.name));
+      setBdeOptions(list);
+    });
+  }, [seesAllFollowups]);
 
   const loadProductCatalog = async () => {
     try {
-      let data: any;
-      try {
-        data = await apiService.get('/products/active');
-      } catch {
-        data = await apiService.get('/products');
-      }
+      const data = await apiService.get('/products/active');
       const list = Array.isArray(data) ? data : data?.data || [];
-      const names = list
-        .filter((p: any) => p.prodStatus !== 0 && p.prodStatus !== false)
-        .map((p: any) =>
-          typeof p === 'string' ? p : p.productName || p.name || p.product_name || '',
-        )
+      const names: string[] = list
+        .map((p: any) => (typeof p === 'string' ? p : p.productName || ''))
         .map((n: string) => String(n).trim())
         .filter(Boolean);
       setProductNames([...new Set(names)]);
@@ -272,38 +246,77 @@ export default function LeadFollowupScreen({ navigation }: any) {
         return;
       }
 
+      const leadsQuery = seesAllFollowups
+        ? '/leads?pipeline=followup&limit=500'
+        : `/leads?employee=${user._id}&pipeline=followup&limit=500`;
+      const ordersQuery = seesAllFollowups
+        ? '/dc-orders?pipeline=followup&limit=500'
+        : `/dc-orders?assigned_to=${user._id}&pipeline=followup&limit=500`;
       const [leadsResponse, dcOrdersResponse] = await Promise.all([
-        apiService.get(`/leads?employee=${user._id}`).catch(() => []),
-        apiService.get(`/dc-orders?assigned_to=${user._id}`).catch(() => []),
+        apiService.get(leadsQuery).catch(() => []),
+        apiService.get(ordersQuery).catch(() => []),
       ]);
 
       const allData = Array.isArray(leadsResponse) ? leadsResponse : leadsResponse?.data || [];
-      const dcOrders = Array.isArray(dcOrdersResponse) ? dcOrdersResponse : dcOrdersResponse?.data || [];
+      const dcOrders: any[] = Array.isArray(dcOrdersResponse)
+        ? dcOrdersResponse
+        : dcOrdersResponse?.data || [];
 
       const activeLeads = (Array.isArray(allData) ? allData : [])
         .filter((lead: any) => isOpenFollowUpLead(lead))
-        .map((lead: any) => ({ ...lead }));
+        .map((lead: any) => {
+          // School code from the lead, else from the matching DcOrder (same school + mobile).
+          let schoolCode = lead.school_code || lead.schoolCode;
+          if (!schoolCode && dcOrders.length > 0) {
+            const match = dcOrders.find((order: any) => {
+              const schoolMatch =
+                (order.school_name || '').toLowerCase().trim() ===
+                (lead.school_name || '').toLowerCase().trim();
+              const mobileMatch =
+                (order.contact_mobile || '').trim() === (lead.contact_mobile || '').trim();
+              return schoolMatch && mobileMatch && (order.school_code || order.dc_code);
+            });
+            if (match) schoolCode = match.school_code || match.dc_code;
+          }
+          const assignee = assigneeFromRecord(lead);
+          return {
+            ...lead,
+            school_code: schoolCode,
+            assignedToId: assignee.id,
+            assignedToName: assignee.name,
+          };
+        });
 
       const leadsFromOrders: any[] = dcOrders
         .filter((order: any) => isOpenFollowUpLead(order))
-        .map((order: any) => ({
-          _id: order._id,
-          school_name: order.school_name,
-          contact_person: order.contact_person,
-          contact_mobile: order.contact_mobile,
-          zone: order.zone,
-          status: order.status,
-          follow_up_date: order.follow_up_date || order.estimated_delivery_date,
-          location: order.location,
-          strength: order.strength,
-          createdAt: order.createdAt,
-          updatedAt: order.updatedAt,
-          remarks: order.remarks,
-          school_type: order.school_type,
-          products: Array.isArray(order.products) ? order.products : undefined,
-          lead_status: order.lead_status,
-          priority: order.priority,
-        }));
+        .map((order: any) => {
+          const assignee = assigneeFromRecord(order);
+          return {
+            _id: order._id,
+            school_name: order.school_name,
+            school_code: order.school_code,
+            contact_person: order.contact_person,
+            contact_mobile: order.contact_mobile,
+            zone: order.zone,
+            status: order.status,
+            follow_up_date: order.follow_up_date || order.estimated_delivery_date,
+            location: order.location,
+            city: order.city,
+            area: order.area,
+            strength: order.strength,
+            createdAt: order.createdAt,
+            updatedAt: order.updatedAt,
+            remarks: order.remarks,
+            school_type: order.school_type,
+            products: Array.isArray(order.products) ? order.products : undefined,
+            lead_status: order.lead_status,
+            priority: order.priority,
+            isChain: order.isChain === true,
+            assignedToId: assignee.id,
+            assignedToName: assignee.name,
+            sourceType: 'dc-order',
+          };
+        });
 
       const combinedLeads = [...activeLeads, ...leadsFromOrders];
       const followUpLeads = combinedLeads.filter((lead: any) => isOpenFollowUpLead(lead));
@@ -333,13 +346,20 @@ export default function LeadFollowupScreen({ navigation }: any) {
         l.zone?.toLowerCase().includes(zoneFilter.toLowerCase())
       );
     }
+    if (mobileFilter) {
+      filtered = filtered.filter((l) => l.contact_mobile?.includes(mobileFilter));
+    }
     if (schoolFilter) {
       filtered = filtered.filter((l) =>
         l.school_name?.toLowerCase().includes(schoolFilter.toLowerCase())
       );
     }
-    if (mobileFilter) {
-      filtered = filtered.filter((l) => l.contact_mobile?.includes(mobileFilter));
+    if (schoolCodeFilter.trim()) {
+      const code = schoolCodeFilter.trim().toLowerCase();
+      filtered = filtered.filter((l) => String(l.school_code || '').toLowerCase().includes(code));
+    }
+    if (employeeFilter) {
+      filtered = filtered.filter((l) => l.assignedToId === employeeFilter);
     }
     filtered.sort((a, b) => {
       // Newest leads first everywhere
@@ -358,11 +378,16 @@ export default function LeadFollowupScreen({ navigation }: any) {
   const openUpdateModal = (lead: any) => {
     setSelectedLead(lead);
     setModalError(null);
-    const prefilled = leadProductsToInterested(lead);
     setUpdateForm({
       follow_up_date: '',
       remarks: '',
-      productsInterested: prefilled.length > 0 ? prefilled : [],
+      productsInterested: leadProductsToInterestedRows(lead).map((row) => {
+        const savedStatus =
+          row.sale_type === 'renewal'
+            ? row.status || 'Warm'
+            : normalizeProductLineStatus(row.status) || row.status || 'Warm';
+        return { ...row, status: savedStatus, savedStatus };
+      }),
     });
     setShowUpdateModal(true);
   };
@@ -383,7 +408,8 @@ export default function LeadFollowupScreen({ navigation }: any) {
     setErrorMessage(null);
   };
 
-  const addInterestedProduct = () => {
+  /** Renewal schools: add a product the school did not buy last year (Cross-Sale). */
+  const addCrossSaleProduct = () => {
     setUpdateForm((prev) => ({
       ...prev,
       productsInterested: [
@@ -392,17 +418,14 @@ export default function LeadFollowupScreen({ navigation }: any) {
           product_name: '',
           term: 'Term 1',
           status: 'Warm',
+          savedStatus: '',
           strength: '',
+          unit_price: '',
           chance: '',
+          not_interested_reason: '',
+          sale_type: 'cross_sale',
         },
       ],
-    }));
-  };
-
-  const removeInterestedProduct = (index: number) => {
-    setUpdateForm((prev) => ({
-      ...prev,
-      productsInterested: prev.productsInterested.filter((_, i) => i !== index),
     }));
   };
 
@@ -419,6 +442,28 @@ export default function LeadFollowupScreen({ navigation }: any) {
     }));
   };
 
+  /** Status change clears fields that do not apply (same rules as the web follow-up). */
+  const changeInterestedStatus = (index: number, v: string) => {
+    setUpdateForm((prev) => ({
+      ...prev,
+      productsInterested: prev.productsInterested.map((item, i) => {
+        if (i !== index) return item;
+        const next = { ...item, status: v };
+        if (!PRICED_LINE_STATUSES.has(v)) {
+          next.strength = '';
+          next.unit_price = '';
+          next.chance = DROPPED_LINE_STATUSES.has(v) ? '0' : '';
+        } else if (v === 'Renewed') {
+          next.chance = '100';
+        } else if (next.chance === '0') {
+          next.chance = '';
+        }
+        if (!DROPPED_LINE_STATUSES.has(v)) next.not_interested_reason = '';
+        return next;
+      }),
+    }));
+  };
+
   const handleUpdateFollowup = async () => {
     if (!selectedLead) return;
     setModalError(null);
@@ -432,7 +477,7 @@ export default function LeadFollowupScreen({ navigation }: any) {
       return;
     }
     if (!updateForm.remarks?.trim()) {
-      setModalError('Remarks are required');
+      setModalError('Remarks is required');
       return;
     }
 
@@ -440,64 +485,108 @@ export default function LeadFollowupScreen({ navigation }: any) {
       (p) => p.product_name && p.product_name.trim()
     );
     if (selectedProducts.length === 0) {
-      setModalError('Add at least one product with Strength and Chance %');
+      setModalError('Add at least one product in Products Interested');
       return;
     }
-    const incomplete = selectedProducts.find((p) => !isFollowUpLineComplete(p));
+    const illegalMove = selectedProducts.find((p) => {
+      const next = normalizeProductLineStatus(p.status) || p.status;
+      if (p.sale_type === 'renewal' || (p.sale_type === 'cross_sale' && !p.savedStatus)) return false;
+      return !followUpStatusOptions(p.savedStatus).includes(next);
+    });
+    if (illegalMove) {
+      const from = normalizeProductLineStatus(illegalMove.savedStatus) || illegalMove.savedStatus;
+      setModalError(
+        from === 'Hot'
+          ? `"${illegalMove.product_name}" is Hot. It can only stay Hot or become Not Interested.`
+          : `"${illegalMove.product_name}" is Warm. It can stay Warm, become Hot, or become Not Interested.`
+      );
+      return;
+    }
+    const incomplete = selectedProducts.find((p) => !isFollowUpProductLineComplete(p));
     if (incomplete) {
-      if ((Number(incomplete.strength) || 0) <= 0 || (Number(incomplete.chance) || 0) <= 0) {
+      if (incomplete.status === 'Not Interested') {
+        setModalError(`Enter a reason why the school is not interested in "${incomplete.product_name}"`);
+      } else if (incomplete.status === 'Not Renewed') {
+        setModalError(`Enter a reason why "${incomplete.product_name}" was not renewed`);
+      } else if ((Number(incomplete.unit_price) || 0) <= 0) {
+        setModalError(`Enter Unit Price for "${incomplete.product_name}"`);
+      } else if (
+        (incomplete.status === 'Hot' || incomplete.status === 'Warm') &&
+        ((Number(incomplete.strength) || 0) <= 0 || (Number(incomplete.chance) || 0) <= 0)
+      ) {
         setModalError(
-          `Enter Strength and Chance % for "${incomplete.product_name}"`
+          `Enter Strength and Chance % for "${incomplete.product_name}" (required for Hot/Warm)`
         );
       } else if (incomplete.status === 'Hot' && Number(incomplete.chance) < 80) {
-        setModalError(`Chance % for "${incomplete.product_name}" must be at least 80 (Hot)`);
+        setModalError(`Chance % for "${incomplete.product_name}" must be at least 80 when status is Hot`);
       } else if (incomplete.status === 'Warm' && Number(incomplete.chance) < 20) {
-        setModalError(`Chance % for "${incomplete.product_name}" must be at least 20 (Warm)`);
+        setModalError(`Chance % for "${incomplete.product_name}" must be at least 20 when status is Warm`);
       } else {
-        setModalError('Complete Strength and Chance % for each product');
+        setModalError('Complete product details for each row');
       }
       return;
     }
 
     setUpdating(true);
     try {
-      const validProducts = selectedProducts.map((p) => ({
-        product_name: p.product_name.trim(),
-        term: p.term || 'Term 1',
-        status: p.status || 'Warm',
-        strength: Number(p.strength) || 0,
-        chance: Number(p.chance) || 0,
-        important: false,
-        quantity: Number(p.strength) || 0,
-        unit_price: 0,
-      }));
+      const validProducts = selectedProducts.map((p) => {
+        const priced = PRICED_LINE_STATUSES.has(p.status);
+        return {
+          product_name: p.product_name.trim(),
+          term: p.term || 'Term 1',
+          status: normalizeLeadProductLineStatus(p.status) || p.status || 'Warm',
+          strength: priced ? Number(p.strength) || 0 : 0,
+          chance: p.status === 'Renewed' ? 100 : priced ? Number(p.chance) || 0 : 0,
+          important: false,
+          quantity: priced ? Number(p.strength) || 1 : 1,
+          unit_price: priced ? Number(p.unit_price) || 0 : 0,
+          not_interested_reason: DROPPED_LINE_STATUSES.has(p.status)
+            ? String(p.not_interested_reason || '').trim()
+            : '',
+          // Keep class / series / level and Renewal vs Cross-Sale on the line.
+          class: p.class,
+          productCategory: p.productCategory,
+          specs: p.specs,
+          level: p.level,
+          subject: p.subject,
+          section: p.section,
+          program: p.program,
+          stream: p.stream,
+          sale_type: p.sale_type,
+        };
+      });
 
       const derivedPriority = deriveLeadPriorityFromDealProducts(validProducts);
       const schoolLeadStatus = (selectedLead.lead_status || '').trim();
       const payload: any = {
         follow_up_date: followUpDateToIso(updateForm.follow_up_date),
-        remarks: updateForm.remarks.trim(),
-        productsInterested: validProducts,
+        remarks: updateForm.remarks,
       };
       if (SCHOOL_LEAD_STATUSES.has(schoolLeadStatus)) {
         payload.lead_status = schoolLeadStatus;
         payload.priority = schoolLeadStatus;
       } else {
-        payload.priority =
-          derivedPriority || selectedLead.priority || displayLeadDealPriority(selectedLead);
+        payload.priority = derivedPriority || selectedLead.priority || displayLeadDealPriority(selectedLead) || 'Warm';
       }
+      payload.productsInterested = validProducts;
 
+      // Use the endpoint that owns the record; a lead id falls back to dc-orders (legacy records).
+      const updateDcOrder = selectedLead.sourceType === 'dc-order';
       try {
+        await apiService.put(
+          updateDcOrder ? `/dc-orders/${selectedLead._id}` : `/leads/${selectedLead._id}`,
+          payload,
+        );
+      } catch (err) {
+        if (updateDcOrder) throw err;
         await apiService.put(`/dc-orders/${selectedLead._id}`, payload);
-      } catch {
-        await apiService.put(`/leads/${selectedLead._id}`, payload);
       }
 
       setSuccessMessage('Follow-up created successfully!');
       closeUpdateModal();
       loadLeads();
     } catch (error: any) {
-      setModalError(error.message || 'Failed to create follow-up');
+      setModalError(error.message || 'Failed to update lead');
     } finally {
       setUpdating(false);
     }
@@ -537,7 +626,7 @@ export default function LeadFollowupScreen({ navigation }: any) {
           follow_up_date: lead.follow_up_date || null,
           remarks: lead.remarks || 'Lead created',
           priority: lead.lead_status || displayLeadDealPriority(lead),
-          productsInterested: leadProductsToInterested(lead),
+          productsInterested: leadProductsToInterestedRows(lead),
           updatedAt: lead.createdAt,
           updatedBy: { name: 'System' },
         });
@@ -607,6 +696,18 @@ export default function LeadFollowupScreen({ navigation }: any) {
         )}
 
         <View style={styles.filtersCard}>
+          {seesAllFollowups && (
+            <WebSelect
+              label="BDE"
+              value={employeeFilter || 'all'}
+              onValueChange={(v) => setEmployeeFilter(v === 'all' ? '' : v)}
+              items={[
+                { label: 'All BDEs', value: 'all' },
+                ...bdeOptions.map((e) => ({ label: e.name, value: e._id })),
+              ]}
+              placeholder="All BDEs"
+            />
+          )}
           {zones.length > 0 && (
             <WebSelect
               label="Zone"
@@ -622,6 +723,14 @@ export default function LeadFollowupScreen({ navigation }: any) {
             placeholder="Search school..."
             value={schoolFilter}
             onChangeText={setSchoolFilter}
+          />
+          <Text style={styles.filterLabel}>School Code</Text>
+          <WebInput
+            style={styles.filterInput}
+            placeholder="Search code..."
+            value={schoolCodeFilter}
+            onChangeText={setSchoolCodeFilter}
+            autoCapitalize="characters"
           />
           <Text style={styles.filterLabel}>Contact Mobile</Text>
           <WebInput
@@ -647,16 +756,35 @@ export default function LeadFollowupScreen({ navigation }: any) {
         ) : (
           leads.map((lead) => {
             const isOverdue = isFollowUpDateOverdue(lead.follow_up_date);
-            const productRows = uniqueLeadProducts(lead);
+            const productRows = leadProductsToInterestedRows(lead);
 
             return (
-              <View key={lead._id} style={styles.card}>
+              <View key={lead._id} style={[styles.card, lead.isChain && styles.cardChain]}>
                 <View style={styles.cardTop}>
                   <View style={styles.cardHeader}>
                     <View style={styles.schoolInfo}>
                       <Text style={styles.schoolName} numberOfLines={2}>
                         {lead.school_name || 'Unnamed School'}
                       </Text>
+                      {lead.school_code || lead.location || lead.city || lead.area ? (
+                        <View style={styles.schoolTagRow}>
+                          {lead.school_code ? (
+                            <Text style={styles.schoolCodeBadge}>{lead.school_code}</Text>
+                          ) : null}
+                          {/* Town / area next to the code, so schools with similar names are easy to tell apart. */}
+                          {lead.location || lead.city || lead.area ? (
+                            <Text style={styles.schoolTownBadge}>{lead.location || lead.city || lead.area}</Text>
+                          ) : null}
+                        </View>
+                      ) : null}
+                      {seesAllFollowups && (lead.assignedToName || lead.assignedToId) ? (
+                        <Text style={styles.locationText}>
+                          BDE:{' '}
+                          {lead.assignedToName ||
+                            bdeOptions.find((e) => e._id === lead.assignedToId)?.name ||
+                            'Assigned'}
+                        </Text>
+                      ) : null}
                       {lead.location ? (
                         <View style={styles.locationRow}>
                           <Text style={styles.locationIcon}>📍</Text>
@@ -698,14 +826,14 @@ export default function LeadFollowupScreen({ navigation }: any) {
                     {productRows.length === 0 ? (
                       <Text style={styles.productsEmpty}>—</Text>
                     ) : (
-                      productRows.map((p) => (
-                        <View key={p.product_name} style={styles.productLine}>
+                      productRows.map((p, pi) => (
+                        <View key={`${p.product_name}-${pi}`} style={styles.productLine}>
                           <Text style={styles.productLineName}>{p.product_name}</Text>
                           <Text style={styles.productLineMeta}>
                             {[
                               p.status,
-                              Number(p.strength) > 0 ? `Strength ${p.strength}` : null,
-                              Number(p.chance) > 0 ? `Chance ${p.chance}%` : null,
+                              Number(p.strength) > 0 ? `Str ${p.strength}` : null,
+                              Number(p.chance) > 0 ? `${p.chance}%` : null,
                             ]
                               .filter(Boolean)
                               .join(' · ')}
@@ -892,59 +1020,126 @@ export default function LeadFollowupScreen({ navigation }: any) {
 
                   <View style={styles.productsSectionHeader}>
                     <Text style={styles.modalLabel}>Products Interested *</Text>
-                    <TouchableOpacity onPress={addInterestedProduct}>
-                      <Text style={styles.addProductLink}>+ Add Product</Text>
-                    </TouchableOpacity>
                   </View>
 
                   {updateForm.productsInterested.length === 0 ? (
                     <Text style={styles.hint}>No products added yet.</Text>
                   ) : (
-                    updateForm.productsInterested.map((product, index) => (
-                      <View key={`pi-${index}`} style={styles.productRowCard}>
-                        <WebSelect
-                          label="Product"
-                          value={product.product_name}
-                          onValueChange={(v) =>
-                            updateInterestedProduct(index, 'product_name', v)
-                          }
-                          items={
-                            product.product_name &&
-                            !productNames.includes(product.product_name)
-                              ? [
-                                  ...productSelectItems,
-                                  { label: product.product_name, value: product.product_name },
-                                ]
-                              : productSelectItems
-                          }
-                          placeholder="Select product"
-                        />
-                        <WebSelect
-                          label="Status"
-                          value={product.status}
-                          onValueChange={(v) => updateInterestedProduct(index, 'status', v)}
-                          items={PRODUCT_LINE_STATUS_OPTIONS}
-                        />
-                        <WebInput
-                          style={styles.input}
-                          placeholder="Strength (qty)"
-                          value={product.strength}
-                          onChangeText={(t) => updateInterestedProduct(index, 'strength', t)}
-                          keyboardType="number-pad"
-                        />
-                        <WebInput
-                          style={styles.input}
-                          placeholder="Chance %"
-                          value={product.chance}
-                          onChangeText={(t) => updateInterestedProduct(index, 'chance', t)}
-                          keyboardType="number-pad"
-                        />
-                        <TouchableOpacity onPress={() => removeInterestedProduct(index)}>
-                          <Text style={styles.removeLink}>Remove</Text>
-                        </TouchableOpacity>
-                      </View>
-                    ))
+                    updateForm.productsInterested.map((product, index) => {
+                      const priced = PRICED_LINE_STATUSES.has(product.status);
+                      const isNewCrossSale = product.sale_type === 'cross_sale' && !product.savedStatus;
+                      const statusOptions = isNewCrossSale
+                        ? [...ALL_FOLLOWUP_STATUSES]
+                        : followUpStatusOptions(product.savedStatus || product.status, product.sale_type);
+                      const detail = lineDetailLabel(product);
+                      return (
+                        <View key={`pi-${index}`} style={styles.productRowCard}>
+                          <WebSelect
+                            label="Product"
+                            value={product.product_name}
+                            disabled={!isNewCrossSale}
+                            onValueChange={(v) =>
+                              updateInterestedProduct(index, 'product_name', v)
+                            }
+                            items={
+                              product.product_name &&
+                              !productNames.includes(product.product_name)
+                                ? [
+                                    ...productSelectItems,
+                                    { label: product.product_name, value: product.product_name },
+                                  ]
+                                : productSelectItems
+                            }
+                            placeholder="Select product"
+                          />
+                          {product.sale_type ? (
+                            <View style={styles.saleTypeRow}>
+                              <Text
+                                style={[
+                                  styles.saleTypeBadge,
+                                  product.sale_type === 'renewal'
+                                    ? styles.saleTypeRenewal
+                                    : styles.saleTypeCrossSale,
+                                ]}
+                              >
+                                {product.sale_type === 'renewal' ? 'Renewal' : 'Cross-Sale'}
+                              </Text>
+                              {detail ? (
+                                <Text style={styles.lineDetailText} numberOfLines={2}>
+                                  {detail}
+                                </Text>
+                              ) : null}
+                            </View>
+                          ) : null}
+                          <WebSelect
+                            label="Status"
+                            value={product.status}
+                            onValueChange={(v) => changeInterestedStatus(index, v)}
+                            items={statusOptions.map((st) => ({ label: st, value: st }))}
+                          />
+                          <View style={styles.numbersRow}>
+                            <View style={styles.numberCell}>
+                              <Text style={styles.numberLabel}>Strength</Text>
+                              <WebInput
+                                style={[styles.input, !priced && styles.inputDisabled]}
+                                placeholder="Qty"
+                                value={product.strength}
+                                editable={priced}
+                                onChangeText={(t) => updateInterestedProduct(index, 'strength', t)}
+                                keyboardType="number-pad"
+                              />
+                            </View>
+                            <View style={styles.numberCell}>
+                              <Text style={styles.numberLabel}>Unit Price</Text>
+                              <WebInput
+                                style={[styles.input, !priced && styles.inputDisabled]}
+                                placeholder="₹"
+                                value={product.unit_price}
+                                editable={priced}
+                                onChangeText={(t) => updateInterestedProduct(index, 'unit_price', t)}
+                                keyboardType="decimal-pad"
+                              />
+                            </View>
+                            <View style={styles.numberCell}>
+                              <Text style={styles.numberLabel}>Chance %</Text>
+                              <WebInput
+                                style={[styles.input, !priced && styles.inputDisabled]}
+                                placeholder="%"
+                                value={product.chance}
+                                editable={priced}
+                                onChangeText={(t) => updateInterestedProduct(index, 'chance', t)}
+                                keyboardType="number-pad"
+                              />
+                            </View>
+                          </View>
+                          {DROPPED_LINE_STATUSES.has(product.status) ? (
+                            <WebInput
+                              style={styles.input}
+                              placeholder={
+                                product.status === 'Not Renewed'
+                                  ? 'Reason not renewed *'
+                                  : 'Reason not interested *'
+                              }
+                              value={product.not_interested_reason}
+                              onChangeText={(t) =>
+                                updateInterestedProduct(index, 'not_interested_reason', t)
+                              }
+                            />
+                          ) : null}
+                        </View>
+                      );
+                    })
                   )}
+                  {selectedLead?.lead_type === 'renewal' ? (
+                    <TouchableOpacity onPress={addCrossSaleProduct} style={styles.addCrossSaleBtn}>
+                      <Text style={styles.addProductLink}>+ Add cross-sale product</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                  <Text style={styles.hint}>
+                    {selectedLead?.lead_type === 'renewal'
+                      ? "Mark each of last year's products Renewed (continues) or Not Renewed (stopped, with a reason). New products added here are Cross-Sale and follow the same rules as a new school."
+                      : 'Products are locked. Hot can only stay Hot or become Not Interested. Warm can stay Warm, become Hot, or become Not Interested. Yet to Visit can change to any status.'}
+                  </Text>
 
                   <Text style={styles.modalLabel}>Remarks *</Text>
                   <WebInput
@@ -1229,6 +1424,42 @@ const styles = StyleSheet.create({
   },
   datePickerTitle: { ...typography.heading.h3, color: colors.textPrimary },
   doneText: { color: colors.primary, fontWeight: '600' },
+  cardChain: { borderWidth: 1, borderColor: '#93C5FD', backgroundColor: '#DBEAFE' },
+  schoolTagRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
+  schoolTownBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#F5F5F5',
+    color: '#404040',
+    fontSize: 12,
+    fontWeight: '500',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginBottom: 4,
+    overflow: 'hidden',
+  },
+  schoolCodeBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#EFF6FF',
+    color: '#1D4ED8',
+    fontSize: 12,
+    fontWeight: '700',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginBottom: 4,
+    overflow: 'hidden',
+  },
+  saleTypeRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: -4, marginBottom: 8 },
+  saleTypeBadge: { fontSize: 11, fontWeight: '600', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, overflow: 'hidden' },
+  saleTypeRenewal: { backgroundColor: '#D1FAE5', color: '#065F46' },
+  saleTypeCrossSale: { backgroundColor: '#DBEAFE', color: '#1E40AF' },
+  lineDetailText: { fontSize: 11, color: colors.textSecondary, flexShrink: 1 },
+  numbersRow: { flexDirection: 'row', gap: 8 },
+  numberCell: { flex: 1 },
+  numberLabel: { fontSize: 12, color: colors.textSecondary, marginBottom: 4 },
+  inputDisabled: { backgroundColor: colors.backgroundMuted, color: colors.textMuted },
+  addCrossSaleBtn: { paddingVertical: 8 },
   productsSectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',

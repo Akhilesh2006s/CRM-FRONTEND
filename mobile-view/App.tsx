@@ -154,6 +154,14 @@ import SettingsExpensesScreen from './src/screens/Settings/SettingsExpensesScree
 import SettingsUploadScreen from './src/screens/Settings/SettingsUploadScreen';
 import SettingsSMSScreen from './src/screens/Settings/SettingsSMSScreen';
 import SettingsBackupScreen from './src/screens/Settings/SettingsBackupScreen';
+import ExpenseApproversScreen from './src/screens/Expenses/ExpenseApproversScreen';
+import MyAttendanceScreen from './src/screens/Attendance/MyAttendanceScreen';
+import AttendanceRosterScreen from './src/screens/Attendance/AttendanceRosterScreen';
+import EmployeeVerificationScreen from './src/screens/Employees/EmployeeVerificationScreen';
+import MyPayslipsScreen from './src/screens/Employees/MyPayslipsScreen';
+import CrossSaleLeadsScreen from './src/screens/Leads/CrossSaleLeadsScreen';
+import RaiseTicketScreen from './src/screens/Tickets/RaiseTicketScreen';
+import ViewTicketsScreen from './src/screens/Tickets/ViewTicketsScreen';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { Component } from 'react';
 
@@ -425,6 +433,14 @@ function AuthenticatedStack() {
 
         {/* Leaves */}
         <Stack.Screen name="LeaveList" component={LeaveListScreen} />
+        <Stack.Screen name="ExpenseApprovers" component={ExpenseApproversScreen} />
+        <Stack.Screen name="MyAttendance" component={MyAttendanceScreen} />
+        <Stack.Screen name="AttendanceRoster" component={AttendanceRosterScreen} />
+        <Stack.Screen name="EmployeeVerification" component={EmployeeVerificationScreen} />
+        <Stack.Screen name="MyPayslips" component={MyPayslipsScreen} />
+        <Stack.Screen name="CrossSaleLeads" component={CrossSaleLeadsScreen} />
+        <Stack.Screen name="RaiseTicket" component={RaiseTicketScreen} />
+        <Stack.Screen name="ViewTickets" component={ViewTicketsScreen} />
     </Stack.Navigator>
   );
 }

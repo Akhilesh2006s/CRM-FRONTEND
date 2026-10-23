@@ -1,128 +1,175 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl, Alert, ActivityIndicator } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, Text, StyleSheet, Alert } from 'react-native';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
-import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
+import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
+import { inr, paymentRemarks, statusColors } from './paymentHelpers';
 
-export default function PaymentHoldScreen({ navigation }: any) {
+/** Same mode list as web hold-payments filter. */
+const PAYMENT_MODES = ['Cash', 'Cheque', 'Online Payment'];
+
+const EMPTY_FILTERS = {
+  schoolCode: '',
+  schoolName: '',
+  mobileNo: '',
+  paymentMode: '',
+  executive: '',
+  zone: '',
+  fromDate: '',
+  toDate: '',
+};
+
+function fmtDateTime(v?: string) {
+  if (!v) return '-';
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return '-';
+  return d.toLocaleString('en-GB', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+export default function PaymentHoldScreen() {
   const [payments, setPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [filters, setFilters] = useState({ ...EMPTY_FILTERS });
+  const [showFilters, setShowFilters] = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  const setF = (k: keyof typeof EMPTY_FILTERS, v: string) => setFilters((f) => ({ ...f, [k]: v }));
 
-  const loadData = async () => {
+  const loadData = useCallback(async (f = filters) => {
     try {
-      setLoading(true);
-      const data = await apiService.get('/payments?status=Hold');
-      setPayments(Array.isArray(data) ? data : []);
+      const parts: string[] = ['status=' + encodeURIComponent('Hold,Rejected')];
+      Object.entries(f).forEach(([k, v]) => {
+        if (!v) return;
+        const key =
+          k === 'fromDate' ? 'startDate' : k === 'toDate' ? 'endDate' : k === 'executive' ? 'employee' : k;
+        parts.push(`${key}=${encodeURIComponent(v)}`);
+      });
+      const data = await apiService.get(`/payments?${parts.join('&')}`);
+      setPayments(Array.isArray(data) ? data : Array.isArray(data?.data) ? data.data : []);
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to load hold payments');
+      Alert.alert('Error', error?.message || 'Failed to load HOLD payments');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters]);
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadData();
-  };
-
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return '-';
-    try {
-      return new Date(dateString).toLocaleDateString('en-IN');
-    } catch {
-      return '-';
-    }
-  };
-
-  const formatAmount = (amount?: number) => {
-    if (!amount) return '₹0';
-    return `₹${amount.toLocaleString('en-IN')}`;
-  };
+  useEffect(() => {
+    loadData(EMPTY_FILTERS);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <ScreenShell
-      title="Hold Payments"
+      title="HOLD Payments"
+      subtitle="Held and rejected payments"
       loading={loading && !refreshing}
       refreshing={refreshing}
-      onRefresh={onRefresh}
+      onRefresh={() => {
+        setRefreshing(true);
+        loadData();
+      }}
     >
-<ScrollView style={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-        {payments.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>⏸️</Text>
-            <Text style={styles.emptyText}>No hold payments found</Text>
+      <PageSection title="Filters">
+        {showFilters ? (
+          <>
+            <WebInput placeholder="By School Code" value={filters.schoolCode} onChangeText={(t) => setF('schoolCode', t)} />
+            <WebInput placeholder="By School Name" value={filters.schoolName} onChangeText={(t) => setF('schoolName', t)} />
+            <WebInput placeholder="By Mobile No" value={filters.mobileNo} onChangeText={(t) => setF('mobileNo', t)} keyboardType="phone-pad" />
+            <WebInput placeholder="From Date (YYYY-MM-DD)" value={filters.fromDate} onChangeText={(t) => setF('fromDate', t)} />
+            <WebInput placeholder="To Date (YYYY-MM-DD)" value={filters.toDate} onChangeText={(t) => setF('toDate', t)} />
+            <WebSelect
+              value={filters.paymentMode}
+              onValueChange={(v) => setF('paymentMode', v)}
+              items={PAYMENT_MODES.map((m) => ({ label: m, value: m }))}
+              placeholder="Select Payment Mode"
+            />
+            <WebInput placeholder="BDE" value={filters.executive} onChangeText={(t) => setF('executive', t)} />
+            <WebInput placeholder="Zone" value={filters.zone} onChangeText={(t) => setF('zone', t)} />
+          </>
+        ) : null}
+        <View style={styles.filterBtns}>
+          <View style={{ flex: 1 }}>
+            <WebButton title={showFilters ? 'Hide Filters' : 'Show Filters'} variant="outline" onPress={() => setShowFilters((s) => !s)} />
           </View>
-        ) : (
-          payments.map((payment) => (
-            <View key={payment._id} style={styles.card}>
+          <View style={{ flex: 1 }}>
+            <WebButton
+              title="Search"
+              onPress={() => {
+                setLoading(true);
+                loadData();
+              }}
+            />
+          </View>
+        </View>
+      </PageSection>
+
+      {payments.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>No held or rejected payments found</Text>
+        </View>
+      ) : (
+        payments.map((p, idx) => {
+          const isRejected = p.status === 'Rejected';
+          const sc = statusColors(isRejected ? 'Rejected' : 'Hold');
+          return (
+            <View key={p._id || idx} style={styles.card}>
               <View style={styles.cardHeader}>
-                <Text style={styles.customerName}>{payment.customerName || 'N/A'}</Text>
-                <View style={[styles.statusBadge, { backgroundColor: colors.warning + '20' }]}>
-                  <Text style={[styles.statusBadgeText, { color: colors.warning }]}>Hold</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.customerName}>{p.customerName || '-'}</Text>
+                  <Text style={styles.code}>{p.schoolCode || '-'}</Text>
+                </View>
+                <View style={[styles.statusBadge, { backgroundColor: sc.bg }]}>
+                  <Text style={[styles.statusBadgeText, { color: sc.fg }]}>{isRejected ? 'Rejected' : 'Hold'}</Text>
                 </View>
               </View>
-              <View style={styles.cardBody}>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Amount:</Text>
-                  <Text style={[styles.infoValue, styles.amountText]}>{formatAmount(payment.amount)}</Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Date:</Text>
-                  <Text style={styles.infoValue}>{formatDate(payment.paymentDate)}</Text>
-                </View>
-                {payment.adminRemarks && (
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Remarks:</Text>
-                    <Text style={styles.infoValue}>{payment.adminRemarks}</Text>
-                  </View>
-                )}
-                {payment.heldAt && (
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Held At:</Text>
-                    <Text style={styles.infoValue}>{formatDate(payment.heldAt)}</Text>
-                  </View>
-                )}
+              <Info label="Amount" value={inr(p.amount)} strong />
+              <Info label="Date of Pay" value={fmtDateTime(p.paymentDate)} />
+              <Info label="Mode" value={p.paymentMethod || '-'} />
+              <Info label="Fin. Year" value={p.financialYear || '-'} />
+              <Info label="Contact" value={[p.contactName, p.mobileNumber].filter(Boolean).join(' · ') || '-'} />
+              <Info label="Location" value={p.location || '-'} />
+              <Info label="Submission" value={p.submissionNo || p.refNo || p.referenceNumber || '-'} />
+              <Info label="Added By" value={p.createdBy?.name || '-'} />
+              <View style={[styles.reasonBox, { backgroundColor: sc.bg }]}>
+                <Text style={[styles.reasonLabel, { color: sc.fg }]}>Reason</Text>
+                <Text style={styles.reasonText}>{paymentRemarks({ ...p, status: isRejected ? 'Rejected' : 'Hold' })}</Text>
               </View>
             </View>
-          ))
-        )}
-      </ScrollView>
+          );
+        })
+      )}
     </ScreenShell>
   );
 }
 
+function Info({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <View style={styles.infoRow}>
+      <Text style={styles.infoLabel}>{label}:</Text>
+      <Text style={[styles.infoValue, strong && styles.amountText]}>{value}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
-  loadingText: { marginTop: 12, ...typography.body.medium, color: colors.textSecondary },
-  header: { paddingHorizontal: 20, paddingTop: 50, paddingBottom: 20, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
-  headerContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  backButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  backIcon: { fontSize: 24, color: colors.textLight, fontWeight: 'bold' },
-  headerTitle: { ...typography.heading.h1, color: colors.textLight, flex: 1, textAlign: 'center' },
-  placeholder: { width: 40 },
-  content: { flex: 1, padding: 16 },
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60 },
-  emptyIcon: { fontSize: 64, marginBottom: 16 },
-  emptyText: { ...typography.heading.h3, color: colors.textSecondary },
-  card: { backgroundColor: colors.backgroundLight, borderRadius: 16, padding: 16, marginBottom: 12, shadowColor: colors.shadowDark, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 3 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  customerName: { ...typography.heading.h3, color: colors.textPrimary, flex: 1 },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  statusBadgeText: { ...typography.label.small, fontWeight: '600' },
-  cardBody: { marginBottom: 12 },
-  infoRow: { flexDirection: 'row', marginBottom: 6 },
+  filterBtns: { flexDirection: 'row', gap: 8 },
+  emptyContainer: { justifyContent: 'center', alignItems: 'center', paddingVertical: 40 },
+  emptyText: { ...typography.heading.h3, color: colors.textSecondary, textAlign: 'center' },
+  card: { backgroundColor: colors.backgroundLight, borderRadius: 12, borderWidth: 1, borderColor: colors.border, padding: 14, marginBottom: 10 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
+  customerName: { ...typography.heading.h3, color: colors.textPrimary },
+  code: { fontSize: 12, color: colors.textTertiary, marginTop: 2 },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginLeft: 8 },
+  statusBadgeText: { fontSize: 12, fontWeight: '600' },
+  infoRow: { flexDirection: 'row', marginBottom: 4 },
   infoLabel: { ...typography.body.medium, color: colors.textSecondary, width: 100 },
   infoValue: { ...typography.body.medium, color: colors.textPrimary, flex: 1 },
-  amountText: { ...typography.heading.h3, color: colors.warning, fontWeight: '600' },
+  amountText: { color: colors.textPrimary, fontWeight: '700' },
+  reasonBox: { borderRadius: 8, padding: 10, marginTop: 6 },
+  reasonLabel: { fontSize: 12, fontWeight: '700', marginBottom: 2 },
+  reasonText: { fontSize: 13, color: colors.textPrimary },
 });
-
-

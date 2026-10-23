@@ -17,6 +17,8 @@ import { phoneDigitsError, sanitizePhoneDigits } from '../../utils/phone';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
+import { useAuth } from '../../context/AuthContext';
+import { LEAD_PRODUCT_STATUSES, validateLeadStyleProducts } from '../../lib/crm/leadProductRules';
 
 const SCHOOL_TYPE_OPTIONS = [
   { label: 'New', value: 'New' },
@@ -26,38 +28,36 @@ const PRIORITY_OPTIONS = [
   { label: 'Hot', value: 'Hot' },
   { label: 'Warm', value: 'Warm' },
   { label: 'Visit Again', value: 'Visit Again' },
-  { label: 'Not Met Management', value: 'Not Met Management' },
+  { label: 'Yet to Visit', value: 'Yet to Visit' },
   { label: 'Not Interested', value: 'Not Interested' },
 ];
 
-const PRODUCT_STATUS_OPTIONS = [
-  { label: 'Hot', value: 'Hot' },
-  { label: 'Warm', value: 'Warm' },
-  { label: 'Not Interested', value: 'Not Interested' },
-  { label: 'Management Not Met', value: 'Management Not Met' },
-  { label: 'Visit Again', value: 'Visit Again' },
-];
+const PRODUCT_STATUS_OPTIONS = LEAD_PRODUCT_STATUSES.map((s) => ({ label: s, value: s }));
 
-type ProductStatus =
-  | 'Hot'
-  | 'Warm'
-  | 'Not Interested'
-  | 'Management Not Met'
-  | 'Visit Again';
+type ProductStatus = 'Hot' | 'Warm' | 'Not Interested' | 'Yet to Visit' | 'Visit Again';
 
+/** Same shape as the web edit page; numbers kept as strings so empty fields stay empty. */
 type ProductSelection = {
   name: string;
   checked: boolean;
+  term: string;
   status: ProductStatus;
-  strength: number;
-  chance: number;
+  strength: string;
+  unit_price: string;
+  chance: string;
+  not_interested_reason: string;
 };
 
-type LeadProductDetail = {
-  name: string;
-  status: ProductStatus;
-  strength: number;
-  chance: number;
+type SavedProductRow = {
+  product_name?: string;
+  product?: string;
+  term?: string;
+  status?: string;
+  strength?: number;
+  chance?: number;
+  quantity?: number;
+  unit_price?: number;
+  not_interested_reason?: string;
 };
 
 function parseFollowUpDate(s: string): string | undefined {
@@ -69,119 +69,122 @@ function parseFollowUpDate(s: string): string | undefined {
   return undefined;
 }
 
-function normalizeProductStatus(raw: any): ProductStatus {
-  const s = String(raw || '').trim();
-  const allowed: ProductStatus[] = [
-    'Hot',
-    'Warm',
-    'Not Interested',
-    'Management Not Met',
-    'Visit Again',
-  ];
-  return (allowed.includes(s as ProductStatus) ? s : 'Warm') as ProductStatus;
+function apiStatusToUi(status?: string): ProductStatus {
+  const s = (status || 'Warm').trim();
+  if (s === 'Not Met Management' || s === 'Management Not Met') return 'Yet to Visit';
+  if (s === 'Hot' || s === 'Warm' || s === 'Not Interested' || s === 'Yet to Visit' || s === 'Visit Again') {
+    return s;
+  }
+  return 'Warm';
 }
 
-function extractLeadProducts(products: any): LeadProductDetail[] {
-  if (!products) return [];
-  let list: any[] = [];
+function numericFieldToString(value?: number): string {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  return String(n);
+}
+
+/** Digits only, no leading zeros, optionally capped (web normalizeIntegerInput). */
+function normalizeIntegerInput(raw: string, max?: number): string {
+  let value = String(raw || '').replace(/\D/g, '');
+  if (value.length > 1) value = value.replace(/^0+/, '') || '0';
+  if (value && max !== undefined && Number(value) > max) value = String(max);
+  return value;
+}
+
+function parseLeadProductsToMap(products: any): Map<string, SavedProductRow> {
+  const map = new Map<string, SavedProductRow>();
+  if (!products) return map;
+  let rows: unknown[] = [];
   if (Array.isArray(products)) {
-    list = products;
-  } else if (typeof products === 'string' && products.trim()) {
+    rows = products;
+  } else if (typeof products === 'string') {
+    const productsStr = products.trim();
+    if (!productsStr) return map;
     try {
-      const parsed = JSON.parse(products);
-      if (Array.isArray(parsed)) list = parsed;
-      else {
-        return products
-          .split(',')
-          .map((x) => x.trim())
-          .filter(Boolean)
-          .map((name) => ({ name, status: 'Warm' as ProductStatus, strength: 0, chance: 0 }));
-      }
+      const parsed = JSON.parse(productsStr);
+      if (Array.isArray(parsed)) rows = parsed;
+      else rows = productsStr.split(',').map((x) => x.trim()).filter(Boolean);
     } catch {
-      return products
-        .split(',')
-        .map((x) => x.trim())
-        .filter(Boolean)
-        .map((name) => ({ name, status: 'Warm' as ProductStatus, strength: 0, chance: 0 }));
+      rows = productsStr.split(',').map((x) => x.trim()).filter(Boolean);
     }
   }
-  return list
-    .map((p: any) => {
-      if (typeof p === 'string') {
-        return { name: p.trim(), status: 'Warm' as ProductStatus, strength: 0, chance: 0 };
-      }
-      const name = String(p.product_name || p.product || p.name || '').trim();
-      if (!name) return null;
-      return {
-        name,
-        status: normalizeProductStatus(p.status || p.lead_status),
-        strength: Number(p.strength) || 0,
-        chance: Number(p.chance) || 0,
-      };
-    })
-    .filter(Boolean) as LeadProductDetail[];
-}
-
-/** Prefer current products[]; fill missing strength/chance/status from updateHistory snapshots (incl. create). */
-function mergeLeadProductDetails(lead: any): LeadProductDetail[] {
-  const fromProducts = extractLeadProducts(lead?.products);
-  const history = Array.isArray(lead?.updateHistory) ? [...lead.updateHistory] : [];
-  history.sort(
-    (a, b) => new Date(a?.updatedAt || 0).getTime() - new Date(b?.updatedAt || 0).getTime(),
-  );
-
-  const fromHistory = new Map<string, LeadProductDetail>();
-  for (const entry of history) {
-    for (const row of extractLeadProducts(entry?.productsInterested)) {
-      const key = row.name.toLowerCase();
-      const prev = fromHistory.get(key);
-      // Later follow-ups override earlier; keep non-zero metrics when a later row clears them
-      fromHistory.set(key, {
-        name: row.name,
-        status: row.status || prev?.status || 'Warm',
-        strength: row.strength > 0 ? row.strength : prev?.strength || 0,
-        chance: row.chance > 0 ? row.chance : prev?.chance || 0,
-      });
+  for (const raw of rows) {
+    if (typeof raw === 'string') {
+      const name = raw.trim();
+      if (name) map.set(name, { product_name: name });
+      continue;
+    }
+    if (raw && typeof raw === 'object') {
+      const row = raw as SavedProductRow;
+      const name = String(row.product_name || row.product || '').trim();
+      if (name) map.set(name, row);
     }
   }
-
-  const merged = new Map<string, LeadProductDetail>();
-
-  for (const [key, hist] of fromHistory) {
-    merged.set(key, { ...hist });
-  }
-
-  for (const p of fromProducts) {
-    const key = p.name.toLowerCase();
-    const hist = merged.get(key);
-    merged.set(key, {
-      name: p.name,
-      status: p.status || hist?.status || 'Warm',
-      strength: p.strength > 0 ? p.strength : hist?.strength || 0,
-      chance: p.chance > 0 ? p.chance : hist?.chance || 0,
-    });
-  }
-
-  return Array.from(merged.values());
+  return map;
 }
 
-function emptyProduct(name: string, checked = false): ProductSelection {
+function defaultProductRow(name: string, saved?: SavedProductRow): ProductSelection {
+  if (saved) {
+    return {
+      name,
+      checked: true,
+      term: saved.term || 'Term 1',
+      status: apiStatusToUi(saved.status),
+      strength: numericFieldToString(saved.strength ?? saved.quantity),
+      unit_price: numericFieldToString(saved.unit_price),
+      chance: numericFieldToString(saved.chance),
+      not_interested_reason: saved.not_interested_reason || '',
+    };
+  }
+  // All products pre-selected / locked (as on the web)
   return {
     name,
-    checked,
+    checked: true,
+    term: 'Term 1',
     status: 'Warm',
-    strength: 0,
-    chance: 0,
+    strength: '',
+    unit_price: '',
+    chance: '',
+    not_interested_reason: '',
   };
+}
+
+/** Lead priority = the strongest product status (Hot > Warm > Visit Again > Yet to Visit > Not Interested). Same as web edit page. */
+function leadPriorityFromProducts(products: unknown): string {
+  if (!Array.isArray(products)) return '';
+  const order = ['Hot', 'Warm', 'Visit Again', 'Yet to Visit', 'Not Interested'];
+  const alias: Record<string, string> = {
+    Renewed: 'Hot',
+    'Not Renewed': 'Not Interested',
+    'Not Met Management': 'Yet to Visit',
+    'Management Not Met': 'Yet to Visit',
+  };
+  let best = order.length;
+  for (const p of products) {
+    const raw = String((p as { status?: string })?.status || '').trim();
+    const i = order.indexOf(alias[raw] || raw);
+    if (i !== -1 && i < best) best = i;
+  }
+  return best < order.length ? order[best] : '';
 }
 
 export default function LeadEditScreen({ navigation, route }: any) {
   const { id } = route.params;
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'Super Admin';
+  const [bdeOptions, setBdeOptions] = useState<Array<{ _id: string; name: string }>>([]);
+  /** Web loads /leads/:id first, then /dc-orders/:id, and saves back to the same record. */
+  const [recordSource, setRecordSource] = useState<'leads' | 'dc-orders'>('dc-orders');
   const [form, setForm] = useState({
     school_name: '',
     school_type: 'New',
     contact_person: '',
     contact_mobile: '',
+    contact_designation: '',
+    financial_contact_designation: '',
+    cluster_code: '',
+    assigned_to: '',
     email: '',
     decision_maker_name: '',
     decision_maker_mobile: '',
@@ -196,7 +199,7 @@ export default function LeadEditScreen({ navigation, route }: any) {
     cluster: '',
     latitude: '',
     longitude: '',
-    priority: 'Hot',
+    priority: 'Warm',
     zone: '',
     branches: '',
     strength: '',
@@ -206,7 +209,7 @@ export default function LeadEditScreen({ navigation, route }: any) {
   });
   const [products, setProducts] = useState<ProductSelection[]>([]);
   const [catalogNames, setCatalogNames] = useState<string[]>([]);
-  const [leadProducts, setLeadProducts] = useState<LeadProductDetail[]>([]);
+  const [savedProducts, setSavedProducts] = useState<Map<string, SavedProductRow> | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -219,6 +222,21 @@ export default function LeadEditScreen({ navigation, route }: any) {
     loadProducts();
     loadLead();
   }, [id]);
+
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    Promise.all(
+      ['Executive', 'Sales BDE', 'Employee'].map((role) =>
+        apiService.get(`/employees?isActive=true&role=${encodeURIComponent(role)}`).catch(() => []),
+      ),
+    ).then((groups) => {
+      const byId = new Map<string, { _id: string; name: string }>();
+      for (const e of groups.flat() as any[]) {
+        if (e?._id && e?.name) byId.set(String(e._id), { _id: String(e._id), name: String(e.name) });
+      }
+      setBdeOptions([...byId.values()].sort((a, b) => a.name.localeCompare(b.name)));
+    });
+  }, [isSuperAdmin]);
 
   const loadProducts = async () => {
     setLoadingProducts(true);
@@ -253,53 +271,15 @@ export default function LeadEditScreen({ navigation, route }: any) {
     }
   };
 
+  // One row per catalog product (all pre-selected), filled from the saved lead line of the same name.
   useEffect(() => {
-    const byName = new Map(
-      leadProducts.map((p) => [p.name.trim().toLowerCase(), p] as const),
+    if (catalogNames.length === 0) return;
+    const saved = savedProducts || new Map<string, SavedProductRow>();
+    const byLower = new Map([...saved.entries()].map(([k, v]) => [k.toLowerCase(), v] as const));
+    setProducts(
+      catalogNames.map((name) => defaultProductRow(name, saved.get(name) || byLower.get(name.toLowerCase()))),
     );
-    const catalogSet = new Set(catalogNames.map((n) => n.trim().toLowerCase()));
-
-    const merged: ProductSelection[] = catalogNames.map((name) => {
-      const existing = byName.get(name.trim().toLowerCase());
-      if (existing) {
-        return {
-          name,
-          checked: true,
-          status: existing.status,
-          strength: existing.strength,
-          chance: existing.chance,
-        };
-      }
-      return emptyProduct(name, false);
-    });
-
-    for (const existing of leadProducts) {
-      const key = existing.name.trim().toLowerCase();
-      if (!key || catalogSet.has(key)) continue;
-      merged.push({
-        name: existing.name.trim(),
-        checked: true,
-        status: existing.status,
-        strength: existing.strength,
-        chance: existing.chance,
-      });
-    }
-
-    if (merged.length === 0 && leadProducts.length > 0) {
-      setProducts(
-        leadProducts.map((p) => ({
-          name: p.name,
-          checked: true,
-          status: p.status,
-          strength: p.strength,
-          chance: p.chance,
-        })),
-      );
-      return;
-    }
-
-    setProducts(merged);
-  }, [catalogNames, leadProducts]);
+  }, [catalogNames, savedProducts]);
 
   const loadLead = async () => {
     try {
@@ -329,6 +309,8 @@ export default function LeadEditScreen({ navigation, route }: any) {
       if (!lead) {
         throw new Error('Failed to load lead');
       }
+      const record: any = fromLead || fromOrder;
+      setRecordSource(fromLead ? 'leads' : 'dc-orders');
 
       let school: any =
         lead.school_id && typeof lead.school_id === 'object' ? lead.school_id : null;
@@ -367,6 +349,12 @@ export default function LeadEditScreen({ navigation, route }: any) {
         school_type: lead.school_type || school?.school_type || 'New',
         contact_person: lead.contact_person || school?.contact_person || '',
         contact_mobile: lead.contact_mobile || school?.contact_mobile || '',
+        contact_designation: record.contact_designation || lead.contact_designation || '',
+        financial_contact_designation:
+          record.financial_contact_designation || lead.financial_contact_designation || '',
+        cluster_code: record.cluster_code || record.cluster || lead.cluster || '',
+        assigned_to:
+          typeof record.assigned_to === 'string' ? record.assigned_to : record.assigned_to?._id || '',
         email: lead.email || school?.email || '',
         decision_maker_name:
           lead.decision_maker ||
@@ -397,7 +385,8 @@ export default function LeadEditScreen({ navigation, route }: any) {
             : school?.longitude != null
               ? String(school.longitude)
               : '',
-        priority: lead.priority || lead.lead_status || 'Hot',
+        priority:
+          leadPriorityFromProducts(record.products) || record.lead_status || record.priority || 'Warm',
         zone: lead.zone || school?.zone || '',
         branches: pickNum(
           fromOrder?.branches,
@@ -420,7 +409,7 @@ export default function LeadEditScreen({ navigation, route }: any) {
         follow_up_date: followStr,
       });
 
-      setLeadProducts(mergeLeadProductDetails(fromOrder || fromLead || lead));
+      setSavedProducts(parseLeadProductsToMap(record.products));
     } catch (error: any) {
       setErrorMessage(error.message || 'Failed to load lead');
     } finally {
@@ -432,129 +421,117 @@ export default function LeadEditScreen({ navigation, route }: any) {
     setProducts((prev) => prev.map((p, i) => (i === index ? { ...p, ...patch } : p)));
   };
 
-  const handleProductCheck = (index: number, checked: boolean) => {
-    updateProduct(index, { checked });
-  };
+  // Products cannot be deselected (all are required, as on the web).
 
   const handleProductStatusChange = (index: number, status: ProductStatus) => {
-    const patch: Partial<ProductSelection> = { status };
-    if (status !== 'Hot' && status !== 'Warm') {
-      patch.strength = 0;
-      patch.chance = 0;
-    }
-    updateProduct(index, patch);
+    setProducts((prev) =>
+      prev.map((p, i) => {
+        if (i !== index) return p;
+        const next = { ...p, status };
+        if (status !== 'Hot' && status !== 'Warm') {
+          next.strength = '';
+          next.unit_price = '';
+          next.chance = status === 'Not Interested' ? '0' : '';
+        }
+        if (status !== 'Not Interested') next.not_interested_reason = '';
+        return next;
+      }),
+    );
+  };
+
+  const handleProductUnitPriceChange = (index: number, raw: string) => {
+    let value = String(raw || '').replace(/[^\d.]/g, '');
+    const parts = value.split('.');
+    if (parts.length > 2) value = `${parts[0]}.${parts.slice(1).join('')}`;
+    if (value.startsWith('.')) value = `0${value}`;
+    updateProduct(index, { unit_price: value });
+  };
+
+  const fail = (message: string) => {
+    setErrorMessage(message);
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
   };
 
   const handleSubmit = async () => {
     setSuccessMessage(null);
     setErrorMessage(null);
 
-    if (!form.decision_maker_name?.trim()) {
-      setErrorMessage('Decision Maker Name is required');
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
-      return;
-    }
-    if (!form.decision_maker_mobile?.trim()) {
-      setErrorMessage('Decision Maker Mobile is required');
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
-      return;
-    }
-    const mobileError = phoneDigitsError(form.contact_mobile, true) || phoneDigitsError(form.decision_maker_mobile, true);
-    if (mobileError) {
-      setErrorMessage(mobileError);
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
-      return;
-    }
-    if (!form.remarks?.trim()) {
-      setErrorMessage('Remarks is required');
-      return;
-    }
-    if (!form.average_fee?.trim() || Number(form.average_fee) <= 0) {
-      setErrorMessage('Average School Fee is required');
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
-      return;
-    }
-    if (!form.branches?.trim() || Number(form.branches) <= 0) {
-      setErrorMessage('No. of Branches is required');
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
-      return;
-    }
-    if (!form.strength?.trim() || Number(form.strength) <= 0) {
-      setErrorMessage('School Strength is required');
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
-      return;
-    }
+    const contactError = phoneDigitsError(form.contact_mobile, true);
+    if (contactError) return fail(contactError);
+    const decisionError = phoneDigitsError(form.decision_maker_mobile, true);
+    if (decisionError) return fail(decisionError);
 
     const selectedProducts = products.filter((p) => p.checked);
+    if (selectedProducts.length === 0) return fail('All products must be included.');
+    const productError = validateLeadStyleProducts(selectedProducts);
+    if (productError) return fail(productError);
 
-    if (selectedProducts.length === 0) {
-      setErrorMessage('Please select at least one product.');
-      return;
+    const productsPayload = selectedProducts.map((p) => {
+      const strengthNum = Number(p.strength) || 0;
+      const hotOrWarm = p.status === 'Hot' || p.status === 'Warm';
+      return {
+        product_name: p.name,
+        quantity: strengthNum > 0 ? strengthNum : 1,
+        unit_price: hotOrWarm ? Number(p.unit_price) || 0 : 0,
+        term: p.term || 'Term 1',
+        status: p.status,
+        strength: strengthNum,
+        chance: hotOrWarm ? Number(p.chance) || 0 : 0,
+        not_interested_reason: p.status === 'Not Interested' ? p.not_interested_reason.trim() : '',
+      };
+    });
+
+    if (!form.decision_maker_name?.trim()) return fail('Financial contact person name is required');
+    if (!form.contact_designation.trim() || !form.financial_contact_designation.trim()) {
+      return fail('Both contact designations are required');
     }
-
-    for (const p of selectedProducts) {
-      if ((p.status === 'Hot' || p.status === 'Warm') && (!p.strength || p.strength <= 0)) {
-        setErrorMessage(`Enter strength for "${p.name}" when status is ${p.status}.`);
-        return;
-      }
-      if (p.status === 'Hot' && p.chance < 80) {
-        setErrorMessage(`Chance % for "${p.name}" must be at least 80% when status is Hot.`);
-        return;
-      }
-      if (p.status === 'Warm' && p.chance < 20) {
-        setErrorMessage(`Chance % for "${p.name}" must be at least 20% when status is Warm.`);
-        return;
-      }
-    }
-
-    const productsPayload = selectedProducts.map((p) => ({
-      product_name: p.name,
-      quantity: 1,
-      unit_price: 0,
-      status: p.status,
-      strength: p.strength || 0,
-      chance: p.status === 'Hot' || p.status === 'Warm' ? p.chance || 0 : 0,
-    }));
+    if (!form.decision_maker_mobile?.trim()) return fail('Financial contact mobile is required');
+    if (!form.area?.trim()) return fail('Area is required. Please enter pincode and select an area.');
+    if (!form.average_fee?.trim()) return fail('Average School Fee is required');
+    if (!form.branches?.trim()) return fail('No. of Branches is required');
+    if (!form.strength?.trim()) return fail('School Strength is required');
+    if (!form.remarks?.trim()) return fail('Remarks is required');
 
     setSubmitting(true);
     try {
+      // Same payload as the web edit page.
       const payload: any = {
         school_name: form.school_name,
-        school_type: form.school_type,
+        school_type: form.school_type || undefined,
         contact_person: form.contact_person,
         contact_mobile: form.contact_mobile,
-        contact_person2: form.decision_maker_name,
-        contact_mobile2: form.decision_maker_mobile,
-        decision_maker: form.decision_maker_name,
-        email: form.email,
+        contact_person2: form.decision_maker_name || undefined,
+        contact_mobile2: form.decision_maker_mobile || undefined,
+        contact_designation: form.contact_designation.trim(),
+        financial_contact_designation: form.financial_contact_designation.trim(),
         location: form.location,
-        address: form.address,
-        pincode: form.pincode,
-        state: form.state,
-        city: form.city,
-        region: form.region,
-        area: form.area,
+        address: form.address || undefined,
+        pincode: form.pincode || undefined,
+        state: form.state || undefined,
+        city: form.city || undefined,
+        region: form.region || undefined,
+        area: form.area || undefined,
         mandal: form.mandal || undefined,
         cluster: form.cluster || undefined,
+        cluster_code: form.cluster || form.cluster_code || undefined,
+        assigned_to: form.assigned_to || undefined,
         latitude: form.latitude ? Number(form.latitude) : undefined,
         longitude: form.longitude ? Number(form.longitude) : undefined,
         zone: form.zone,
-        priority: form.priority,
+        priority: form.priority || 'Warm',
         branches: form.branches ? Number(form.branches) : undefined,
         no_of_branches: form.branches ? Number(form.branches) : undefined,
         strength: form.strength ? Number(form.strength) : undefined,
-        remarks: form.remarks,
+        remarks: form.remarks || undefined,
         average_fee: form.average_fee ? Number(form.average_fee) : undefined,
         avg_fee: form.average_fee ? Number(form.average_fee) : undefined,
+        email: form.email,
         products: productsPayload,
         follow_up_date: parseFollowUpDate(form.follow_up_date),
       };
 
-      try {
-        await apiService.put(`/leads/${id}`, payload);
-      } catch {
-        await apiService.put(`/dc-orders/${id}`, payload);
-      }
+      const updatePath = recordSource === 'leads' ? `/leads/${id}` : `/dc-orders/${id}`;
+      await apiService.put(updatePath, payload);
 
       setSuccessMessage('Lead details updated successfully.');
       scrollRef.current?.scrollTo({ y: 0, animated: true });
@@ -598,6 +575,15 @@ export default function LeadEditScreen({ navigation, route }: any) {
           />
         )}
 
+        {isSuperAdmin ? (
+          <WebSelect
+            label="Assign to (BDE)"
+            value={form.assigned_to}
+            onValueChange={(v) => setForm((f) => ({ ...f, assigned_to: v }))}
+            items={bdeOptions.map((b) => ({ label: b.name, value: b._id }))}
+            placeholder="Select BDE"
+          />
+        ) : null}
         <FormField
           label="School name *"
           value={form.school_name}
@@ -623,22 +609,34 @@ export default function LeadEditScreen({ navigation, route }: any) {
           maxLength={15}
         />
         <FormField
+          label="School contact designation *"
+          value={form.contact_designation}
+          onChangeText={(text) => setForm((f) => ({ ...f, contact_designation: text }))}
+          placeholder="e.g. Principal"
+        />
+        <FormField
           label="Email"
           value={form.email}
           onChangeText={(text) => setForm((f) => ({ ...f, email: text }))}
         />
         <FormField
-          label="Decision Maker Name *"
+          label="Financial contact person *"
           value={form.decision_maker_name}
           onChangeText={(text) => setForm((f) => ({ ...f, decision_maker_name: text }))}
         />
         <FormField
-          label="Decision Maker Mobile *"
+          label="Financial contact mobile *"
           value={form.decision_maker_mobile}
           onChangeText={(text) => setForm((f) => ({ ...f, decision_maker_mobile: sanitizePhoneDigits(text) }))}
           keyboardType="phone-pad"
           placeholder="10 to 15 digits"
           maxLength={15}
+        />
+        <FormField
+          label="Financial contact designation *"
+          value={form.financial_contact_designation}
+          onChangeText={(text) => setForm((f) => ({ ...f, financial_contact_designation: text }))}
+          placeholder="e.g. Accountant"
         />
         <FormField
           label="Landmark"
@@ -662,7 +660,7 @@ export default function LeadEditScreen({ navigation, route }: any) {
           onChangeText={(text) => setForm((f) => ({ ...f, city: text }))}
         />
         <FormField
-          label="Area"
+          label="Area *"
           value={form.area}
           onChangeText={(text) => setForm((f) => ({ ...f, area: text }))}
         />
@@ -678,7 +676,7 @@ export default function LeadEditScreen({ navigation, route }: any) {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Products Interested *</Text>
+          <Text style={styles.sectionTitle}>Products * (all required — cannot deselect)</Text>
           {loadingProducts ? (
             <ActivityIndicator color={colors.primary} style={{ marginVertical: 12 }} />
           ) : products.length === 0 ? (
@@ -693,58 +691,58 @@ export default function LeadEditScreen({ navigation, route }: any) {
               const hotOrWarm = product.status === 'Hot' || product.status === 'Warm';
               return (
                 <View key={`${product.name}-${index}`} style={styles.productCard}>
-                  <TouchableOpacity
-                    style={styles.productHeader}
-                    onPress={() => handleProductCheck(index, !product.checked)}
-                  >
-                    <View
-                      style={[styles.checkbox, product.checked && styles.checkboxSelected]}
-                    >
-                      {product.checked ? <Text style={styles.checkboxMark}>✓</Text> : null}
+                  <View style={styles.productHeader}>
+                    <View style={[styles.checkbox, styles.checkboxSelected]}>
+                      <Text style={styles.checkboxMark}>✓</Text>
                     </View>
                     <Text style={styles.productName}>{product.name}</Text>
-                  </TouchableOpacity>
-                  {product.checked ? (
-                    <View style={styles.productFields}>
-                      <WebSelect
-                        label="Status"
-                        value={product.status}
-                        onValueChange={(v) =>
-                          handleProductStatusChange(index, v as ProductStatus)
-                        }
-                        items={PRODUCT_STATUS_OPTIONS}
-                      />
+                  </View>
+                  <View style={styles.productFields}>
+                    <WebSelect
+                      label="Status *"
+                      value={product.status}
+                      onValueChange={(v) => handleProductStatusChange(index, v as ProductStatus)}
+                      items={PRODUCT_STATUS_OPTIONS}
+                    />
+                    <FormField
+                      label={hotOrWarm ? 'Strength *' : 'Strength'}
+                      value={product.strength}
+                      onChangeText={(text) => updateProduct(index, { strength: normalizeIntegerInput(text) })}
+                      placeholder={hotOrWarm ? 'Qty' : '—'}
+                      keyboardType="number-pad"
+                      editable={hotOrWarm}
+                    />
+                    <FormField
+                      label={hotOrWarm ? 'Unit Price (₹) *' : 'Unit Price (₹)'}
+                      value={product.unit_price}
+                      onChangeText={(text) => handleProductUnitPriceChange(index, text)}
+                      placeholder={hotOrWarm ? '0' : '—'}
+                      keyboardType="number-pad"
+                      editable={hotOrWarm}
+                    />
+                    <FormField
+                      label={hotOrWarm ? 'Chance % *' : 'Chance %'}
+                      value={product.status === 'Not Interested' ? '0' : product.chance}
+                      onChangeText={(text) => updateProduct(index, { chance: normalizeIntegerInput(text, 100) })}
+                      placeholder={product.status === 'Hot' ? '80-100' : product.status === 'Warm' ? '20+' : '—'}
+                      keyboardType="number-pad"
+                      editable={hotOrWarm}
+                    />
+                    {product.status === 'Not Interested' ? (
                       <FormField
-                        label="Strength"
-                        value={hotOrWarm ? String(product.strength ?? '') : '0'}
-                        onChangeText={(text) =>
-                          updateProduct(index, { strength: Number(text) || 0 })
-                        }
-                        placeholder="Qty"
-                        keyboardType="number-pad"
-                        editable={hotOrWarm}
+                        label="Reason not interested *"
+                        value={product.not_interested_reason}
+                        onChangeText={(text) => updateProduct(index, { not_interested_reason: text })}
+                        placeholder="Why is the school not interested?"
                       />
-                      <FormField
-                        label="Chance %"
-                        value={hotOrWarm ? String(product.chance ?? '') : '0'}
-                        onChangeText={(text) =>
-                          updateProduct(index, {
-                            chance: Math.min(100, Math.max(0, Number(text) || 0)),
-                          })
-                        }
-                        placeholder="%"
-                        keyboardType="number-pad"
-                        editable={hotOrWarm}
-                      />
-                    </View>
-                  ) : null}
+                    ) : null}
+                  </View>
                 </View>
               );
             })
           )}
           <Text style={styles.hint}>
-            Previously selected products are checked with their Status, Strength, and Chance %.
-            Select more products to add them.
+            All products are required. Choose a status for each. Strength, Unit Price, and Chance % are required only for Hot and Warm.
           </Text>
         </View>
 
@@ -886,7 +884,7 @@ function FormField({
   label: string;
   value: string;
   onChangeText: (text: string) => void;
-  keyboardType?: 'default' | 'phone-pad' | 'number-pad';
+  keyboardType?: 'default' | 'phone-pad' | 'number-pad' | 'decimal-pad';
   placeholder?: string;
   editable?: boolean;
   maxLength?: number;

@@ -17,6 +17,8 @@ import { colors } from '../../theme/colors';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
 import { navigateRoot } from '../../navigation/navigationRef';
+import { DueRenewalsCard, type DueRenewalRow } from '../../components/clients/DueRenewalsCard';
+import { ContractEditor } from '../../components/clients/ContractEditor';
 
 type DcOrderRow = {
   _id: string;
@@ -33,6 +35,9 @@ type DcOrderRow = {
   region?: string;
   area?: string;
   location?: string;
+  contract_years?: number;
+  contract_start?: string;
+  contract_end?: string;
   products?: Array<{ product_name?: string; quantity?: number; term?: string }>;
 };
 
@@ -132,7 +137,7 @@ function formatRenewalProductMeta(p: {
   const strength = Number(p.strength ?? p.quantity);
   if (Number.isFinite(strength) && strength > 0) parts.push(`Strength: ${strength}`);
   const raw = p.renewal_pct ?? p.chance;
-  if (raw != null && raw !== '' && Number.isFinite(Number(raw))) {
+  if (raw != null && String(raw) !== '' && Number.isFinite(Number(raw))) {
     parts.push(`Chance: ${Number(raw)}%`);
   }
   return parts.join(' · ');
@@ -179,6 +184,8 @@ export default function LeadsRenewalListScreen() {
   const [renewRecommendations, setRenewRecommendations] = useState('');
   const [renewProducts, setRenewProducts] = useState<RenewProductLine[]>([emptyAdditionalLine()]);
   const [creatingRenewal, setCreatingRenewal] = useState(false);
+  const [dueRefreshKey, setDueRefreshKey] = useState(0);
+  const isAdmin = user?.role === 'Admin' || user?.role === 'Super Admin';
 
   const [updateOpen, setUpdateOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
@@ -362,6 +369,7 @@ export default function LeadsRenewalListScreen() {
         })),
       });
       Alert.alert('Success', 'Renewal lead created');
+      setDueRefreshKey((key) => key + 1);
       setSelectedSchool(null);
       setSchoolQuery('');
       setRenewRemarks('');
@@ -530,9 +538,17 @@ export default function LeadsRenewalListScreen() {
       refreshing={refreshing}
       onRefresh={() => {
         setRefreshing(true);
+        setDueRefreshKey((key) => key + 1);
         loadLeads();
       }}
     >
+      <DueRenewalsCard
+        refreshKey={dueRefreshKey}
+        onStartRenewal={(row: DueRenewalRow) => {
+          void selectSchool({ ...row, products: [] });
+        }}
+      />
+
       <PageSection title="Create renewal lead">
         <WebLabel>Search school (name or code)</WebLabel>
         <WebInput
@@ -596,6 +612,19 @@ export default function LeadsRenewalListScreen() {
               <Text style={styles.detailLabel}>Location: </Text>
               {displayField(selectedSchool.location)}
             </Text>
+            <View style={{ marginTop: 6 }}>
+              <Text style={styles.detailLabel}>Contract:</Text>
+              <ContractEditor
+                key={`${selectedSchool._id}-${selectedSchool.contract_end || ''}`}
+                schoolId={selectedSchool._id}
+                contract={selectedSchool}
+                canEdit={isAdmin}
+                onSaved={(saved) => {
+                  setSelectedSchool((prev) => (prev ? ({ ...prev, ...saved } as DcOrderRow) : prev));
+                  setDueRefreshKey((key) => key + 1);
+                }}
+              />
+            </View>
           </View>
         ) : null}
 

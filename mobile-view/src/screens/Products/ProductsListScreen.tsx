@@ -201,7 +201,7 @@ export default function ProductsListScreen({ navigation }: any) {
 
                 <InfoRow label="Term / Level" value={formatList(product.productLevels)} />
                 <InfoRow
-                  label="Special Notes"
+                  label="Deliverables"
                   value={
                     product.hasSubjects ? formatList(product.subjects) : '-'
                   }

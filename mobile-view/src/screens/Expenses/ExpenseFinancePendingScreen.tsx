@@ -39,8 +39,8 @@ export default function ExpenseFinancePendingScreen({ navigation }: any) {
   const loadFilters = async () => {
     try {
       const [employeeData, trainerData] = await Promise.all([
-        apiService.get<OptionItem[]>('/employees?isActive=true').catch(() => []),
-        apiService.get<OptionItem[]>('/trainers?status=active').catch(() => []),
+        apiService.get('/employees?isActive=true').catch(() => []),
+        apiService.get('/trainers?status=active').catch(() => []),
       ]);
       setEmployees(employeeData || []);
       setTrainers(trainerData || []);
@@ -56,7 +56,7 @@ export default function ExpenseFinancePendingScreen({ navigation }: any) {
       const params = new URLSearchParams();
       if (filters.employeeId !== 'all') params.append('employeeId', filters.employeeId);
       if (filters.trainerId !== 'all') params.append('trainerId', filters.trainerId);
-      const data = await apiService.get<Expense[]>(`/expenses/finance-pending${params.toString() ? `?${params.toString()}` : ''}`);
+      const data = await apiService.get(`/expenses/finance-pending${params.toString() ? `?${params.toString()}` : ''}`);
       setExpenses(Array.isArray(data) ? data : []);
     } catch {
       setExpenses([]);

@@ -1,137 +1,150 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl, Alert, ActivityIndicator } from 'react-native';
-import { colors } from '../../theme/colors';
+import React, { useCallback, useState } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { colors, radii } from '../../theme/colors';
 import { typography } from '../../theme/typography';
-import ScreenShell, { PageSection } from '../../ui/ScreenShell';
-import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
+import ScreenShell from '../../ui/ScreenShell';
+import MessageBanner from '../../components/MessageBanner';
 import { apiService } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 import { leaveTypeLabel } from '../../lib/leaveTypes';
+import { type LeaveApprovalFields, sortDecidableFirst } from '../../lib/leaveApproval';
+import LeaveApprovalStatus from '../../components/leaves/LeaveApprovalStatus';
+import LeaveDecisionActions from '../../components/leaves/LeaveDecisionActions';
 
-export default function LeavesPendingScreen({ navigation }: any) {
-  const [leaves, setLeaves] = useState<any[]>([]);
+type Leave = LeaveApprovalFields & {
+  _id: string;
+  employeeId: { _id?: string; name?: string; empCode?: string; role?: string } | string | null;
+  reason?: string;
+  startDate: string;
+  endDate: string;
+  leaveType?: string;
+};
+
+/** Display legacy numeric and current employee codes with the VESPL prefix (web lib/employeeCode.ts). */
+function formatEmployeeCode(value?: string | null, fallback = '—') {
+  const raw = String(value || '').trim();
+  if (!raw) return fallback;
+  const withoutPrefix = raw.replace(/^VESPL/i, '');
+  return `VESPL${/^\d+$/.test(withoutPrefix) ? withoutPrefix.padStart(4, '0') : withoutPrefix}`;
+}
+
+const formatDate = (d?: string) => {
+  if (!d) return '-';
+  const date = new Date(d);
+  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleDateString('en-IN');
+};
+
+export default function LeavesPendingScreen() {
+  const { user } = useAuth();
+  const [leaves, setLeaves] = useState<Leave[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
-      setLoading(true);
+      setLoadError(null);
       const data = await apiService.get('/leaves?status=Pending');
-      setLeaves(Array.isArray(data) ? data : []);
+      setLeaves(sortDecidableFirst(Array.isArray(data) ? data : []));
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to load pending leaves');
+      setLoadError(error?.message || 'Failed to load leaves');
+      setLeaves([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadData();
-  };
-
-  const handleAction = async (id: string, status: 'Approved' | 'Rejected') => {
-    try {
-      await apiService.put(`/leaves/${id}/approve`, { status });
-      Alert.alert('Success', `Leave ${status.toLowerCase()} successfully!`);
+  useFocusEffect(
+    useCallback(() => {
       loadData();
-    } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to update leave');
-    }
-  };
+    }, [loadData])
+  );
 
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return '-';
-    try {
-      return new Date(dateString).toLocaleDateString('en-IN');
-    } catch {
-      return '-';
-    }
-  };
+  const isOwnLeave = (l: Leave) => !!l.employeeId && typeof l.employeeId === 'object' && l.employeeId._id === user?._id;
+
+  const employeeName = (l: Leave) =>
+    !l.employeeId ? 'Unknown' : typeof l.employeeId === 'string' ? l.employeeId : l.employeeId.name || 'Unknown';
 
   return (
     <ScreenShell
       title="Pending Leaves"
+      subtitle={`Total: ${leaves.length}`}
       loading={loading && !refreshing}
       refreshing={refreshing}
-      onRefresh={onRefresh}
+      onRefresh={() => {
+        setRefreshing(true);
+        loadData();
+      }}
     >
-<ScrollView style={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-        {leaves.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>📅</Text>
-            <Text style={styles.emptyText}>No pending leaves found</Text>
-          </View>
-        ) : (
-          leaves.map((leave) => (
-            <View key={leave._id} style={styles.card}>
-              <View style={styles.cardHeader}>
-                <Text style={styles.employeeName}>{typeof leave.employeeId === 'string' ? leave.employeeId : leave.employeeId?.name || 'Unknown'}</Text>
-                <Text style={styles.leaveType}>{leaveTypeLabel(leave.leaveType)}</Text>
+      <Text style={styles.intro}>
+        Each leave needs two approvals: BDE — Zonal Manager + HR Manager; Trainer — Product Head + HR Manager; other
+        roles — Admin + HR Manager. Any rejection rejects the leave.
+      </Text>
+      {loadError ? <MessageBanner type="error" message={loadError} onDismiss={() => setLoadError(null)} /> : null}
+
+      {leaves.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>No pending leaves</Text>
+        </View>
+      ) : (
+        leaves.map((leave) => (
+          <View key={leave._id} style={[styles.card, leave.canDecide && styles.cardActionable]}>
+            <View style={styles.cardHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.employeeName}>{employeeName(leave)}</Text>
+                <Text style={styles.code}>
+                  {formatEmployeeCode(typeof leave.employeeId === 'object' && leave.employeeId ? leave.employeeId.empCode : undefined)}
+                </Text>
               </View>
-              <View style={styles.cardBody}>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>From:</Text>
-                  <Text style={styles.infoValue}>{formatDate(leave.startDate)}</Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>To:</Text>
-                  <Text style={styles.infoValue}>{formatDate(leave.endDate)}</Text>
-                </View>
-                {leave.reason && (
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Reason:</Text>
-                    <Text style={styles.infoValue}>{leave.reason}</Text>
-                  </View>
-                )}
-              </View>
-              <View style={styles.cardFooter}>
-                <TouchableOpacity style={styles.approveButton} onPress={() => handleAction(leave._id, 'Approved')}>
-                  <Text style={styles.approveButtonText}>Approve</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.rejectButton} onPress={() => handleAction(leave._id, 'Rejected')}>
-                  <Text style={styles.rejectButtonText}>Reject</Text>
-                </TouchableOpacity>
-              </View>
+              <Text style={styles.leaveType}>{leaveTypeLabel(leave.leaveType)}</Text>
             </View>
-          ))
-        )}
-      </ScrollView>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>From:</Text>
+              <Text style={styles.infoValue}>{formatDate(leave.startDate)}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>To:</Text>
+              <Text style={styles.infoValue}>{formatDate(leave.endDate)}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Reason:</Text>
+              <Text style={styles.infoValue}>{leave.reason || '-'}</Text>
+            </View>
+            <View style={styles.section}>
+              <LeaveApprovalStatus leave={leave} />
+            </View>
+            <View style={styles.footer}>
+              <LeaveDecisionActions leave={leave} isOwn={isOwnLeave(leave)} onDone={loadData} />
+            </View>
+          </View>
+        ))
+      )}
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
-  loadingText: { marginTop: 12, ...typography.body.medium, color: colors.textSecondary },
-  header: { paddingHorizontal: 20, paddingTop: 50, paddingBottom: 20, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
-  headerContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  backButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  backIcon: { fontSize: 24, color: colors.textLight, fontWeight: 'bold' },
-  headerTitle: { ...typography.heading.h1, color: colors.textLight, flex: 1, textAlign: 'center' },
-  placeholder: { width: 40 },
-  content: { flex: 1, padding: 16 },
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60 },
-  emptyIcon: { fontSize: 64, marginBottom: 16 },
+  intro: { fontSize: 13, color: colors.textSecondary, lineHeight: 18, marginBottom: 12 },
+  emptyContainer: { alignItems: 'center', paddingVertical: 60 },
   emptyText: { ...typography.heading.h3, color: colors.textSecondary },
-  card: { backgroundColor: colors.backgroundLight, borderRadius: 16, padding: 16, marginBottom: 12, shadowColor: colors.shadowDark, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 3 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  employeeName: { ...typography.heading.h3, color: colors.textPrimary, flex: 1 },
+  card: {
+    backgroundColor: colors.backgroundLight,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 14,
+    marginBottom: 12,
+  },
+  cardActionable: { borderColor: colors.primaryLight },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10, gap: 8 },
+  employeeName: { ...typography.heading.h3, color: colors.textPrimary },
+  code: { fontSize: 12, color: colors.textSecondary },
   leaveType: { ...typography.body.medium, color: colors.textSecondary },
-  cardBody: { marginBottom: 12 },
-  infoRow: { flexDirection: 'row', marginBottom: 6 },
-  infoLabel: { ...typography.body.medium, color: colors.textSecondary, width: 80 },
+  infoRow: { flexDirection: 'row', marginBottom: 4 },
+  infoLabel: { ...typography.body.medium, color: colors.textSecondary, width: 70 },
   infoValue: { ...typography.body.medium, color: colors.textPrimary, flex: 1 },
-  cardFooter: { flexDirection: 'row', gap: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border },
-  approveButton: { flex: 1, paddingVertical: 10, borderRadius: 8, backgroundColor: colors.success, alignItems: 'center' },
-  approveButtonText: { ...typography.label.medium, color: colors.textLight, fontWeight: '600' },
-  rejectButton: { flex: 1, paddingVertical: 10, borderRadius: 8, backgroundColor: colors.error || '#ef4444', alignItems: 'center' },
-  rejectButtonText: { ...typography.label.medium, color: colors.textLight, fontWeight: '600' },
+  section: { marginTop: 8 },
+  footer: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border },
 });
-
-

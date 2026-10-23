@@ -14,6 +14,10 @@ import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebLabel, WebSelect } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 import { phoneDigitsError, sanitizePhoneDigits } from '../../utils/phone';
+import { printReturnSlip } from '../../lib/returnSlip';
+
+/** Same list as web app/dashboard/returns/warehouse-executive/page.tsx ("Marked by students": written in, counted but not sellable). */
+const CONDITION_OPTIONS = ['Sellable', 'Marked by students', 'Wrong Print', 'Damaged', 'Expired', 'Missing', 'Short received'];
 
 type DcOrderRef = {
   _id?: string;
@@ -52,12 +56,26 @@ type StockReturnDetail = {
   schoolCode?: string;
   customerName?: string;
   dcOrderId?: DcOrderRef | string;
+  returnType?: string;
+  saleId?: string;
+  executiveName?: string;
   products?: Array<{
     product: string;
+    class?: string;
+    productCategory?: string;
     level?: string;
-    returnQty: number;
+    subject?: string;
+    specs?: string;
+    soldQty?: number;
+    /** No longer returned to the warehouse executive (blind count). */
+    returnQty?: number;
     receivedQty?: number;
     reason?: string;
+    remarks?: string;
+    condition?: string;
+    batchLot?: string;
+    storageLocation?: string;
+    mismatchRemark?: string;
   }>;
 };
 
@@ -65,10 +83,20 @@ type ProductLine = {
   id: string;
   productRaw: string;
   productLabel: string;
+  class: string;
+  productCategory: string;
+  level: string;
+  subject: string;
+  specs: string;
+  soldQty?: number;
   qty: number;
-  returnQty: number;
+  /** Raw input so an explicit 0 can be entered. */
+  qtyText: string;
   reason: string;
+  remarks: string;
   condition: string;
+  batchLot: string;
+  storageLocation: string;
   mismatchRemark: string;
 };
 
@@ -150,16 +178,31 @@ export default function StockReturnWarehouseVerifyScreen({ navigation, route }: 
       );
       setLrNumber(data.lrNumber || '');
 
-      const rows: ProductLine[] = (data.products || []).map((p, idx) => ({
-        id: `line-${idx}`,
-        productRaw: (p.product || '').trim(),
-        productLabel: (p.product || '').trim() || '—',
-        qty: Number(p.receivedQty) || 0,
-        returnQty: Number(p.returnQty) || 0,
-        reason: p.reason || 'Excess',
-        condition: (p as any).condition || '',
-        mismatchRemark: (p as any).mismatchRemark || '',
-      }));
+      const rows: ProductLine[] = (data.products || []).map((p, idx) => {
+        // Blind count: start empty unless this line was already verified.
+        const received = Number(p.receivedQty);
+        const verified = Boolean(String(p.condition || '').trim()) || (Number.isFinite(received) && received > 0);
+        const qty = verified && Number.isFinite(received) ? received : 0;
+        return {
+          id: `line-${idx}`,
+          productRaw: (p.product || '').trim(),
+          productLabel: (p.product || '').trim() || '—',
+          class: p.class || '',
+          productCategory: p.productCategory || '',
+          level: p.level || '',
+          subject: p.subject || '',
+          specs: p.specs || '',
+          soldQty: p.soldQty,
+          qty,
+          qtyText: verified ? String(qty) : '',
+          reason: p.reason || '',
+          remarks: p.remarks || '',
+          condition: p.condition || '',
+          batchLot: p.batchLot || '',
+          storageLocation: p.storageLocation || '',
+          mismatchRemark: p.mismatchRemark || '',
+        };
+      });
       setLines(rows);
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to load return', [
@@ -190,22 +233,63 @@ export default function StockReturnWarehouseVerifyScreen({ navigation, route }: 
     schoolCode,
     products: lines.map((l) => ({
       product: l.productRaw || l.productLabel,
-      returnQty: l.returnQty,
+      soldQty: l.soldQty,
+      reason: l.reason || undefined,
+      remarks: l.remarks,
       receivedQty: l.qty,
-      qty: l.qty,
-      reason: l.reason || 'Excess',
       condition: l.condition,
-      mismatchRemark: l.mismatchRemark,
+      batchLot: l.batchLot,
+      storageLocation: l.storageLocation,
+      class: l.class,
+      productCategory: l.productCategory,
+      level: l.level,
+      subject: l.subject,
+      mismatchRemark: (l.mismatchRemark || '').trim(),
     })),
+    totalReceivedQty: lines.reduce((sum, l) => sum + (l.qty || 0), 0),
   });
 
   const updateLineQty = (lineId: string, raw: string) => {
     const cleaned = raw.replace(/\D/g, '');
     setLines((prev) =>
       prev.map((l) =>
-        l.id === lineId ? { ...l, qty: cleaned === '' ? 0 : Number(cleaned) } : l,
+        l.id === lineId ? { ...l, qtyText: cleaned, qty: cleaned === '' ? 0 : Number(cleaned) } : l,
       ),
     );
+  };
+
+  const updateLineBatch = (lineId: string, batchLot: string) => {
+    setLines((prev) => prev.map((l) => (l.id === lineId ? { ...l, batchLot } : l)));
+  };
+
+  const handlePrint = () => {
+    if (!detail) return;
+    const dc = detail.dcOrderId && typeof detail.dcOrderId === 'object' ? detail.dcOrderId : null;
+    printReturnSlip(
+      {
+        returnId: detail.returnId,
+        saleId: detail.saleId,
+        returnType: detail.returnType,
+        status: returnStatus,
+        executiveName: detail.executiveName,
+        customerName: schoolName || dc?.school_name,
+        schoolCode,
+        returnDate: returnDate || detail.returnDate,
+        lrNumber,
+        transport,
+        products: lines.map((l) => ({
+          product: l.productRaw || l.productLabel,
+          class: l.class,
+          productCategory: l.productCategory,
+          level: l.level,
+          subject: l.subject,
+          specs: l.specs,
+          receivedQty: l.qty,
+          condition: l.condition,
+        })),
+      },
+      { showReceived: true, hideReturnQty: true },
+    ).catch((e: any) => Alert.alert('Print', e?.message || 'Could not create the return slip'));
   };
 
   const updateLineCondition = (lineId: string, condition: string) => {
@@ -258,11 +342,12 @@ export default function StockReturnWarehouseVerifyScreen({ navigation, route }: 
       Alert.alert('Validation', 'No products on this return');
       return;
     }
-    const missingQty = lines.find((l) => l.qty <= 0);
+    // 0 is a valid count (nothing arrived); only an empty / invalid entry is rejected.
+    const missingQty = lines.find((l) => l.qtyText.trim() === '' || !Number.isFinite(l.qty) || l.qty < 0);
     if (missingQty) {
       Alert.alert(
         'Validation',
-        `Enter received quantity for ${missingQty.productLabel || missingQty.productRaw || 'each product'}`,
+        `Please enter a valid received quantity for ${missingQty.productLabel || missingQty.productRaw || 'each product'}`,
       );
       return;
     }
@@ -455,11 +540,17 @@ export default function StockReturnWarehouseVerifyScreen({ navigation, route }: 
               {lines.map((line) => (
                 <View key={line.id} style={styles.productCard}>
                   <Text style={styles.productName}>{line.productLabel || line.productRaw || '—'}</Text>
+                  <View style={styles.metaRow}>
+                    <Text style={styles.metaText}>Class: {line.class || '-'}</Text>
+                    <Text style={styles.metaText}>Series: {line.productCategory || '-'}</Text>
+                    {line.level ? <Text style={styles.metaText}>Level: {line.level}</Text> : null}
+                  </View>
+                  <Text style={[styles.metaText, { marginBottom: 8 }]}>Deliverables: {line.subject || line.specs || '-'}</Text>
                   <View style={styles.productFields}>
                     <View style={styles.receivedField}>
                       <Text style={styles.fieldLabel}>Received Qty *</Text>
                       <WebInput
-                        value={canEdit ? (line.qty === 0 ? '' : String(line.qty)) : String(line.qty)}
+                        value={canEdit ? line.qtyText : String(line.qty)}
                         onChangeText={(v) => updateLineQty(line.id, v)}
                         keyboardType="number-pad"
                         placeholder={canEdit ? 'Enter count' : ''}
@@ -475,15 +566,27 @@ export default function StockReturnWarehouseVerifyScreen({ navigation, route }: 
                       placeholder="Select condition"
                       disabled={!canEdit}
                       compact
-                      items={[
-                        { label: 'Sellable', value: 'Sellable' },
-                        { label: 'Damaged', value: 'Damaged' },
-                        { label: 'Expired', value: 'Expired' },
-                        { label: 'QC / Hold', value: 'QC / Hold' },
-                      ]}
+                      items={CONDITION_OPTIONS.map((c) => ({ label: c, value: c }))}
                     />
                   </View>
                   </View>
+                  <Text style={styles.fieldLabel}>Batch / Lot</Text>
+                  <WebInput
+                    value={line.batchLot}
+                    onChangeText={(v) => updateLineBatch(line.id, v)}
+                    placeholder="Batch/Lot number"
+                    editable={canEdit}
+                    style={canEdit ? undefined : styles.readonly}
+                  />
+                  <Text style={styles.fieldLabel}>Remark</Text>
+                  <WebInput
+                    value={line.mismatchRemark}
+                    onChangeText={(v) => updateMismatchRemark(line.id, v)}
+                    placeholder="Optional remark"
+                    multiline
+                    editable={canEdit}
+                    style={canEdit ? undefined : styles.readonly}
+                  />
                 </View>
               ))}
             </View>
@@ -491,6 +594,7 @@ export default function StockReturnWarehouseVerifyScreen({ navigation, route }: 
         </View>
 
         <View style={styles.footer}>
+          <WebButton title="Print Return Slip" variant="outline" onPress={handlePrint} />
           <WebButton
             title="Back to list"
             variant="outline"
@@ -589,6 +693,8 @@ const styles = StyleSheet.create({
   productFields: { flexDirection: 'row', gap: 10 },
   receivedField: { width: '34%' },
   conditionField: { flex: 1 },
+  metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 2 },
+  metaText: { fontSize: 12, color: colors.textSecondary },
   fieldLabel: { ...typography.label.small, color: colors.textSecondary, marginBottom: 5 },
   qtyInput: {
     borderColor: '#059669',

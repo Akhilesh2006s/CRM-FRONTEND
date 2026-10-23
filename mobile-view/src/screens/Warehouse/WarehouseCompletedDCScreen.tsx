@@ -24,6 +24,9 @@ import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
 import { apiService, getApiUrl } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { DC_ROW_CATEGORIES, dcRowCategoryOrDefault, isBillableDcRow, isSpecimenRow } from '../../lib/crm/dcRowCategory';
+import { useDcCatalog } from '../../hooks/useDcCatalog';
+import { AbacusMaterialsSummary } from '../../components/dc/AbacusMaterials';
 
 /** Native only — react-native-webview throws on Expo web. */
 let NativeWebView: any = null;
@@ -200,6 +203,13 @@ function dcNoFrom(dc: any) {
   return `${String(year).slice(-2)}-${String(year + 1).slice(-2)}/${id.slice(-4)}`;
 }
 
+/** Student type shown for a DC line, as the web challan: Shortage DC, specimen = Training Material, else DC_ROW_CATEGORIES. */
+function lineCategory(dc: any, p: any): (typeof DC_ROW_CATEGORIES)[number] {
+  if (dc?.dcType === 'shortage') return 'Shortage';
+  if (isSpecimenRow(p)) return 'Training Material';
+  return dcRowCategoryOrDefault(p?.category);
+}
+
 function transformDc(dc: any): CompletedRow {
   const dcId = String(dc._id);
   const order = dc.dcOrderId && typeof dc.dcOrderId === 'object' ? dc.dcOrderId : null;
@@ -257,16 +267,28 @@ export default function WarehouseCompletedDCScreen({ navigation }: any) {
   });
   const [saving, setSaving] = useState(false);
 
+  const { hasProductCategories, getProductCategories } = useDcCatalog();
   const [studentTypeById, setStudentTypeById] = useState<Record<string, string>>({});
   const [shortageTarget, setShortageTarget] = useState<CompletedRow | null>(null);
   const [shortageRows, setShortageRows] = useState<
-    Array<{ id: string; product: string; class: string; ordered: number; delivered: number; shortage: string }>
+    Array<{
+      id: string;
+      product: string;
+      class: string;
+      category: string;
+      term: string;
+      productCategory?: string;
+      ordered: number;
+      delivered: number;
+      shortage: string;
+    }>
   >([]);
   const [shortageRemarks, setShortageRemarks] = useState('');
   const [savingShortage, setSavingShortage] = useState(false);
 
   const [invoiceVisible, setInvoiceVisible] = useState(false);
   const [invoiceLines, setInvoiceLines] = useState<any[]>([]);
+  const [invoiceDc, setInvoiceDc] = useState<any>(null);
   const [invoiceTitle, setInvoiceTitle] = useState('');
   const [invoiceLoadingId, setInvoiceLoadingId] = useState<string | null>(null);
 
@@ -295,7 +317,8 @@ export default function WarehouseCompletedDCScreen({ navigation }: any) {
         data = await apiService.get('/dc?status=completed').catch(() => []);
       }
       const list = Array.isArray(data) ? data : data?.data || [];
-      setRows(list.map(transformDc));
+      // Only rows backed by a DC: a sale with no DC has nothing to show or update here (web drops them too).
+      setRows(list.filter((dc: any) => dc && dc._id).map(transformDc));
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to load completed DCs');
       setRows([]);
@@ -447,6 +470,7 @@ export default function WarehouseCompletedDCScreen({ navigation }: any) {
       const full = await apiService.get(`/dc/${row.dcId}`);
       const lines = Array.isArray(full?.productDetails) ? full.productDetails : row.productDetails || [];
       setInvoiceLines(lines);
+      setInvoiceDc(full || null);
       setInvoiceTitle(`Invoice - ${row.schoolName || row.dcNo}`);
       setInvoiceVisible(true);
     } catch (e: any) {
@@ -478,12 +502,20 @@ export default function WarehouseCompletedDCScreen({ navigation }: any) {
       setShortageRemarks('');
       setShortageRows(
         products.map((p: any, i: number) => {
+          const prodName = p.product || p.productName || '';
           const ordered = Number(p.quantity || p.strength || 0);
-          const delivered = Number(p.deliverableQuantity ?? p.quantity ?? 0);
+          const delivered = Number(p.deliveredQuantity ?? p.deliverableQuantity ?? ordered);
+          const skuCats = hasProductCategories(prodName) ? getProductCategories(prodName) : [];
+          const rawPc = typeof p.productCategory === 'string' ? p.productCategory.trim() : '';
+          const productCategory =
+            (rawPc && skuCats.find((c) => c.toLowerCase() === rawPc.toLowerCase())) || rawPc || skuCats[0] || undefined;
           return {
-            id: `${i}-${p.product || p.productName}`,
-            product: p.product || p.productName || '',
-            class: String(p.class || ''),
+            id: `${i}-${prodName}`,
+            product: prodName,
+            class: String(p.class || '1'),
+            category: p.category || 'New Students',
+            term: p.term || 'Term 1',
+            productCategory,
             ordered,
             delivered,
             shortage: '',
@@ -502,6 +534,9 @@ export default function WarehouseCompletedDCScreen({ navigation }: any) {
       .map((r) => ({
         product: r.product,
         class: r.class,
+        category: r.category,
+        term: r.term,
+        productCategory: hasProductCategories(r.product) && r.productCategory?.trim() ? r.productCategory.trim() : undefined,
         quantity: Number(r.shortage),
         deliveredQuantity: r.delivered,
         shortageQuantity: Number(r.shortage),
@@ -922,13 +957,18 @@ export default function WarehouseCompletedDCScreen({ navigation }: any) {
                   <View key={i} style={styles.invoiceLine}>
                     <Text style={styles.invoiceProduct}>{p.product || p.productName || '-'}</Text>
                     <Text style={styles.invoiceMeta}>
-                      Class {p.class || '-'} · Qty {p.deliverableQuantity ?? p.quantity ?? '-'}
+                      Class {p.class || '-'} · {lineCategory(invoiceDc, p)} · Qty {p.deliverableQuantity ?? p.quantity ?? '-'}
                       {p.specs ? ` · Specs ${p.specs}` : ' · Specs -'}
                     </Text>
-                    {p.total != null ? <Text style={styles.invoiceMeta}>Total: {p.total}</Text> : null}
+                    {p.total != null || !isBillableDcRow(p, { dcType: invoiceDc?.dcType }) ? (
+                      <Text style={styles.invoiceMeta}>
+                        Total: {isBillableDcRow(p, { dcType: invoiceDc?.dcType }) ? p.total : 0}
+                      </Text>
+                    ) : null}
                   </View>
                 ))
               )}
+              <AbacusMaterialsSummary materials={invoiceDc?.abacusMaterials} />
             </ScrollView>
           </View>
         </View>

@@ -40,7 +40,6 @@ export const ROUTE_REGISTRY: RouteEntry[] = [
   { webPath: '/dashboard/dc/admin/my', mobileScreen: 'DCAdminMy', module: 'Clients', status: 'done' },
   { webPath: '/dashboard/clients/closed-sales', mobileScreen: 'ClientsClosedSales', module: 'Clients', status: 'done' },
   { webPath: '/dashboard/dc', mobileScreen: 'DCHub', module: 'Clients', status: 'done' },
-  { webPath: '/dashboard/products/deliverables/add', mobileScreen: 'DeliverableAdd', module: 'Products', status: 'done' },
   { webPath: '/dashboard/employees/zones-clusters', mobileScreen: 'EmployeesZonesClusters', module: 'Employees', status: 'done' },
 
   { webPath: '/dashboard/employees/new', mobileScreen: 'EmployeeNew', module: 'Employees', status: 'done' },
@@ -120,7 +119,6 @@ export const ROUTE_REGISTRY: RouteEntry[] = [
 
   { webPath: '/dashboard/products', mobileScreen: 'ProductsList', module: 'Products', status: 'done' },
   { webPath: '/dashboard/products/vendors', mobileScreen: 'VendorsList', module: 'Vendor', status: 'done' },
-  { webPath: '/dashboard/products/deliverables', mobileScreen: 'DeliverablesList', module: 'Products', status: 'done' },
 
   { webPath: '/dashboard/settings/password', mobileScreen: 'SettingsPassword', module: 'Settings', status: 'done' },
   { webPath: '/dashboard/settings/upload', mobileScreen: 'SettingsUpload', module: 'Settings', status: 'done' },
@@ -133,6 +131,14 @@ export const ROUTE_REGISTRY: RouteEntry[] = [
   { webPath: '/dashboard/stocks', mobileScreen: 'PartnerStocks', module: 'Vendor', status: 'done' },
   { webPath: '/dashboard/dcs', mobileScreen: 'PartnerDCs', module: 'Vendor', status: 'done' },
   { webPath: '/dashboard/franchises/[email]', mobileScreen: 'FranchiseDetail', module: 'Franchises', status: 'done' },
+  { webPath: '/dashboard/expenses/approvers', mobileScreen: 'ExpenseApprovers', module: 'Expenses', status: 'done' },
+  { webPath: '/dashboard/attendance', mobileScreen: 'MyAttendance', module: 'Attendance', status: 'done' },
+  { webPath: '/dashboard/employees/attendance', mobileScreen: 'AttendanceRoster', module: 'Employees', status: 'done' },
+  { webPath: '/dashboard/employees/verification', mobileScreen: 'EmployeeVerification', module: 'Employees', status: 'done' },
+  { webPath: '/dashboard/payslips', mobileScreen: 'MyPayslips', module: 'Employees', status: 'done' },
+  { webPath: '/dashboard/leads/cross-sale', mobileScreen: 'CrossSaleLeads', module: 'Leads', status: 'done' },
+  { webPath: '/dashboard/complaints/raise', mobileScreen: 'RaiseTicket', module: 'Tickets', status: 'done' },
+  { webPath: '/dashboard/complaints', mobileScreen: 'ViewTickets', module: 'Tickets', status: 'done' },
 ];
 
 export function getParitySummary() {

@@ -23,50 +23,94 @@ import MessageBanner from '../../components/MessageBanner';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { phoneDigitsError, sanitizePhoneDigits } from '../../utils/phone';
+import { useDcCatalog } from '../../hooks/useDcCatalog';
+import { isMarkerSpecs } from '../../lib/crm/dcRowCategory';
+import { withBilledTotals } from '../../lib/crm/dcPaymentDivisors';
+import { expandDeliverableStockRows } from '../../lib/crm/deliverableStockRows';
 import {
-  findCatalogProduct,
-  getProductSpecsOptions,
-} from '../../utils/productCatalog';
+  mapInventoryIdentityOntoDcRow,
+  requiredQtyFromDcRow,
+  validateDcStockAgainstInventory,
+} from '../../components/dc/warehouseStockHelpers';
+import { consolidateStockRows } from '../../components/dc/warehouseStockList';
 
 const DC_CATEGORIES = ['Term 1', 'Term 2', 'Term 3', 'Full Year'];
 
-/** Specs for display: hide legacy "Regular" default unless the product catalog lists it. */
-function resolveDisplaySpecs(catalog: any[], productName: string, raw: any): string {
-  const value = raw !== undefined && raw !== null ? String(raw).trim() : '';
-  if (!value) return '';
-  if (value === 'Regular') {
-    const options = getProductSpecsOptions(catalog, productName);
-    return options.includes('Regular') ? 'Regular' : '';
-  }
-  const entry = findCatalogProduct(catalog, productName);
-  if (entry && !entry.hasSpecs) return '';
-  return value;
-}
-
 type ProductRow = {
   product: string;
+  productName?: string;
+  productCategory?: string;
   class: string;
   category: string;
   specs: string;
   subject?: string;
+  section?: string;
+  program?: string;
+  stream?: string;
   quantity: number;
   strength?: number;
   price?: number;
+  unit_price?: number;
   total?: number;
   level?: string;
+  term?: string;
+  itemType?: string;
+  lineId?: string;
+  subjectPackage?: any;
+  dispatchMode?: string;
   availableQuantity?: number;
   deliverableQuantity?: number;
   remainingQuantity?: number;
 };
 
 type WarehouseItem = {
+  _id?: string;
   productName?: string;
   category?: string;
+  class?: string;
   level?: string;
   specs?: string;
   subject?: string;
-  currentStock?: number;
+  currentStock: number;
 };
+
+/** Identity fields used to match a DC row to a warehouse SKU (web toStockRow). */
+function toStockRow(p: Record<string, any>) {
+  return {
+    product: p.product || p.productName || '',
+    productName: p.productName || p.product || '',
+    class: p.class,
+    category: p.category,
+    productCategory: p.productCategory,
+    specs: p.specs,
+    subject: p.subject,
+    level: p.level,
+    term: p.term,
+    quantity: p.quantity,
+    strength: p.strength,
+    availableQuantity: p.availableQuantity,
+  };
+}
+
+/** Same as web: /warehouse/stock-list, falling back to consolidated /warehouse inventory. */
+async function loadStockRecords(): Promise<WarehouseItem[]> {
+  const stockList: any = await apiService.get('/warehouse/stock-list').catch(() => []);
+  const list = Array.isArray(stockList) ? stockList : stockList?.data || [];
+  if (list.length > 0) {
+    return list.map((row: any) => ({ ...row, currentStock: Number(row.currentStock) || 0 }));
+  }
+  const inventory: any = await apiService.get('/warehouse').catch(() => []);
+  const inv = Array.isArray(inventory) ? inventory : inventory?.data || [];
+  return consolidateStockRows(inv).map((row: any) => ({
+    _id: row._id,
+    productName: row.productName,
+    category: row.category,
+    level: row.level,
+    specs: row.specs,
+    subject: row.subject,
+    currentStock: row.currentStock,
+  }));
+}
 
 function toYmd(d: Date) {
   const y = d.getFullYear();
@@ -83,72 +127,6 @@ function parseYmd(value?: string) {
 
 function errMsg(e: any, fallback: string) {
   return e?.response?.data?.message || e?.message || fallback;
-}
-
-function findInventoryItem(
-  inventory: WarehouseItem[],
-  productName: string,
-  category?: string,
-  level?: string,
-  specs?: string,
-  subject?: string
-): WarehouseItem | null {
-  const name = (productName || '').toLowerCase();
-  const spec = (specs && specs.trim()) || 'Regular';
-  const subj = subject && subject.trim() ? subject.trim() : undefined;
-  const list = Array.isArray(inventory) ? inventory : [];
-  const itemSpec = (item: WarehouseItem) => (item.specs && item.specs.trim()) || 'Regular';
-  const itemSubj = (item: WarehouseItem) =>
-    item.subject && item.subject.trim() ? item.subject.trim() : undefined;
-  const base = (item: WarehouseItem) => item.productName?.toLowerCase() === name;
-
-  const match = (pred: (item: WarehouseItem) => boolean) => list.find(pred) || null;
-
-  if (subj) {
-    return (
-      match(
-        (i) =>
-          base(i) &&
-          (i.category || '') === (category || '') &&
-          (i.level || '') === (level || '') &&
-          itemSpec(i) === spec &&
-          itemSubj(i) === subj
-      ) ||
-      match((i) => base(i) && (i.level || '') === (level || '') && itemSpec(i) === spec && itemSubj(i) === subj) ||
-      match((i) => base(i) && itemSpec(i) === spec && itemSubj(i) === subj) ||
-      match(
-        (i) =>
-          base(i) &&
-          (i.category || '') === (category || '') &&
-          (i.level || '') === (level || '') &&
-          itemSpec(i) === spec
-      ) ||
-      match((i) => base(i) && (i.category || '') === (category || '') && (i.level || '') === (level || '')) ||
-      match((i) => base(i) && (i.category || '') === (category || '')) ||
-      match(base)
-    );
-  }
-
-  return (
-    match(
-      (i) =>
-        base(i) &&
-        (i.category || '') === (category || '') &&
-        (i.level || '') === (level || '') &&
-        itemSpec(i) === spec &&
-        itemSubj(i) === undefined
-    ) ||
-    match(
-      (i) =>
-        base(i) &&
-        (i.category || '') === (category || '') &&
-        (i.level || '') === (level || '') &&
-        itemSpec(i) === spec
-    ) ||
-    match((i) => base(i) && (i.category || '') === (category || '') && (i.level || '') === (level || '')) ||
-    match((i) => base(i) && (i.category || '') === (category || '')) ||
-    match(base)
-  );
 }
 
 function DateField({
@@ -294,37 +272,39 @@ export default function WarehouseDCAtWarehouseDetailScreen({ navigation, route }
   const [dcNotes, setDcNotes] = useState('');
   const [dcRemarks, setDcRemarks] = useState('');
   const [productRows, setProductRows] = useState<ProductRow[]>([]);
+  const [warehouseInventory, setWarehouseInventory] = useState<WarehouseItem[]>([]);
+  const { getProductSpecs, getProductRelatedItems, getCalculationType, getCatalogFallbackCount, loading: catalogLoading } =
+    useDcCatalog();
+
+  /** Web resolveProductMasterSpec: marker specs (specimen / related item) keep their text. */
+  const resolveProductMasterSpec = (productName: string, currentSpec: unknown): string => {
+    if (isMarkerSpecs(productName, currentSpec, getProductRelatedItems)) return String(currentSpec).trim();
+    const masterSpecs = getProductSpecs(productName);
+    if (!Array.isArray(masterSpecs) || masterSpecs.length === 0) return '';
+    const normalizedCurrent = String(currentSpec || '').trim().toLowerCase();
+    const matched = masterSpecs.find((spec) => String(spec || '').trim().toLowerCase() === normalizedCurrent);
+    return matched || masterSpecs[0] || '';
+  };
 
   useEffect(() => {
-    load();
-  }, [id]);
+    if (!catalogLoading) load();
+  }, [id, catalogLoading]);
 
   const load = async () => {
     try {
       setLoading(true);
-      const [inventoryRes, fullDC, catalogRes] = await Promise.all([
-        apiService.get('/warehouse').catch(() => []),
-        apiService.get(`/dc/${id}`),
-        apiService.get('/products/active').catch(() => apiService.get('/products').catch(() => [])),
-      ]);
-      const inventory: WarehouseItem[] = Array.isArray(inventoryRes)
-        ? inventoryRes
-        : inventoryRes?.data || [];
-      const catalog: any[] = Array.isArray(catalogRes)
-        ? catalogRes
-        : catalogRes?.data || catalogRes?.products || [];
-      setDc(fullDC);
+      const [inventory, fullDC] = await Promise.all([loadStockRecords(), apiService.get(`/dc/${id}`)]);
+      setWarehouseInventory(inventory);
       let order: any =
         typeof fullDC.dcOrderId === 'object' && fullDC.dcOrderId ? fullDC.dcOrderId : {};
 
-      // Ensure school_type is loaded from the deal (e.g. "New" from school create)
       const orderId =
         typeof fullDC.dcOrderId === 'object' && fullDC.dcOrderId?._id
           ? fullDC.dcOrderId._id
           : typeof fullDC.dcOrderId === 'string'
             ? fullDC.dcOrderId
             : null;
-      if (orderId && !order.school_type) {
+      if (orderId) {
         try {
           const fullOrder = await apiService.get(`/dc-orders/${orderId}`);
           if (fullOrder) order = { ...order, ...fullOrder };
@@ -332,6 +312,7 @@ export default function WarehouseDCAtWarehouseDetailScreen({ navigation, route }
           /* keep populated order */
         }
       }
+      setDc({ ...fullDC, dcOrderId: Object.keys(order).length > 0 ? order : fullDC.dcOrderId });
 
       setContactPerson(fullDC.contactPerson || order.contact_person || '');
       setContactMobile(fullDC.contactMobile || fullDC.customerPhone || order.contact_mobile || '');
@@ -344,9 +325,16 @@ export default function WarehouseDCAtWarehouseDetailScreen({ navigation, route }
             'New',
         ).trim(),
       );
-      setSchoolAddress(order.address || order.location || '');
+      setSchoolAddress(order.address || fullDC.customerAddress || order.location || '');
       setZone(fullDC.zone || order.zone || '');
-      setCluster(fullDC.cluster || '');
+      setCluster(
+        fullDC.cluster ||
+          order.cluster_code ||
+          order.cluster ||
+          (typeof fullDC.employeeId === 'object' ? fullDC.employeeId?.cluster : '') ||
+          (typeof order.assigned_to === 'object' ? order.assigned_to?.cluster : '') ||
+          '',
+      );
       setDcDate(fullDC.dcDate ? toYmd(new Date(fullDC.dcDate)) : '');
       setDcRemarks(fullDC.dcRemarks || '');
       setDcCategory(fullDC.dcCategory || 'Term 1');
@@ -357,62 +345,75 @@ export default function WarehouseDCAtWarehouseDetailScreen({ navigation, route }
       if (Array.isArray(fullDC.productDetails) && fullDC.productDetails.length > 0) {
         setProductRows(
           fullDC.productDetails.map((p: any) => {
-            const productName = p.product || 'ABACUS';
-            const specsValue = resolveDisplaySpecs(catalog, productName, p.specs);
-            const subjectValue = p.subject || undefined;
-            const inventoryItem = findInventoryItem(
-              inventory,
-              productName,
-              p.category,
-              p.level,
-              specsValue,
-              subjectValue
-            );
-            const qty = Number(p.quantity) || 0;
-            const str = Number(p.strength) || 0;
-            const requestedQty = Math.max(qty, str);
-            const availableQty = inventoryItem
-              ? Number(inventoryItem.currentStock) || 0
-              : Number(p.availableQuantity) || 0;
+            const subjectValue =
+              p.subject !== undefined && p.subject !== null && String(p.subject).trim() !== ''
+                ? String(p.subject)
+                : undefined;
+            const stockRow = toStockRow({ ...p, specs: p.specs, subject: subjectValue, level: p.level || '' });
+            const productName = stockRow.productName || stockRow.product;
+            const requestedQty = requiredQtyFromDcRow(stockRow);
+            const mapped = mapInventoryIdentityOntoDcRow(stockRow, inventory);
+            const availableQty = mapped.availableQuantity;
             const deliverableQty =
               p.deliverableQuantity !== undefined && p.deliverableQuantity !== null
                 ? Number(p.deliverableQuantity)
-                : Math.min(requestedQty, availableQty);
+                : requestedQty;
+            const unitPrice = Number(p.unit_price) || Number(p.price) || 0;
             return {
               product: productName,
+              productName,
+              productCategory: mapped.productCategory,
               class: p.class || 'NA',
               category: p.category || 'Training-Material',
-              specs: specsValue,
-              subject: subjectValue,
+              specs: resolveProductMasterSpec(productName, p.specs),
+              // IIT combination rows keep what was raised; stock matching expands the combination itself.
+              subject: p.stream ? subjectValue : mapped.subject || undefined,
+              section: p.section || undefined,
+              program: p.program || undefined,
+              stream: p.stream || undefined,
               quantity: requestedQty,
               availableQuantity: availableQty,
               deliverableQuantity: deliverableQty,
-              remainingQuantity: availableQty - deliverableQty,
+              remainingQuantity: Math.max(0, availableQty - deliverableQty),
               strength: p.strength || 0,
-              price: p.price || 0,
-              total: p.total || 0,
-              level: p.level || 'L1',
+              price: unitPrice,
+              unit_price: unitPrice,
+              total: (Number(p.quantity) || Number(p.strength) || 0) * unitPrice,
+              level: mapped.level,
+              term: p.term,
+              itemType: p.itemType || undefined,
+              lineId: p.lineId || undefined,
+              subjectPackage: p.subjectPackage,
+              dispatchMode: p.dispatchMode,
             };
           })
         );
       } else {
-        const productName = fullDC.product || fullDC.productDetails?.[0]?.product || 'ABACUS';
-        const inventoryItem = findInventoryItem(inventory, productName, 'Training-Material');
-        const requestedQty = Number(fullDC.requestedQuantity) || 0;
-        const availableQty = inventoryItem ? Number(inventoryItem.currentStock) || 0 : 0;
-        const deliverableQty = Math.min(requestedQty, availableQty);
+        const productName = fullDC.product || '';
+        const stockRow = toStockRow({
+          product: productName,
+          productName,
+          category: 'Training-Material',
+          quantity: fullDC.requestedQuantity || 0,
+        });
+        const requestedQty = requiredQtyFromDcRow(stockRow);
+        const mapped = mapInventoryIdentityOntoDcRow(stockRow, inventory);
+        const availableQty = mapped.availableQuantity;
         setProductRows([
           {
             product: productName,
+            productName,
+            productCategory: mapped.productCategory,
             class: 'NA',
             category: 'Training-Material',
-            specs: '',
+            specs: resolveProductMasterSpec(productName, undefined),
+            subject: mapped.subject || undefined,
             quantity: requestedQty,
             availableQuantity: availableQty,
-            deliverableQuantity: deliverableQty,
-            remainingQuantity: availableQty - deliverableQty,
+            deliverableQuantity: requestedQty,
+            remainingQuantity: Math.max(0, availableQty - requestedQty),
             strength: 0,
-            level: 'L1',
+            level: mapped.level,
           },
         ]);
       }
@@ -423,14 +424,19 @@ export default function WarehouseDCAtWarehouseDetailScreen({ navigation, route }
     }
   };
 
-  const insufficientQuantity = useMemo(
-    () => productRows.some((p) => (p.availableQuantity || 0) < (p.deliverableQuantity || 0)),
-    [productRows]
+  /** Stock check as web: deliverable "CW, HW" rows need each book at the row's quantity. */
+  const stockCheck = useMemo(
+    () =>
+      productRows.length
+        ? validateDcStockAgainstInventory(expandDeliverableStockRows(productRows.map(toStockRow)), warehouseInventory)
+        : { ok: true, message: '' },
+    [productRows, warehouseInventory]
   );
+  const insufficientQuantity = !stockCheck.ok;
 
   const dcOrder = typeof dc?.dcOrderId === 'object' && dc?.dcOrderId ? dc.dcOrderId : {};
-  const transportName = dcOrder.transport_name || dc?.transport || '';
-  const transportLocation = dcOrder.transport_location || dc?.transportArea || '';
+  const transportName = dc?.transport || dcOrder.transport_name || '';
+  const transportLocation = dc?.transportArea || dcOrder.transport_location || '';
   const transportLandmark = dcOrder.transportation_landmark || '';
   const pincode = dcOrder.pincode || '';
   const executiveName = dc?.managerId?.name || dc?.employeeId?.name || '';
@@ -439,37 +445,80 @@ export default function WarehouseDCAtWarehouseDetailScreen({ navigation, route }
   const updateDeliverable = (idx: number, raw: string) => {
     const updated = [...productRows];
     const newDeliverableQty = Number(raw) || 0;
-    const availableQty = updated[idx].availableQuantity || 0;
+    const availableQty = Number(updated[idx].availableQuantity) || 0;
     updated[idx] = {
       ...updated[idx],
       deliverableQuantity: newDeliverableQty,
-      remainingQuantity: availableQty >= newDeliverableQty ? availableQty - newDeliverableQty : 0,
+      remainingQuantity: Math.max(0, availableQty - newDeliverableQty),
     };
     setProductRows(updated);
   };
 
+  /** Web payload: every identity / commercial field kept, totals as billed. */
   const productPayload = (rows: ProductRow[]) =>
-    rows.map((p) => ({
+    withBilledTotals(rows as any[], getCalculationType, getCatalogFallbackCount).map((p: any) => ({
       product: p.product,
+      productName: p.productName || p.product,
+      productCategory: p.productCategory,
       class: p.class,
       category: p.category,
-      specs: p.specs?.trim() || undefined,
+      specs: p.specs || '',
       subject: p.subject || undefined,
+      section: p.section || undefined,
+      program: p.program || undefined,
+      stream: p.stream || undefined,
       quantity: p.quantity,
       availableQuantity: p.availableQuantity,
       deliverableQuantity: p.deliverableQuantity,
       remainingQuantity: p.remainingQuantity,
       strength: p.strength,
-      price: p.price,
-      total: p.total,
-      level: p.level,
+      price: Number(p.price) || Number(p.unit_price) || 0,
+      unit_price: Number(p.unit_price) || Number(p.price) || 0,
+      total: Number(p.total) || 0,
+      level: p.level || '',
+      term: p.term || undefined,
+      itemType: p.itemType || undefined,
+      lineId: p.lineId || undefined,
+      subjectPackage: p.subjectPackage,
+      dispatchMode: p.dispatchMode,
     }));
 
   const totals = (rows: ProductRow[]) => {
-    const requested = rows.reduce((sum, p) => sum + Math.max(p.quantity || 0, p.strength || 0), 0);
+    const requested = rows.reduce((sum, p) => sum + requiredQtyFromDcRow(toStockRow(p)), 0);
     const available = rows.reduce((sum, p) => sum + (p.availableQuantity || 0), 0);
     const deliverable = rows.reduce((sum, p) => sum + (p.deliverableQuantity || 0), 0);
     return { requested, available, deliverable };
+  };
+
+  /** Fresh stock + identity remap before saving (web processDC / putOnHold). */
+  const refreshRowsFromStock = async () => {
+    const inventory = await loadStockRecords();
+    setWarehouseInventory(inventory);
+    const updated: ProductRow[] = productRows.map((p) => {
+      const stockRow = toStockRow(p);
+      const mapped = mapInventoryIdentityOntoDcRow(stockRow, inventory);
+      const availableQty = mapped.availableQuantity;
+      const requiredQty = requiredQtyFromDcRow(stockRow);
+      const deliverableQty = p.deliverableQuantity != null ? Number(p.deliverableQuantity) : requiredQty;
+      return {
+        ...p,
+        // IIT combination rows keep the fields entered when the DC was raised.
+        ...(p.stream
+          ? {}
+          : {
+              productCategory: mapped.productCategory,
+              specs: mapped.specs,
+              subject: mapped.subject || undefined,
+              level: mapped.level,
+            }),
+        quantity: requiredQty,
+        availableQuantity: availableQty,
+        remainingQuantity: Math.max(0, availableQty - deliverableQty),
+      };
+    });
+    setProductRows(updated);
+    const check = validateDcStockAgainstInventory(expandDeliverableStockRows(updated.map(toStockRow)), inventory);
+    return { rows: updated, check };
   };
 
   const sharedBody = (rows: ProductRow[], extra: Record<string, any> = {}) => {
@@ -488,6 +537,9 @@ export default function WarehouseDCAtWarehouseDetailScreen({ navigation, route }
       zone: zone || undefined,
       cluster: cluster || undefined,
       remarks: dcRemarks || undefined,
+      transport: transportName || undefined,
+      transportArea: transportLocation || undefined,
+      lrNo: lrNo || undefined,
       dcOrderId:
         dc?.dcOrderId && typeof dc.dcOrderId === 'object'
           ? { ...dc.dcOrderId, school_type: schoolType || undefined, address: schoolAddress || undefined }
@@ -513,7 +565,9 @@ export default function WarehouseDCAtWarehouseDetailScreen({ navigation, route }
   };
 
   const handleUpdateAndSubmit = async () => {
-    const stage = dc?.warehouseStage || (dc?.status === 'sent_to_manager' ? 'awaiting_receipt' : '');
+    const stage =
+      dc?.warehouseStage ||
+      (dc?.status === 'sent_to_manager' ? 'awaiting_receipt' : dc?.status === 'warehouse_processing' ? 'accepted' : '');
     if (stage === 'awaiting_receipt') {
       if (!isChecker) {
         setBanner({ type: 'error', message: 'The Warehouse Manager must accept this DC before it can be processed.' });
@@ -530,6 +584,17 @@ export default function WarehouseDCAtWarehouseDetailScreen({ navigation, route }
       }
       return;
     }
+    const approving = stage === 'pending_approval' && isChecker;
+    if (!approving) {
+      if (!isMaker) {
+        setBanner({ type: 'error', message: 'Only a Warehouse Executive can submit packing for approval.' });
+        return;
+      }
+      if (!lrNo.trim()) {
+        setBanner({ type: 'error', message: 'LR Number is required before submitting for manager approval.' });
+        return;
+      }
+    }
     if (!schoolType.trim()) {
       setBanner({ type: 'error', message: 'School Type is required. Please enter the school type before submitting.' });
       return;
@@ -539,47 +604,36 @@ export default function WarehouseDCAtWarehouseDetailScreen({ navigation, route }
       setBanner({ type: 'error', message: mobileError });
       return;
     }
-    if (!dcDate.trim()) {
-      setBanner({ type: 'error', message: 'DC Date is required. Please enter the DC date before submitting.' });
-      return;
-    }
-    if (insufficientQuantity) {
-      setBanner({
-        type: 'error',
-        message:
-          'Enough quantity is not available. Available quantity is less than deliverable quantity for one or more products. Please adjust deliverable quantities or use the "Hold DC" button to put the DC on hold.',
-      });
-      return;
-    }
     setProcessing(true);
     setBanner(null);
     try {
-      const t = totals(productRows);
-      const stage = dc?.warehouseStage || (dc?.status === 'warehouse_processing' ? 'accepted' : '');
-      await apiService.put(`/dc/${id}`, sharedBody(productRows));
-      if (stage === 'pending_approval' && isChecker) {
+      const { rows, check } = await refreshRowsFromStock();
+      if (!check.ok) {
+        setBanner({ type: 'error', message: check.message });
+        return;
+      }
+      const t = totals(rows);
+      await apiService.put(`/dc/${id}`, sharedBody(rows));
+      if (approving) {
         await apiService.post(`/dc/${id}/warehouse-approve`, {
           availableQuantity: t.available,
           deliverableQuantity: t.deliverable,
           remarks: dcRemarks || undefined,
-          productDetails: productPayload(productRows),
+          productDetails: productPayload(rows),
         });
         navigation.navigate('WarehouseCompletedDC');
         return;
       }
-      if (!isMaker) {
-        setBanner({ type: 'error', message: 'Only a Warehouse Executive can submit packing for approval.' });
-        return;
-      }
-      if (!lrNo.trim()) {
-        setBanner({ type: 'error', message: 'LR Number is required before submitting for manager approval.' });
-        return;
-      }
       await apiService.post(`/dc/${id}/warehouse-submit`, {
-        ...sharedBody(productRows),
+        availableQuantity: t.available,
+        deliverableQuantity: t.deliverable,
+        remarks: dcRemarks || undefined,
+        productDetails: productPayload(rows),
         lrNo: lrNo.trim(),
+        transport: transportName || undefined,
+        transportArea: transportLocation || undefined,
         vehicleNo: vehicleNo.trim() || undefined,
-        bags: productRows.map((p, index) => ({
+        bags: rows.map((p, index) => ({
           bagNo: String(index + 1),
           product: p.product,
           productName: p.product,
@@ -601,8 +655,9 @@ export default function WarehouseDCAtWarehouseDetailScreen({ navigation, route }
       setBanner({ type: 'error', message: 'School Type is required. Please enter the school type before putting the DC on hold.' });
       return;
     }
-    if (!dcDate.trim()) {
-      setBanner({ type: 'error', message: 'DC Date is required. Please enter the DC date before putting the DC on hold.' });
+    const mobileError = phoneDigitsError(contactMobile, false);
+    if (mobileError) {
+      setBanner({ type: 'error', message: mobileError });
       return;
     }
     if (productRows.length === 0) {
@@ -612,10 +667,15 @@ export default function WarehouseDCAtWarehouseDetailScreen({ navigation, route }
     setHolding(true);
     setBanner(null);
     try {
-      const holdReason = dcRemarks
-        ? `Insufficient quantity available. Remarks: ${dcRemarks}`
-        : 'Insufficient quantity available.';
-      await apiService.put(`/dc/${id}`, sharedBody(productRows, { status: 'hold', holdReason }));
+      const { rows, check } = await refreshRowsFromStock();
+      const holdReason = check.ok
+        ? dcRemarks
+          ? `Hold requested. Remarks: ${dcRemarks}`
+          : 'Hold requested.'
+        : dcRemarks
+          ? `${check.message}. Remarks: ${dcRemarks}`
+          : check.message;
+      await apiService.put(`/dc/${id}`, sharedBody(rows, { status: 'hold', holdReason }));
       setBanner({ type: 'success', message: 'DC has been put on hold. It will appear in Hold DC page.' });
       setTimeout(() => navigation.navigate('WarehouseHoldDC'), 800);
     } catch (e: any) {
@@ -625,7 +685,7 @@ export default function WarehouseDCAtWarehouseDetailScreen({ navigation, route }
     }
   };
 
-  const requiredTotal = productRows.reduce((sum, row) => sum + (Number(row.strength) || Number(row.quantity) || 0), 0);
+  const requiredTotal = productRows.reduce((sum, row) => sum + requiredQtyFromDcRow(toStockRow(row)), 0);
   const busy = processing || holding;
 
   return (
@@ -702,8 +762,7 @@ export default function WarehouseDCAtWarehouseDetailScreen({ navigation, route }
         {insufficientQuantity ? (
           <View style={styles.warningBox}>
             <Text style={styles.warningText}>
-              Warning: Enough quantity is not available. Available quantity is less than deliverable quantity for one or
-              more products. Please adjust deliverable quantities or use the "Hold DC" button to put the DC on hold.
+              {stockCheck.message || 'Insufficient stock. Please ensure sufficient stock before processing this DC.'}
             </Text>
           </View>
         ) : null}
@@ -714,7 +773,7 @@ export default function WarehouseDCAtWarehouseDetailScreen({ navigation, route }
               {[
                 'Product',
                 'Class',
-                'Category',
+                'Product Category',
                 'Specs',
                 'Subject',
                 'Required Quantity',
@@ -739,8 +798,8 @@ export default function WarehouseDCAtWarehouseDetailScreen({ navigation, route }
                   <View key={`${row.product}-${idx}`} style={styles.tableRow}>
                     <Text style={styles.td}>{row.product}</Text>
                     <Text style={styles.td}>{row.class}</Text>
-                    <Text style={styles.td}>{row.category}</Text>
-                    <Text style={styles.td}>{row.specs?.trim() || '-'}</Text>
+                    <Text style={styles.td}>{row.productCategory || '-'}</Text>
+                    <Text style={styles.td}>{resolveProductMasterSpec(row.product, row.specs) || '-'}</Text>
                     <Text style={styles.td}>{row.subject || '-'}</Text>
                     <Text style={[styles.td, styles.tdStrong]}>{row.quantity || 0}</Text>
                     <Text style={styles.td}>{row.level || '-'}</Text>

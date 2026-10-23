@@ -26,72 +26,55 @@ import { navigateRoot } from '../../navigation/navigationRef';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
-import {
-  applyCatalogDefaultsToRow,
-  findCatalogProduct,
-  getCatalogProductNames,
-  getProductCategoryOptions,
-  getProductLevelsOptions,
-  getProductSpecsOptions,
-  getProductSubjectsOptions,
-  mapSourceToRaiseDcRow,
-} from '../../utils/productCatalog';
+import { useDcCatalog } from '../../hooks/useDcCatalog';
+import { DcCategoryPicker } from '../../components/dc/DcCategoryPicker';
+import { AbacusMaterialsSummary } from '../../components/dc/AbacusMaterials';
+import { canonicalDcRowCategory, dcRowCategoryOrDefault } from '../../lib/crm/dcRowCategory';
+import { withBilledTotals } from '../../lib/crm/dcPaymentDivisors';
+import { splitDeliverableRows } from '../../lib/crm/deliverableStockRows';
+import { isTermWiseDcRecord, resolveClosedSalesProductLines } from '../../components/dc/closedSalesLines';
+import { CLOSE_LEAD_DESTINATION } from '../../lib/crm/closeLeadTermRouting';
+import { resolveExistingProductTerm } from '../../lib/crm/productTerm';
 
 type ProductRow = {
   id: string;
+  itemType?: string;
   product: string;
   class: string;
   category: string;
   productCategory?: string;
   specs: string;
   subject?: string;
+  // IIT assignment identity (class section, program, stream)
+  section?: string;
+  program?: string;
+  stream?: string;
+  quantity: number;
   strength: number;
   level: string;
   term: string;
+  unit_price: number;
+  price?: number;
 };
 
 const DEFAULT_ROW: Omit<ProductRow, 'id'> = {
   product: 'Abacus',
   class: '1',
-  category: 'new Students',
-  specs: 'Regular',
+  category: 'New Students',
+  specs: '',
+  quantity: 1,
   strength: 0,
   level: 'L1',
   term: 'Term 1',
+  unit_price: 0,
 };
 
 const CLASSES = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
-const CATEGORY_OPTIONS = [
-  'NA',
-  'Training Mterial',
-  'new Students',
-  'Old Students',
-  'Excess',
-  'Exchange',
-  'Shortage',
-  'Excess-OldStudents',
-  'Excess NewStudents',
-];
 const DC_CATEGORIES = ['Term 1', 'Term 2', 'Term 3', 'Full Year'];
 const TERMS = ['Term 1', 'Term 2', 'Both'];
 
-const normalizeCategoryForDropdown = (raw: any, fallback: string) => {
-  const v = typeof raw === 'string' ? raw.trim() : '';
-  if (!v) return fallback;
-  if (v === 'New Students') return 'new Students';
-  if (v === 'Existing Students') return 'Old Students';
-  if (v === 'Both') return 'NA';
-  if (v === 'New School') return 'new Students';
-  if (v === 'Existing School') return 'Old Students';
-  return CATEGORY_OPTIONS.includes(v) ? v : fallback;
-};
-
-const resolveProductRowsSource = (data: any) => {
-  const dcReq = data?.dcRequestData || {};
-  const pe = data?.pendingEdit || {};
-  const candidates = [dcReq.productDetails, pe.productDetails, pe.products, data?.products];
-  return candidates.find((arr) => Array.isArray(arr) && arr.length > 0) as any[] | undefined;
-};
+const dcListFromResponse = (res: any): any[] =>
+  Array.isArray(res) ? res : Array.isArray(res?.data) ? res.data : [];
 
 const SCHOOL_TYPES = ['New', 'Existing'].map((t) => ({
   label: t,
@@ -611,15 +594,27 @@ function RaiseDCForm({
   const scrollRef = useRef<ScrollView>(null);
   const { user } = useAuth();
 
+  const catalog = useDcCatalog();
+  const {
+    productNames: availableProducts,
+    getProductLevels,
+    getProductSpecs,
+    getProductSubjects,
+    getProductCategories,
+    hasProductSpecs,
+    getCalculationType,
+    getCatalogFallbackCount,
+  } = catalog;
+  const getDefaultLevel = (productName: string) => getProductLevels(productName)[0] || '';
+
   const [deal, setDeal] = useState<any>(null);
   const [isLead, setIsLead] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [accepting, setAccepting] = useState(false);
+  const [requesting, setRequesting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [existingDC, setExistingDC] = useState<any>(null);
   const [employees, setEmployees] = useState<{ _id: string; name: string }[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -642,13 +637,46 @@ function RaiseDCForm({
       setErrorMessage('No deal selected');
       return;
     }
-    (async () => {
-      const [, catalog] = await Promise.all([loadEmployees(), loadProducts()]);
-      await loadDeal(catalog);
-    })();
-  }, [dealId]);
+    if (catalog.loading) return;
+    loadEmployees();
+    loadDeal();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dealId, catalog.loading]);
 
-  const loadDeal = async (catalogProducts: any[]) => {
+  /** Map DcOrder / DC product lines into Closed Sales rows without mixing quantity and strength (web mapSourceProductToRow). */
+  const mapSourceProductToRow = (p: any, idx: number): ProductRow => {
+    const originalProduct = p.product_name || p.product || p.productName || 'Abacus';
+    const skuCategories = getProductCategories(originalProduct);
+    const normalizedSku = String(p.productCategory || p.category || '').trim();
+    const matchedSku = skuCategories.includes(normalizedSku)
+      ? normalizedSku
+      : skuCategories.find((c) => c.toLowerCase() === normalizedSku.toLowerCase());
+    const quantityNum =
+      p.quantity !== undefined && p.quantity !== null && p.quantity !== '' ? Number(p.quantity) : 1;
+    const strengthNum =
+      p.strength !== undefined && p.strength !== null && p.strength !== '' ? Number(p.strength) : 0;
+    return {
+      id: String(idx + 1),
+      product: originalProduct,
+      class: p.class || '1',
+      category: canonicalDcRowCategory(p.category) || 'New Students',
+      productCategory: matchedSku || undefined,
+      specs: p.specs || 'Regular',
+      subject: p.subject || undefined,
+      itemType: p.itemType || undefined,
+      section: p.section || undefined,
+      program: p.program || undefined,
+      stream: p.stream || undefined,
+      quantity: Number.isFinite(quantityNum) && quantityNum >= 0 ? quantityNum : 1,
+      strength: Number.isFinite(strengthNum) && strengthNum >= 0 ? strengthNum : 0,
+      // Specimen / related-item rows never get a default level.
+      level: p.itemType ? p.level || '' : p.level || getDefaultLevel(originalProduct),
+      term: resolveExistingProductTerm(p),
+      unit_price: Number(p.unit_price) || Number(p.price) || 0,
+    };
+  };
+
+  const loadDeal = async () => {
     try {
       setLoading(true);
       if (!isUpdateMode) {
@@ -670,88 +698,66 @@ function RaiseDCForm({
       setDeal(data);
       const pe = data?.pendingEdit || {};
       const dcReq = data?.dcRequestData || {};
-      // Contact details are carried from the sale; all other new Raise DC
-      // details must be entered deliberately.
       setContactPerson2(pe.contact_person2 || dcReq.contact_person2 || data?.contact_person2 || '');
       setContactMobile2(pe.contact_mobile2 || dcReq.contact_mobile2 || data?.contact_mobile2 || '');
-      if (isUpdateMode) {
-        if (dcReq.dcDate) {
-          const loaded = String(dcReq.dcDate).split('T')[0];
-          const todayYmd = toYmd(startOfToday());
-          setDcDate(loaded >= todayYmd ? loaded : todayYmd);
-        }
-        if (dcReq.dcCategory) setDcCategory(dcReq.dcCategory);
-        if (dcReq.dcRemarks) setDcRemarks(dcReq.dcRemarks);
-        if (dcReq.dcNotes) setDcNotes(String(dcReq.dcNotes));
+      // DC details the BDE entered with the request (web prefills from dcRequestData).
+      if (dcReq.dcDate) {
+        const loaded = String(dcReq.dcDate).split('T')[0];
+        const todayYmd = toYmd(startOfToday());
+        setDcDate(loaded >= todayYmd ? loaded : todayYmd);
       }
+      if (dcReq.dcCategory) setDcCategory(dcReq.dcCategory);
+      if (dcReq.dcRemarks) setDcRemarks(dcReq.dcRemarks);
+      if (dcReq.dcNotes) setDcNotes(String(dcReq.dcNotes));
       if (data?.assigned_to) {
         const id = typeof data.assigned_to === 'object' ? data.assigned_to._id : data.assigned_to;
         if (id) setSelectedEmployeeId(id);
       }
 
-      // Prefer linked DC document when updating from Saved DC (same as web Update DC modal).
+      // My Clients DC for this order (never the Term-Wise DC) + Term-Wise sibling lines.
       let linkedDC: any = null;
+      let siblingRows: any[] = [];
       try {
-        const dcsRes = await apiService.get(`/dc?dcOrderId=${dealId}`);
-        const dcs = Array.isArray(dcsRes) ? dcsRes : dcsRes?.data || [];
-        if (dcs.length > 0) {
-          const active = dcs.filter((d: any) => d.status !== 'scheduled_for_later');
-          const pool = active.length > 0 ? active : dcs;
+        const dcs = dcListFromResponse(await apiService.get(`/dc?dcOrderId=${encodeURIComponent(dealId)}`));
+        siblingRows = dcs
+          .filter((d: any) => isTermWiseDcRecord(d))
+          .flatMap((d: any) => (Array.isArray(d.productDetails) ? d.productDetails : []));
+        const pool = dcs.filter((d: any) => !isTermWiseDcRecord(d));
+        if (pool.length > 0) {
           const preferred = pool.filter((d: any) =>
             ['created', 'po_submitted', 'pending_dc'].includes(String(d.status || '')),
           );
-          const ranked = (preferred.length > 0 ? preferred : pool).slice().sort((a: any, b: any) => {
-            return (
+          const ranked = (preferred.length > 0 ? preferred : pool).slice().sort(
+            (a: any, b: any) =>
               new Date(b.updatedAt || b.createdAt || 0).getTime() -
-              new Date(a.updatedAt || a.createdAt || 0).getTime()
-            );
-          });
-          linkedDC = ranked[0] || dcs[0];
-          setExistingDC(linkedDC);
+              new Date(a.updatedAt || a.createdAt || 0).getTime(),
+          );
+          linkedDC = ranked[0];
           try {
             const fullDC = await apiService.get(`/dc/${linkedDC._id}`);
-            linkedDC = fullDC || linkedDC;
-            setExistingDC(linkedDC);
-            if (isUpdateMode) {
-              if (fullDC?.dcDate) {
-                const loaded = String(fullDC.dcDate).split('T')[0];
-                const todayYmd = toYmd(startOfToday());
-                setDcDate(loaded >= todayYmd ? loaded : todayYmd);
-              }
-              if (fullDC?.dcCategory) setDcCategory(fullDC.dcCategory);
-              if (fullDC?.dcRemarks) setDcRemarks(fullDC.dcRemarks || '');
-              if (fullDC?.dcNotes) setDcNotes(fullDC.dcNotes || '');
-            }
+            if (fullDC && !isTermWiseDcRecord(fullDC)) linkedDC = fullDC;
           } catch {
             /* keep list DC */
           }
+          if (linkedDC?.dcDate) {
+            const loaded = String(linkedDC.dcDate).split('T')[0];
+            const todayYmd = toYmd(startOfToday());
+            setDcDate(loaded >= todayYmd ? loaded : todayYmd);
+          }
+          if (linkedDC?.dcCategory) setDcCategory(linkedDC.dcCategory);
+          if (linkedDC?.dcRemarks) setDcRemarks(linkedDC.dcRemarks || '');
+          if (linkedDC?.dcNotes) setDcNotes(linkedDC.dcNotes || '');
         }
       } catch {
-        setExistingDC(null);
+        linkedDC = null;
       }
+      setExistingDC(linkedDC);
 
-      const categoryFallback =
-        data.school_type === 'Existing' ? 'Old Students' : 'new Students';
-      const rowSource =
-        (Array.isArray(linkedDC?.productDetails) && linkedDC.productDetails.length > 0
-          ? linkedDC.productDetails
-          : null) || resolveProductRowsSource(data);
-      if (rowSource?.length) {
-        setProductRows(
-          rowSource.map((p: any, idx: number) =>
-            mapSourceToRaiseDcRow(p, catalogProducts, categoryFallback, CATEGORY_OPTIONS, idx),
-          ),
-        );
-      } else if (catalogProducts.length) {
-        setProductRows([
-          mapSourceToRaiseDcRow(
-            { product: getCatalogProductNames(catalogProducts)[0], class: '1', strength: 0 },
-            catalogProducts,
-            categoryFallback,
-            CATEGORY_OPTIONS,
-            0,
-          ),
-        ]);
+      const poProducts = resolveClosedSalesProductLines(data, linkedDC, siblingRows);
+      if (poProducts.length > 0) {
+        setProductRows(splitDeliverableRows(poProducts).map((p: any, idx: number) => mapSourceProductToRow(p, idx)));
+      } else {
+        setProductRows([{ ...DEFAULT_ROW, id: '1' }]);
       }
     } catch (e: any) {
       setErrorMessage(e?.message || 'Failed to load deal');
@@ -771,48 +777,27 @@ function RaiseDCForm({
     }
   };
 
-  const loadProducts = async (): Promise<any[]> => {
-    try {
-      let data: any = await apiService.get('/products/active').catch(() => apiService.get('/products'));
-      const list = Array.isArray(data) ? data : data?.data || data?.products || [];
-      setProducts(list);
-      return list;
-    } catch {
-      setProducts([]);
-      return [];
-    }
-  };
+  const getProductNames = (): string[] => availableProducts;
 
-  const getProductLevels = (productName: string): string[] =>
-    getProductLevelsOptions(products, productName);
-
-  const getProductSpecs = (productName: string): string[] =>
-    getProductSpecsOptions(products, productName);
-
-  const getProductSubjects = (productName: string): string[] =>
-    getProductSubjectsOptions(products, productName);
-
-  const getProductCategories = (productName: string): string[] =>
-    getProductCategoryOptions(products, productName);
-
-  const getProductNames = (): string[] => getCatalogProductNames(products);
-
+  /** Product change resets level / series / specs / deliverable to the product's catalogue defaults (web). */
   const applyProductDefaults = (row: ProductRow, productName: string): ProductRow => {
-    const catalogEntry = findCatalogProduct(products, productName);
-    const canonicalName = catalogEntry?.productName || productName;
-    return applyCatalogDefaultsToRow(
-      { ...row, product: canonicalName },
-      products,
-    ) as ProductRow;
+    const cats = getProductCategories(productName);
+    const subjects = getProductSubjects(productName);
+    return {
+      ...row,
+      product: productName,
+      level: getDefaultLevel(productName),
+      productCategory: cats.length ? cats[0] || '' : undefined,
+      specs: getProductSpecs(productName)[0] || '',
+      subject: subjects.length ? subjects[0] || '' : undefined,
+    };
   };
 
   const updateProductRow = (id: string, field: keyof ProductRow, value: any) => {
     setProductRows((prev) =>
       prev.map((r) => {
         if (r.id !== id) return r;
-        if (field === 'product') {
-          return applyProductDefaults({ ...r, product: value, strength: r.strength }, value);
-        }
+        if (field === 'product') return applyProductDefaults(r, value);
         return { ...r, [field]: value };
       }),
     );
@@ -823,25 +808,17 @@ function RaiseDCForm({
   };
 
   const addProductRow = () => {
-    const names = getProductNames();
-    const productName = names[0] || DEFAULT_ROW.product;
-    const base: ProductRow = {
-      ...DEFAULT_ROW,
-      id: String(Date.now()),
-      product: productName,
-      category:
-        deal?.school_type === 'Existing' ? 'Old Students' : DEFAULT_ROW.category,
-    };
+    const productName = getProductNames()[0] || DEFAULT_ROW.product;
+    const base: ProductRow = { ...DEFAULT_ROW, id: String(Date.now()), product: productName };
     setProductRows((prev) => [...prev, applyProductDefaults(base, productName)]);
   };
 
+  // BDE requests the DC; Coordinator (or Super Admin) accepts it into Pending DC (web canRequestDC / canApproveDC).
+  const canRequestDC = user?.role === 'Executive';
   const canApproveDC =
     user?.role === 'Super Admin' ||
     user?.role === 'Admin' ||
     user?.role === 'Coordinator';
-
-  const grandTotalQty = productRows.reduce((s, r) => s + (Number(r.strength) || 0), 0);
-
   const getAssignedToName = () => {
     const assignedTo = deal?.assigned_to;
     if (!assignedTo) return '';
@@ -881,92 +858,92 @@ function RaiseDCForm({
   const raiseDcSubtitle = isUpdateMode
     ? 'Update DC details and submit to Senior Coordinator'
     : deal?.status === 'dc_requested'
-      ? 'Review DC request from employee. You can accept it (to update later) or send to Senior Coordinator.'
-      : deal?.status === 'dc_accepted'
-        ? 'Update DC details. You can save changes or submit to Senior Coordinator.'
-        : 'Fill in DC details and submit to Senior Coordinator.';
+      ? 'Review the DC request from the BDE. Accept sends it to Pending DC for the Senior Coordinator.'
+      : 'Fill in DC details. Accept sends it to Pending DC for the Senior Coordinator.';
 
   const screenTitle = isUpdateMode
     ? 'Update DC'
     : `Raise DC${deal?.school_name ? ` - ${deal.school_name}` : ''}`;
 
+  const grandTotalQty = productRows.reduce((s, r) => s + (Number(r.quantity) || 0), 0);
+
+  /** DC rows as web Closed Sales sends them: billed totals (free rows ₹0), unit price, IIT identity, item type. */
   const buildProductDetails = () =>
-    productRows.map((row) => ({
-      product: row.product,
+    withBilledTotals(productRows as any[], getCalculationType, getCatalogFallbackCount).map((row: any) => ({
+      product: row.product || '',
       class: row.class || '1',
-      category: row.category || 'new Students',
+      category: canonicalDcRowCategory(row.category) || 'New Students',
       productCategory: row.productCategory || undefined,
       specs: row.specs || 'Regular',
       subject: row.subject || undefined,
+      itemType: row.itemType || undefined,
+      section: row.section || undefined,
+      program: row.program || undefined,
+      stream: row.stream || undefined,
       strength: Number(row.strength) || 0,
-      quantity: Number(row.strength) || 0,
-      level: row.level || 'L1',
+      quantity: Number(row.quantity) || 0,
+      level: row.itemType ? row.level || '' : row.level || getDefaultLevel(row.product || 'Abacus'),
       term: row.term || 'Term 1',
+      unit_price: Number(row.unit_price) || Number(row.price) || 0,
+      price: Number(row.unit_price) || Number(row.price) || 0,
+      total: Number(row.total) || 0,
+      closeLeadDestination: CLOSE_LEAD_DESTINATION.MY_CLIENT,
     }));
+
+  const totalRequestedQuantity = () => productRows.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0) || 1;
 
   const getAssignedEmployeeId = () =>
     selectedEmployeeId ||
     (typeof deal?.assigned_to === 'object' ? deal?.assigned_to?._id : deal?.assigned_to) ||
     '';
 
+  /** Contact Person 2 / Mobile 2 are mandatory on this Closed Sales form (web validateClosedSalesContact2). */
+  const contact2Payload = () => ({
+    contact_person2: contactPerson2.trim(),
+    contact_mobile2: contactMobile2.trim(),
+    validateClosedSalesContact2: true,
+  });
+
+  const fail = (message: string) => {
+    setErrorMessage(message);
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+    return false;
+  };
+
+  /** DC Date + DC Category required; Remarks optional (web validateDcDetailsFields). */
   const validate = (opts?: { forSave?: boolean }): boolean => {
-    if (!selectedEmployeeId.trim() && !deal?.assigned_to) {
-      setErrorMessage('Assigned To * is required');
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
-      return false;
-    }
+    if (!selectedEmployeeId.trim() && !deal?.assigned_to) return fail('Please assign an employee before submitting');
     if (!isUpdateMode) {
-      if (!contactPerson2.trim()) {
-        setErrorMessage('Contact Person 2 * is required');
-        scrollRef.current?.scrollTo({ y: 0, animated: true });
-        return false;
-      }
-      if (!contactMobile2.trim()) {
-        setErrorMessage('Contact Mobile 2 * is required');
-        scrollRef.current?.scrollTo({ y: 0, animated: true });
-        return false;
-      }
+      if (!contactPerson2.trim()) return fail('Contact Person 2 is required.');
+      if (!contactMobile2.trim()) return fail('Contact Mobile 2 is required.');
       const mobile2Error = phoneDigitsError(contactMobile2, true);
-      if (mobile2Error) {
-        setErrorMessage(mobile2Error);
-        scrollRef.current?.scrollTo({ y: 0, animated: true });
-        return false;
-      }
+      if (mobile2Error) return fail(mobile2Error);
     }
     if (!opts?.forSave) {
-      if (!dcDate.trim()) {
-        setErrorMessage('DC Date * is required');
-        scrollRef.current?.scrollTo({ y: 0, animated: true });
-        return false;
-      }
-      if (dcDate.trim() < toYmd(startOfToday())) {
-        setErrorMessage('DC Date cannot be in the past');
-        scrollRef.current?.scrollTo({ y: 0, animated: true });
-        return false;
-      }
-      if (!dcCategory.trim()) {
-        setErrorMessage('DC Category * is required');
-        scrollRef.current?.scrollTo({ y: 0, animated: true });
-        return false;
-      }
-      if (!dcRemarks.trim()) {
-        setErrorMessage('DC Remarks * is required');
-        scrollRef.current?.scrollTo({ y: 0, animated: true });
-        return false;
-      }
+      if (!dcDate.trim()) return fail('DC Date is required.');
+      if (!dcCategory.trim()) return fail('DC Category is required.');
     }
-    if (productRows.length === 0) {
-      setErrorMessage('Add at least one product row');
-      return false;
-    }
-    const invalid = productRows.some(
-      (r) => !r.product?.trim() || (r.strength ?? 0) <= 0
-    );
-    if (invalid) {
-      setErrorMessage('Product and Quantity (Strength) * are required for all rows');
-      return false;
-    }
+    if (productRows.length === 0) return fail('Please add at least one product before accepting');
     setErrorMessage(null);
+    return true;
+  };
+
+  /** Row checks before the DC is accepted (web handleSendToSeniorCoordinator). */
+  const validateRows = (): boolean => {
+    const invalidRows: string[] = [];
+    productRows.forEach((row, idx) => {
+      const n = idx + 1;
+      if (!row.product || row.product.trim() === '') invalidRows.push(`Row ${n}: Product is required`);
+      if (row.product && hasProductSpecs(row.product) && (!row.specs || row.specs.trim() === '')) {
+        invalidRows.push(`Row ${n}: Specs is required`);
+      }
+      if (!row.quantity || Number(row.quantity) <= 0) invalidRows.push(`Row ${n}: Quantity must be greater than 0`);
+      if (row.product && getProductLevels(row.product).length > 0 && (!row.level || row.level.trim() === '')) {
+        invalidRows.push(`Row ${n}: Term / Level is required`);
+      }
+      if (!row.term || row.term.trim() === '') invalidRows.push(`Row ${n}: Term is required`);
+    });
+    if (invalidRows.length > 0) return fail('Please fill in all required fields:\n\n' + invalidRows.join('\n'));
     return true;
   };
 
@@ -978,7 +955,7 @@ function RaiseDCForm({
     setSaving(true);
     try {
       const productDetails = buildProductDetails();
-      const requestedQuantity = productDetails.reduce((s, p) => s + (p.strength || 0), 0) || 1;
+      const requestedQuantity = totalRequestedQuantity();
       const assignedEmployeeId = getAssignedEmployeeId();
       const raisePayload: any = {
         dcOrderId: dealId,
@@ -992,7 +969,7 @@ function RaiseDCForm({
         status: 'created',
       };
 
-      if (existingDC?._id) {
+      if (existingDC?._id && !isTermWiseDcRecord(existingDC)) {
         await apiService.put(`/dc/${existingDC._id}`, raisePayload);
       } else {
         const created = await apiService.post('/dc/raise', raisePayload);
@@ -1039,7 +1016,7 @@ function RaiseDCForm({
         deal?.school_name || 'School',
         `Code: ${deal?.dc_code || deal?.school_code || '-'}`,
         `Executive: ${assignedToName || '-'}`,
-        `Products: ${productRows.map((r) => `${r.product} - ${r.strength}`).join(', ') || '-'}`,
+        `Products: ${productRows.map((r) => `${r.product} - ${r.quantity}`).join(', ') || '-'}`,
         `DC Date: ${dcDate || '-'}`,
         `Category: ${dcCategory || '-'}`,
         `Remarks: ${dcRemarks || '-'}`,
@@ -1047,115 +1024,93 @@ function RaiseDCForm({
     );
   };
 
-  const handleAcceptDC = async () => {
+  /** Executive requests the DC: stores the request on the DcOrder (web handleRequestDC). */
+  const handleRequestDC = async () => {
     setErrorMessage(null);
     setSuccessMessage(null);
     if (!validate()) return;
-
-    setAccepting(true);
+    const employeeId = getAssignedEmployeeId();
+    if (!employeeId) {
+      fail('Please assign an employee before requesting DC');
+      return;
+    }
+    setRequesting(true);
     try {
-      const productDetails = buildProductDetails();
-      const requestedQuantity = productDetails.reduce((s, p) => s + (p.strength || 0), 0) || 1;
-      const assignedEmployeeId = getAssignedEmployeeId();
-
-      if (!isLead) {
-        await apiService.put(`/dc-orders/${dealId}`, {
-          contact_person2: contactPerson2.trim(),
-          contact_mobile2: contactMobile2.trim(),
-        });
-      }
-
-      await apiService.post('/dc/raise', {
-        dcOrderId: dealId,
-        dcDate: dcDate || undefined,
-        dcRemarks: dcRemarks || undefined,
-        dcCategory: dcCategory || undefined,
-        contact_person2: contactPerson2.trim(),
-        contact_mobile2: contactMobile2.trim(),
-        employeeId: assignedEmployeeId,
-        productDetails,
-        requestedQuantity,
+      await apiService.put(`/dc-orders/${dealId}`, {
+        status: 'dc_requested',
+        dcRequestData: {
+          dcDate: dcDate || undefined,
+          dcRemarks: dcRemarks || undefined,
+          dcCategory: dcCategory || undefined,
+          requestedQuantity: totalRequestedQuantity(),
+          productDetails: buildProductDetails(),
+          employeeId,
+        },
       });
-
-      if (!isLead) {
-        // Saved DC page loads GET /dc-orders?status=dc_approved (not My Clients `saved`).
-        await apiService.put(`/dc-orders/${dealId}`, {
-          status: 'dc_approved',
-          workflowStage: 'ClosedSales',
-          contact_person2: contactPerson2.trim(),
-          contact_mobile2: contactMobile2.trim(),
-          dcRequestData: {
-            dcDate,
-            dcRemarks,
-            dcCategory,
-            contact_person2: contactPerson2.trim(),
-            contact_mobile2: contactMobile2.trim(),
-            requestedQuantity,
-            productDetails,
-            employeeId: assignedEmployeeId,
-          },
-        });
-      }
-
-      setDeal((prev: any) => (prev ? { ...prev, status: 'dc_approved' } : prev));
-      setSuccessMessage('DC request accepted! Opening Saved DC…');
+      setSuccessMessage('DC request submitted successfully! The Coordinator will review and accept it.');
       scrollRef.current?.scrollTo({ y: 0, animated: true });
-      setTimeout(() => {
-        // Closed Sales → Raise DC Accept lands on Saved DC List (dc_approved).
-        if (!navigateRoot('DCSaved')) {
-          navigation.navigate('DCSaved');
-        }
-      }, 600);
+      setTimeout(() => navigation.goBack(), 1200);
     } catch (e: any) {
-      setErrorMessage(e?.message || 'Failed to accept DC');
+      setErrorMessage(e?.message || 'Failed to submit DC request');
       scrollRef.current?.scrollTo({ y: 0, animated: true });
     } finally {
-      setAccepting(false);
+      setRequesting(false);
     }
   };
 
+  /**
+   * Coordinator accepts the DC into Pending DC for the Senior Coordinator (web handleSendToSeniorCoordinator):
+   * PUT /dc/:existingId {…, status:'pending_dc'} when a My Clients DC exists, else POST /dc/raise;
+   * then PUT /dc-orders/:id {status:'dc_sent_to_senior'}.
+   */
   const handleSubmitToSeniorCoordinator = async () => {
     setErrorMessage(null);
     setSuccessMessage(null);
-    if (!validate()) return;
+    if (!validate() || !validateRows()) return;
 
     setSubmitting(true);
     try {
-      const productDetails = buildProductDetails();
+      const dcRequestData = deal?.dcRequestData || {};
+      const raisePayload: any = {
+        dcOrderId: dealId,
+        dcDate: String(dcDate).trim(),
+        dcRemarks: dcRemarks.trim() || undefined,
+        dcCategory: String(dcCategory).trim(),
+        ...(dcNotes.trim() ? { dcNotes: dcNotes.trim() } : {}),
+        requestedQuantity: totalRequestedQuantity(),
+        productDetails: buildProductDetails(),
+        status: 'pending_dc',
+      };
+      const employeeId = dcRequestData.employeeId || getAssignedEmployeeId();
+      if (employeeId) raisePayload.employeeId = employeeId;
 
-      const terms = productDetails.map((p) => p.term || 'Term 1');
-      const hasTerm2 = terms.some((t) => t === 'Term 2');
-      const hasTerm1OrBoth = terms.some((t) => t === 'Term 1' || t === 'Both');
-      const hasBothTerms = hasTerm2 && hasTerm1OrBoth;
+      // Shortage DC: only rows with a quantity, each carrying its shortage quantity (web).
+      if (String(dcCategory || '').toLowerCase() === 'shortage') {
+        raisePayload.dcType = 'shortage';
+        raisePayload.parentDcId = existingDC?._id;
+        raisePayload.productDetails = raisePayload.productDetails
+          .filter((p: any) => Number(p.quantity || p.strength || 0) > 0)
+          .map((p: any) => ({
+            ...p,
+            shortageQuantity: Number(p.quantity || p.strength || 0),
+            deliveredQuantity: 0,
+          }));
+      }
 
-      const requestedQuantity = productDetails.reduce((s, p) => s + (p.strength || 0), 0) || 1;
-      const assignedEmployeeId = getAssignedEmployeeId();
+      if (existingDC?._id && !isTermWiseDcRecord(existingDC)) {
+        await apiService.put(`/dc/${existingDC._id}`, raisePayload);
+      } else {
+        await apiService.post('/dc/raise', raisePayload);
+      }
+
       if (!isLead) {
         await apiService.put(`/dc-orders/${dealId}`, {
-          contact_person2: contactPerson2.trim(),
-          contact_mobile2: contactMobile2.trim(),
+          status: 'dc_sent_to_senior',
+          ...contact2Payload(),
         });
       }
 
-      await apiService.post('/dc/raise', {
-        dcOrderId: dealId,
-        dcDate: dcDate || undefined,
-        dcRemarks: dcRemarks || undefined,
-        dcCategory: dcCategory || undefined,
-        dcNotes: dcNotes || undefined,
-        contact_person2: contactPerson2.trim(),
-        contact_mobile2: contactMobile2.trim(),
-        employeeId: assignedEmployeeId,
-        productDetails,
-        requestedQuantity,
-        status: hasTerm2 && !hasTerm1OrBoth ? 'scheduled_for_later' : 'pending_dc',
-      });
-
-      if (!isLead) {
-        await apiService.put(`/dc-orders/${dealId}`, { status: 'dc_sent_to_senior' });
-      }
-
-      setSuccessMessage(hasBothTerms ? 'DC split: Term 1 → Pending DC, Term 2 → Term-Wise DC.' : 'DC raised and sent to Senior Coordinator.');
+      setSuccessMessage('DC accepted. It is now in Pending DC for the Senior Coordinator.');
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       setTimeout(() => {
         if (isUpdateMode) {
@@ -1165,13 +1120,12 @@ function RaiseDCForm({
         }
       }, 1500);
     } catch (e: any) {
-      setErrorMessage(e?.message || 'Failed to raise DC');
+      setErrorMessage(e?.message || 'Failed to accept DC');
       scrollRef.current?.scrollTo({ y: 0, animated: true });
     } finally {
       setSubmitting(false);
     }
   };
-
   const clearMessages = () => {
     setErrorMessage(null);
     setSuccessMessage(null);
@@ -1292,10 +1246,10 @@ function RaiseDCForm({
               <View style={styles.tableHeader}>
                 <Text style={[styles.th, styles.colProduct]}>Product</Text>
                 <Text style={[styles.th, styles.colClass]}>Class</Text>
-                <Text style={[styles.th, styles.colCategory]}>Category</Text>
+                <Text style={[styles.th, styles.colCategory]}>Enrollment Category</Text>
                 <Text style={[styles.th, styles.colProductCategory]}>Series</Text>
                 <Text style={[styles.th, styles.colSpecs]}>Specs</Text>
-                <Text style={[styles.th, styles.colSubject]}>Special Notes</Text>
+                <Text style={[styles.th, styles.colSubject]}>Deliverables</Text>
                 <Text style={[styles.th, styles.colQty]}>Quantity</Text>
                 <Text style={[styles.th, styles.colLevel]}>Term / Level</Text>
                 <Text style={[styles.th, styles.colTerm]}>Term</Text>
@@ -1332,22 +1286,16 @@ function RaiseDCForm({
                         style={styles.cellPicker}
                         {...(Platform.OS === 'android' ? { mode: 'dropdown' as const } : {})}
                       >
-                        {CLASSES.map((c) => (
+                        {(CLASSES.includes(row.class) || !row.class ? CLASSES : [row.class, ...CLASSES]).map((c) => (
                           <Picker.Item key={c} label={c} value={c} />
                         ))}
                       </Picker>
                     </View>
                     <View style={[styles.cell, styles.colCategory]}>
-                      <Picker
-                        selectedValue={row.category}
-                        onValueChange={(v) => updateProductRow(row.id, 'category', v)}
-                        style={styles.cellPicker}
-                        {...(Platform.OS === 'android' ? { mode: 'dropdown' as const } : {})}
-                      >
-                        {CATEGORY_OPTIONS.map((c) => (
-                          <Picker.Item key={c} label={c} value={c} />
-                        ))}
-                      </Picker>
+                      <DcCategoryPicker
+                        value={dcRowCategoryOrDefault(row.category)}
+                        onChange={(v) => updateProductRow(row.id, 'category', v)}
+                      />
                     </View>
                     <View style={[styles.cell, styles.colProductCategory]}>
                       {skuOpts.length > 0 ? (
@@ -1406,8 +1354,8 @@ function RaiseDCForm({
                     <View style={[styles.cell, styles.colQty]}>
                       <WebInput
                         style={styles.cellInput}
-                        value={row.strength ? String(row.strength) : ''}
-                        onChangeText={(v) => updateProductRow(row.id, 'strength', Number(v) || 0)}
+                        value={row.quantity ? String(row.quantity) : ''}
+                        onChangeText={(v) => updateProductRow(row.id, 'quantity', Number(v.replace(/[^0-9]/g, '')) || 0)}
                         keyboardType="numeric"
                         placeholder="0"
                       />
@@ -1462,6 +1410,9 @@ function RaiseDCForm({
               </View>
             </View>
           </ScrollView>
+          <AbacusMaterialsSummary
+            materials={deal?.abacusMaterials || deal?.dcRequestData?.abacusMaterials}
+          />
         </View>
 
         {/* DC Details */}
@@ -1505,7 +1456,7 @@ function RaiseDCForm({
             </View>
           </View>
           <FormField
-            label="DC Remarks *"
+            label="DC Remarks"
             value={dcRemarks}
             onChangeText={setDcRemarks}
             placeholder="Remarks"
@@ -1553,34 +1504,30 @@ function RaiseDCForm({
             <TouchableOpacity
               style={styles.cancelButton}
               onPress={() => navigation.goBack()}
-              disabled={submitting || accepting}
+              disabled={submitting || requesting}
             >
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
-            {canApproveDC ? (
+            {canRequestDC && deal?.status !== 'dc_requested' && deal?.status !== 'dc_accepted' ? (
               <TouchableOpacity
-                style={[styles.acceptButton, (accepting || submitting) && styles.submitButtonDisabled]}
-                onPress={handleAcceptDC}
-                disabled={accepting || submitting}
+                style={[styles.submitButton, (requesting || submitting) && styles.submitButtonDisabled]}
+                onPress={handleRequestDC}
+                disabled={requesting || submitting}
               >
-                <Text style={styles.acceptButtonText}>
-                  {accepting
-                    ? 'Processing…'
-                    : deal?.status === 'dc_approved' || deal?.status === 'dc_accepted'
-                      ? 'Update DC'
-                      : 'Accept'}
+                <Text style={styles.submitButtonText} numberOfLines={2}>
+                  {requesting ? 'Submitting…' : 'Raise DC'}
                 </Text>
               </TouchableOpacity>
             ) : null}
-            <TouchableOpacity
-              style={[styles.submitButton, (submitting || accepting) && styles.submitButtonDisabled]}
-              onPress={handleSubmitToSeniorCoordinator}
-              disabled={submitting || accepting}
-            >
-              <Text style={styles.submitButtonText} numberOfLines={2}>
-                {submitting ? 'Submitting…' : 'Submit to Senior Coordinator'}
-              </Text>
-            </TouchableOpacity>
+            {canApproveDC ? (
+              <TouchableOpacity
+                style={[styles.acceptButton, (requesting || submitting) && styles.submitButtonDisabled]}
+                onPress={handleSubmitToSeniorCoordinator}
+                disabled={requesting || submitting}
+              >
+                <Text style={styles.acceptButtonText}>{submitting ? 'Accepting…' : 'Accept'}</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         )}
       </ScrollView>

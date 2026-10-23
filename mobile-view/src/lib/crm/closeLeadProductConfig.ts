@@ -1,0 +1,1236 @@
+/** Copied from the web app (lib/closeLeadProductConfig.ts); keep the two in sync. */
+import { computeBucketAmount, roundToTwo, type CalculationType } from './paymentDivisor'
+import { applyPaymentDivisorsToBreakdown } from './dcPaymentDivisors'
+import { isCustomStream, matchStream, streamSubjects, type StreamCombo } from './iitStreams'
+import { normalizeProductTerm, termFromLevelLabel, type ProductTerm } from './productTerm'
+
+/** Keep only specs that exist on the product. Falls back to the first catalog spec. */
+export function specsFromCatalog(catalogSpecs: string[], selected: string[] | undefined): string[] {
+  const catalog = catalogSpecs.map((s) => String(s || '').trim()).filter(Boolean)
+  if (catalog.length === 0) return []
+  const picked = (selected || [])
+    .map((s) => catalog.find((c) => c.toLowerCase() === String(s || '').trim().toLowerCase()))
+    .filter((s): s is string => Boolean(s))
+  const unique = [...new Set(picked)]
+  return unique.length > 0 ? unique : [catalog[0]]
+}
+
+export type GroupProductOpts = {
+  getCalculationType: (productName: string) => CalculationType
+  getCatalogFallbackCount: (productName: string, ct: CalculationType) => number
+}
+
+export type ProductDetailRow = {
+  id: string
+  product: string
+  class: string
+  fromClass?: string
+  toClass?: string
+  category: string
+  productCategory?: string
+  quantity: number
+  strength: number
+  price: number
+  total: number
+  level: string
+  specs: string
+  subject?: string
+  section?: string
+  program?: string
+  stream?: string
+  iitAssignments?: IitAssignment[]
+  /** Physical subject row included in one per-student package price. */
+  subjectPackage?: boolean
+  isParentRow?: boolean
+  sameRateForAllClasses?: boolean
+  selectedSubjects?: string[]
+  selectedSpecs?: string[]
+  selectedCategories?: string[]
+  selectedDeliverables?: string[]
+  term?: string
+  levels_snapshot?: string[]
+  dispatchMode?: 'one_level_at_a_time' | 'both_levels_together'
+}
+
+export type ClassStrengthSelection = {
+  class: string
+  strength: number
+}
+
+export type IitAssignment = {
+  id: string
+  class: string
+  /** ALL is a class-wide assignment; otherwise the school's section label. */
+  section: string
+  program: string
+  stream: string
+  strength: number
+  unitPrice: number
+}
+
+export const isIitProduct = (name: string) => /\bIIT\b/i.test(String(name || ''))
+export const normalizeIitSection = (value: string) =>
+  String(value || '').trim().toUpperCase() || 'ALL'
+
+export type CloseProductSectionLine = {
+  id: string
+  parentRowId: string
+  product: string
+  /** @deprecated use selectedLevels — kept for saved leads */
+  level: string
+  /** Term / level options chosen above the table (e.g. Term 1, Term 2). */
+  selectedLevels: string[]
+  /** Per-product class + strength (independent for each product in the section). */
+  classSelections: ClassStrengthSelection[]
+  iitAssignments?: IitAssignment[]
+  sameStrengthForAllClasses?: boolean
+  fromClass?: string
+  toClass?: string
+  strength?: number
+  selectedSpecs: string[]
+  /** User changed the spec checkboxes. Empty selection stays empty. */
+  specsTouched?: boolean
+  selectedSubjects: string[]
+  selectedDeliverables: string[]
+  selectedCategories?: string[]
+  /**
+   * Per-row Product Category keyed by `class|level|subject`.
+   * Survives class generation, adding another product, and re-expansion.
+   */
+  productCategoryByKey?: Record<string, string>
+  sameRateForAllClasses: boolean
+  price: number
+  /** Overrides for individual classes when the shared-rate option is off. */
+  priceByClass?: Record<string, number>
+  term?: string
+  dispatchMode?: 'one_level_at_a_time' | 'both_levels_together'
+}
+
+export type CloseProductSection = {
+  id: string
+  /** Legacy range fields — migrated into classSelections when loading */
+  fromClass?: string
+  toClass?: string
+  strength?: number
+  classSelections: ClassStrengthSelection[]
+  sameStrengthForAllClasses?: boolean
+  lines: CloseProductSectionLine[]
+}
+
+export const SELECTABLE_CLOSE_CLASSES = [
+  '1',
+  '2',
+  '3',
+  '4',
+  '5',
+  '6',
+  '7',
+  '8',
+  '9',
+  '10',
+  '11',
+  '12',
+]
+
+export const makeRowId = () => `${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
+
+/** Per-line Product Category map key: class + level + subject. */
+export function productCategoryRowKey(
+  classValue: string,
+  level?: string,
+  subject?: string
+): string {
+  return `${String(classValue ?? '')}|${String(level ?? '')}|${String(subject ?? '')}`
+}
+
+/** Cross-row identity so P1 Class 1 stays distinct from P2 Class 1. */
+export function productCategoryRowIdentity(
+  parentRowId: string,
+  product: string,
+  classValue: string,
+  level?: string,
+  subject?: string
+): string {
+  return [
+    parentRowId,
+    product,
+    String(classValue ?? ''),
+    String(level ?? ''),
+    String(subject ?? ''),
+  ].join('|')
+}
+
+export function categoryValueFromRow(
+  row: Pick<ProductDetailRow, 'category' | 'productCategory'>
+): string {
+  const sku = typeof row.productCategory === 'string' ? row.productCategory.trim() : ''
+  if (sku) return sku
+  return typeof row.category === 'string' ? row.category.trim() : ''
+}
+
+function parentRowIdForChild(child: ProductDetailRow, parents: ProductDetailRow[]): string {
+  const match = parents.find((p) => p.isParentRow && child.id.startsWith(`${p.id}_`))
+  return match?.id || ''
+}
+
+export function buildProductCategoryOverrideMap(
+  rows: ProductDetailRow[] | undefined
+): Record<string, string> {
+  const map: Record<string, string> = {}
+  if (!rows?.length) return map
+  const parents = rows.filter((r) => r.isParentRow)
+  for (const row of rows) {
+    if (row.isParentRow) continue
+    const value = categoryValueFromRow(row)
+    if (!value) continue
+    const parentId = parentRowIdForChild(row, parents)
+    if (!parentId) continue
+    map[
+      productCategoryRowIdentity(parentId, row.product, row.class, row.level, row.subject)
+    ] = value
+  }
+  return map
+}
+
+function firstNonEmptyCategory(...values: Array<string | undefined | null>): string {
+  for (const value of values) {
+    const trimmed = typeof value === 'string' ? value.trim() : ''
+    if (trimmed) return trimmed
+  }
+  return ''
+}
+
+/**
+ * Keep an existing Product Category. Only use the catalog default when the row
+ * has no value yet — never replace a selection with cats[0].
+ */
+export function resolveRowProductCategory(existing: string | undefined, fallback: string): string {
+  const current = typeof existing === 'string' ? existing.trim() : ''
+  if (current) return current
+  return typeof fallback === 'string' ? fallback.trim() : ''
+}
+
+function normalizeCategoryMatchText(value: string): string {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/** Digits from level labels like "Level -1", "Level-2", "L1". */
+export function extractLevelNumber(level?: string): string {
+  const match = String(level || '').match(/(\d+)/)
+  return match?.[1] || ''
+}
+
+/**
+ * Pick a Product Category for a row: prefer subject match (longest first),
+ * then level suffix, scoped to selectedCategories when provided.
+ */
+export function pickDefaultProductCategory(
+  categories: string[],
+  opts?: {
+    subject?: string
+    level?: string
+    selectedCategories?: string[]
+  }
+): string {
+  const catalog = (categories || []).map((c) => String(c || '').trim()).filter(Boolean)
+  if (catalog.length === 0) return ''
+
+  const selected = (opts?.selectedCategories || [])
+    .map((c) => String(c || '').trim())
+    .filter(Boolean)
+  const pool =
+    selected.length > 0
+      ? catalog.filter((c) =>
+          selected.some((s) => normalizeCategoryMatchText(s) === normalizeCategoryMatchText(c))
+        )
+      : catalog
+  const candidates = pool.length > 0 ? pool : catalog
+
+  const subjectNorm = normalizeCategoryMatchText(opts?.subject || '')
+  const levelNum = extractLevelNumber(opts?.level)
+
+  let matched = candidates
+  if (subjectNorm) {
+    const bySubject = candidates
+      .map((cat) => {
+        const catNorm = normalizeCategoryMatchText(cat)
+        const starts = catNorm.startsWith(subjectNorm)
+        const includes = catNorm.includes(subjectNorm)
+        return { cat, starts, includes, len: subjectNorm.length }
+      })
+      .filter((x) => x.starts || x.includes)
+      .sort((a, b) => {
+        if (a.starts !== b.starts) return a.starts ? -1 : 1
+        return b.len - a.len
+      })
+    if (bySubject.length > 0) {
+      matched = bySubject.map((x) => x.cat)
+    }
+  }
+
+  if (levelNum && matched.length > 1) {
+    const byLevel = matched.filter((cat) => {
+      const catNorm = normalizeCategoryMatchText(cat)
+      return (
+        catNorm.endsWith(` ${levelNum}`) ||
+        catNorm.endsWith(levelNum) ||
+        new RegExp(`(?:^|\\s|-)${levelNum}$`).test(catNorm)
+      )
+    })
+    if (byLevel.length > 0) matched = byLevel
+  }
+
+  return matched[0] || candidates[0] || ''
+}
+
+/** The entry categories in Grid.docx depend on the student's class. */
+function gridCategoryMatchesClass(product: string, classValue: string, category: string): boolean {
+  const classNumber = Number(classValue)
+  const normalized = normalizeCategoryMatchText(category)
+  if (!Number.isInteger(classNumber) || classNumber < 1) return true
+  if (/abacus/i.test(product)) {
+    return classNumber <= 2 ? normalized.includes('star junior') :
+      classNumber <= 4 ? /\bjunior(s)?\b/.test(normalized) && !/\bstar\b/.test(normalized) :
+      /\bsenior(s)?\b/.test(normalized)
+  }
+  if (/spelling\s*bee/i.test(product)) {
+    const categoryNumber = Number(normalized.match(/\bcategory\s*(\d+)/)?.[1])
+    return !categoryNumber || categoryNumber === (classNumber <= 3 ? 1 : classNumber <= 6 ? 2 : 3)
+  }
+  return true
+}
+
+export function pickGridProductCategory(
+  product: string,
+  classValue: string,
+  categories: string[],
+  opts?: { subject?: string; level?: string; selectedCategories?: string[] }
+): string {
+  const candidates = categories.filter((category) => gridCategoryMatchesClass(product, classValue, category))
+  if (candidates.length > 0 && candidates.length < categories.length)
+    return pickDefaultProductCategory(candidates, opts)
+  return pickDefaultProductCategory(categories, opts)
+}
+
+/** Group child product rows per product + class. For level_based / subject_based,
+ * sum strengths across distinct levels/subjects; duplicate same level+subject uses max.
+ */
+export const groupProductDetailsByProductAndClass = (
+  details: any[],
+  opts?: GroupProductOpts
+) => {
+  const getCt = (name: string) => isIitProduct(name) ? ('normal' as CalculationType) : opts?.getCalculationType(name) ?? ('none' as CalculationType)
+  const getFallback = (name: string, ct: CalculationType) =>
+    opts?.getCatalogFallbackCount(name, ct) ?? 0
+
+  const normLevel = (l: any) =>
+    String(l || '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, '')
+  const normSubject = (s: any) => String(s || '').trim().toLowerCase()
+  const normSpecs = (s: any) => String(s || '').trim().toLowerCase()
+
+  const map = new Map<string, any>()
+
+  details.forEach((p) => {
+    // Keep CW / HW (and other specs) as separate lines — do not collapse by product+class only.
+    const key = `${p.product || ''}||${p.class || ''}||${normalizeIitSection(p.section || '')}||${p.program || ''}||${p.stream || ''}||${normSpecs(p.specs)}`
+    const strength = Number(p.strength) || 0
+    const price = Number(p.price) || 0
+    const ct = getCt(p.product || '')
+
+    const existing = map.get(key)
+    if (!existing) {
+      if (ct === 'level_based' || ct === 'subject_based') {
+        map.set(key, {
+          ...p,
+          strength,
+          price,
+          _dimRows: [{ strength, level: p.level, subject: p.subject, specs: p.specs, price }],
+        })
+      } else {
+        map.set(key, {
+          ...p,
+          strength,
+          price,
+          total: strength * price,
+        })
+      }
+      return
+    }
+
+    const mergedPrice = Math.max(Number(existing.price) || 0, price)
+
+    if (ct === 'level_based' || ct === 'subject_based') {
+      const dimRows = [...(existing._dimRows || [])]
+      const prevDims = new Set(
+        dimRows.map(
+          (r: any) =>
+            `${normLevel(r.level)}|${normSubject(r.subject || '')}|${normSpecs(r.specs)}`
+        )
+      )
+      const thisDim = `${normLevel(p.level)}|${normSubject(p.subject || '')}|${normSpecs(p.specs)}`
+      const duplicateDim = prevDims.has(thisDim)
+      const mergedStrength = duplicateDim
+        ? Math.max(Number(existing.strength) || 0, strength)
+        : (Number(existing.strength) || 0) + strength
+      dimRows.push({ strength, level: p.level, subject: p.subject, specs: p.specs, price })
+      map.set(key, {
+        ...existing,
+        strength: mergedStrength,
+        price: mergedPrice,
+        _dimRows: dimRows,
+      })
+    } else {
+      const mergedStrength = Math.max(Number(existing.strength) || 0, strength)
+      map.set(key, {
+        ...existing,
+        strength: mergedStrength,
+        price: mergedPrice,
+        total: mergedStrength * mergedPrice,
+      })
+    }
+  })
+
+  const grouped = Array.from(map.values()).map((row) => {
+    if (row._dimRows) {
+      const ct = getCt(row.product || '')
+      const total = computeBucketAmount({
+        calculationType: ct,
+        rows: row._dimRows,
+        unitPrice: Number(row.price) || 0,
+        catalogFallbackCount: getFallback(row.product || '', ct),
+      })
+      const { _dimRows, ...rest } = row
+      return { ...rest, total }
+    }
+    return row
+  })
+
+  // CW/HW and similar specs are physical books for one class enrollment, not
+  // separate sales of the same student package. Allocate the class amount
+  // across the selected specs, preserving the exact two-decimal grand total.
+  const byProductClass = new Map<string, any[]>()
+  const packageSubjects = new Map<string, Set<string>>()
+  for (const detail of details) {
+    if (!detail.subjectPackage || !detail.subject) continue
+    const key = `${detail.product || ''}||${detail.class || ''}||${normalizeIitSection(detail.section || '')}||${detail.program || ''}||${detail.stream || ''}`
+    const subjects = packageSubjects.get(key) || new Set<string>()
+    subjects.add(normSubject(detail.subject))
+    packageSubjects.set(key, subjects)
+  }
+  for (const row of grouped) {
+    const key = `${row.product || ''}||${row.class || ''}||${normalizeIitSection(row.section || '')}||${row.program || ''}||${row.stream || ''}`
+    const list = byProductClass.get(key) || []
+    list.push(row)
+    byProductClass.set(key, list)
+  }
+  for (const [key, rows] of byProductClass) {
+    // Subject-based products charge every deliverable, so their subjects are never divided out.
+    const ct = getCt(rows[0].product)
+    const subjectCount = rows.some((row) => row.subjectPackage) && ct !== 'normal' && ct !== 'subject_based'
+      ? Math.max(1, packageSubjects.get(key)?.size || 1) : 1
+    if (rows.length <= 1 && subjectCount <= 1) continue
+    const divisor = rows.length * subjectCount
+    const target = roundToTwo(rows.reduce((sum, row) => sum + (Number(row.total) || 0), 0) / divisor)
+    let allocated = 0
+    rows.forEach((row, index) => {
+      row.total = index === rows.length - 1
+        ? roundToTwo(target - allocated)
+        : roundToTwo((Number(row.total) || 0) / divisor)
+      allocated += row.total
+    })
+  }
+  return grouped
+}
+
+export function rangeToClassSelections(
+  fromClass: string,
+  toClass: string,
+  strength: number
+): ClassStrengthSelection[] {
+  const from = parseInt(fromClass, 10)
+  const to = parseInt(toClass, 10)
+  if (from === 0 || to === 0 || from > to || strength <= 0) return []
+  const out: ClassStrengthSelection[] = []
+  for (let i = from; i <= to; i++) {
+    out.push({ class: String(i), strength })
+  }
+  return out
+}
+
+export function getSectionClassSelections(sec: CloseProductSection): ClassStrengthSelection[] {
+  if (sec.classSelections?.length) return sec.classSelections
+  return rangeToClassSelections(sec.fromClass ?? '0', sec.toClass ?? '0', Number(sec.strength) || 0)
+}
+
+export function getLineClassSelections(
+  line: CloseProductSectionLine,
+  sec?: CloseProductSection
+): ClassStrengthSelection[] {
+  // Empty array is intentional (all classes unchecked / all Product Details rows deleted).
+  if (Array.isArray(line.classSelections)) return line.classSelections
+  if (sec?.classSelections?.length && sec.lines.length === 1 && sec.lines[0]?.id === line.id) {
+    return sec.classSelections
+  }
+  if (line.fromClass != null && line.toClass != null) {
+    return rangeToClassSelections(line.fromClass, line.toClass, Number(line.strength) || 0)
+  }
+  if (sec) return getSectionClassSelections(sec)
+  return []
+}
+
+export function parentRowIdForDetailRow(
+  row: ProductDetailRow,
+  details: ProductDetailRow[]
+): string | undefined {
+  if (row.isParentRow) return row.id
+  return details.find((p) => p.isParentRow && row.id.startsWith(`${p.id}_`))?.id
+}
+
+/**
+ * Rebuild class checkboxes from remaining Product Details rows.
+ * Classes with no remaining row are omitted (unchecked, strength/rate dropped).
+ */
+export function syncClassSelectionsFromDetailRows(
+  previous: ClassStrengthSelection[],
+  remainingChildRows: ProductDetailRow[]
+): ClassStrengthSelection[] {
+  const strengthByClass = new Map<string, number>()
+  for (const row of remainingChildRows) {
+    if (row.isParentRow) continue
+    const cls = String(row.class || '').trim()
+    if (!cls) continue
+    const strength = Number(row.strength) || Number(row.quantity) || 0
+    const existing = strengthByClass.get(cls)
+    if (existing == null || (strength > 0 && existing <= 0)) {
+      strengthByClass.set(cls, strength)
+    }
+  }
+  const seen = new Set<string>()
+  const next: ClassStrengthSelection[] = []
+  for (const sel of previous) {
+    const cls = String(sel.class || '').trim()
+    if (!cls || !strengthByClass.has(cls) || seen.has(cls)) continue
+    seen.add(cls)
+    next.push({ class: cls, strength: strengthByClass.get(cls) ?? sel.strength })
+  }
+  for (const [cls, strength] of strengthByClass) {
+    if (seen.has(cls)) continue
+    seen.add(cls)
+    next.push({ class: cls, strength })
+  }
+  return next
+}
+
+/** Count of checked subjects on a product line (unselected subjects do not count). */
+export function getLineSelectedSubjectCount(line: CloseProductSectionLine): number {
+  const subjects = (line.selectedSubjects || [])
+    .map((s) => String(s || '').trim())
+    .filter(Boolean)
+  return subjects.length
+}
+
+/**
+ * Subject multiplier for list-price totals.
+ * Products with no subject selection behave as multiplier 1 (strength × price).
+ */
+export function getLineSubjectPriceMultiplier(line: CloseProductSectionLine): number {
+  const count = getLineSelectedSubjectCount(line)
+  return count > 0 ? count : 1
+}
+
+/**
+ * Per-class list price: classStrength × selectedSubjectCount × unitPrice
+ * (subject count is 1 when no subjects are selected).
+ */
+export function computeClassSubjectUnitTotal(
+  classStrength: number,
+  selectedSubjectCount: number,
+  unitPrice: number
+): number {
+  const strength = Number(classStrength) || 0
+  const subjects = Math.max(1, Number(selectedSubjectCount) || 0)
+  const price = Number(unitPrice) || 0
+  return strength * subjects * price
+}
+
+/** UI line total: one package price per student, regardless of selected subjects. */
+export function computeLineDisplayTotal(
+  line: CloseProductSectionLine,
+  sec?: CloseProductSection
+): number {
+  if (isIitProduct(line.product) && line.iitAssignments !== undefined)
+    return roundToTwo(line.iitAssignments.reduce((sum, row) =>
+      sum + (Number(row.strength) || 0) * (Number(row.unitPrice) || 0), 0))
+  return getLineClassSelections(line, sec).reduce(
+    (sum, s) => sum + (Number(s.strength) || 0) *
+      (line.sameRateForAllClasses ? Number(line.price) || 0 : Number(line.priceByClass?.[s.class] ?? line.price) || 0),
+    0
+  )
+}
+
+/** Per-line quantity: Σ (class strength × selected subjects). */
+export function computeLineDisplayQuantity(
+  line: CloseProductSectionLine,
+  sec?: CloseProductSection
+): number {
+  if (isIitProduct(line.product) && line.iitAssignments !== undefined)
+    return line.iitAssignments.reduce((sum, row) => sum + (Number(row.strength) || 0), 0)
+  const subjectMult = getLineSubjectPriceMultiplier(line)
+  return getLineClassSelections(line, sec).reduce(
+    (sum, s) => sum + (Number(s.strength) || 0) * subjectMult,
+    0
+  )
+}
+
+/** Sum of per-line display totals across all product sections. */
+export function computeSectionsDisplayTotal(sections: CloseProductSection[]): number {
+  return sections.reduce(
+    (sum, sec) =>
+      sum + sec.lines.reduce((lineSum, line) => lineSum + computeLineDisplayTotal(line, sec), 0),
+    0
+  )
+}
+
+/**
+ * Sum of per-line quantities across sections:
+ * strength × selected subject count (not just raw class strength).
+ */
+export function computeSectionsDisplayQuantity(sections: CloseProductSection[]): number {
+  return sections.reduce(
+    (sum, sec) =>
+      sum +
+      sec.lines.reduce(
+        (lineSum, line) => lineSum + computeLineDisplayQuantity(line, sec),
+        0
+      ),
+    0
+  )
+}
+
+/** Numeric class strength from a Product Details row (strength, then quantity). */
+export function getProductDetailRowStrength(row: ProductDetailRow): number {
+  const strength = Number(row.strength)
+  if (Number.isFinite(strength) && strength > 0) return strength
+  const quantity = Number(row.quantity)
+  if (Number.isFinite(quantity) && quantity > 0) return quantity
+  return 0
+}
+
+/**
+ * Product Details table / DC payload source of truth: every displayed product must
+ * have at least one class row with numeric strength greater than 0.
+ * Empty or leftover section lines that never expanded into table rows are ignored.
+ */
+export function productDetailsHaveValidClassStrengths(rows: ProductDetailRow[]): boolean {
+  const childRows = rows.filter((r) => !r.isParentRow)
+  const byProduct = new Map<string, ProductDetailRow[]>()
+  for (const row of childRows) {
+    const name = String(row.product || '').trim()
+    if (!name) continue
+    const list = byProduct.get(name)
+    if (list) list.push(row)
+    else byProduct.set(name, [row])
+  }
+  if (byProduct.size === 0) return false
+  for (const productRows of byProduct.values()) {
+    if (!productRows.some((r) => getProductDetailRowStrength(r) > 0)) return false
+  }
+  return true
+}
+
+/** Prefer Product Details rows as source of truth: sum each row quantity/strength. */
+export function computeProductDetailsDisplayQuantity(rows: ProductDetailRow[]): number {
+  return rows
+    .filter((r) => !r.isParentRow)
+    .reduce((sum, r) => sum + (Number(r.quantity) || Number(r.strength) || 0), 0)
+}
+
+/** Show the same billed amount that is saved on the order, not raw book count × price. */
+export function computeProductDetailsDisplayTotal(
+  rows: ProductDetailRow[], opts?: GroupProductOpts
+): number {
+  return roundToTwo(groupProductDetailsByProductAndClass(
+    rows.filter((r) => !r.isParentRow), opts
+  ).reduce((sum, row) => sum + (Number(row.total) || 0), 0))
+}
+
+/** Persist the billed share of each physical book row on the raised DC. */
+export function billedProductDetailRows(
+  rows: ProductDetailRow[],
+  getCalculationType: (productName: string) => CalculationType,
+  getCatalogFallbackCount: (productName: string, ct: CalculationType) => number
+): ProductDetailRow[] {
+  const billed = applyPaymentDivisorsToBreakdown(
+    rows.map((row) => ({ product: row.product, class: row.class,
+      section: row.section, program: row.program, stream: row.stream,
+      strength: Number(row.strength) || Number(row.quantity) || 0,
+      unitPrice: Number(row.price) || 0, level: row.level,
+      subject: row.subject, specs: row.specs, subjectPackage: row.subjectPackage })),
+    (product) => isIitProduct(product) ? 'normal' : getCalculationType(product), getCatalogFallbackCount
+  ).paymentBreakdown
+  return rows.map((row, index) => ({ ...row, total: Number(billed[index]?.total) || 0 }))
+}
+
+export function lineHasValidClassSelections(
+  line: CloseProductSectionLine,
+  sec?: CloseProductSection
+): boolean {
+  return getLineClassSelections(line, sec).some((s) => Number(s.strength) > 0)
+}
+
+export function getLineSelectedLevels(
+  line: CloseProductSectionLine,
+  getDefaultLevel: (product: string) => string,
+  getProductLevels: (product: string) => string[]
+): string[] {
+  if (line.selectedLevels?.length) return line.selectedLevels
+  if (line.level) return [line.level]
+  const catalog = getProductLevels(line.product)
+  if (catalog.length === 1) return [catalog[0]]
+  if (catalog.length > 0) return [getDefaultLevel(line.product)]
+  return [getDefaultLevel(line.product)]
+}
+
+export function lineHasValidLevelSelections(
+  line: CloseProductSectionLine,
+  getDefaultLevel: (product: string) => string,
+  getProductLevels: (product: string) => string[]
+): boolean {
+  const catalog = getProductLevels(line.product)
+  if (catalog.length === 0) return true
+  return getLineSelectedLevels(line, getDefaultLevel, getProductLevels).length > 0
+}
+
+export function sectionHasValidClassSelections(sec: CloseProductSection): boolean {
+  if (sec.lines.length === 0) return false
+  return sec.lines.every((line) => lineHasValidClassSelections(line, sec))
+}
+
+export function classSelectionBounds(selections: ClassStrengthSelection[]): {
+  fromClass: string
+  toClass: string
+} {
+  const nums = selections
+    .map((s) => parseInt(s.class, 10))
+    .filter((n) => !isNaN(n) && n > 0)
+  if (nums.length === 0) return { fromClass: '0', toClass: '0' }
+  return { fromClass: String(Math.min(...nums)), toClass: String(Math.max(...nums)) }
+}
+
+export type ExpandSectionsCtx = {
+  hasProductSubjects: (product: string) => boolean
+  hasProductSpecs?: (product: string) => boolean
+  getProductSpecs?: (product: string) => string[]
+  getProductCategories: (product: string) => string[]
+  hasProductCategories: (product: string) => boolean
+  schoolType?: string
+  /** Existing table rows — used so re-expansion does not clobber Product Category. */
+  previousDetails?: ProductDetailRow[]
+  /** Explicit per-row overrides (user selections), keyed by productCategoryRowIdentity. */
+  categoryOverrides?: Record<string, string>
+  /** Billing type; Subject-based products keep one row per deliverable (subject). */
+  getCalculationType?: (product: string) => string
+}
+
+export function expandSectionsToProductDetails(
+  sections: CloseProductSection[],
+  ctx: ExpandSectionsCtx
+): ProductDetailRow[] {
+  const out: ProductDetailRow[] = []
+  const schoolExisting = ctx.schoolType === 'Existing'
+  const prevCategoryMap = buildProductCategoryOverrideMap(ctx.previousDetails)
+  const categoryOverrides = ctx.categoryOverrides || {}
+
+  for (const sec of sections) {
+    for (const line of sec.lines) {
+      if (isIitProduct(line.product) && line.iitAssignments !== undefined) {
+        const assignments = line.iitAssignments.filter((row) =>
+          row.class.trim() && row.program.trim() && row.stream.trim() &&
+          Number(row.strength) > 0 && Number(row.unitPrice) > 0
+        )
+        if (assignments.length === 0) continue
+        const classes = assignments.map((row) => Number(row.class)).filter(Number.isFinite)
+        const parentRow: ProductDetailRow = {
+          id: line.parentRowId,
+          product: line.product,
+          class: '0',
+          fromClass: String(Math.min(...classes)),
+          toClass: String(Math.max(...classes)),
+          category: schoolExisting ? 'Existing Students' : 'New Students',
+          quantity: 1,
+          strength: assignments.reduce((sum, row) => sum + Number(row.strength), 0),
+          price: 0,
+          total: assignments.reduce((sum, row) => sum + Number(row.strength) * Number(row.unitPrice), 0),
+          level: '',
+          specs: '',
+          isParentRow: true,
+          iitAssignments: line.iitAssignments.map((row) => ({ ...row })),
+          selectedDeliverables: line.selectedDeliverables || [],
+        }
+        out.push(parentRow)
+        for (const row of assignments) {
+          out.push({
+            id: `${line.parentRowId}_${row.id}`,
+            product: line.product,
+            class: row.class.trim(),
+            section: normalizeIitSection(row.section),
+            program: row.program.trim(),
+            stream: row.stream.trim(),
+            category: schoolExisting ? 'Existing Students' : 'New Students',
+            productCategory: row.program.trim(),
+            quantity: Number(row.strength),
+            strength: Number(row.strength),
+            price: Number(row.unitPrice),
+            total: Number(row.strength) * Number(row.unitPrice),
+            level: '',
+            specs: '',
+            isParentRow: false,
+          })
+        }
+        continue
+      }
+      const classSelections = [...getLineClassSelections(line, sec)].sort(
+        (a, b) => Number(a.class) - Number(b.class)
+      )
+      if (classSelections.length === 0) continue
+
+      const { fromClass, toClass } = classSelectionBounds(classSelections)
+      const priceToUse = Number(line.price) || 0
+      const configuredLevels = line.selectedLevels?.length
+        ? line.selectedLevels
+        : line.level
+          ? [line.level]
+          : []
+      // Level is an optional catalog dimension. Products such as Abacus can
+      // expand once per selected level, while products with no configured
+      // levels must still produce one row per class/spec/subject combination.
+      const levelsToUse = configuredLevels.length > 0 ? configuredLevels : ['']
+      const hasSkuCategories = ctx.hasProductCategories(line.product)
+      const skuCategories = hasSkuCategories ? ctx.getProductCategories(line.product) : []
+      const enrollmentDefault = schoolExisting ? 'Existing Students' : 'New Students'
+      const selectedCategories = line.selectedCategories || []
+      const parentDefaultCategory = hasSkuCategories
+        ? pickDefaultProductCategory(skuCategories, {
+            subject: (line.selectedSubjects || [])[0],
+            level: levelsToUse[0] || line.level,
+            selectedCategories,
+          }) || skuCategories[0] || ''
+        : enrollmentDefault
+
+      const catalogSpecs = ctx.getProductSpecs ? ctx.getProductSpecs(line.product) : []
+      const productHasSpecs = catalogSpecs.length > 0
+      const selectedSpecs = productHasSpecs
+        ? specsFromCatalog(catalogSpecs, line.selectedSpecs)
+        : []
+      const specsToUse = productHasSpecs ? selectedSpecs : ['']
+
+      const parentRow: ProductDetailRow = {
+        id: line.parentRowId,
+        product: line.product,
+        class: '0',
+        fromClass,
+        toClass,
+        category: parentDefaultCategory,
+        quantity: 1,
+        strength: classSelections[0]?.strength || 0,
+        price: priceToUse,
+        total: 0,
+        level: configuredLevels[0] || line.level || '',
+        specs: specsToUse[0] || '',
+        isParentRow: true,
+        sameRateForAllClasses: line.sameRateForAllClasses,
+        selectedSubjects: line.selectedSubjects || [],
+        selectedSpecs,
+        selectedDeliverables: line.selectedDeliverables || [],
+        selectedCategories: selectedCategories.length > 0 ? selectedCategories : undefined,
+        term:
+          line.term !== undefined && line.term !== ''
+            ? normalizeProductTerm(line.term)
+            : undefined,
+        levels_snapshot: [...configuredLevels],
+        dispatchMode: line.dispatchMode,
+      }
+      out.push(parentRow)
+
+      const selectedSubjects = line.selectedSubjects || []
+      const hasSubjects =
+        ctx.hasProductSubjects(line.product) && selectedSubjects.length > 0
+      // One row per deliverable (CW, HW ...). Billing still charges the student once for
+      // non Subject-based products (payment divisors treat the rows as one package).
+      const subjectsToUse = hasSubjects && selectedSubjects.length > 0 ? selectedSubjects : [undefined]
+
+      let rowIdx = 0
+      const parentId = line.parentRowId
+      // One row per (selected class × level × spec × subject).
+      for (const classSel of classSelections) {
+        const strengthToUse = Number(classSel.strength) || 0
+        const classNum = parseInt(classSel.class, 10)
+        if (!classNum || strengthToUse <= 0) continue
+        const classPrice = line.sameRateForAllClasses
+          ? priceToUse
+          : Number(line.priceByClass?.[classSel.class] ?? line.price) || 0
+
+        for (const level of levelsToUse) {
+          for (const spec of specsToUse) {
+            for (const subject of subjectsToUse) {
+              const classValue = classNum.toString()
+              const lineKey = productCategoryRowKey(classValue, level, subject)
+              const identity = productCategoryRowIdentity(
+                parentId,
+                line.product,
+                classValue,
+                level,
+                subject
+              )
+              const existingCategory = firstNonEmptyCategory(
+                categoryOverrides[identity],
+                line.productCategoryByKey?.[lineKey],
+                prevCategoryMap[identity]
+              )
+              const subjectDefault = hasSkuCategories
+                ? pickGridProductCategory(line.product, classValue, skuCategories, {
+                    subject: typeof subject === 'string' ? subject : undefined,
+                    level,
+                    selectedCategories,
+                  }) || skuCategories[0] || ''
+                : enrollmentDefault
+              // Drop stale defaults that don't match this row's subject (e.g. Star junior on a junior row).
+              const subjectNorm = normalizeCategoryMatchText(
+                typeof subject === 'string' ? subject : ''
+              )
+              const existingNorm = normalizeCategoryMatchText(existingCategory)
+              const existingFitsSubject =
+                !subjectNorm ||
+                !existingNorm ||
+                existingNorm.startsWith(subjectNorm)
+              const existingFitsGrid = !existingCategory ||
+                gridCategoryMatchesClass(line.product, classValue, existingCategory)
+              const category = resolveRowProductCategory(
+                existingFitsSubject && existingFitsGrid ? existingCategory : '',
+                subjectDefault
+              )
+              if (category) {
+                categoryOverrides[identity] = category
+              }
+              // Subjects remain separate fulfillment rows but share one package price.
+              out.push({
+                id: `${parentId}_${classNum}_${rowIdx++}`,
+                product: line.product,
+                class: classValue,
+                category,
+                productCategory: hasSkuCategories ? category : undefined,
+                quantity: strengthToUse || 1,
+                strength: strengthToUse,
+                price: classPrice,
+                total: strengthToUse * classPrice,
+                level,
+                specs: spec || '',
+                subject,
+                subjectPackage: hasSubjects,
+                isParentRow: false,
+                sameRateForAllClasses: false,
+                dispatchMode: line.dispatchMode,
+              })
+            }
+          }
+        }
+      }
+      // The unit price covers the selected subject package for each student.
+      parentRow.total = classSelections.reduce(
+        (sum, s) =>
+          sum +
+          computeClassSubjectUnitTotal(
+            Number(s.strength) || 0,
+            1,
+            line.sameRateForAllClasses ? priceToUse : Number(line.priceByClass?.[s.class] ?? line.price) || 0
+          ),
+        0
+      )
+    }
+  }
+  return out
+}
+
+export function parentRowToSectionLine(p: ProductDetailRow): CloseProductSectionLine {
+  const from = p.fromClass ?? '0'
+  const to = p.toClass ?? '0'
+  const strength = Number(p.strength) || 0
+  const levelsFromSnapshot =
+    Array.isArray((p as ProductDetailRow & { levels_snapshot?: string[] }).levels_snapshot) &&
+    (p as ProductDetailRow & { levels_snapshot?: string[] }).levels_snapshot!.length > 0
+      ? (p as ProductDetailRow & { levels_snapshot?: string[] }).levels_snapshot!
+      : p.level
+        ? [p.level]
+        : []
+  return {
+    id: makeRowId(),
+    parentRowId: p.id,
+    product: p.product,
+    level: levelsFromSnapshot[0] || p.level || '',
+    selectedLevels: levelsFromSnapshot,
+    classSelections: rangeToClassSelections(from, to, strength),
+    iitAssignments: isIitProduct(p.product) ? (p.iitAssignments || []) : undefined,
+    sameStrengthForAllClasses: false,
+    selectedSpecs: p.selectedSpecs || [],
+    selectedSubjects: p.selectedSubjects || [],
+    selectedDeliverables: p.selectedDeliverables || [],
+    selectedCategories: p.selectedCategories || undefined,
+    productCategoryByKey: undefined,
+    sameRateForAllClasses: p.sameRateForAllClasses || false,
+    price: Number(p.price) || 0,
+    term: p.term,
+    dispatchMode: p.dispatchMode,
+  }
+}
+
+export function parentRowsToSections(parents: ProductDetailRow[]): CloseProductSection[] {
+  return parents.map((p) => ({
+    id: makeRowId(),
+    classSelections: [],
+    lines: [parentRowToSectionLine(p)],
+  }))
+}
+
+/** Best-effort: one section per parent row (preserves ranges and line metadata on reopen). */
+export function productDetailsToSections(details: ProductDetailRow[]): CloseProductSection[] {
+  return parentRowsToSections(details.filter((d) => d.isParentRow))
+}
+
+export type BuildDcOrderProductsOpts = {
+  productDetails: ProductDetailRow[]
+  getCalculationType: (productName: string) => CalculationType
+  getCatalogFallbackCount: (productName: string, ct: CalculationType) => number
+  hasProductCategories: (product: string) => boolean
+  getProductCategories: (product: string) => string[]
+}
+
+/**
+ * Same products array shape Close Lead uses when saving to DcOrder
+ * (grouped by product + class with class, levels, specs, deliverables, term, etc.).
+ */
+export function buildDcOrderProductsFromDetails(
+  childRows: ProductDetailRow[],
+  opts: BuildDcOrderProductsOpts
+) {
+  const groupOpts: GroupProductOpts = {
+    getCalculationType: opts.getCalculationType,
+    getCatalogFallbackCount: opts.getCatalogFallbackCount,
+  }
+  const groupedProductDetails = groupProductDetailsByProductAndClass(childRows, groupOpts)
+  const { productDetails, hasProductCategories, getProductCategories } = opts
+
+  return groupedProductDetails.map((p) => {
+    const sampleChild = childRows.find(
+      (r) =>
+        !r.isParentRow &&
+        (r.product || '') === (p.product || '') &&
+        String(r.class || '') === String(p.class || '') &&
+        normalizeIitSection(r.section || '') === normalizeIitSection(p.section || '') &&
+        String(r.program || '') === String(p.program || '') &&
+        String(r.stream || '') === String(p.stream || '') &&
+        String(r.specs || '').trim().toLowerCase() === String((p as any).specs || '').trim().toLowerCase()
+    )
+    const parentRow = sampleChild
+      ? productDetails.find(
+          (parent) => parent.isParentRow && sampleChild.id.startsWith(parent.id + '_')
+        )
+      : productDetails.find((parent) => parent.isParentRow && parent.product === p.product)
+    const deliverables = parentRow?.selectedDeliverables || []
+    const bucketRows = childRows.filter(
+      (r) =>
+        (r.product || '') === (p.product || '') &&
+        String(r.class || '') === String(p.class || '') &&
+        normalizeIitSection(r.section || '') === normalizeIitSection(p.section || '') &&
+        String(r.program || '') === String(p.program || '') &&
+        String(r.stream || '') === String(p.stream || '') &&
+        String(r.specs || '').trim().toLowerCase() === String((p as any).specs || '').trim().toLowerCase()
+    )
+    const levelSet = new Set<string>()
+    const subjectSet = new Set<string>()
+    bucketRows.forEach((r) => {
+      if (r.level) levelSet.add(String(r.level).trim())
+      if (r.subject) subjectSet.add(String(r.subject).trim())
+    })
+    const termsFromLevels = new Set<ProductTerm>()
+    bucketRows.forEach((r) => {
+      const t = termFromLevelLabel(r.level)
+      if (t) termsFromLevels.add(t)
+    })
+    let invoiceTerm: ProductTerm = normalizeProductTerm(parentRow?.term)
+    if (termsFromLevels.size === 1) {
+      invoiceTerm = [...termsFromLevels][0]
+    } else if (termsFromLevels.size > 1) {
+      invoiceTerm = 'Both'
+    }
+    const selectedSubjects =
+      parentRow?.selectedSubjects?.length && parentRow.selectedSubjects.length > 0
+        ? [...parentRow.selectedSubjects]
+        : Array.from(subjectSet)
+    // Class strength (per class, not multiplied) for strength field / Raise DC.
+    const classStrength = Number(sampleChild?.strength) || 0
+    // Quantity = sum of Product Details row quantities for this product+class
+    // (one row per subject/level → strength × subjects × levels).
+    const quantityFromRows = bucketRows.reduce(
+      (sum, r) => sum + (Number(r.quantity) || Number(r.strength) || 0),
+      0
+    )
+    const subjectCountForPrice =
+      selectedSubjects.length > 0 ? selectedSubjects.length : 1
+    const strengthQty = classStrength > 0 ? classStrength : Number(p.strength) || 0
+    const unitPrice = Number(p.price) || 0
+    const quantity =
+      quantityFromRows > 0
+        ? quantityFromRows
+        : strengthQty * Math.max(1, subjectCountForPrice)
+    // Grouping already applies the product's level/subject billing divisor.
+    // Multiplying raw DC quantity by price charges twice for a two-level sale.
+    const lineTotal = Number(p.total) || 0
+    return {
+      product_name: p.product,
+      quantity,
+      strength: strengthQty,
+      unit_price: unitPrice,
+      total: lineTotal,
+      class: String(p.class ?? '1'),
+      section: (p as any).section || undefined,
+      program: (p as any).program || undefined,
+      stream: (p as any).stream || undefined,
+      specs: (p as any).specs || undefined,
+      deliverables,
+      productCategory: (() => {
+        const skuCats = hasProductCategories(p.product) ? getProductCategories(p.product) : []
+        const catStr = typeof (p as any).category === 'string' ? (p as any).category.trim() : ''
+        const isSku = skuCats.some((c) => c.toLowerCase() === catStr.toLowerCase())
+        return isSku ? catStr : (p as any).productCategory || undefined
+      })(),
+      selected_subjects: selectedSubjects,
+      subjectPackage: Boolean(p.subjectPackage),
+      levels_snapshot: Array.from(levelSet),
+      level: levelSet.size === 1 ? Array.from(levelSet)[0] : undefined,
+      subject: subjectSet.size === 1 ? Array.from(subjectSet)[0] : undefined,
+      term: invoiceTerm,
+      dispatchMode: parentRow?.dispatchMode,
+    }
+  })
+}
+
+export type ValidateCloseLeadProductsOpts = {
+  productDetails: ProductDetailRow[]
+  productSections: CloseProductSection[]
+  deliverablesByProduct?: Record<string, string[]>
+  getCalculationType: (productName: string) => CalculationType
+  getCatalogFallbackCount: (productName: string, ct: CalculationType) => number
+  /** When true (Close Lead default), require deliverable selection if catalog has any. */
+  requireDeliverables?: boolean
+  /** When true (Close Lead default), require unit price > 0. */
+  requireUnitPrice?: boolean
+  /** The product's streams (subject combinations) for IIT rows. */
+  getStreamCombos?: (productName: string) => StreamCombo[]
+}
+
+/** Shared validation matching Close Lead Turn-to-Client product checks. */
+export function validateCloseLeadProductConfig(
+  opts: ValidateCloseLeadProductsOpts
+): { ok: true } | { ok: false; message: string } {
+  for (const section of opts.productSections) {
+    for (const line of section.lines) {
+      if (!isIitProduct(line.product) || line.iitAssignments === undefined) continue
+      if (line.iitAssignments.length === 0) return { ok: false, message: 'Add at least one IIT class/section/program assignment.' }
+      const used = new Map<string, Set<string>>()
+      for (const row of line.iitAssignments) {
+        if (!/^\d+$/.test(row.class.trim()) || Number(row.class) <= 0 || !row.program.trim() || !row.stream.trim() || Number(row.strength) <= 0 || Number(row.unitPrice) <= 0)
+          return { ok: false, message: 'Each IIT assignment needs class, program, stream, strength, and a unit price greater than zero.' }
+        const combos = opts.getStreamCombos?.(line.product) || []
+        if (isCustomStream(row.stream) ? streamSubjects(row.stream).length < 2 : !matchStream(row.stream, combos))
+          return { ok: false, message: `IIT class ${row.class.trim()}: select a stream, or tick at least two subjects for another combination.` }
+        const key = row.class.trim().toLowerCase()
+        const sectionName = normalizeIitSection(row.section).toLowerCase()
+        const prior = used.get(key) || new Set<string>()
+        if (prior.has(sectionName) || (sectionName === 'all' && prior.size > 0) || (sectionName !== 'all' && prior.has('all')))
+          return { ok: false, message: `Class ${row.class} has overlapping IIT section assignments.` }
+        prior.add(sectionName)
+        used.set(key, prior)
+      }
+    }
+  }
+  const childRows = opts.productDetails.filter((pd) => !pd.isParentRow)
+  const grouped = groupProductDetailsByProductAndClass(childRows, {
+    getCalculationType: opts.getCalculationType,
+    getCatalogFallbackCount: opts.getCatalogFallbackCount,
+  })
+
+  if (grouped.length === 0) {
+    return {
+      ok: false,
+      message: 'Please add at least one product with classes and strength per product',
+    }
+  }
+
+  // Validate class strength from Product Details rows (same structure the modal
+  // table displays and buildDcOrderProductsFromDetails submits). Do not require
+  // every productSections line to be valid: empty extra sections and leftover
+  // preloaded lines never expand into table rows and are not sent to the API.
+  if (!productDetailsHaveValidClassStrengths(opts.productDetails)) {
+    return {
+      ok: false,
+      message: 'Each product must have at least one class with strength greater than 0.',
+    }
+  }
+
+  const missingDispatchChoice = opts.productSections.some((section) =>
+    section.lines.some(
+      (line) => (line.selectedLevels || []).length > 1 && !line.dispatchMode
+    )
+  )
+  if (missingDispatchChoice) {
+    return {
+      ok: false,
+      message: 'Choose Term 1 only or Both Terms Together for each multi-level product.',
+    }
+  }
+
+  if (opts.requireDeliverables !== false) {
+    const parentRows = opts.productDetails.filter((pd) => pd.isParentRow)
+    const deliverablesByProduct = opts.deliverablesByProduct || {}
+    const productsWithDeliverables = parentRows.filter(
+      (p) => (deliverablesByProduct[p.product] || []).length > 0
+    )
+    const invalidDeliverables = productsWithDeliverables.some((p) => {
+      const selected = p.selectedDeliverables || []
+      return selected.length === 0
+    })
+    if (invalidDeliverables) {
+      return {
+        ok: false,
+        message:
+          'Please select at least one deliverable for products that have deliverables configured.',
+      }
+    }
+  }
+
+  const requirePrice = opts.requireUnitPrice !== false
+  const invalidProducts = grouped.filter(
+    (p) =>
+      !p.product ||
+      !p.strength ||
+      p.strength <= 0 ||
+      (requirePrice && (!p.price || p.price <= 0))
+  )
+  if (invalidProducts.length > 0) {
+    return {
+      ok: false,
+      message: requirePrice
+        ? 'Please fill in Product, Quantity (Strength), and Unit Price for all products. Both Quantity and Unit Price are mandatory and must be greater than 0.'
+        : 'Please fill in Product and Quantity (Strength) for all products. Strength must be greater than 0.',
+    }
+  }
+
+  return { ok: true }
+}

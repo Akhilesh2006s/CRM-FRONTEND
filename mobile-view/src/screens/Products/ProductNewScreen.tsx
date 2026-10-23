@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,22 @@ import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebInput } from '../../ui/WebPrimitives';
+import {
+  ProductClassesField,
+  ProductRelatedItemsField,
+  ProductSpecimenItemsField,
+  ProductStreamsField,
+} from '../../components/products/ProductExtraFields';
+import {
+  DEFAULT_PRODUCT_CLASSES,
+  productExtraFieldsFromApi,
+  productExtraPayload,
+  relatedItemsError,
+  specimenItemsError,
+  type ProductRelatedItem,
+  type ProductSpecimenItem,
+  type StreamCombo,
+} from '../../lib/productFields';
 import { useAuth } from '../../context/AuthContext';
 
 const TERM_OPTIONS = ['Term 1', 'Term 2', 'Term 3'] as const;
@@ -45,6 +61,23 @@ export default function ProductNewScreen({ navigation }: any) {
     prodStatus: 1,
     calculationType: 'normal' as 'normal' | 'level_based' | 'subject_based',
   });
+  // Classes, Streams, Related Items and Specimen Set (same fields as the web product form).
+  const [classes, setClasses] = useState<string[]>([...DEFAULT_PRODUCT_CLASSES]);
+  const [streams, setStreams] = useState<StreamCombo[]>([]);
+  const [relatedItems, setRelatedItems] = useState<ProductRelatedItem[]>([]);
+  const [specimenItems, setSpecimenItems] = useState<ProductSpecimenItem[]>([]);
+  const [catalogueNames, setCatalogueNames] = useState<string[]>([]);
+
+  useEffect(() => {
+    apiService
+      .get('/products/active')
+      .then((res: any) => {
+        const list = Array.isArray(res) ? res : res?.data || [];
+        const names = list.map((p: any) => String(p.productName || p.name || '').trim()).filter(Boolean);
+        setCatalogueNames([...new Set<string>(names)].sort((a, b) => a.localeCompare(b)));
+      })
+      .catch(() => setCatalogueNames([]));
+  }, []);
 
   const addLevel = () => {
     const value = form.newLevel.trim();
@@ -144,7 +177,7 @@ export default function ProductNewScreen({ navigation }: any) {
       return;
     }
     if (form.hasSubjects && form.subjects.length === 0) {
-      setErrorMessage('At least one subject is required when subjects are enabled');
+      setErrorMessage('At least one deliverable is required when deliverables are enabled');
       setSubmitting(false);
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       return;
@@ -168,7 +201,15 @@ export default function ProductNewScreen({ navigation }: any) {
       return;
     }
     if (form.calculationType === 'subject_based' && !form.hasSubjects) {
-      setErrorMessage('Subject-based payment requires at least one Special Note');
+      setErrorMessage('Subject-based payment requires at least one Deliverable');
+      setSubmitting(false);
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+      return;
+    }
+
+    const itemsError = relatedItemsError(relatedItems) || specimenItemsError(specimenItems);
+    if (itemsError) {
+      setErrorMessage(itemsError);
       setSubmitting(false);
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       return;
@@ -186,6 +227,7 @@ export default function ProductNewScreen({ navigation }: any) {
         categories: form.hasCategory ? form.categories : [],
         prodStatus: form.prodStatus,
         calculationType: form.calculationType,
+        ...productExtraPayload({ classes, streams, relatedItems, specimenItems }),
       };
 
       await apiService.post('/products', payload);
@@ -287,6 +329,8 @@ export default function ProductNewScreen({ navigation }: any) {
             <Text style={styles.hint}>Normal: Full amount is charged without division</Text>
           </View>
 
+          <ProductClassesField value={classes} onChange={setClasses} />
+
           <View style={styles.formSection}>
             <Text style={styles.label}>Term / Level</Text>
             <Text style={styles.hint}>
@@ -338,9 +382,13 @@ export default function ProductNewScreen({ navigation }: any) {
             )}
           </View>
 
+          <ProductStreamsField value={streams} subjects={form.hasSubjects ? form.subjects : []} onChange={setStreams} />
+          <ProductRelatedItemsField value={relatedItems} onChange={setRelatedItems} />
+          <ProductSpecimenItemsField value={specimenItems} onChange={setSpecimenItems} productOptions={catalogueNames} />
+
           <View style={styles.formSection}>
             <View style={styles.switchRow}>
-              <Text style={styles.label}>Special Notes</Text>
+              <Text style={styles.label}>Deliverables</Text>
               <Switch
                 value={form.hasSubjects}
                 onValueChange={(value) => setForm({ ...form, hasSubjects: value })}
@@ -352,12 +400,12 @@ export default function ProductNewScreen({ navigation }: any) {
 
           {form.hasSubjects && (
             <View style={styles.formSection}>
-              <Text style={styles.label}>Special Notes *</Text>
-              <Text style={styles.hint}>Add one or multiple special notes</Text>
+              <Text style={styles.label}>Deliverables *</Text>
+              <Text style={styles.hint}>Add one or multiple deliverables</Text>
               <View style={styles.addRow}>
                 <WebInput
                   style={[styles.input, styles.addInput]}
-                  placeholder="Enter special note"
+                  placeholder="Enter deliverable"
                   value={form.newSubject}
                   onChangeText={(text) => setForm({ ...form, newSubject: text })}
                   onSubmitEditing={addSubject}

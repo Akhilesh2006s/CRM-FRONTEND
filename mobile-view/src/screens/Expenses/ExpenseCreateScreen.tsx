@@ -1,724 +1,431 @@
-import React, { useEffect, useMemo, useState, useRef } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  Alert,
-  ActivityIndicator,
-  Modal,
-  Platform,
-} from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, Platform } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as DocumentPicker from 'expo-document-picker';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
-import { apiService, getApiUrl } from '../../services/api';
+import { apiService } from '../../services/api';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
+import { appendFileToFormData, MAX_BILL_BYTES, type PickedFile } from '../../lib/expenseFiles';
 
-type ExpensePolicy = {
-  skipFinanceStage: boolean;
-  foodBillMandatoryAbove: number;
-  requireTicketForModes: string[];
-  bikeRatePerKm?: number;
-  carRatePerKm?: number;
-};
+/** Per-km rates for Bike / Car come from GET /expenses/policy (defaults ₹2.80 / ₹8) — web lib/expenseTravelRates.ts */
+type TravelPerKmRates = { bikeRatePerKm?: number; carRatePerKm?: number };
 
-type CartLine = {
-  id: string;
-  category: 'travel' | 'food' | 'accommodation' | 'other';
-  date: string;
-  amount: string;
-  remarks: string;
-  transportType: string;
-  travelFrom: string;
-  travelTo: string;
-  approxKms: string;
-  gpsDistance: number | null;
-  lodgeName: string;
-  city: string;
-  stayDate: string;
-  stayDateEnd: string;
-  restaurantName: string;
-  mealDate: string;
-  otherExpenseType: string;
-  expenseName: string;
-  description: string;
-  billUri: string | null;
-  ticketUri: string | null;
-};
+type ExpenseType = '' | 'travel' | 'food' | 'accommodation' | 'others';
 
-const CATEGORY_OPTIONS = [
+type FieldKey = 'receiptNumber' | 'bill' | 'hotelName' | 'hotelAddress' | 'checkInDate' | 'checkOutDate' | 'approxKms';
+type FieldErrors = Partial<Record<FieldKey, string>>;
+
+const TYPE_OPTIONS = [
   { label: 'Travel', value: 'travel' },
-  { label: 'Accommodation', value: 'accommodation' },
   { label: 'Food', value: 'food' },
-  { label: 'Other expenses', value: 'other' },
+  { label: 'Accommodation', value: 'accommodation' },
+  { label: 'Others', value: 'others' },
 ];
 
-const TRANSPORT_OPTIONS = ['Bike', 'Car', 'Bus', 'Train', 'Flight', 'Auto'].map((m) => ({
-  label: m,
-  value: m,
-}));
+const TRAVEL_MODES = ['Bike', 'Car', 'Bus', 'Train', 'Flight', 'Auto'];
 
-const OTHER_TYPES = ['Parking', 'Toll', 'Courier', 'Printing', 'Miscellaneous', 'Other'] as const;
-
-function emptyLine(category: CartLine['category'] = 'travel'): CartLine {
-  const today = new Date().toISOString().split('T')[0];
-  return {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    category,
-    date: today,
-    amount: '',
-    remarks: '',
-    transportType: '',
-    travelFrom: '',
-    travelTo: '',
-    approxKms: '',
-    gpsDistance: null,
-    lodgeName: '',
-    city: '',
-    stayDate: today,
-    stayDateEnd: today,
-    restaurantName: '',
-    mealDate: today,
-    otherExpenseType: 'Miscellaneous',
-    expenseName: '',
-    description: '',
-    billUri: null,
-    ticketUri: null,
-  };
+function resolveRates(rates?: TravelPerKmRates) {
+  const bike = Number(rates?.bikeRatePerKm);
+  const car = Number(rates?.carRatePerKm);
+  return { bikeRatePerKm: bike > 0 ? bike : 2.8, carRatePerKm: car > 0 ? car : 8 };
 }
 
-function resolveRates(policy?: ExpensePolicy | null) {
-  const bike = Number(policy?.bikeRatePerKm);
-  const car = Number(policy?.carRatePerKm);
-  return {
-    bikeRatePerKm: bike > 0 ? bike : 2.8,
-    carRatePerKm: car > 0 ? car : 8,
-  };
-}
+const isPerKmMode = (mode: string) => mode === 'Bike' || mode === 'Car';
 
-function isPerKmMode(mode: string) {
-  return mode === 'Bike' || mode === 'Car';
-}
-
-function calcTravelAmount(mode: string, kms: number, policy?: ExpensePolicy | null): string {
+function calcTravelAmount(mode: string, kms: number, rates?: TravelPerKmRates): string {
   if (!isPerKmMode(mode) || kms <= 0) return '';
-  const r = resolveRates(policy);
-  const rate = mode === 'Bike' ? r.bikeRatePerKm : r.carRatePerKm;
-  return (kms * rate).toFixed(2);
+  const r = resolveRates(rates);
+  return (kms * (mode === 'Bike' ? r.bikeRatePerKm : r.carRatePerKm)).toFixed(2);
 }
 
-function perKmLabel(mode: string, policy?: ExpensePolicy | null): string {
-  const r = resolveRates(policy);
+function perKmRateLabel(mode: string, rates?: TravelPerKmRates): string {
+  const r = resolveRates(rates);
   if (mode === 'Bike') return `₹${r.bikeRatePerKm}/km`;
   if (mode === 'Car') return `₹${r.carRatePerKm}/km`;
   return '';
 }
 
-function apiCategory(cat: CartLine['category']): string {
-  return cat === 'other' ? 'others' : cat;
-}
+const todayIso = () => new Date().toISOString().split('T')[0];
 
-async function submitOneExpense(line: CartLine, batchId: string, token: string | null) {
-  const formData = new FormData();
-  const payload: Record<string, string | number> = {
-    category: apiCategory(line.category),
-    date: line.date,
-    amount: parseFloat(line.amount) || 0,
-    employeeRemarks: line.remarks,
-    submissionBatchId: batchId,
-    title: `${line.category} expense`,
-    status: 'Pending',
-  };
+const emptyForm = () => ({
+  type: '' as ExpenseType,
+  date: todayIso(),
+  amount: '',
+  receiptNumber: '',
+  remarks: '',
+  transportType: '',
+  travelFrom: '',
+  travelTo: '',
+  approxKms: '',
+  hotelName: '',
+  hotelAddress: '',
+  checkInDate: '',
+  checkOutDate: '',
+});
 
-  if (line.category === 'travel') {
-    payload.transportType = line.transportType;
-    payload.travelFrom = line.travelFrom;
-    payload.travelTo = line.travelTo;
-    payload.approxKms = parseFloat(line.approxKms) || 0;
-    if (line.gpsDistance != null) {
-      payload.gpsDistance = line.gpsDistance;
-      payload.gpsProvider = 'google';
-    }
-  }
-  if (line.category === 'accommodation') {
-    payload.lodgeName = line.lodgeName;
-    payload.city = line.city;
-    payload.stayDate = line.stayDate;
-    if (line.stayDateEnd) payload.stayDateEnd = line.stayDateEnd;
-  }
-  if (line.category === 'food') {
-    payload.restaurantName = line.restaurantName;
-    payload.mealDate = line.mealDate;
-  }
-  if (line.category === 'other') {
-    payload.otherExpenseType = line.otherExpenseType;
-    payload.expenseName = line.expenseName || line.otherExpenseType;
-    payload.description = line.description;
-  }
-
-  Object.entries(payload).forEach(([k, v]) => formData.append(k, String(v)));
-
-  const appendFile = (uri: string | null, field: string) => {
-    if (!uri) return;
-    const filename = uri.split('/').pop() || 'file.jpg';
-    const match = /\.(\w+)$/.exec(filename);
-    const type = match ? `image/${match[1]}` : 'image/jpeg';
-    formData.append(field, { uri, name: filename, type } as any);
-  };
-
-  appendFile(line.billUri, 'bill');
-  appendFile(line.ticketUri, 'ticket');
-
-  const base = getApiUrl().replace(/\/$/, '');
-  const headers: HeadersInit = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
-
-  const res = await fetch(`${base}/expenses/create`, {
-    method: 'POST',
-    headers,
-    body: formData,
-  });
-
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data?.message || 'Failed to submit expense');
-  }
-  return res.json();
-}
+type DateField = 'date' | 'checkInDate' | 'checkOutDate';
 
 export default function ExpenseCreateScreen({ navigation }: any) {
-  const [policy, setPolicy] = useState<ExpensePolicy | null>(null);
-  const [draft, setDraft] = useState<CartLine>(emptyLine('travel'));
-  const [cart, setCart] = useState<CartLine[]>([]);
+  const [rates, setRates] = useState<TravelPerKmRates>({});
+  const [form, setForm] = useState(emptyForm());
+  const [billFile, setBillFile] = useState<PickedFile | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [submitting, setSubmitting] = useState(false);
-  const [gpsLoading, setGpsLoading] = useState(false);
-  const [gpsNote, setGpsNote] = useState('');
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showStayDatePicker, setShowStayDatePicker] = useState(false);
-  const [showStayEndDatePicker, setShowStayEndDatePicker] = useState(false);
-  const [showMealDatePicker, setShowMealDatePicker] = useState(false);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [datePicker, setDatePicker] = useState<DateField | null>(null);
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     apiService
-      .get<ExpensePolicy>('/expenses/policy')
-      .then(setPolicy)
-      .catch(() =>
-        setPolicy({
-          skipFinanceStage: false,
-          foodBillMandatoryAbove: 500,
-          requireTicketForModes: ['Bus', 'Train', 'Flight'],
-          bikeRatePerKm: 2.8,
-          carRatePerKm: 8,
-        })
-      );
+      .get('/expenses/policy')
+      .then((policy: TravelPerKmRates) => setRates(policy || {}))
+      .catch(() => setRates({}));
   }, []);
 
-  const ticketRequired = useMemo(() => {
-    if (!policy || draft.category !== 'travel') return false;
-    return policy.requireTicketForModes.includes(draft.transportType);
-  }, [draft, policy]);
+  const isTravelType = form.type === 'travel';
+  const needsHotel = form.type === 'food' || form.type === 'accommodation';
+  const isStay = form.type === 'accommodation';
+  const amountLocked = isTravelType && isPerKmMode(form.transportType);
+  const autoAmount = amountLocked ? calcTravelAmount(form.transportType, Number(form.approxKms) || 0, rates) : '';
+  const amountValue = amountLocked ? autoAmount : form.amount;
+  // Auto rickshaws give no bill: bill and receipt number are optional for Auto travel.
+  const billOptional = isTravelType && form.transportType === 'Auto';
 
-  const showGlobalBillUpload = draft.category === 'travel' && !ticketRequired;
-
-  const billRequired = useMemo(() => {
-    if (draft.category === 'accommodation') return true;
-    const amt = parseFloat(draft.amount) || 0;
-    if (draft.category === 'food' && policy) return amt >= policy.foodBillMandatoryAbove;
-    if (draft.category === 'other') {
-      return ['Parking', 'Toll', 'Courier', 'Printing'].includes(draft.otherExpenseType);
-    }
-    return false;
-  }, [draft, policy]);
-
-  const totals = useMemo(() => {
-    const t = { travel: 0, accommodation: 0, food: 0, other: 0, grandTotal: 0 };
-    for (const line of cart) {
-      const a = parseFloat(line.amount) || 0;
-      if (line.category === 'travel') t.travel += a;
-      else if (line.category === 'accommodation') t.accommodation += a;
-      else if (line.category === 'food') t.food += a;
-      else t.other += a;
-      t.grandTotal += a;
-    }
-    return t;
-  }, [cart]);
-
-  const pickImage = async (field: 'billUri' | 'ticketUri') => {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-      Alert.alert('Permission Denied', 'Photo library access is required.');
-        return;
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.8,
+  const update = (patch: Partial<ReturnType<typeof emptyForm>>) => {
+    setForm((prev) => ({ ...prev, ...patch }));
+    const keys = Object.keys(patch) as FieldKey[];
+    if (keys.some((k) => fieldErrors[k])) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        keys.forEach((k) => delete next[k]);
+        return next;
       });
-      if (!result.canceled && result.assets[0]) {
-      setDraft((d) => ({ ...d, [field]: result.assets[0].uri }));
     }
   };
 
-  const fetchGpsDistance = async () => {
-    if (!draft.travelFrom.trim() || !draft.travelTo.trim()) {
-      setErrorMessage('Enter From and To locations first');
-      return;
-    }
-    setGpsLoading(true);
-    setGpsNote('');
-    try {
-      const res = await apiService.post<{ gpsDistance: number | null; error?: string }>(
-        '/expenses/calculate-distance',
-        { from: draft.travelFrom, to: draft.travelTo }
-      );
-      if (res.gpsDistance != null) {
-        const kms = String(res.gpsDistance);
-        setDraft((d) => {
-          const amt = isPerKmMode(d.transportType)
-            ? calcTravelAmount(d.transportType, res.gpsDistance!, policy)
-            : d.amount;
-          return {
-            ...d,
-            gpsDistance: res.gpsDistance,
-            approxKms: kms,
-            amount: amt || d.amount,
-          };
-        });
-        setGpsNote(`System estimate: ${res.gpsDistance} km`);
-      } else {
-        setGpsNote(res.error || 'GPS distance unavailable — manager can verify manually.');
-      }
-    } catch (e: any) {
-      setGpsNote(e?.message || 'Could not calculate GPS distance');
-    } finally {
-      setGpsLoading(false);
-    }
-  };
-
-  const travelAmountLocked =
-    draft.category === 'travel' && isPerKmMode(draft.transportType);
-
-  const updateKms = (kms: string) => {
-    const amt = isPerKmMode(draft.transportType)
-      ? calcTravelAmount(draft.transportType, parseFloat(kms) || 0, policy)
-      : draft.amount;
-    setDraft({
-      ...draft,
-      approxKms: kms,
-      amount: isPerKmMode(draft.transportType) ? amt : draft.amount,
-    });
-  };
-
-  const updateTransport = (mode: string) => {
-    const kms = parseFloat(draft.approxKms) || 0;
-    const amt = isPerKmMode(mode) ? calcTravelAmount(mode, kms, policy) : '';
-    setDraft({
-      ...draft,
-      transportType: mode,
-      amount: isPerKmMode(mode) ? amt : draft.amount,
-    });
-  };
-
-  const validateDraft = (): string | null => {
-    if (!draft.amount || parseFloat(draft.amount) <= 0) return 'Enter a valid amount';
-    if (draft.category === 'travel') {
-      if (!draft.transportType || !draft.travelFrom || !draft.travelTo || !draft.approxKms) {
-        return 'Complete all travel fields including distance claimed';
-      }
-      if (ticketRequired && !draft.ticketUri) {
-        return 'Ticket/proof upload is required for this travel mode';
-      }
-    }
-    if (draft.category === 'accommodation') {
-      if (!draft.lodgeName || !draft.city || !draft.stayDate || !draft.stayDateEnd) {
-        return 'Lodge name, city, and stay period (from–to) are required';
-      }
-      if (new Date(draft.stayDateEnd) < new Date(draft.stayDate)) {
-        return 'Stay to date must be on or after stay from date';
-      }
-      if (!draft.billUri) return 'Bill upload is required for accommodation';
-    }
-    if (draft.category === 'food') {
-      if (!draft.restaurantName || !draft.mealDate) return 'Restaurant and meal date are required';
-      if (billRequired && !draft.billUri) {
-        return `Bill required for food expenses of ₹${policy?.foodBillMandatoryAbove ?? 500}+`;
-      }
-    }
-    if (draft.category === 'other') {
-      if (!draft.description.trim()) return 'Description is required';
-      if (billRequired && !draft.billUri) return 'Proof upload is required for this expense type';
-    }
-    return null;
-  };
-
-  const showValidationError = (msg: string) => {
+  const showError = (msg: string) => {
     setErrorMessage(msg);
     scrollRef.current?.scrollTo({ y: 0, animated: true });
   };
 
-  const addToCart = () => {
-    setErrorMessage(null);
-    const err = validateDraft();
-    if (err) {
-      showValidationError(err);
+  const acceptFile = (file: PickedFile) => {
+    const isImage = file.mimeType.startsWith('image/');
+    const isPdf = file.mimeType === 'application/pdf' || /\.pdf$/i.test(file.name);
+    if (!isImage && !isPdf) {
+      showError('Only image files (JPG, PNG) and PDF files are allowed');
       return;
     }
-    setCart((c) => [...c, { ...draft, id: `${Date.now()}-${Math.random().toString(36).slice(2)}` }]);
-    setDraft(emptyLine(draft.category));
-    setGpsNote('');
+    if (file.size != null && file.size > MAX_BILL_BYTES) {
+      showError('File size must be less than 5MB');
+      return;
+    }
+    setBillFile(isPdf ? { ...file, mimeType: 'application/pdf' } : file);
+    setFieldErrors((prev) => ({ ...prev, bill: undefined }));
   };
 
-  const submitNow = async () => {
-    setErrorMessage(null);
-    const err = validateDraft();
-    if (err) {
-      showValidationError(err);
+  const pickPhoto = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      showError('Photo library access is required to attach a bill photo.');
       return;
     }
-    setSubmitting(true);
-    const batchId = `batch-${Date.now()}`;
-    try {
-      const token = await AsyncStorage.getItem('authToken');
-      await submitOneExpense(draft, batchId, token);
-      setSuccessMessage('Expense submitted for approval.');
-      setDraft(emptyLine(draft.category));
-      setGpsNote('');
-        scrollRef.current?.scrollTo({ y: 0, animated: true });
-    } catch (e: any) {
-      setErrorMessage(e?.message || 'Submit failed');
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
-    } finally {
-      setSubmitting(false);
-    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets[0]) return;
+    const a = result.assets[0];
+    acceptFile({
+      uri: a.uri,
+      name: a.fileName || a.uri.split('/').pop() || 'bill.jpg',
+      mimeType: a.mimeType || 'image/jpeg',
+      size: a.fileSize ?? null,
+      webFile: (a as any).file,
+    });
   };
 
-  const submitAll = async () => {
-    if (cart.length === 0) {
-      setErrorMessage('Add at least one expense line before submitting');
-      return;
+  const pickDocument = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ['image/*', 'application/pdf'],
+      copyToCacheDirectory: true,
+      multiple: false,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const a = result.assets[0];
+    acceptFile({
+      uri: a.uri,
+      name: a.name || 'bill',
+      mimeType: a.mimeType || (/\.pdf$/i.test(a.name || '') ? 'application/pdf' : 'image/jpeg'),
+      size: a.size ?? null,
+      webFile: (a as any).file,
+    });
+  };
+
+  const validate = (): FieldErrors => {
+    const errors: FieldErrors = {};
+    if (isTravelType && amountLocked && !(Number(form.approxKms) > 0)) errors.approxKms = 'Enter the kilometres travelled.';
+    if (needsHotel) {
+      if (!form.hotelName.trim()) errors.hotelName = 'Hotel Name is required.';
+      if (!form.hotelAddress.trim()) errors.hotelAddress = 'Hotel Address is required.';
     }
-    setSubmitting(true);
-    setErrorMessage(null);
-    const batchId = `batch-${Date.now()}`;
-    try {
-      const token = await AsyncStorage.getItem('authToken');
-      for (const line of cart) {
-        await submitOneExpense(line, batchId, token);
+    if (isStay) {
+      if (!form.checkInDate) errors.checkInDate = 'Check-in Date is required.';
+      if (!form.checkOutDate) errors.checkOutDate = 'Check-out Date is required.';
+      else if (form.checkInDate && form.checkOutDate < form.checkInDate) {
+        errors.checkOutDate = 'Check-out must be on or after Check-in.';
       }
-      setSuccessMessage(`${cart.length} expense(s) submitted for approval.`);
-      setCart([]);
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
+    }
+    if (!billOptional) {
+      if (!form.receiptNumber.trim()) errors.receiptNumber = 'Receipt No is required.';
+      if (!billFile) errors.bill = 'Bill upload is required.';
+    }
+    return errors;
+  };
+
+  const handleSubmit = async () => {
+    setErrorMessage(null);
+    if (!form.type || (!isStay && !form.date) || !(Number(amountValue) > 0)) {
+      showError(amountLocked ? 'Enter the kilometres travelled to calculate the amount' : 'Please fill in Type, Date and Amount');
+      return;
+    }
+    if (isTravelType && (!form.transportType || !form.travelFrom.trim() || !form.travelTo.trim())) {
+      showError('Please fill in all required travel fields (Travel mode, From, To)');
+      return;
+    }
+    const errors = validate();
+    setFieldErrors(errors);
+    const firstError = Object.values(errors).find(Boolean);
+    if (firstError) {
+      showError(firstError);
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const expenseData: Record<string, string | number | undefined> = {
+        title: `${form.type.charAt(0).toUpperCase() + form.type.slice(1)} Expense`,
+        category: form.type,
+        amount: Number(amountValue),
+        date: isStay ? form.checkInDate || form.date : form.date,
+        receiptNumber: form.receiptNumber.trim() || undefined,
+        employeeRemarks: form.remarks.trim() || undefined,
+        status: 'Pending',
+      };
+      if (isTravelType) {
+        expenseData.transportType = form.transportType;
+        expenseData.travelFrom = form.travelFrom.trim();
+        expenseData.travelTo = form.travelTo.trim();
+        if (form.approxKms) expenseData.approxKms = Number(form.approxKms);
+      }
+      if (needsHotel) {
+        expenseData.hotelName = form.hotelName.trim();
+        expenseData.hotelAddress = form.hotelAddress.trim();
+      }
+      if (isStay) {
+        expenseData.checkInDate = form.checkInDate;
+        expenseData.checkOutDate = form.checkOutDate;
+      }
+
+      if (billFile) {
+        const formData = new FormData();
+        Object.entries(expenseData).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) formData.append(key, String(value));
+        });
+        await appendFileToFormData(formData, 'bill', billFile);
+        await apiService.upload('/expenses/create', formData);
+      } else {
+        const body: Record<string, string | number> = {};
+        Object.entries(expenseData).forEach(([k, v]) => {
+          if (v !== undefined) body[k] = v;
+        });
+        await apiService.post('/expenses/create', body);
+      }
+
+      navigation.navigate('ExpenseMy', { view: 'pending' });
+      setForm(emptyForm());
+      setBillFile(null);
     } catch (e: any) {
-      setErrorMessage(e?.message || 'Submit failed');
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
+      showError(e?.message || 'Failed to create expense');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const DateField = ({
-    label,
-    value,
-    onPress,
-  }: {
-    label: string;
-    value: string;
-    onPress: () => void;
-  }) => (
+  const errorText = (key: FieldKey) => (fieldErrors[key] ? <Text style={styles.fieldError}>{fieldErrors[key]}</Text> : null);
+  const errStyle = (key: FieldKey) => (fieldErrors[key] ? styles.inputError : null);
+
+  const DateInput = ({ field, label }: { field: DateField; label: string }) => (
     <View style={styles.fieldContainer}>
       <Text style={styles.label}>{label}</Text>
-      <TouchableOpacity style={styles.dateTouchable} onPress={onPress}>
-        <Text style={[styles.dateText, !value && styles.datePlaceholder]}>
-          {value || 'Tap to pick date'}
-        </Text>
+      <TouchableOpacity
+        style={[styles.dateTouchable, field !== 'date' && errStyle(field as FieldKey)]}
+        onPress={() => setDatePicker(field)}
+      >
+        <Text style={[styles.dateText, !form[field] && styles.datePlaceholder]}>{form[field] || 'Tap to pick date'}</Text>
         <Text>📅</Text>
       </TouchableOpacity>
+      {field !== 'date' ? errorText(field as FieldKey) : null}
     </View>
   );
 
   return (
-    <ScreenShell
-      noScroll
-      title="Submit reimbursement"
-      subtitle="Add one or more expense lines, then submit for manager approval."
-      contentContainerStyle={{ flex: 1, minHeight: 0 }}
-    >
+    <ScreenShell noScroll title="Create Expense" contentContainerStyle={{ flex: 1, minHeight: 0 }}>
       <View style={styles.page}>
-      <ScrollView
-        ref={scrollRef}
-        style={styles.content}
-        contentContainerStyle={styles.contentContainer}
-        keyboardShouldPersistTaps="handled"
-        nestedScrollEnabled
-      >
-        {successMessage && (
-          <MessageBanner
-            type="success"
-            message={successMessage}
-            actionLabel="View My Expenses"
-            onAction={() => navigation.navigate('ExpenseMy')}
+        <ScrollView
+          ref={scrollRef}
+          style={styles.content}
+          contentContainerStyle={styles.contentContainer}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+        >
+          {errorMessage && <MessageBanner type="error" message={errorMessage} onDismiss={() => setErrorMessage(null)} />}
+
+          <WebSelect
+            label="Type *"
+            value={form.type}
+            placeholder="Select expense type"
+            onValueChange={(v) =>
+              update({
+                type: v as ExpenseType,
+                transportType: '',
+                travelFrom: '',
+                travelTo: '',
+                approxKms: '',
+                hotelName: '',
+                hotelAddress: '',
+                checkInDate: '',
+                checkOutDate: '',
+              })
+            }
+            items={TYPE_OPTIONS}
           />
-        )}
-        {errorMessage && (
-          <MessageBanner type="error" message={errorMessage} onDismiss={() => setErrorMessage(null)} />
-        )}
 
-        <View style={styles.infoBox}>
-          <Text style={styles.infoText}>
-            Proof rules: accommodation always needs a bill; food above ₹
-            {policy?.foodBillMandatoryAbove ?? 500} needs a bill; Bus/Train/Flight travel needs a ticket
-            upload. Use GPS verify on travel to compare claimed distance with maps.
-          </Text>
-        </View>
+          {!isStay && <DateInput field="date" label="Date *" />}
 
-        <WebSelect
-          label="Category *"
-          value={draft.category}
-          onValueChange={(v) => setDraft(emptyLine(v as CartLine['category']))}
-          items={CATEGORY_OPTIONS}
-        />
-
-        <DateField label="Date *" value={draft.date} onPress={() => setShowDatePicker(true)} />
-
-        <View style={styles.fieldContainer}>
-          <Text style={styles.label}>Amount (₹) *</Text>
-          <WebInput
-            style={styles.input}
-            value={draft.amount}
-            onChangeText={(text) => {
-              if (travelAmountLocked) return;
-              setDraft((d) => ({ ...d, amount: text }));
-            }}
-            placeholder="0.00"
-            keyboardType="decimal-pad"
-            editable={!travelAmountLocked}
-          />
-          {travelAmountLocked && (
-            <Text style={styles.hint}>
-              Auto-calculated from distance ({perKmLabel(draft.transportType, policy)}) — not editable
-            </Text>
+          {isTravelType && (
+            <View style={styles.sectionCard}>
+              <Text style={styles.sectionTitle}>Travel Details</Text>
+              <WebSelect
+                label="Travel mode *"
+                value={form.transportType}
+                onValueChange={(v) => update({ transportType: v })}
+                items={TRAVEL_MODES.map((m) => ({
+                  label: isPerKmMode(m) ? `${m} (${perKmRateLabel(m, rates)})` : m,
+                  value: m,
+                }))}
+                placeholder="Select mode"
+              />
+              <FormField label="From *" value={form.travelFrom} onChangeText={(t) => update({ travelFrom: t })} placeholder="Enter origin location" />
+              <FormField label="To *" value={form.travelTo} onChangeText={(t) => update({ travelTo: t })} placeholder="Enter destination location" />
+              <FormField
+                label={`Kilometres${amountLocked ? ' *' : ''}`}
+                value={form.approxKms}
+                onChangeText={(t) => update({ approxKms: t })}
+                placeholder="Enter kilometres travelled"
+                keyboardType="decimal-pad"
+                error={fieldErrors.approxKms}
+              />
+            </View>
           )}
-        </View>
 
-        {draft.category === 'travel' && (
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Travel</Text>
-            <WebSelect
-              label="Travel mode *"
-              value={draft.transportType}
-              onValueChange={updateTransport}
-              items={TRANSPORT_OPTIONS}
-              placeholder="Select mode"
-            />
-            <FormField
-              label="From *"
-              value={draft.travelFrom}
-              onChangeText={(t) => setDraft((d) => ({ ...d, travelFrom: t }))}
-              placeholder="Hyderabad"
-            />
-            <FormField
-              label="To *"
-              value={draft.travelTo}
-              onChangeText={(t) => setDraft((d) => ({ ...d, travelTo: t }))}
-              placeholder="Vijayawada"
-            />
-            <FormField
-              label="Total distance claimed (km) *"
-              value={draft.approxKms}
-              onChangeText={updateKms}
-              placeholder="0"
-              keyboardType="decimal-pad"
-            />
-            {isPerKmMode(draft.transportType) && (
-              <Text style={styles.hint}>
-                Rate: {perKmLabel(draft.transportType, policy)} — amount updates automatically and is
-                locked
-              </Text>
-            )}
-            <TouchableOpacity
-              style={styles.gpsButton}
-              onPress={fetchGpsDistance}
-              disabled={gpsLoading}
-            >
-              {gpsLoading ? (
-                <ActivityIndicator color={colors.primary} size="small" />
-              ) : (
-                <Text style={styles.gpsButtonText}>Verify distance (GPS)</Text>
+          {needsHotel && (
+            <View style={[styles.sectionCard, styles.sectionAmber]}>
+              <Text style={styles.sectionTitle}>{isStay ? 'Stay Details' : 'Hotel Details'}</Text>
+              {isStay && (
+                <>
+                  <DateInput field="checkInDate" label="Check-in Date *" />
+                  <DateInput field="checkOutDate" label="Check-out Date *" />
+                </>
               )}
-            </TouchableOpacity>
-            {gpsNote ? <Text style={styles.hint}>{gpsNote}</Text> : null}
-            {ticketRequired && (
-              <UploadField
-                label="Ticket / proof upload *"
-                uri={draft.ticketUri}
-                onPick={() => pickImage('ticketUri')}
+              <FormField
+                label="Hotel Name *"
+                value={form.hotelName}
+                onChangeText={(t) => update({ hotelName: t })}
+                placeholder="Enter hotel name"
+                error={fieldErrors.hotelName}
               />
-            )}
-          </View>
-        )}
-
-        {draft.category === 'accommodation' && (
-          <View style={[styles.sectionCard, styles.sectionPurple]}>
-            <Text style={styles.sectionTitle}>Accommodation</Text>
-            <FormField label="Lodge / hotel name *" value={draft.lodgeName} onChangeText={(t) => setDraft((d) => ({ ...d, lodgeName: t }))} />
-            <FormField label="City *" value={draft.city} onChangeText={(t) => setDraft((d) => ({ ...d, city: t }))} />
-            <DateField label="Stay from *" value={draft.stayDate} onPress={() => setShowStayDatePicker(true)} />
-            <DateField label="Stay to *" value={draft.stayDateEnd} onPress={() => setShowStayEndDatePicker(true)} />
-            <UploadField label="Bill photo *" uri={draft.billUri} onPick={() => pickImage('billUri')} />
-          </View>
-        )}
-
-        {draft.category === 'food' && (
-          <View style={[styles.sectionCard, styles.sectionOrange]}>
-            <Text style={styles.sectionTitle}>Food</Text>
-            <FormField label="Restaurant name *" value={draft.restaurantName} onChangeText={(t) => setDraft((d) => ({ ...d, restaurantName: t }))} />
-            <DateField label="Meal date *" value={draft.mealDate} onPress={() => setShowMealDatePicker(true)} />
-            <UploadField
-              label={`Bill upload${billRequired ? ' *' : ''}`}
-              uri={draft.billUri}
-              onPick={() => pickImage('billUri')}
-            />
-          </View>
-        )}
-
-        {draft.category === 'other' && (
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Other expenses</Text>
-            <WebSelect
-              label="Type *"
-              value={draft.otherExpenseType}
-              onValueChange={(v) => setDraft((d) => ({ ...d, otherExpenseType: v }))}
-              items={OTHER_TYPES.map((t) => ({ label: t, value: t }))}
-            />
-            {draft.otherExpenseType === 'Other' && (
-              <FormField label="Name *" value={draft.expenseName} onChangeText={(t) => setDraft((d) => ({ ...d, expenseName: t }))} />
-            )}
-            <View style={styles.fieldContainer}>
-              <Text style={styles.label}>Description *</Text>
-              <WebInput
-                style={[styles.input, styles.textArea]}
-                value={draft.description}
-                onChangeText={(t) => setDraft((d) => ({ ...d, description: t }))}
+              <FormField
+                label="Hotel Address *"
+                value={form.hotelAddress}
+                onChangeText={(t) => update({ hotelAddress: t })}
+                placeholder="Enter hotel address"
                 multiline
-                numberOfLines={3}
+                error={fieldErrors.hotelAddress}
               />
             </View>
-            <UploadField
-              label={`Proof upload${billRequired ? ' *' : ''}`}
-              uri={draft.billUri}
-              onPick={() => pickImage('billUri')}
+          )}
+
+          <View style={styles.fieldContainer}>
+            <Text style={styles.label}>Amount *</Text>
+            <WebInput
+              style={[styles.input, amountLocked && styles.inputLocked]}
+              value={amountValue}
+              onChangeText={(t) => {
+                if (!amountLocked) update({ amount: t });
+              }}
+              placeholder={amountLocked ? 'Calculated from kilometres' : '0.00'}
+              keyboardType="decimal-pad"
+              editable={!amountLocked}
             />
+            {amountLocked && (
+              <Text style={styles.hint}>Calculated automatically: kilometres × {perKmRateLabel(form.transportType, rates)}</Text>
+            )}
           </View>
-        )}
 
-        <View style={styles.fieldContainer}>
-          <Text style={styles.label}>Remarks</Text>
-          <WebInput
-            style={[styles.input, styles.textArea]}
-            value={draft.remarks}
-            onChangeText={(t) => setDraft((d) => ({ ...d, remarks: t }))}
-            multiline
-            numberOfLines={3}
+          <FormField
+            label={`Receipt No.${billOptional ? '' : ' *'}`}
+            value={form.receiptNumber}
+            onChangeText={(t) => update({ receiptNumber: t })}
+            placeholder={billOptional ? 'Optional for Auto' : 'Enter receipt number'}
+            error={fieldErrors.receiptNumber}
           />
-        </View>
 
-        {showGlobalBillUpload && (
-          <UploadField
-            label={`Bill / receipt upload${billRequired ? ' *' : ''}`}
-            uri={draft.billUri}
-            onPick={() => pickImage('billUri')}
-          />
-        )}
+          <FormField label="Remarks" value={form.remarks} onChangeText={(t) => update({ remarks: t })} placeholder="Enter remarks" multiline />
 
-        {cart.length > 0 && (
-          <View style={styles.cartCard}>
-            <Text style={styles.cartTitle}>Submission list ({cart.length})</Text>
-            {cart.map((line) => (
-              <View key={line.id} style={styles.cartRow}>
-                <Text style={styles.cartRowText}>
-                  {line.category} — ₹{line.amount}
-                  {line.category === 'travel' && line.approxKms ? ` (${line.approxKms} km)` : ''}
-                </Text>
-                <TouchableOpacity onPress={() => setCart((c) => c.filter((x) => x.id !== line.id))}>
-                  <Text style={styles.removeText}>Remove</Text>
-          </TouchableOpacity>
-              </View>
-            ))}
-            <View style={styles.totalsRow}>
-              <Text style={styles.totalsText}>Travel: ₹{totals.travel.toFixed(2)}</Text>
-              <Text style={styles.totalsText}>Stay: ₹{totals.accommodation.toFixed(2)}</Text>
-              <Text style={styles.totalsText}>Food: ₹{totals.food.toFixed(2)}</Text>
-              <Text style={styles.totalsText}>Other: ₹{totals.other.toFixed(2)}</Text>
-              <Text style={styles.totalsGrand}>Total: ₹{totals.grandTotal.toFixed(2)}</Text>
+          <View style={styles.fieldContainer}>
+            <Text style={styles.label}>{`Upload Bill${billOptional ? ' (optional for Auto)' : ' *'}`}</Text>
+            <View style={styles.uploadRow}>
+              <TouchableOpacity style={[styles.uploadButton, errStyle('bill')]} onPress={pickPhoto} disabled={submitting}>
+                <Text style={styles.uploadButtonText}>Choose photo</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.uploadButton, errStyle('bill')]} onPress={pickDocument} disabled={submitting}>
+                <Text style={styles.uploadButtonText}>Choose file (image / PDF)</Text>
+              </TouchableOpacity>
             </View>
+            {billFile ? (
+              <View style={styles.fileRow}>
+                <Text style={styles.fileName} numberOfLines={1}>
+                  {billFile.name}
+                </Text>
+                <TouchableOpacity onPress={() => setBillFile(null)}>
+                  <Text style={styles.removeText}>Remove</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+            {errorText('bill')}
+            <Text style={styles.hint}>Accepted formats: JPG, PNG, PDF (Max 5MB)</Text>
           </View>
-        )}
-      </ScrollView>
+        </ScrollView>
 
-      <View style={styles.footer}>
-        <WebButton
-          title="+ Add to list"
-          onPress={addToCart}
-          variant="outline"
-          disabled={submitting}
-        />
-        {cart.length > 0 && (
-          <WebButton
-            title={submitting ? 'Submitting…' : `Submit all (${cart.length}) for approval`}
-            onPress={submitAll}
-            loading={submitting}
-            disabled={submitting}
-          />
-        )}
-        <WebButton
-          title={submitting ? 'Submitting…' : 'Submit this expense'}
-          onPress={submitNow}
-          loading={submitting}
-          disabled={submitting}
-        />
-        <WebButton title="Cancel" onPress={() => navigation.goBack()} variant="outline" disabled={submitting} />
-      </View>
+        <View style={styles.footer}>
+          <WebButton title={submitting ? 'Creating...' : 'Create Expense'} onPress={handleSubmit} loading={submitting} disabled={submitting} />
+          <WebButton title="Cancel" onPress={() => navigation.goBack()} variant="outline" disabled={submitting} />
+        </View>
       </View>
 
-      {showDatePicker && (
+      {datePicker && (
         <DatePickerModal
-          value={draft.date}
-          title="Expense date"
-          onClose={() => setShowDatePicker(false)}
-          onChange={(d) => setDraft((prev) => ({ ...prev, date: d }))}
-        />
-      )}
-      {showStayDatePicker && (
-        <DatePickerModal
-          value={draft.stayDate}
-          title="Stay from"
-          onClose={() => setShowStayDatePicker(false)}
-          onChange={(d) => setDraft((prev) => ({ ...prev, stayDate: d }))}
-        />
-      )}
-      {showStayEndDatePicker && (
-        <DatePickerModal
-          value={draft.stayDateEnd}
-          title="Stay to"
-          minimumDate={draft.stayDate ? new Date(draft.stayDate + 'T00:00:00') : undefined}
-          onClose={() => setShowStayEndDatePicker(false)}
-          onChange={(d) => setDraft((prev) => ({ ...prev, stayDateEnd: d }))}
-        />
-      )}
-      {showMealDatePicker && (
-        <DatePickerModal
-          value={draft.mealDate}
-          title="Meal date"
-          onClose={() => setShowMealDatePicker(false)}
-          onChange={(d) => setDraft((prev) => ({ ...prev, mealDate: d }))}
+          value={form[datePicker]}
+          title={datePicker === 'date' ? 'Expense date' : datePicker === 'checkInDate' ? 'Check-in date' : 'Check-out date'}
+          minimumDate={
+            datePicker === 'checkOutDate' && form.checkInDate ? new Date(form.checkInDate + 'T00:00:00') : undefined
+          }
+          onClose={() => setDatePicker(null)}
+          onChange={(d) => update({ [datePicker]: d } as any)}
         />
       )}
     </ScreenShell>
@@ -738,6 +445,30 @@ function DatePickerModal({
   onChange: (isoDate: string) => void;
   minimumDate?: Date;
 }) {
+  if (Platform.OS === 'web') {
+    return (
+      <Modal visible transparent animationType="fade">
+        <TouchableOpacity style={styles.dateOverlay} activeOpacity={1} onPress={onClose} />
+        <View style={styles.datePickerBox}>
+          <View style={styles.datePickerHeader}>
+            <Text style={styles.datePickerTitle}>{title}</Text>
+            <TouchableOpacity onPress={onClose}>
+              <Text style={styles.doneText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={{ padding: 16 }}>
+            {React.createElement('input', {
+              type: 'date',
+              value: value || '',
+              min: minimumDate ? minimumDate.toISOString().split('T')[0] : undefined,
+              onChange: (e: any) => onChange(e.target.value),
+              style: { fontSize: 16, padding: 8 },
+            })}
+          </View>
+        </View>
+      </Modal>
+    );
+  }
   return (
     <Modal visible transparent animationType="slide">
       <TouchableOpacity style={styles.dateOverlay} activeOpacity={1} onPress={onClose} />
@@ -749,16 +480,19 @@ function DatePickerModal({
           </TouchableOpacity>
         </View>
         <DateTimePicker
-          value={value ? new Date(value + 'T00:00:00') : new Date()}
+          value={value ? new Date(value + 'T00:00:00') : minimumDate || new Date()}
           mode="date"
           display={Platform.OS === 'ios' ? 'spinner' : 'calendar'}
           minimumDate={minimumDate}
           onChange={(_, d) => {
-            if (d) onChange(d.toISOString().split('T')[0]);
+            if (d) {
+              const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+              onChange(local.toISOString().split('T')[0]);
+            }
             if (Platform.OS === 'android') onClose();
           }}
-      />
-    </View>
+        />
+      </View>
     </Modal>
   );
 }
@@ -769,34 +503,30 @@ function FormField({
   onChangeText,
   placeholder,
   keyboardType,
+  multiline,
+  error,
 }: {
   label: string;
   value: string;
   onChangeText: (t: string) => void;
   placeholder?: string;
   keyboardType?: 'default' | 'decimal-pad';
+  multiline?: boolean;
+  error?: string;
 }) {
   return (
     <View style={styles.fieldContainer}>
       <Text style={styles.label}>{label}</Text>
       <WebInput
-        style={styles.input}
+        style={[styles.input, multiline && styles.textArea, error ? styles.inputError : null]}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
         keyboardType={keyboardType}
+        multiline={multiline}
+        numberOfLines={multiline ? 3 : undefined}
       />
-    </View>
-  );
-}
-
-function UploadField({ label, uri, onPick }: { label: string; uri: string | null; onPick: () => void }) {
-  return (
-    <View style={styles.fieldContainer}>
-      <Text style={styles.label}>{label}</Text>
-      <TouchableOpacity style={styles.uploadButton} onPress={onPick}>
-        <Text style={styles.uploadButtonText}>{uri ? 'File selected (tap to change)' : 'Select image'}</Text>
-          </TouchableOpacity>
+      {error ? <Text style={styles.fieldError}>{error}</Text> : null}
     </View>
   );
 }
@@ -815,15 +545,6 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
     backgroundColor: colors.backgroundLight,
   },
-  infoBox: {
-    backgroundColor: '#fef3c7',
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#fcd34d',
-  },
-  infoText: { ...typography.body.small, color: '#92400e' },
   fieldContainer: { marginBottom: 14 },
   label: { ...typography.label.medium, color: colors.textPrimary, marginBottom: 6 },
   input: {
@@ -833,16 +554,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
     color: colors.textPrimary,
+    marginBottom: 0,
   },
-  textArea: { minHeight: 80, textAlignVertical: 'top' },
+  inputLocked: { backgroundColor: colors.backgroundMuted, fontWeight: '600' },
+  inputError: { borderColor: colors.error },
+  fieldError: { fontSize: 12, color: colors.error, marginTop: 4 },
+  textArea: { minHeight: 70, textAlignVertical: 'top' },
   hint: { ...typography.body.small, color: colors.textSecondary, marginTop: 6 },
-  calcPreview: {
-    ...typography.body.medium,
-    color: colors.primary,
-    fontWeight: '700',
-    marginTop: 8,
-    marginBottom: 4,
-  },
   dateTouchable: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -860,51 +578,15 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.info + '40',
-    backgroundColor: colors.info + '08',
+    borderColor: '#BFDBFE',
+    backgroundColor: '#EFF6FF',
   },
-  sectionPurple: { borderColor: '#c4b5fd', backgroundColor: '#f5f3ff' },
-  sectionOrange: { borderColor: '#fdba74', backgroundColor: '#fff7ed' },
+  sectionAmber: { borderColor: '#FDE68A', backgroundColor: '#FFFBEB' },
   sectionTitle: { ...typography.heading.h4, color: colors.textPrimary, marginBottom: 12 },
-  modeRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  modeChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    backgroundColor: colors.backgroundLight,
-  },
-  modeChipSelected: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primary,
-  },
-  modeChipText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  modeChipTextSelected: {
-    color: colors.textLight,
-    fontWeight: '700',
-  },
-  gpsButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.backgroundLight,
-    alignSelf: 'flex-start',
-    marginBottom: 8,
-  },
-  gpsButtonText: { ...typography.body.medium, color: colors.primary, fontWeight: '600' },
+  uploadRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   uploadButton: {
-    padding: 14,
+    flexGrow: 1,
+    padding: 12,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
@@ -912,28 +594,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   uploadButtonText: { ...typography.body.medium, color: colors.primary },
-  cartCard: {
-    marginTop: 20,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.backgroundLight,
-  },
-  cartTitle: { ...typography.heading.h4, marginBottom: 12 },
-  cartRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  cartRowText: { ...typography.body.medium, flex: 1, marginRight: 8 },
+  fileRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, gap: 8 },
+  fileName: { flex: 1, fontSize: 13, color: colors.textPrimary },
   removeText: { color: colors.error, fontWeight: '600', fontSize: 13 },
-  totalsRow: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border, gap: 4 },
-  totalsText: { ...typography.body.small, color: colors.textSecondary },
-  totalsGrand: { ...typography.body.medium, fontWeight: '700', color: colors.textPrimary, marginTop: 4 },
   dateOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
   datePickerBox: {
     backgroundColor: colors.backgroundLight,

@@ -16,6 +16,7 @@ import ScreenShell from '../../ui/ScreenShell';
 import { WebInput } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import StockMovementsCard from '../../components/warehouse/StockMovementsCard';
 
 function cell(value: string | number | undefined | null) {
   if (value === undefined || value === null || value === '') return '-';
@@ -34,6 +35,7 @@ export default function WarehouseStockScreen({ navigation }: any) {
   const [quantity, setQuantity] = useState('');
   const [batchLot, setBatchLot] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [movementsKey, setMovementsKey] = useState(0);
 
   useEffect(() => {
     loadData();
@@ -54,6 +56,7 @@ export default function WarehouseStockScreen({ navigation }: any) {
 
   const onRefresh = () => {
     setRefreshing(true);
+    setMovementsKey((k) => k + 1);
     loadData();
   };
 
@@ -103,6 +106,7 @@ export default function WarehouseStockScreen({ navigation }: any) {
           reason: 'Manual add',
         });
         Alert.alert('Success', 'Quantity added successfully');
+        setMovementsKey((k) => k + 1);
         loadData();
       }
       setModalVisible(false);
@@ -174,6 +178,8 @@ export default function WarehouseStockScreen({ navigation }: any) {
             </View>
           ))
         )}
+
+        <StockMovementsCard refreshKey={movementsKey} />
       </ScrollView>
 
       <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>

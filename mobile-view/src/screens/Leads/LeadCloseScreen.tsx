@@ -1,274 +1,204 @@
-import React, { useState, useEffect } from 'react';
+/**
+ * Close Lead — mobile port of the web app/dashboard/leads/close/[id]/page.tsx.
+ * Same sequence as the web: close the lead (PUT /leads/:id, or PUT /dc-orders/:id + lead upsert),
+ * then POST /dc/raise with the billed product rows, then POST /dc/:id/submit-po.
+ */
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
   ActivityIndicator,
   Modal,
   Platform,
 } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as DocumentPicker from 'expo-document-picker';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
 import { phoneDigitsError, sanitizePhoneDigits } from '../../utils/phone';
+import { getRoleFlags } from '../../utils/roles';
 import ScreenShell from '../../ui/ScreenShell';
-import { WebInput, WebSelect } from '../../ui/WebPrimitives';
+import { WebInput, WebLabel, WebSelect } from '../../ui/WebPrimitives';
 import { useAuth } from '../../context/AuthContext';
 import MessageBanner from '../../components/MessageBanner';
 import { navigateRoot } from '../../navigation/navigationRef';
-import CloseLeadProductsModal, {
-  type CloseLeadProductRow,
-} from './CloseLeadProductsModal';
+import CloseLeadProductsModal from './CloseLeadProductsModal';
+import { useCloseLeadProductConfig } from '../../components/leads/useCloseLeadProductConfig';
+import CheckRow from '../../components/leads/CheckRow';
 import {
-  assignTermsByLevelCombination,
-  formatProductWithLevel,
-} from '../../utils/levelTermRouting';
+  SpecimenProductPicker,
+  specimenCandidateProducts,
+} from '../../components/leads/SpecimenProductPicker';
+import { AbacusMaterialsFields } from '../../components/leads/AbacusMaterialsFields';
+import { persistProductTerm } from '../../lib/crm/productTerm';
+import { partitionProductsForCloseLeadRouting } from '../../lib/crm/closeLeadTermRouting';
+import { billedProductDetailRows } from '../../lib/crm/closeLeadProductConfig';
+import { abacusStudentStrength, defaultMasterAbacusQuantity } from '../../lib/crm/abacusMaterials';
+import {
+  buildRelatedItemRows,
+  buildSpecimenRows,
+  isRelatedItemRow,
+  isSpecimenRow,
+  specimenCopiesValue,
+  type SpecimenItemChoice,
+} from '../../lib/crm/dcRowCategory';
+import { renewalLinesToSections } from '../../lib/crm/renewalCloseSections';
 
-type ProductDetail = CloseLeadProductRow;
+/** Same as the web Close Lead page: e.g. 2026 → "2026-2027". */
+const getCurrentAcademicYear = () => {
+  const currentYear = new Date().getFullYear();
+  return `${currentYear}-${currentYear + 1}`;
+};
 
-function getCategoriesForProduct(catalog: any[], productName: string): string[] {
-  const product = catalog.find(
-    (p) => (p.productName || p.name || p.product || '') === productName,
-  );
-  if (!product?.hasCategory) return [];
-  if (Array.isArray(product.categories) && product.categories.length > 0) {
-    return product.categories.map((c: any) => String(c).trim()).filter(Boolean);
-  }
-  return [];
-}
+type SplitPreview = {
+  term1: { productName: string; strength: number }[];
+  term2: { productName: string; strength: number }[];
+};
 
-/** e.g. 2026 → "2026-27" (matches existing Close Lead year values). */
-function getCurrentAcademicYear(): string {
-  const y = new Date().getFullYear();
-  return `${y}-${String(y + 1).slice(-2)}`;
-}
-
-/** Newest years first so the current/recent year is at the top of the picker. */
-function getAcademicYearsNewestFirst(count = 4): string[] {
-  const current = new Date().getFullYear();
-  const newestStart = current + 1; // include next year (e.g. 2027-28)
-  return Array.from({ length: count }, (_, i) => {
-    const y = newestStart - i;
-    return `${y}-${String(y + 1).slice(-2)}`;
-  });
-}
-
-export default function LeadCloseScreen({ navigation, route }: any) {
-  const id = route?.params?.id ? String(route.params.id) : '';
+export default function LeadCloseScreen({ route }: any) {
+  const leadId = route?.params?.id ? String(route.params.id) : '';
   const { user } = useAuth();
-  const [lead, setLead] = useState<any>(null);
+  const currentUserId = String(user?._id || (user as any)?.id || '');
+  const isSuperAdmin = getRoleFlags(user).isSuperAdmin || Boolean((user as any)?.isSuperAdmin);
+  const currentAcademicYear = getCurrentAcademicYear();
+
+  const [employees, setEmployees] = useState<{ _id: string; name: string }[]>([]);
+  const [assignedEmployeeId, setAssignedEmployeeId] = useState('');
+  const [assignedEmployeeName, setAssignedEmployeeName] = useState('');
+
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [products, setProducts] = useState<any[]>([]);
-  const [loadingProducts, setLoadingProducts] = useState(false);
-  const [showProductModal, setShowProductModal] = useState(false);
-  const [productDetails, setProductDetails] = useState<ProductDetail[]>([]);
-  const [poPhotoUrl, setPoPhotoUrl] = useState<string>('');
-  const [uploadingPO, setUploadingPO] = useState(false);
-  const [showDeliveryDatePicker, setShowDeliveryDatePicker] = useState(false);
-  const [loadedAsDcOrder, setLoadedAsDcOrder] = useState(false);
-  const [formMessage, setFormMessage] = useState<string | null>(null);
-  const [formMessageType, setFormMessageType] = useState<'error' | 'success'>('error');
-  const [splitModalOpen, setSplitModalOpen] = useState(false);
-  const [splitPreview, setSplitPreview] = useState<{
-    term1: { productName: string; strength: number }[];
-    term2: { productName: string; strength: number }[];
-  } | null>(null);
-  const [pendingConvert, setPendingConvert] = useState<{
-    schoolName: string;
-    productsPayload: any[];
-    isDcOrder: boolean;
-  } | null>(null);
-
-  const currentAcademicYear = getCurrentAcademicYear();
-  // Newest academic years first in the Close Lead year dropdown
-  const availableYears = getAcademicYearsNewestFirst(4);
+  /** True when the record was loaded from /dc-orders (not /leads). */
+  const [isDcOrderRecord, setIsDcOrderRecord] = useState(false);
+  const [lead, setLead] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const [form, setForm] = useState({
-    school_name: '',
-    contact_person: '',
-    email: '',
-    contact_mobile: '',
     contact_person2: '',
     contact_mobile2: '',
+    financial_contact_designation: '',
     delivery_date: '',
     year: currentAcademicYear,
   });
+  const [showDeliveryDatePicker, setShowDeliveryDatePicker] = useState(false);
 
-  const todayYmd = () => new Date().toISOString().split('T')[0];
+  const [poPhotoUrl, setPoPhotoUrl] = useState('');
+  const [uploadingPO, setUploadingPO] = useState(false);
+  const [splitModalOpen, setSplitModalOpen] = useState(false);
+  const [splitPreview, setSplitPreview] = useState<SplitPreview | null>(null);
+  const [pendingSubmissionContext, setPendingSubmissionContext] = useState<{
+    dcProductDetails: any[];
+    totalQuantity: number;
+  } | null>(null);
+  const [masterQuantityOverride, setMasterQuantityOverride] = useState<string | null>(null);
+  const [masterUnitPrice, setMasterUnitPrice] = useState('');
+  const [specimenRequested, setSpecimenRequested] = useState(false);
+  const [specimenCopies, setSpecimenCopies] = useState('1');
+  /** Products that get specimen copies; null = every product. */
+  const [specimenProducts, setSpecimenProducts] = useState<string[] | null>(null);
+  /** Items ticked from each product's specimen set; a product missing here sends its whole set. */
+  const [specimenItemChoice, setSpecimenItemChoice] = useState<SpecimenItemChoice>({});
 
-  const showError = (message: string) => {
-    setFormMessageType('error');
-    setFormMessage(message);
-  };
-
-  const showSuccess = (message: string) => {
-    setFormMessageType('success');
-    setFormMessage(message);
-  };
+  const productConfig = useCloseLeadProductConfig({ schoolType: lead?.school_type });
+  const {
+    productDetails,
+    setProductSections,
+    childProductRows,
+    groupedChildProductRows,
+    getDefaultLevel,
+    getProductCategories,
+    hasProductCategories,
+    validateProducts,
+    buildDcOrderProducts,
+    getCalculationType,
+    getCatalogFallbackCount,
+    getProductRelatedItems,
+    getProductSpecimenItems,
+  } = productConfig;
+  const abacusStrength = lead?.school_type === 'Existing' ? 0 : abacusStudentStrength(childProductRows);
+  const masterQuantity =
+    masterQuantityOverride === null
+      ? defaultMasterAbacusQuantity(abacusStrength)
+      : Number(masterQuantityOverride) || 0;
 
   useEffect(() => {
-    loadLead();
-    loadProducts();
-  }, [id]);
+    if (leadId) void loadLead();
+    else setLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leadId]);
 
-  const loadProducts = async () => {
-    try {
-      setLoadingProducts(true);
-      // Use /products/active first (no auth required, works for executives; /products requires Admin)
-      let data: any;
-      try {
-        data = await apiService.get('/products/active');
-      } catch (err: any) {
-        // Fallback to /products for admin users if /active fails
-        try {
-          data = await apiService.get('/products');
-        } catch (err2: any) {
-          console.error('Failed to load products:', err2?.message || err2);
-          throw err2;
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    const roles = ['Executive', 'Sales BDE', 'Employee'];
+    Promise.all(
+      roles.map((role) =>
+        apiService.get(`/employees?isActive=true&role=${encodeURIComponent(role)}`).catch(() => []),
+      ),
+    ).then((batches) => {
+      const seen = new Set<string>();
+      const list: { _id: string; name: string }[] = [];
+      for (const raw of batches) {
+        const batch = Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : [];
+        for (const u of batch) {
+          const id = String(u?._id || u?.id || '');
+          const name = String(u?.name || '').trim();
+          if (!id || !name || seen.has(id)) continue;
+          seen.add(id);
+          list.push({ _id: id, name });
         }
       }
-      
-      // Handle different response structures
-      let productsList: any[] = [];
-      if (Array.isArray(data)) {
-        productsList = data;
-      } else if (data?.data && Array.isArray(data.data)) {
-        productsList = data.data;
-      } else if (data?.products && Array.isArray(data.products)) {
-        productsList = data.products;
-      }
-      
-      console.log('Products list after parsing:', productsList.length, 'products');
-      
-      // Filter for active products - be more lenient with the filter
-      // Only filter if prodStatus exists and is explicitly 0 or false
-      const activeProducts = productsList.filter((p: any) => {
-        // If prodStatus exists, check it's not 0 or false
-        if (p.prodStatus !== undefined && p.prodStatus !== null) {
-          return p.prodStatus !== 0 && p.prodStatus !== false && p.prodStatus !== '0';
-        }
-        // If status exists, check it's not 0 or false
-        if (p.status !== undefined && p.status !== null) {
-          return p.status !== 0 && p.status !== false && p.status !== '0';
-        }
-        // If no status field, include it (assume active)
-        return true;
-      });
-      
-      console.log('Active products after filtering:', activeProducts.length);
-      
-      // If no products after filtering, show all products (maybe they don't have status field)
-      const finalProducts = activeProducts.length > 0 ? activeProducts : productsList;
-      
-      setProducts(finalProducts);
-      
-      if (finalProducts.length === 0) {
-        console.warn('No products found at all');
-        Alert.alert('Info', 'No products found. Please ensure products are created in the system.');
-      } else {
-        console.log('Successfully loaded', finalProducts.length, 'products');
-      }
-    } catch (error: any) {
-      console.error('Failed to load products:', error);
-      Alert.alert('Error', `Failed to load products: ${error.message || 'Unknown error'}\n\nPlease check your connection and try again.`);
-      setProducts([]);
-    } finally {
-      setLoadingProducts(false);
-    }
-  };
+      list.sort((a, b) => a.name.localeCompare(b.name));
+      setEmployees(list);
+    });
+  }, [isSuperAdmin]);
 
   const loadLead = async () => {
-    if (!id) {
-      setLoading(false);
-      return;
-    }
+    setLoading(true);
     try {
-      setLoading(true);
-      setLoadedAsDcOrder(false);
-      let data: any;
+      // Same order as the web: dc-orders first, then leads.
+      let leadData: any = null;
       try {
-        data = await apiService.get(`/leads/${id}`);
+        leadData = await apiService.get(`/dc-orders/${leadId}`);
+        setIsDcOrderRecord(true);
       } catch {
-        data = await apiService.get(`/dc-orders/${id}`);
-        if (data) setLoadedAsDcOrder(true);
+        leadData = await apiService.get(`/leads/${leadId}`);
+        setIsDcOrderRecord(false);
       }
-      
-      if (data) {
-        setLead(data);
-        const followUpYmd = data.follow_up_date
-          ? new Date(data.follow_up_date).toISOString().split('T')[0]
-          : '';
-        const estimatedYmd = data.estimated_delivery_date
-          ? new Date(data.estimated_delivery_date).toISOString().split('T')[0]
-          : '';
-        // Never treat follow-up as delivery; ignore estimated when it matches follow-up (legacy bug).
-        const deliveryDate =
-          estimatedYmd && estimatedYmd !== followUpYmd ? estimatedYmd : '';
+      if (leadData) {
+        setLead(leadData);
+        const assigned = leadData.assigned_to;
+        const assignedId = assigned && typeof assigned === 'object' ? assigned._id : assigned;
+        if (assignedId) setAssignedEmployeeId(String(assignedId));
+        if (assigned && typeof assigned === 'object' && assigned.name) setAssignedEmployeeName(String(assigned.name));
         setForm({
-          school_name: data.school_name || '',
-          contact_person: data.contact_person || '',
-          email: data.email || '',
-          contact_mobile: data.contact_mobile || '',
-          contact_person2: data.decision_maker || data.contact_person2 || '',
-          contact_mobile2: data.contact_mobile2 || '',
-          delivery_date: deliveryDate || todayYmd(),
+          contact_person2: leadData.contact_person2 || leadData.decision_maker || '',
+          contact_mobile2: leadData.contact_mobile2 || '',
+          financial_contact_designation: leadData.financial_contact_designation || '',
+          // PO dispatch date must be an explicit user decision.
+          delivery_date: '',
           year: currentAcademicYear,
         });
-        
-        // Prefill product rows if the lead/order already has products
-        if (data.products && Array.isArray(data.products) && data.products.length > 0) {
-          const rows: ProductDetail[] = data.products
-            .map((p: any, index: number) => {
-              const name = (p.product_name || p.product || '').toString().trim();
-              if (!name) return null;
-              const strength = Number(p.quantity ?? p.strength) || 0;
-              const price = Number(p.unit_price ?? p.price) || 0;
-              return {
-                id: `existing_${index}_${name}`,
-                product: name,
-                class: String(p.class || '1'),
-                category: p.category || '',
-                quantity: strength || 1,
-                strength: strength || 0,
-                price,
-                total: (strength || 0) * price,
-                level: p.level || '',
-                specs: p.specs || 'Regular',
-                subject: p.subject || undefined,
-                deliverables: Array.isArray(p.deliverables) ? p.deliverables : undefined,
-                term: p.term || 'Term 1',
-                isParentRow: false,
-              } as ProductDetail;
-            })
-            .filter(Boolean) as ProductDetail[];
-          if (rows.length > 0) setProductDetails(rows);
+        const hasProducts =
+          (Array.isArray(leadData.products) && leadData.products.length > 0) ||
+          (typeof leadData.products === 'string' && leadData.products.trim());
+        if (hasProducts) {
+          // Fresh leads open with no sections (BDE adds them with "Add section").
+          // Renewal leads open with last year's class lines.
+          const renewal = renewalLinesToSections(Array.isArray(leadData.products) ? leadData.products : []);
+          setProductSections(renewal.sections);
+        } else {
+          setProductSections([]);
         }
       }
-    } catch (error: any) {
-      showError(error.message || 'Failed to load lead');
+    } catch (err: any) {
+      setError(err?.message || 'Failed to load lead');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const pickPOPhoto = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/pdf', 'application/octet-stream'],
-        copyToCacheDirectory: true,
-      });
-
-      if (result.canceled || !result.assets?.length) return;
-      await uploadPoAsset(result.assets[0]);
-    } catch (err: any) {
-      showError(err.message || 'Failed to pick document');
     }
   };
 
@@ -276,39 +206,25 @@ export default function LeadCloseScreen({ navigation, route }: any) {
     const name = String(asset.name || 'po.pdf');
     const nameLooksPdf = name.toLowerCase().endsWith('.pdf');
     const mime = String(asset.mimeType || asset.type || '');
-    if (mime && mime !== 'application/pdf' && mime !== 'application/octet-stream' && !nameLooksPdf) {
-      showError('Please upload a PDF file only.');
-      return;
-    }
-    if (!nameLooksPdf && mime && mime !== 'application/pdf') {
-      showError('Please upload a PDF file only.');
+    if (mime && mime !== 'application/pdf' && !(mime === 'application/octet-stream' && nameLooksPdf)) {
+      setError('Please upload a PDF file only');
       return;
     }
     if (asset.size && asset.size > 5 * 1024 * 1024) {
-      showError('File size must be less than 5MB.');
+      setError('File size must be less than 5MB');
       return;
     }
-
     setUploadingPO(true);
-    setFormMessage(null);
+    setError(null);
     try {
       const formData = new FormData();
       if (Platform.OS === 'web') {
         let fileObj: File | Blob | null = asset.file instanceof File ? asset.file : null;
         if (!fileObj && asset.uri) {
           const res = await fetch(asset.uri);
-          const blob = await res.blob();
-          try {
-            fileObj = new File([blob], nameLooksPdf ? name : `${name}.pdf`, {
-              type: 'application/pdf',
-            });
-          } catch {
-            fileObj = blob;
-          }
+          fileObj = await res.blob();
         }
-        if (!fileObj) {
-          throw new Error('Could not read the selected PDF.');
-        }
+        if (!fileObj) throw new Error('Could not read the selected PDF.');
         formData.append('poPhoto', fileObj, nameLooksPdf ? name : 'po.pdf');
       } else {
         formData.append('poPhoto', {
@@ -317,316 +233,465 @@ export default function LeadCloseScreen({ navigation, route }: any) {
           name: nameLooksPdf ? name : 'po.pdf',
         } as any);
       }
-
-      const uploadRes = await apiService.upload('/dc/upload-po', formData);
-      const uploadedUrl = uploadRes.poPhotoUrl || uploadRes.url;
-      if (!uploadedUrl) {
-        throw new Error('Upload succeeded but no file URL was returned');
-      }
-      setPoPhotoUrl(uploadedUrl);
-      showSuccess('PO document uploaded.');
+      const data = await apiService.upload('/dc/upload-po', formData);
+      const url = data.poPhotoUrl || data.url || '';
+      if (!url) throw new Error('Failed to upload PO document');
+      setPoPhotoUrl(url);
+      setNotice('PO document uploaded successfully');
     } catch (err: any) {
       setPoPhotoUrl('');
-      showError(err.message || 'Failed to upload PO document');
+      setError(err?.message || 'Failed to upload PO document');
     } finally {
       setUploadingPO(false);
+    }
+  };
+
+  const pickPOPhoto = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf'],
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled || !result.assets?.length) return;
+      await uploadPoAsset(result.assets[0]);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to pick document');
     }
   };
 
   const handleWebPoFile = async (e: any) => {
     const file = e?.target?.files?.[0];
     if (!file) return;
-    await uploadPoAsset({
-      file,
-      name: file.name,
-      mimeType: file.type,
-      size: file.size,
-      uri: URL.createObjectURL(file),
-    });
+    await uploadPoAsset({ file, name: file.name, mimeType: file.type, size: file.size });
     e.target.value = '';
   };
 
-  const proceedWithConversion = async (opts: {
-    schoolName: string;
-    productsPayload: any[];
-    isDcOrder: boolean;
-  }) => {
-    const userId = user?._id || (user as any)?.id;
-    if (!lead || !userId) {
-      showError('User not found. Please login again.');
-      return;
+  const buildDcProductDetails = () => {
+    const actualProductDetails = billedProductDetailRows(childProductRows, getCalculationType, getCatalogFallbackCount);
+    const rows = actualProductDetails.map((p) => {
+      const parentRow = productDetails.find((parent) => parent.isParentRow && p.id.startsWith(parent.id + '_'));
+      const deliverables = parentRow?.selectedDeliverables || [];
+      const levelValue = p.level || getDefaultLevel(p.product);
+      const skuCats = hasProductCategories(p.product) ? getProductCategories(p.product) : [];
+      const catStr = typeof p.category === 'string' ? p.category.trim() : '';
+      const isSkuCategory = skuCats.some((c) => c.toLowerCase() === catStr.toLowerCase());
+      // Billed book rows; renewal schools are billed the same way as new students.
+      const enrollmentCategory = 'New Students';
+      return {
+        product: p.product,
+        class: p.class || '1',
+        section: p.section || undefined,
+        program: p.program || undefined,
+        stream: p.stream || undefined,
+        category: isSkuCategory
+          ? enrollmentCategory
+          : p.category ||
+            (hasProductCategories(p.product)
+              ? getProductCategories(p.product)[0] || enrollmentCategory
+              : enrollmentCategory),
+        productCategory: isSkuCategory ? catStr : (p as any).productCategory || undefined,
+        quantity: Number(p.quantity) || 0,
+        strength: Number(p.strength) || 0,
+        price: Number(p.price) || 0,
+        total: Number(p.total) || 0,
+        level: levelValue,
+        specs: p.specs || '',
+        subject: p.subject || undefined,
+        subjectPackage: Boolean(p.subjectPackage),
+        deliverables,
+        term: persistProductTerm({
+          term: (p as any).term || (parentRow as any)?.term,
+          level: levelValue,
+        }),
+        dispatchMode: p.dispatchMode || parentRow?.dispatchMode,
+      };
+    });
+    // Product related items (Tensmat, Teacher Books, Flash Cards, ...) always ship with the product.
+    const withRelatedItems = [...rows, ...buildRelatedItemRows(rows, getProductRelatedItems)];
+    return specimenRequested
+      ? [
+          ...withRelatedItems,
+          ...buildSpecimenRows(
+            specimenProducts ? rows.filter((row) => specimenProducts.includes(String(row.product || ''))) : rows,
+            specimenCopiesValue(specimenCopies),
+            { getSpecimenItems: getProductSpecimenItems, chosenItems: specimenItemChoice },
+          ).map((row) => ({ ...row, deliverables: [] })),
+        ]
+      : withRelatedItems;
+  };
+
+  /** Split dialog line: product, class/section/stream and level, flagging specimen and related-item rows. */
+  const splitPreviewName = (p: any) => {
+    const where = [
+      p.class ? `Cl ${p.class}${p.section && p.section !== 'ALL' ? p.section : ''}` : '',
+      p.program,
+      p.stream,
+    ]
+      .filter(Boolean)
+      .join(' ');
+    const stage = p.level ? p.level : p.term || '';
+    const kind = isSpecimenRow(p) ? ' · Specimen copy' : isRelatedItemRow(p) ? ` · ${p.specs || 'Related item'}` : '';
+    return `${p.productName || p.product}${where ? ` ${where}` : ''}${stage ? ` (${stage})` : ''}${kind}`;
+  };
+
+  /** Mark lead/order closed, then raise DC. Only call after user confirms any split dialog. */
+  const closeRecordAndRaiseDc = async (dcProductDetails: any[], totalQuantity: number) => {
+    if (!currentUserId) throw new Error('User not found. Please login again.');
+    const mobileErr = phoneDigitsError(lead?.contact_mobile || '', true);
+    if (mobileErr) throw new Error(mobileErr);
+    const decisionMobile = String(form.contact_mobile2 || '').trim();
+    if (decisionMobile) {
+      const decisionErr = phoneDigitsError(decisionMobile, true);
+      if (decisionErr) throw new Error(decisionErr);
     }
 
-    const isLocalFileUri = (uri: string) =>
-      /^(file|content|ph|assets-library):\/\//i.test(uri);
+    const closingEmployeeId = isSuperAdmin ? assignedEmployeeId : currentUserId;
+    if (!closingEmployeeId) throw new Error('Select the BDE this close is assigned to.');
 
-    setSubmitting(true);
-    try {
-      let podProofUrl = poPhotoUrl;
-      if (isLocalFileUri(poPhotoUrl)) {
-        try {
-          const formData = new FormData();
-          formData.append('poPhoto', {
-            uri: poPhotoUrl,
-            type: 'application/pdf',
-            name: 'po.pdf',
-          } as any);
-          const uploadRes = await apiService.upload('/dc/upload-po', formData);
-          podProofUrl = uploadRes.poPhotoUrl || uploadRes.url || poPhotoUrl;
-        } catch (uploadErr: any) {
-          showError(uploadErr?.message || 'Failed to upload PO. Please try again.');
-          setSubmitting(false);
-          return;
+    const updatePayload: any = {
+      school_name: lead?.school_name || undefined,
+      contact_person: lead?.contact_person || undefined,
+      contact_mobile: lead?.contact_mobile || undefined,
+      email: lead?.email || undefined,
+      contact_person2: form.contact_person2 || undefined,
+      contact_mobile2: form.contact_mobile2 || undefined,
+      financial_contact_designation: form.financial_contact_designation || undefined,
+      estimated_delivery_date: form.delivery_date ? new Date(form.delivery_date).toISOString() : undefined,
+      year: currentAcademicYear,
+      assigned_to: closingEmployeeId,
+      products: buildDcOrderProducts(),
+    };
+
+    if (isDcOrderRecord) {
+      updatePayload.status = 'saved';
+      const updated = await apiService.put(`/dc-orders/${leadId}`, updatePayload);
+      try {
+        const searchResponse = await apiService.get(
+          `/leads?schoolName=${encodeURIComponent(lead?.school_name || '')}&contactMobile=${lead?.contact_mobile || ''}`,
+        );
+        const allLeads = Array.isArray(searchResponse) ? searchResponse : searchResponse?.data || [];
+        const existingLead = allLeads.find(
+          (l: any) => l.school_name === lead?.school_name && l.contact_mobile === lead?.contact_mobile,
+        );
+        const clientSchoolCode = updated?.school_code || lead?.school_code || '';
+        if (existingLead) {
+          await apiService.put(`/leads/${existingLead._id}`, {
+            status: 'Closed',
+            year: currentAcademicYear,
+            ...(clientSchoolCode ? { school_code: clientSchoolCode } : {}),
+            school_id: updated?._id,
+          });
+        } else {
+          await apiService.post('/leads/create', {
+            school_name: lead?.school_name || updated?.school_name,
+            school_code: clientSchoolCode || undefined,
+            school_id: updated?._id,
+            contact_person: lead?.contact_person || updated?.contact_person,
+            contact_mobile: lead?.contact_mobile || updated?.contact_mobile,
+            email: lead?.email || updated?.email || undefined,
+            zone: lead?.zone || updated?.zone,
+            location: lead?.location || updated?.location,
+            priority: lead?.priority || updated?.priority || 'Hot',
+            year: currentAcademicYear,
+            status: 'Closed',
+            createdBy: closingEmployeeId,
+          });
         }
+      } catch (leadUpdateErr: any) {
+        console.warn('Could not update/create Lead record for reporting:', leadUpdateErr?.message);
       }
-
-      if (opts.isDcOrder) {
-        const updatePayload: any = {
-          school_name: opts.schoolName,
-          contact_person: form.contact_person || lead?.contact_person,
-          contact_mobile: form.contact_mobile || lead?.contact_mobile,
-          email: form.email || lead?.email,
-          contact_person2: form.contact_person2,
-          contact_mobile2: form.contact_mobile2,
-          estimated_delivery_date: new Date(form.delivery_date).toISOString(),
-          assigned_to: userId,
-          products: opts.productsPayload,
-          status: 'saved',
-        };
-        if (podProofUrl) updatePayload.pod_proof_url = podProofUrl;
-        await apiService.put(`/dc-orders/${id}`, updatePayload);
-      } else {
-        await apiService.post(`/leads/${id}/convert-to-client`, {
-          school_name: opts.schoolName,
-          contact_person: form.contact_person || lead?.contact_person,
-          contact_mobile: form.contact_mobile || lead?.contact_mobile,
-          email: form.email || lead?.email,
-          contact_person2: form.contact_person2,
-          contact_mobile2: form.contact_mobile2,
-          zone: lead?.zone,
-          school_type: lead?.school_type,
-          estimated_delivery_date: form.delivery_date
-            ? new Date(form.delivery_date).toISOString()
-            : undefined,
-          products: opts.productsPayload,
-          pod_proof_url: podProofUrl,
-        });
-      }
-
-      showSuccess('Lead converted to client. Opening My Clients…');
-      navigateRoot('DCClient');
-    } catch (err: any) {
-      showError(err.message || 'Failed to convert lead to client');
-    } finally {
-      setSubmitting(false);
-      setPendingConvert(null);
-      setSplitPreview(null);
-      setSplitModalOpen(false);
+    } else {
+      updatePayload.status = 'Closed';
+      await apiService.put(`/leads/${leadId}`, updatePayload);
     }
+
+    const dcPayload: any = {
+      dcOrderId: leadId,
+      dcDate: form.delivery_date || new Date().toISOString(),
+      dcRemarks: `Lead converted to client - ${lead?.school_name}`,
+      dcCategory: lead?.school_type === 'Existing' ? 'Existing School' : 'New School',
+      requestedQuantity: totalQuantity,
+      employeeId: closingEmployeeId,
+      productDetails: dcProductDetails,
+      ...(abacusStrength > 0
+        ? {
+            abacusMaterials: {
+              masterAbacusQuantity: masterQuantity,
+              masterAbacusUnitPrice: Number(masterUnitPrice) || 0,
+            },
+          }
+        : {}),
+      status: 'created',
+    };
+    if (poPhotoUrl) {
+      dcPayload.poPhotoUrl = poPhotoUrl;
+      dcPayload.poDocument = poPhotoUrl;
+    }
+
+    const dc = await apiService.post('/dc/raise', dcPayload);
+
+    if (poPhotoUrl && dc?._id) {
+      try {
+        await apiService.post(`/dc/${dc._id}/submit-po`, { poPhotoUrl });
+      } catch (poErr) {
+        console.error('Failed to submit PO:', poErr);
+      }
+    }
+
+    setNotice('Lead converted to client! DC created and submitted to My Clients successfully.');
+    navigateRoot('DCClient', dc?._id ? { newlyConvertedDCId: dc._id } : undefined);
   };
 
   const handleSplitConfirm = async () => {
-    if (!pendingConvert) return;
-    setSplitModalOpen(false);
-    await proceedWithConversion(pendingConvert);
+    if (!pendingSubmissionContext) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await closeRecordAndRaiseDc(pendingSubmissionContext.dcProductDetails, pendingSubmissionContext.totalQuantity);
+      setSplitModalOpen(false);
+      setSplitPreview(null);
+      setPendingSubmissionContext(null);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to convert lead to client');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleSplitCancel = () => {
     setSplitModalOpen(false);
     setSplitPreview(null);
-    setPendingConvert(null);
+    setPendingSubmissionContext(null);
     setSubmitting(false);
+    setError(null);
   };
 
   const handleTurnToClient = async () => {
-    setFormMessage(null);
-    const userId = user?._id || (user as any)?.id;
-    if (!lead || !userId) {
-      showError('User not found. Please login again.');
+    if (!lead) return;
+    setError(null);
+    setNotice(null);
+
+    const productValidation = validateProducts();
+    if (!productValidation.ok) {
+      setError(productValidation.message);
       return;
     }
-
-    const schoolName = (form.school_name || lead?.school_name || '').trim();
-    if (!schoolName) {
-      showError('School name is required.');
+    if (!form.delivery_date || form.delivery_date.trim() === '') {
+      setError('Delivery date is required. Pick a date in the Delivery Date field above.');
       return;
     }
-    const mobileError = phoneDigitsError(form.contact_mobile, true);
-    if (mobileError) {
-      showError(mobileError);
-      return;
-    }
-
-    const actualProductDetails = productDetails.filter((pd) => !pd.isParentRow);
-
-    if (actualProductDetails.length === 0) {
-      showError('Add at least one product (tap ADD PRODUCTS) with class, quantity, and price.');
-      return;
-    }
-
-    const invalidProducts = actualProductDetails.filter(
-      (p) =>
-        !p.product ||
-        p.strength == null ||
-        p.strength === '' ||
-        Number(p.strength) <= 0 ||
-        p.price == null ||
-        p.price === '' ||
-        Number(p.price) <= 0,
-    );
-    if (invalidProducts.length > 0) {
-      showError(
-        'Each product needs Quantity (Strength) and Unit Price greater than 0. Open ADD PRODUCTS and fill those fields.',
-      );
-      return;
-    }
-
-    if (!form.delivery_date?.trim()) {
-      showError('Delivery date is required. Pick a date above.');
-      return;
-    }
-
     if (!poPhotoUrl || poPhotoUrl.trim() === '') {
-      showError('PO document is required. Upload a PDF with the blue button above.');
+      setError('PO document is required. Upload a PDF in the PO Document section above, then try again.');
+      return;
+    }
+    if (!currentUserId) {
+      setError('User not found. Please login again.');
+      return;
+    }
+    if (abacusStrength > 0 && masterQuantity > 0 && abacusStrength < 100 && !(Number(masterUnitPrice) > 0)) {
+      setError('Enter a Master Abacus price when adding it below 100 students.');
+      productConfig.setProductDialogOpen(true);
       return;
     }
 
-    const withTerms = assignTermsByLevelCombination(
-      actualProductDetails.map((p) => ({
-        product_name: p.product,
-        quantity: Number(p.strength) || 1,
-        unit_price: Number(p.price) || 0,
-        strength: Number(p.strength) || 0,
-        class: String(p.class || ''),
-        level: p.level || undefined,
-        specs: p.specs || undefined,
-        subject: p.subject || undefined,
-        deliverables: p.deliverables?.length ? p.deliverables : undefined,
-        productCategory: p.category || undefined,
-        term: p.term || 'Term 1',
-        product: p.product,
-      })),
-      (productName) => {
-        const product = products.find(
-          (p) =>
-            String(p.productName || p.name || p.product || '')
-              .trim()
-              .toLowerCase() === String(productName || '').trim().toLowerCase(),
-        );
-        return Array.isArray(product?.productLevels)
-          ? product.productLevels.map((l: any) => String(l).trim()).filter(Boolean)
-          : [];
-      },
-    );
+    const dcProductDetails = buildDcProductDetails();
+    const totalQuantity = groupedChildProductRows.reduce((sum, p) => sum + (p.strength || 0), 0);
+    const { myClientsProducts, termWiseProducts, needsTermWiseSplit } =
+      partitionProductsForCloseLeadRouting(dcProductDetails);
 
-    const productsPayload = withTerms.map((p) => ({
-      product_name: p.product_name || p.product,
-      quantity: Number(p.quantity) || Number(p.strength) || 1,
-      unit_price: Number(p.unit_price) || 0,
-      strength: Number(p.strength) || Number(p.quantity) || 0,
-      class: p.class,
-      level: p.level,
-      specs: p.specs,
-      subject: p.subject,
-      deliverables: p.deliverables,
-      productCategory: p.productCategory,
-      term: p.term || 'Term 1',
-    }));
-
-    const term1Items = withTerms.filter(
-      (p) => (p.term || 'Term 1') === 'Term 1' || (p.term || 'Term 1') === 'Both',
-    );
-    const term2Items = withTerms.filter((p) => (p.term || 'Term 1') === 'Term 2');
-
-    const convertOpts = {
-      schoolName,
-      productsPayload,
-      isDcOrder: loadedAsDcOrder,
-    };
-
-    if (term1Items.length > 0 && term2Items.length > 0) {
-      setPendingConvert(convertOpts);
+    // Show split preview first — do NOT close the lead until Confirm & Submit.
+    if (needsTermWiseSplit) {
       setSplitPreview({
-        term1: term1Items.map((p) => ({
-          productName: formatProductWithLevel(String(p.product_name || p.product || ''), p.level),
-          strength: Number(p.strength) || Number(p.quantity) || 0,
+        term1: myClientsProducts.map((p: any) => ({
+          productName: splitPreviewName(p),
+          strength: p.strength || p.quantity || 0,
         })),
-        term2: term2Items.map((p) => ({
-          productName: formatProductWithLevel(String(p.product_name || p.product || ''), p.level),
-          strength: Number(p.strength) || Number(p.quantity) || 0,
+        term2: termWiseProducts.map((p: any) => ({
+          productName: splitPreviewName(p),
+          strength: p.strength || p.quantity || 0,
         })),
       });
+      setPendingSubmissionContext({ dcProductDetails, totalQuantity });
       setSplitModalOpen(true);
       return;
     }
 
-    await proceedWithConversion(convertOpts);
+    setSubmitting(true);
+    try {
+      await closeRecordAndRaiseDc(dcProductDetails, totalQuantity);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to convert lead to client');
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  const employeeOptions = useMemo(() => {
+    const list =
+      assignedEmployeeId && !employees.some((e) => e._id === assignedEmployeeId)
+        ? [{ _id: assignedEmployeeId, name: assignedEmployeeName || 'Assigned BDE' }, ...employees]
+        : employees;
+    return list.map((e) => ({ label: e.name, value: e._id }));
+  }, [employees, assignedEmployeeId, assignedEmployeeName]);
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading lead...</Text>
+        <Text style={styles.loadingText}>Loading lead details...</Text>
       </View>
     );
   }
 
-  const actualProductDetails = productDetails.filter(pd => !pd.isParentRow);
+  if (error && !lead) {
+    return (
+      <ScreenShell title="Close Lead">
+        <MessageBanner type="error" message={error} />
+      </ScreenShell>
+    );
+  }
+
+  const candidateProducts = specimenCandidateProducts(childProductRows);
+  const dialogExtra =
+    childProductRows.length > 0 ? (
+      <View>
+        <View style={styles.extraBox}>
+          <CheckRow
+            checked={specimenRequested}
+            onChange={setSpecimenRequested}
+            label="Specimen copies requested"
+            hint="Adds each product's specimen set (the products set on the product, or one set as per DC list) as Training Material (no billing)."
+          />
+          {specimenRequested ? (
+            <>
+              <SpecimenProductPicker
+                products={candidateProducts}
+                selected={specimenProducts ?? candidateProducts}
+                onChange={setSpecimenProducts}
+                getItems={getProductSpecimenItems}
+                chosenItems={specimenItemChoice}
+                onItemsChange={setSpecimenItemChoice}
+              />
+              <View style={{ marginTop: 8, width: 160 }}>
+                <WebLabel>Sets per product *</WebLabel>
+                <WebInput
+                  keyboardType="number-pad"
+                  value={specimenCopies}
+                  onChangeText={(v) => setSpecimenCopies(v.replace(/[^\d]/g, ''))}
+                  onBlur={() => setSpecimenCopies(String(specimenCopiesValue(specimenCopies)))}
+                />
+              </View>
+            </>
+          ) : null}
+        </View>
+        {abacusStrength > 0 ? (
+          <AbacusMaterialsFields
+            studentQuantity={abacusStrength}
+            masterQuantity={masterQuantity}
+            masterQuantityInput={masterQuantityOverride ?? String(masterQuantity)}
+            onMasterQuantityChange={setMasterQuantityOverride}
+            masterUnitPrice={masterUnitPrice}
+            onMasterUnitPriceChange={setMasterUnitPrice}
+            hint={`Default Master Abacus: ${defaultMasterAbacusQuantity(abacusStrength)}. Adjust the quantity if required. Below 100 students, an added Master Abacus must have a price.`}
+          />
+        ) : null}
+      </View>
+    ) : null;
+
+  const rowCount = productDetails.filter((pd) => !pd.isParentRow).length;
 
   return (
-    <ScreenShell title="Close Lead">
-      {formMessage ? (
-        <MessageBanner
-          type={formMessageType}
-          message={formMessage}
-          onDismiss={() => setFormMessage(null)}
+    <ScreenShell title="Close Lead" subtitle="Fill in the details to close this lead and convert to client">
+      {error ? <MessageBanner type="error" message={error} onDismiss={() => setError(null)} /> : null}
+      {notice ? <MessageBanner type="success" message={notice} onDismiss={() => setNotice(null)} /> : null}
+
+      {isSuperAdmin ? (
+        <WebSelect
+          label="Assign to (BDE) *"
+          value={assignedEmployeeId}
+          onValueChange={setAssignedEmployeeId}
+          items={employeeOptions}
+          placeholder={employeeOptions.length === 0 ? 'No BDEs found' : 'Select BDE'}
         />
       ) : null}
 
-      <FormField label="School Name *" value={form.school_name} onChangeText={(text: string) => setForm({ ...form, school_name: text })} placeholder="Enter school name" />
-      <FormField label="Person 1 *" value={form.contact_person} onChangeText={(text: string) => setForm({ ...form, contact_person: text })} placeholder="Enter contact person" />
-      <FormField label="Email 1" value={form.email} onChangeText={(text: string) => setForm({ ...form, email: text })} placeholder="Enter email" keyboardType="email-address" />
-      <FormField label="Mob 1 *" value={form.contact_mobile} onChangeText={(text: string) => setForm({ ...form, contact_mobile: sanitizePhoneDigits(text) })} placeholder="10 to 15 digits" keyboardType="phone-pad" maxLength={15} />
-      <FormField label="Decision Maker" value={form.contact_person2} onChangeText={(text: string) => setForm({ ...form, contact_person2: text })} placeholder="Enter decision maker name" />
-      <FormField label="Email" value={form.contact_mobile2} onChangeText={(text: string) => setForm({ ...form, contact_mobile2: text })} placeholder="Enter decision maker email" keyboardType="email-address" />
+      <Field label="School Name" value={lead?.school_name || ''} onChangeText={(t: string) => setLead({ ...lead, school_name: t })} />
+      <Field label="Person 1" value={lead?.contact_person || ''} onChangeText={(t: string) => setLead({ ...lead, contact_person: t })} />
+      <Field
+        label="Email 1"
+        value={lead?.email || ''}
+        keyboardType="email-address"
+        onChangeText={(t: string) => setLead({ ...lead, email: t })}
+      />
+      <Field
+        label="Mob 1"
+        value={lead?.contact_mobile || ''}
+        keyboardType="phone-pad"
+        maxLength={15}
+        placeholder="10 to 15 digits"
+        onChangeText={(t: string) => setLead({ ...lead, contact_mobile: sanitizePhoneDigits(t) })}
+      />
+      <Field
+        label="Financial contact person"
+        value={form.contact_person2}
+        placeholder="Enter financial contact name"
+        onChangeText={(t: string) => setForm({ ...form, contact_person2: t })}
+      />
+      <Field
+        label="Financial contact mobile"
+        value={form.contact_mobile2}
+        keyboardType="phone-pad"
+        maxLength={15}
+        placeholder="10 to 15 digits"
+        onChangeText={(t: string) => setForm({ ...form, contact_mobile2: sanitizePhoneDigits(t) })}
+      />
+      <Field
+        label="Financial contact designation"
+        value={form.financial_contact_designation}
+        placeholder="e.g. Accountant"
+        onChangeText={(t: string) => setForm({ ...form, financial_contact_designation: t })}
+      />
+
       <View style={styles.fieldContainer}>
-        <Text style={styles.label}>Delivery Date *</Text>
+        <WebLabel>Delivery Date *</WebLabel>
         {Platform.OS === 'web' ? (
           React.createElement('input', {
             type: 'date',
             value: form.delivery_date || '',
-            min: todayYmd(),
             onChange: (e: any) => setForm((f) => ({ ...f, delivery_date: e.target.value })),
             style: {
               width: '100%',
-              padding: 14,
-              borderRadius: 12,
+              padding: 10,
+              borderRadius: 8,
               border: '1px solid #E2E8F0',
-              fontSize: 16,
+              fontSize: 15,
               backgroundColor: '#fff',
+              boxSizing: 'border-box',
             },
           })
         ) : (
-          <TouchableOpacity
-            style={styles.dateTouchable}
-            onPress={() => setShowDeliveryDatePicker(true)}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.dateTouchableText, !form.delivery_date && styles.datePlaceholder]}>
+          <TouchableOpacity style={styles.dateTouchable} onPress={() => setShowDeliveryDatePicker(true)} activeOpacity={0.7}>
+            <Text style={[styles.dateText, !form.delivery_date && styles.datePlaceholder]}>
               {form.delivery_date || 'Tap to pick date'}
             </Text>
-            <Text style={styles.dateCalendarIcon}>📅</Text>
+            <Text style={styles.dateIcon}>📅</Text>
           </TouchableOpacity>
         )}
       </View>
-        {showDeliveryDatePicker && (
+      {showDeliveryDatePicker ? (
+        Platform.OS === 'android' ? (
+          <DateTimePicker
+            value={form.delivery_date ? new Date(form.delivery_date) : new Date()}
+            mode="date"
+            display="calendar"
+            onChange={(_, selectedDate) => {
+              setShowDeliveryDatePicker(false);
+              if (selectedDate) setForm((f) => ({ ...f, delivery_date: selectedDate.toISOString().split('T')[0] }));
+            }}
+          />
+        ) : (
           <Modal visible transparent animationType="slide">
-            <TouchableOpacity
-              style={styles.datePickerOverlay}
-              activeOpacity={1}
-              onPress={() => setShowDeliveryDatePicker(false)}
-            />
+            <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setShowDeliveryDatePicker(false)} />
             <View style={styles.datePickerContainer}>
               <View style={styles.datePickerHeader}>
                 <Text style={styles.datePickerTitle}>Select Delivery Date</Text>
@@ -637,252 +702,128 @@ export default function LeadCloseScreen({ navigation, route }: any) {
               <DateTimePicker
                 value={form.delivery_date ? new Date(form.delivery_date) : new Date()}
                 mode="date"
-                display={Platform.OS === 'ios' ? 'spinner' : 'calendar'}
-                minimumDate={new Date()}
+                display="spinner"
                 onChange={(_, selectedDate) => {
-                  if (selectedDate) {
-                    setForm((f) => ({
-                      ...f,
-                      delivery_date: selectedDate.toISOString().split('T')[0],
-                    }));
-                    if (Platform.OS === 'android') {
-                      setShowDeliveryDatePicker(false);
-                    }
-                  }
+                  if (selectedDate) setForm((f) => ({ ...f, delivery_date: selectedDate.toISOString().split('T')[0] }));
                 }}
-                style={Platform.OS === 'ios' ? styles.datePickerIos : undefined}
+                style={{ height: 200 }}
               />
             </View>
           </Modal>
-        )}
+        )
+      ) : null}
 
-        <View style={styles.fieldContainer}>
-          <Text style={styles.label}>Select Year *</Text>
-          <Picker
-            selectedValue={form.year}
-            onValueChange={(itemValue) => setForm({ ...form, year: itemValue })}
-            style={styles.picker}
-          >
-            {availableYears.map(year => (
-              <Picker.Item key={year} label={year} value={year} />
-            ))}
-          </Picker>
-        </View>
+      <Field label="Select Year" value={form.year} editable={false} />
 
-        <View style={styles.fieldContainer}>
-          <Text style={styles.label}>PO Document *</Text>
-          {poPhotoUrl ? (
-            <View style={styles.poPhotoContainer}>
-              <View style={[styles.poPhoto, { backgroundColor: colors.errorLight, justifyContent: 'center', alignItems: 'center' }]}>
-                <Text style={{ fontSize: 24, fontWeight: 'bold', color: colors.error }}>PDF</Text>
-              </View>
-              <TouchableOpacity style={styles.removePhotoButton} onPress={() => setPoPhotoUrl('')}>
-                <Text style={styles.removePhotoText}>Remove</Text>
-              </TouchableOpacity>
+      <View style={[styles.fieldContainer, styles.borderTop]}>
+        <WebLabel>PO Document *</WebLabel>
+        {poPhotoUrl ? (
+          <View style={styles.poRow}>
+            <View style={styles.pdfBadge}>
+              <Text style={styles.pdfBadgeText}>PDF</Text>
             </View>
-          ) : Platform.OS === 'web' ? (
-            <View>
-              {React.createElement('input', {
-                type: 'file',
-                accept: 'application/pdf,.pdf',
-                disabled: uploadingPO,
-                onChange: handleWebPoFile,
-                style: {
-                  width: '100%',
-                  padding: 12,
-                  borderRadius: 12,
-                  border: '1px solid #E2E8F0',
-                  backgroundColor: '#fff',
-                  fontSize: 15,
-                },
-              })}
-              <Text style={{ marginTop: 6, fontSize: 12, color: colors.textSecondary }}>
-                {uploadingPO ? 'Uploading…' : 'PDF only, max 5MB'}
-              </Text>
-            </View>
-          ) : (
+            <TouchableOpacity style={styles.removeBtn} onPress={() => setPoPhotoUrl('')}>
+              <Text style={styles.removeBtnText}>✕ Remove</Text>
+            </TouchableOpacity>
+          </View>
+        ) : Platform.OS === 'web' ? (
+          <View>
+            {React.createElement('input', {
+              type: 'file',
+              accept: 'application/pdf',
+              disabled: uploadingPO,
+              onChange: handleWebPoFile,
+              style: { width: '100%', padding: 10, borderRadius: 8, border: '1px solid #E2E8F0', backgroundColor: '#fff' },
+            })}
+            <Text style={styles.hint}>{uploadingPO ? 'Uploading...' : 'Accepted: PDF only (max 5MB)'}</Text>
+          </View>
+        ) : (
+          <View>
             <TouchableOpacity style={styles.uploadButton} onPress={pickPOPhoto} disabled={uploadingPO}>
               <Text style={styles.uploadButtonText}>{uploadingPO ? 'Uploading...' : '📄 Upload PO Document (PDF)'}</Text>
             </TouchableOpacity>
-          )}
-        </View>
-
-        <TouchableOpacity
-          style={styles.addProductsButton}
-          onPress={() => {
-            void loadProducts();
-            setShowProductModal(true);
-          }}
-        >
-          <Text style={styles.addProductsButtonText}>
-            📦 ADD PRODUCTS {actualProductDetails.length > 0 && `(${actualProductDetails.length})`}
-          </Text>
-        </TouchableOpacity>
-
-        {actualProductDetails.length > 0 ? (
-          <View style={styles.productDetailsCard}>
-            <Text style={styles.productDetailsTitle}>Product Details</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator>
-              <View>
-                <View style={styles.productDetailsHeaderRow}>
-                  <Text style={[styles.pdCol, styles.pdColProduct, styles.pdHeader]}>Product</Text>
-                  <Text style={[styles.pdCol, styles.pdColLevel, styles.pdHeader]}>Level</Text>
-                  <Text style={[styles.pdCol, styles.pdColClass, styles.pdHeader]}>Class</Text>
-                  <Text style={[styles.pdCol, styles.pdColCat, styles.pdHeader]}>
-                    Product Category
-                  </Text>
-                  <Text style={[styles.pdCol, styles.pdColSpecs, styles.pdHeader]}>Specs</Text>
-                  <Text style={[styles.pdCol, styles.pdColQty, styles.pdHeader]}>
-                    Quantity (Strength) *
-                  </Text>
-                  <Text style={[styles.pdCol, styles.pdColAction, styles.pdHeader]}>Action</Text>
-                </View>
-                {actualProductDetails.map((pd) => {
-                  const categoryOptions = getCategoriesForProduct(products, pd.product);
-                  return (
-                  <View key={pd.id} style={styles.productDetailsRow}>
-                    <Text style={[styles.pdCol, styles.pdColProduct]} numberOfLines={1}>
-                      {pd.product}
-                    </Text>
-                    <Text style={[styles.pdCol, styles.pdColLevel]}>{pd.level || '—'}</Text>
-                    <Text style={[styles.pdCol, styles.pdColClass]}>{pd.class || '—'}</Text>
-                    <View style={[styles.pdCol, styles.pdColCat]}>
-                      {categoryOptions.length > 0 ? (
-                        <WebSelect
-                          value={pd.category || ''}
-                          onValueChange={(v) =>
-                            setProductDetails((prev) =>
-                              prev.map((r) =>
-                                r.id === pd.id ? { ...r, category: v } : r,
-                              ),
-                            )
-                          }
-                          items={categoryOptions.map((c) => ({ label: c, value: c }))}
-                          placeholder="Select category"
-                        />
-                      ) : (
-                        <Text style={styles.pdPlain} numberOfLines={1}>
-                          {pd.category || '—'}
-                        </Text>
-                      )}
-                    </View>
-                    <Text style={[styles.pdCol, styles.pdColSpecs]} numberOfLines={1}>
-                      {pd.specs || '—'}
-                    </Text>
-                    <Text style={[styles.pdCol, styles.pdColQty]}>{pd.strength}</Text>
-                    <TouchableOpacity
-                      style={styles.pdColAction}
-                      onPress={() =>
-                        setProductDetails((prev) => prev.filter((r) => r.id !== pd.id))
-                      }
-                    >
-                      <Text style={styles.pdRemove}>✕</Text>
-                    </TouchableOpacity>
-                  </View>
-                  );
-                })}
-                <View style={[styles.productDetailsRow, styles.productDetailsTotalRow]}>
-                  <Text style={[styles.pdCol, styles.pdColProduct, styles.pdHeader]}>Total:</Text>
-                  <Text style={[styles.pdCol, styles.pdColLevel]} />
-                  <Text style={[styles.pdCol, styles.pdColClass]} />
-                  <Text style={[styles.pdCol, styles.pdColCat]} />
-                  <Text style={[styles.pdCol, styles.pdColSpecs]} />
-                  <Text style={[styles.pdCol, styles.pdColQty, styles.pdHeader]}>
-                    {actualProductDetails.reduce((s, p) => s + (Number(p.strength) || 0), 0)}
-                  </Text>
-                  <Text style={[styles.pdCol, styles.pdColAction, styles.pdHeader]}>
-                    ₹
-                    {actualProductDetails
-                      .reduce(
-                        (s, p) =>
-                          s + (Number(p.total) || Number(p.strength) * Number(p.price) || 0),
-                        0,
-                      )
-                      .toLocaleString('en-IN', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                  </Text>
-                </View>
-              </View>
-            </ScrollView>
+            <Text style={styles.hint}>Accepted: PDF only (max 5MB)</Text>
           </View>
-        ) : null}
+        )}
+      </View>
 
-        <TouchableOpacity
-          style={[styles.turnToClientButton, submitting && styles.submitButtonDisabled]}
-          onPress={handleTurnToClient}
-          disabled={submitting}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.turnToClientButtonText}>
-            {submitting ? 'Processing…' : '👤 Turn Lead to Client'}
-          </Text>
-        </TouchableOpacity>
+      <TouchableOpacity style={styles.addProductsButton} onPress={() => productConfig.setProductDialogOpen(true)}>
+        <Text style={styles.addProductsButtonText}>📦 ADD PRODUCTS {rowCount > 0 ? `(${rowCount})` : ''}</Text>
+      </TouchableOpacity>
 
-      <CloseLeadProductsModal
-        visible={showProductModal}
-        onClose={() => setShowProductModal(false)}
-        catalogProducts={products}
-        loadingProducts={loadingProducts}
-        onRefreshProducts={loadProducts}
-        onDone={(rows) => setProductDetails(rows)}
-      />
+      {childProductRows.length > 0 ? (
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryTitle}>Products</Text>
+          {groupedChildProductRows.map((row, idx) => (
+            <Text key={`${row.product}_${row.class}_${idx}`} style={styles.summaryLine}>
+              • {row.product} · Cl {row.class}
+              {row.section && row.section !== 'ALL' ? row.section : ''}
+              {row.level ? ` · ${row.level}` : ''} — {row.strength} students
+            </Text>
+          ))}
+          {specimenRequested ? <Text style={styles.summaryLine}>• Specimen copies requested</Text> : null}
+        </View>
+      ) : null}
 
-      <Modal visible={splitModalOpen} transparent animationType="fade">
+      <TouchableOpacity
+        style={[styles.turnToClientButton, submitting && styles.disabled]}
+        onPress={handleTurnToClient}
+        disabled={submitting}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.turnToClientButtonText}>{submitting ? 'Processing...' : '✓ Upload PO'}</Text>
+      </TouchableOpacity>
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+      <CloseLeadProductsModal config={productConfig} dialogExtra={dialogExtra} />
+
+      <Modal visible={splitModalOpen} transparent animationType="fade" onRequestClose={handleSplitCancel}>
         <View style={styles.splitOverlay}>
           <View style={styles.splitCard}>
             <Text style={styles.splitTitle}>This lead will be split into 2 DCs</Text>
             <Text style={styles.splitSubtitle}>
-              Level/Term 1 → My Clients. Level/Term 2 → Term-Wise DC. Scroll if needed, then tap Confirm & Submit.
+              Level/Term 1 goes to My Clients. Level/Term 2 goes to Term-Wise DC. Scroll the list if needed, then tap
+              Confirm & Submit below to continue.
             </Text>
-
-            <ScrollView
-              style={styles.splitScroll}
-              contentContainerStyle={{ paddingBottom: 8 }}
-              nestedScrollEnabled
-            >
+            <ScrollView style={styles.splitScroll} nestedScrollEnabled>
               <View style={styles.splitBlock}>
-                <Text style={styles.splitBlockTitleTerm1}>
-                  DC 1 – My Clients (Term 1 / Level 1)
-                </Text>
-                {(splitPreview?.term1 || []).map((p, i) => (
-                  <View key={`t1-${i}`} style={styles.splitRow}>
-                    <Text style={styles.splitProduct}>• {p.productName}</Text>
-                    <Text style={styles.splitQty}>Qty: {p.strength}</Text>
-                  </View>
-                ))}
+                <Text style={styles.splitBlockTitleTerm1}>DC 1 – My Clients (Term 1 / Level 1)</Text>
+                {(splitPreview?.term1 || []).length === 0 ? (
+                  <Text style={styles.splitProduct}>No Term 1 / Level 1 lines</Text>
+                ) : (
+                  splitPreview!.term1.map((p, i) => (
+                    <View key={`t1-${i}`} style={styles.splitRow}>
+                      <Text style={styles.splitProduct}>• {p.productName}</Text>
+                      <Text style={styles.splitQty}>Qty: {p.strength}</Text>
+                    </View>
+                  ))
+                )}
               </View>
-
               <View style={styles.splitBlock}>
-                <Text style={styles.splitBlockTitleTerm2}>
-                  DC 2 – Term Wise DC (Term 2 / Level 2)
-                </Text>
-                {(splitPreview?.term2 || []).map((p, i) => (
-                  <View key={`t2-${i}`} style={styles.splitRow}>
-                    <Text style={styles.splitProduct}>• {p.productName}</Text>
-                    <Text style={styles.splitQty}>Qty: {p.strength}</Text>
-                  </View>
-                ))}
+                <Text style={styles.splitBlockTitleTerm2}>DC 2 – Term Wise DC (Term 2 / Level 2)</Text>
+                {(splitPreview?.term2 || []).length === 0 ? (
+                  <Text style={styles.splitProduct}>No Term 2 / Level 2 lines</Text>
+                ) : (
+                  splitPreview!.term2.map((p, i) => (
+                    <View key={`t2-${i}`} style={styles.splitRow}>
+                      <Text style={styles.splitProduct}>• {p.productName}</Text>
+                      <Text style={styles.splitQty}>Qty: {p.strength}</Text>
+                    </View>
+                  ))
+                )}
               </View>
+              {error ? <Text style={styles.errorText}>{error}</Text> : null}
             </ScrollView>
-
             <View style={styles.splitFooter}>
-              <TouchableOpacity
-                style={styles.splitCancelBtn}
-                onPress={handleSplitCancel}
-                disabled={submitting}
-              >
+              <TouchableOpacity style={styles.splitCancelBtn} onPress={handleSplitCancel} disabled={submitting}>
                 <Text style={styles.splitCancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.splitConfirmBtn, submitting && styles.submitButtonDisabled]}
+                style={[styles.splitConfirmBtn, submitting && styles.disabled]}
                 onPress={handleSplitConfirm}
                 disabled={submitting}
               >
-                <Text style={styles.splitConfirmText}>
-                  {submitting ? 'Submitting…' : 'Confirm & Submit'}
-                </Text>
+                <Text style={styles.splitConfirmText}>{submitting ? 'Submitting...' : 'Confirm & Submit'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -892,36 +833,30 @@ export default function LeadCloseScreen({ navigation, route }: any) {
   );
 }
 
-function FormField({ label, value, onChangeText, placeholder, keyboardType, maxLength }: any) {
+function Field({ label, value, onChangeText, placeholder, keyboardType, maxLength, editable }: any) {
   return (
     <View style={styles.fieldContainer}>
-      <Text style={styles.label}>{label}</Text>
+      <WebLabel>{label}</WebLabel>
       <WebInput
-        style={styles.input}
         value={value}
         onChangeText={onChangeText}
-        placeholder={placeholder} keyboardType={keyboardType}
+        placeholder={placeholder}
+        keyboardType={keyboardType}
         maxLength={maxLength}
+        editable={editable !== false}
+        style={editable === false ? styles.readOnly : undefined}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
   loadingText: { marginTop: 12, ...typography.body.medium, color: colors.textSecondary },
-  header: { paddingHorizontal: 20, paddingTop: 50, paddingBottom: 20, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
-  headerContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  backButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  backIcon: { fontSize: 24, color: colors.textLight, fontWeight: 'bold' },
-  headerTitle: { ...typography.heading.h1, color: colors.textLight, flex: 1, textAlign: 'center' },
-  placeholder: { width: 40 },
-  content: { flex: 1 },
-  contentContainer: { padding: 20, paddingBottom: 40 },
-  fieldContainer: { marginBottom: 16 },
-  label: { ...typography.label.medium, color: colors.textPrimary, marginBottom: 8 },
-  input: { ...typography.body.medium, backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 14, color: colors.textPrimary },
+  fieldContainer: { marginBottom: 4 },
+  readOnly: { backgroundColor: colors.backgroundMuted, color: colors.textSecondary },
+  borderTop: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12, marginTop: 4 },
+  hint: { fontSize: 12, color: colors.textSecondary, marginTop: 6, marginBottom: 8 },
   dateTouchable: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -929,21 +864,19 @@ const styles = StyleSheet.create({
     backgroundColor: colors.backgroundLight,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
   },
-  dateTouchableText: { ...typography.body.medium, color: colors.textPrimary },
-  datePlaceholder: { color: colors.textSecondary },
-  dateCalendarIcon: { fontSize: 20 },
-  datePickerOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
+  dateText: { fontSize: 15, color: colors.textPrimary },
+  datePlaceholder: { color: colors.textMuted },
+  dateIcon: { fontSize: 18 },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
   datePickerContainer: {
     backgroundColor: colors.backgroundLight,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    paddingBottom: 34,
   },
   datePickerHeader: {
     flexDirection: 'row',
@@ -955,236 +888,63 @@ const styles = StyleSheet.create({
   },
   datePickerTitle: { ...typography.heading.h3, color: colors.textPrimary },
   datePickerDone: { ...typography.label.medium, color: colors.primary, fontWeight: '600' },
-  datePickerIos: { height: 200 },
-  picker: { height: 50, backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border, borderRadius: 12 },
-  uploadButton: { backgroundColor: colors.primary, borderRadius: 12, padding: 14, alignItems: 'center' },
-  uploadButtonText: { ...typography.body.medium, color: colors.textLight, fontWeight: '600' },
-  poPhotoContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
-  poPhoto: { width: 80, height: 80, borderRadius: 8, marginRight: 12 },
-  removePhotoButton: { backgroundColor: colors.error, borderRadius: 8, padding: 8 },
-  removePhotoText: { ...typography.body.small, color: colors.textLight },
-  addProductsButton: { backgroundColor: colors.info, borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 12 },
-  addProductsButtonText: { ...typography.body.medium, color: colors.textLight, fontWeight: '600' },
-  productDetailsCard: {
+  poRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
+  pdfBadge: {
+    width: 64,
+    height: 64,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
-    backgroundColor: colors.backgroundLight,
-  },
-  productDetailsTitle: {
-    ...typography.heading.h3,
-    color: colors.textPrimary,
-    marginBottom: 10,
-  },
-  productDetailsHeaderRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    paddingBottom: 6,
-    marginBottom: 4,
-    backgroundColor: '#F1F5F9',
-  },
-  productDetailsRow: {
-    flexDirection: 'row',
+    backgroundColor: colors.errorLight,
     alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  productDetailsTotalRow: {
-    borderBottomWidth: 0,
-    backgroundColor: '#F1F5F9',
-    marginTop: 4,
-    borderRadius: 8,
-  },
-  pdCol: { ...typography.body.small, color: colors.textPrimary, paddingHorizontal: 4 },
-  pdHeader: { fontWeight: '700', color: colors.textSecondary },
-  pdColProduct: { width: 90 },
-  pdColLevel: { width: 50, textAlign: 'center' },
-  pdColClass: { width: 44, textAlign: 'center' },
-  pdColCat: { width: 150 },
-  pdPlain: { ...typography.body.small, color: colors.textPrimary },
-  pdColSpecs: { width: 90 },
-  pdColQty: { width: 100, textAlign: 'center' },
-  pdColAction: { width: 80, alignItems: 'center', justifyContent: 'center' },
-  pdRemove: { color: colors.error, fontSize: 16, fontWeight: '700' },
-  turnToClientButton: {
-    backgroundColor: colors.info,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    marginBottom: 28,
-  },
-  turnToClientButtonText: { ...typography.body.medium, color: colors.textLight, fontWeight: '700' },
-  submitButton: { marginTop: 24, borderRadius: 12, overflow: 'hidden' },
-  submitButtonDisabled: { opacity: 0.6 },
-  submitButtonGradient: { paddingVertical: 16, alignItems: 'center' },
-  submitButtonText: { ...typography.label.large, color: colors.textLight, fontWeight: '600' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: colors.backgroundLight, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '90%' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: colors.border },
-  modalTitle: { ...typography.heading.h2, color: colors.textPrimary },
-  modalClose: { fontSize: 24, color: colors.textSecondary },
-  modalBody: { padding: 20, maxHeight: 600 },
-  modalFooter: { padding: 20, borderTopWidth: 1, borderTopColor: colors.border },
-  modalButton: { backgroundColor: colors.primary, borderRadius: 12, padding: 16, alignItems: 'center' },
-  modalButtonText: { ...typography.body.medium, color: colors.textLight, fontWeight: '600' },
-  productSelectionContainer: { marginBottom: 20 },
-  sectionTitle: { ...typography.heading.h3, color: colors.textPrimary, marginBottom: 12 },
-  productList: { maxHeight: 200, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 8 },
-  productItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
-  productItemText: { ...typography.body.medium, color: colors.textPrimary, flex: 1 },
-  productItemAdd: { ...typography.body.small, color: colors.primary, fontWeight: '600' },
-  productsLoadingContainer: { padding: 20, alignItems: 'center', justifyContent: 'center' },
-  productsLoadingText: { ...typography.body.small, color: colors.textSecondary, marginTop: 8 },
-  emptyContainer: { padding: 20, alignItems: 'center', justifyContent: 'center' },
-  emptyIcon: { fontSize: 48, marginBottom: 12 },
-  emptyText: { ...typography.body.medium, color: colors.textPrimary, marginBottom: 4, textAlign: 'center' },
-  emptySubtext: { ...typography.body.small, color: colors.textSecondary, textAlign: 'center', marginBottom: 16 },
-  refreshButton: { backgroundColor: colors.primary, borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8 },
-  refreshButtonText: { ...typography.body.small, color: colors.textLight, fontWeight: '600' },
-  rangeConfigContainer: { marginBottom: 20 },
-  parentRowContainer: { backgroundColor: colors.background, borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: colors.border },
-  parentRowHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  parentRowProduct: { ...typography.body.medium, color: colors.textPrimary, fontWeight: '600' },
-  rangeControls: { flexDirection: 'row', marginBottom: 12 },
-  rangeControl: { flex: 1, marginRight: 8 },
-  rangeLabel: { ...typography.body.small, color: colors.textSecondary, marginBottom: 4 },
-  dropdownButton: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center',
-    backgroundColor: colors.backgroundLight, 
-    borderWidth: 1, 
-    borderColor: colors.border, 
-    borderRadius: 8, 
-    padding: 12,
-    height: 44,
-  },
-  dropdownButtonText: { ...typography.body.medium, color: colors.textPrimary },
-  dropdownArrow: { ...typography.body.small, color: colors.textSecondary, marginLeft: 8 },
-  classPickerOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  classPickerOverlayTouchable: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)' },
-  classPickerContainer: { backgroundColor: colors.backgroundLight, borderRadius: 16, width: '80%', maxWidth: 400, maxHeight: '70%', zIndex: 1000, elevation: 5 },
-  classPickerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: colors.border },
-  classPickerTitle: { ...typography.heading.h3, color: colors.textPrimary },
-  classPickerClose: { fontSize: 24, color: colors.textSecondary, padding: 4 },
-  classPickerList: { maxHeight: 400 },
-  classPickerItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.backgroundLight },
-  classPickerItemSelected: { backgroundColor: colors.primary + '15' },
-  classPickerItemText: { ...typography.body.medium, color: colors.textPrimary },
-  classPickerItemTextSelected: { color: colors.primary, fontWeight: '600' },
-  classPickerCheck: { fontSize: 18, color: colors.primary, fontWeight: 'bold' },
-  subjectsContainer: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border },
-  subjectsLabel: { ...typography.body.small, color: colors.textSecondary, marginBottom: 8 },
-  subjectsList: { flexDirection: 'row', flexWrap: 'wrap' },
-  subjectChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border, marginRight: 8, marginBottom: 8 },
-  subjectChipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
-  subjectChipText: { ...typography.body.small, color: colors.textPrimary },
-  subjectChipTextSelected: { color: colors.textLight },
-  checkboxList: { flexDirection: 'column', marginTop: 8, paddingVertical: 4 },
-  checkboxItem: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    marginBottom: 12, 
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-  },
-  checkbox: { 
-    width: 24, 
-    height: 24, 
-    borderWidth: 2, 
-    borderColor: '#6B7280', 
-    borderRadius: 4, 
-    backgroundColor: '#FFFFFF', 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    marginRight: 12,
-  },
-  checkboxSelected: { 
-    backgroundColor: colors.primary, 
-    borderColor: colors.primary,
-  },
-  checkboxCheck: { 
-    fontSize: 14, 
-    color: colors.textLight, 
-    fontWeight: 'bold',
-  },
-  checkboxLabel: { 
-    ...typography.body.medium, 
-    color: colors.textPrimary, 
-    flex: 1,
-  },
-  detailsTableContainer: { marginBottom: 20 },
-  tableWrapper: { minWidth: 1160 },
-  tableHeader: { flexDirection: 'row', backgroundColor: colors.background, padding: 8, borderBottomWidth: 2, borderBottomColor: colors.border, alignItems: 'center' },
-  tableHeaderText: { ...typography.body.small, color: colors.textPrimary, fontWeight: '600', textAlign: 'center' },
-  tableRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.border, padding: 8, alignItems: 'center', minHeight: 50 },
-  tableCell: { ...typography.body.small, color: colors.textPrimary, textAlign: 'center', justifyContent: 'center', paddingVertical: 4 },
-  colProduct: { width: 120, paddingHorizontal: 4 },
-  colClass: { width: 60, paddingHorizontal: 4 },
-  colCategory: { width: 120, paddingHorizontal: 4 },
-  colSpecs: { width: 100, paddingHorizontal: 4 },
-  colSubject: { width: 100, paddingHorizontal: 4 },
-  colStrength: { width: 80, paddingHorizontal: 4 },
-  colPrice: { width: 80, paddingHorizontal: 4 },
-  colTotal: { width: 80, paddingHorizontal: 4 },
-  colLevel: { width: 80, paddingHorizontal: 4 },
-  colTerm: { width: 88, paddingHorizontal: 4 },
-  colAction: { width: 60, paddingHorizontal: 4 },
-  tableInput: { backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border, borderRadius: 4, padding: 6, textAlign: 'center', fontSize: 12, height: 32, color: colors.textPrimary },
-  tablePicker: { height: 32, width: '100%', color: '#111827', backgroundColor: colors.backgroundLight, fontSize: 14 },
-  tdPickerWrap: { backgroundColor: colors.backgroundLight },
-  tableFooter: { flexDirection: 'column', padding: 12, backgroundColor: colors.background, borderTopWidth: 2, borderTopColor: colors.border },
-  tableFooterRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  tableFooterLabel: { ...typography.body.medium, color: colors.textPrimary, fontWeight: '600' },
-  tableFooterValue: { ...typography.body.medium, color: colors.primary, fontWeight: '600' },
-  removeButton: { fontSize: 18, color: colors.error, fontWeight: 'bold' },
-  splitOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'center',
+  },
+  pdfBadgeText: { fontSize: 14, fontWeight: '700', color: colors.error },
+  removeBtn: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
+  removeBtnText: { color: colors.textPrimary, fontWeight: '600' },
+  uploadButton: { backgroundColor: colors.primary, borderRadius: 8, padding: 12, alignItems: 'center' },
+  uploadButtonText: { color: colors.textLight, fontWeight: '600' },
+  addProductsButton: {
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: 8,
+    padding: 14,
     alignItems: 'center',
-    padding: 20,
+    marginVertical: 12,
+    backgroundColor: '#fff',
   },
-  splitCard: {
-    width: '100%',
-    maxWidth: 420,
-    maxHeight: '85%',
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 16,
-    padding: 20,
-  },
-  splitTitle: { ...typography.heading.h3, color: colors.textPrimary, marginBottom: 6 },
-  splitSubtitle: { ...typography.body.small, color: colors.textSecondary, marginBottom: 12 },
-  splitScroll: { maxHeight: 320, marginBottom: 8 },
-  splitBlock: {
+  addProductsButtonText: { color: colors.primary, fontWeight: '700' },
+  extraBox: { borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, marginTop: 12, backgroundColor: '#fff' },
+  summaryCard: {
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 10,
     padding: 12,
     marginBottom: 12,
+    backgroundColor: colors.backgroundLight,
   },
-  splitBlockTitleTerm1: {
-    ...typography.body.medium,
-    color: '#15803d',
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  splitBlockTitleTerm2: {
-    ...typography.body.medium,
-    color: '#1d4ed8',
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  splitRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  summaryTitle: { fontSize: 14, fontWeight: '700', color: colors.textPrimary, marginBottom: 6 },
+  summaryLine: { fontSize: 12, color: colors.textSecondary, marginBottom: 2 },
+  turnToClientButton: {
+    backgroundColor: colors.success,
+    borderRadius: 8,
+    padding: 16,
     alignItems: 'center',
-    marginBottom: 4,
+    marginTop: 8,
+    marginBottom: 8,
   },
+  turnToClientButtonText: { color: colors.textLight, fontWeight: '700', fontSize: 16 },
+  disabled: { opacity: 0.6 },
+  errorText: { color: colors.error, fontSize: 13, textAlign: 'center', marginBottom: 24 },
+  splitOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  splitCard: { width: '100%', maxWidth: 420, maxHeight: '85%', backgroundColor: colors.backgroundLight, borderRadius: 16, padding: 20 },
+  splitTitle: { ...typography.heading.h3, color: colors.textPrimary, marginBottom: 6 },
+  splitSubtitle: { ...typography.body.small, color: colors.textSecondary, marginBottom: 12 },
+  splitScroll: { maxHeight: 360, marginBottom: 8 },
+  splitBlock: { borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, marginBottom: 12 },
+  splitBlockTitleTerm1: { ...typography.body.medium, color: '#15803d', fontWeight: '700', marginBottom: 8 },
+  splitBlockTitleTerm2: { ...typography.body.medium, color: '#1d4ed8', fontWeight: '700', marginBottom: 8 },
+  splitRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   splitProduct: { ...typography.body.small, color: colors.textSecondary, flex: 1, paddingRight: 8 },
   splitQty: { ...typography.body.small, color: colors.textSecondary },
   splitFooter: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8, gap: 10 },
@@ -1197,11 +957,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.backgroundLight,
   },
   splitCancelText: { ...typography.body.medium, color: colors.textPrimary, fontWeight: '600' },
-  splitConfirmBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    backgroundColor: colors.primary,
-  },
+  splitConfirmBtn: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 10, backgroundColor: colors.success },
   splitConfirmText: { ...typography.body.medium, color: colors.textLight, fontWeight: '700' },
 });

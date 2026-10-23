@@ -15,36 +15,50 @@ import { typography } from '../../theme/typography';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
+import { useDcCatalog } from '../../hooks/useDcCatalog';
+
+type KitProduct = { product: string; quantity: string };
+
+/** BDEs request samples and see their own requests / kits; reviewers accept, reject and issue kits (web dc/emp). */
+const BDE_ROLES = ['Executive', 'Sales BDE', 'Employee'];
 
 export default function DCEmpScreen({ navigation }: any) {
+  const { user } = useAuth();
+  const isBde = BDE_ROLES.includes(String(user?.role || ''));
+  const { productNames } = useDcCatalog();
   const [activeTab, setActiveTab] = useState<'samples' | 'kits'>('samples');
   const [sampleRequests, setSampleRequests] = useState<any[]>([]);
   const [empDCs, setEmpDCs] = useState<any[]>([]);
   const [loadingSamples, setLoadingSamples] = useState(true);
   const [loadingKits, setLoadingKits] = useState(true);
   const [processingRequest, setProcessingRequest] = useState<string | null>(null);
+  const [returningId, setReturningId] = useState<string | null>(null);
   const [form, setForm] = useState({
     employee_id: '',
     kit_type: 'Sales',
     distribution_date: '',
     expected_return_date: '',
   });
+  const [kitProducts, setKitProducts] = useState<KitProduct[]>([{ product: '', quantity: '1' }]);
   const [submitting, setSubmitting] = useState(false);
   const [employees, setEmployees] = useState<any[]>([]);
 
   useEffect(() => {
     loadData();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isBde]);
 
   const loadData = async () => {
-    await Promise.all([loadSampleRequests(), loadEmpDCs(), loadEmployees()]);
+    await Promise.all([loadSampleRequests(), loadEmpDCs(), isBde ? Promise.resolve() : loadEmployees()]);
   };
 
   const loadSampleRequests = async () => {
     try {
       setLoadingSamples(true);
-      const data = await apiService.get('/sample-requests/pending');
-      setSampleRequests(Array.isArray(data) ? data : []);
+      // A BDE sees all of their own requests with status; reviewers see the pending queue.
+      const data = await apiService.get(isBde ? '/sample-requests/my' : '/sample-requests/pending');
+      setSampleRequests(Array.isArray(data) ? data : data?.data || []);
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to load sample requests');
     } finally {
@@ -56,7 +70,7 @@ export default function DCEmpScreen({ navigation }: any) {
     try {
       setLoadingKits(true);
       const data = await apiService.get('/emp-dc/list');
-      setEmpDCs(Array.isArray(data) ? data : []);
+      setEmpDCs(Array.isArray(data) ? data : data?.data || []);
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to load employee kits');
     } finally {
@@ -66,21 +80,25 @@ export default function DCEmpScreen({ navigation }: any) {
 
   const loadEmployees = async () => {
     try {
-      const data = await apiService.get('/employees?isActive=true');
-      setEmployees(Array.isArray(data) ? data : []);
+      const res = await apiService.get('/employees?isActive=true');
+      const rows: any[] = Array.isArray(res) ? res : res?.data || res?.employees || [];
+      setEmployees(
+        rows.filter((e) => e && e._id).sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
+      );
     } catch (error: any) {
-      console.error('Failed to load employees:', error);
+      Alert.alert('Error', error?.message || 'Could not load employees');
     }
   };
 
   const handleAccept = async (requestId: string) => {
     setProcessingRequest(requestId);
     try {
-      await apiService.put(`/sample-requests/${requestId}/accept`);
-      Alert.alert('Success', 'Sample request accepted and EmpDC created');
-      loadData();
+      await apiService.put(`/sample-requests/${requestId}/accept`, {});
+      Alert.alert('Success', 'Accepted — EmpDC created and sample DC sent to warehouse queue');
+      loadSampleRequests();
+      loadEmpDCs();
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to accept request');
+      Alert.alert('Error', error.message || 'Failed to accept sample request');
     } finally {
       setProcessingRequest(null);
     }
@@ -90,33 +108,61 @@ export default function DCEmpScreen({ navigation }: any) {
     setProcessingRequest(requestId);
     try {
       await apiService.put(`/sample-requests/${requestId}/reject`, {
-        rejection_reason: 'Rejected by admin'
+        rejection_reason: 'Rejected by admin',
       });
       Alert.alert('Success', 'Sample request rejected');
       loadSampleRequests();
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to reject request');
+      Alert.alert('Error', error.message || 'Failed to reject sample request');
     } finally {
       setProcessingRequest(null);
     }
   };
 
+  const updateKitProduct = (idx: number, patch: Partial<KitProduct>) =>
+    setKitProducts((rows) => rows.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+
   const submitKit = async () => {
-    if (!form.employee_id || !form.distribution_date) {
-      Alert.alert('Error', 'Please fill all required fields');
+    if (!form.employee_id) {
+      Alert.alert('Error', 'Select the employee who receives the kit.');
       return;
     }
-
+    if (!form.distribution_date) {
+      Alert.alert('Error', 'Enter the distribution date.');
+      return;
+    }
+    const products = kitProducts
+      .filter((p) => p.product.trim())
+      .map((p) => ({ product: p.product.trim(), quantity: Math.floor(Number(p.quantity)) || 0 }));
+    const badQty = products.find((p) => p.quantity < 1);
+    if (badQty) {
+      Alert.alert('Error', `Enter a quantity of at least 1 for ${badQty.product}.`);
+      return;
+    }
     setSubmitting(true);
     try {
-      await apiService.post('/emp-dc/create', form);
-      Alert.alert('Success', 'Employee kit created successfully!');
+      await apiService.post('/emp-dc/create', { ...form, products });
+      Alert.alert('Success', 'Employee kit created');
       setForm({ employee_id: '', kit_type: 'Sales', distribution_date: '', expected_return_date: '' });
+      setKitProducts([{ product: '', quantity: '1' }]);
       loadEmpDCs();
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to create kit');
+      Alert.alert('Error', error.message || 'Failed to create the employee kit.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const markReturned = async (kit: any) => {
+    setReturningId(kit._id);
+    try {
+      await apiService.put(`/emp-dc/${kit._id}/return`, {});
+      Alert.alert('Success', `${kit.emp_dc_code} marked returned`);
+      loadEmpDCs();
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to mark the kit returned.');
+    } finally {
+      setReturningId(null);
     }
   };
 
@@ -129,145 +175,206 @@ export default function DCEmpScreen({ navigation }: any) {
     }
   };
 
+  const statusColors = (status: string) =>
+    status === 'Accepted'
+      ? { bg: colors.successLight, fg: colors.success }
+      : status === 'Rejected'
+        ? { bg: colors.errorLight, fg: colors.error }
+        : { bg: colors.warningLight, fg: '#92400E' };
+
   return (
-    <ScreenShell
-      title="EMP DC"
-    >
-<View style={styles.tabContainer}>
+    <ScreenShell title="EMP DC (Employee Kits)">
+      <View style={styles.tabContainer}>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'samples' && styles.tabActive]}
           onPress={() => setActiveTab('samples')}
         >
-          <Text style={[styles.tabText, activeTab === 'samples' && styles.tabTextActive]}>
-            Sample Requests
-          </Text>
+          <Text style={[styles.tabText, activeTab === 'samples' && styles.tabTextActive]}>Sample Requests</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'kits' && styles.tabActive]}
           onPress={() => setActiveTab('kits')}
         >
-          <Text style={[styles.tabText, activeTab === 'kits' && styles.tabTextActive]}>
-            Employee Kits
-          </Text>
+          <Text style={[styles.tabText, activeTab === 'kits' && styles.tabTextActive]}>Employee Kits</Text>
         </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
         {activeTab === 'samples' ? (
           <View>
-            <Text style={styles.sectionTitle}>Pending Sample Requests</Text>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>{isBde ? 'My Sample Requests' : 'Pending Sample Requests'}</Text>
+              {isBde ? (
+                <WebButton title="+ Request samples" onPress={() => navigation?.navigate?.('SamplesRequest')} />
+              ) : null}
+            </View>
             {loadingSamples ? (
               <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
             ) : sampleRequests.length === 0 ? (
               <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No pending sample requests</Text>
+                <Text style={styles.emptyText}>
+                  {isBde ? 'You have not requested any samples yet.' : 'No pending sample requests'}
+                </Text>
               </View>
             ) : (
-              sampleRequests.map((request) => (
-                <View key={request._id} style={styles.requestCard}>
-                  <View style={styles.requestHeader}>
-                    <Text style={styles.requestCode}>{request.request_code}</Text>
-                    <Text style={styles.requestDate}>{formatDate(request.createdAt)}</Text>
-                  </View>
-                  <Text style={styles.requestEmployee}>
-                    Employee: {typeof request.employee_id === 'object' ? request.employee_id?.name : request.employee_id}
-                  </Text>
-                  <Text style={styles.requestPurpose}>{request.purpose}</Text>
-                  {request.products && request.products.length > 0 && (
-                    <View style={styles.productsList}>
-                      {request.products.map((p: any, idx: number) => (
-                        <Text key={idx} style={styles.productItem}>
-                          • {p.product_name} (Qty: {p.quantity})
-                        </Text>
-                      ))}
+              sampleRequests.map((request) => {
+                const delivery = [request.area, request.city].filter(Boolean).join(', ');
+                const transport = [request.transport_name, request.pincode].filter(Boolean).join(' · ');
+                const sc = statusColors(String(request.status || 'Pending'));
+                return (
+                  <View key={request._id} style={styles.requestCard}>
+                    <View style={styles.requestHeader}>
+                      <Text style={styles.requestCode}>{request.request_code}</Text>
+                      <Text style={styles.requestDate}>{formatDate(request.createdAt)}</Text>
                     </View>
-                  )}
-                  <View style={styles.requestActions}>
-                    <TouchableOpacity
-                      style={[styles.actionButton, styles.acceptButton]}
-                      onPress={() => handleAccept(request._id)}
-                      disabled={processingRequest === request._id}
-                    >
-                      {processingRequest === request._id ? (
-                        <ActivityIndicator color={colors.textLight} />
-                      ) : (
-                        <Text style={styles.actionButtonText}>Accept</Text>
-                      )}
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.actionButton, styles.rejectButton]}
-                      onPress={() => handleReject(request._id)}
-                      disabled={processingRequest === request._id}
-                    >
-                      <Text style={[styles.actionButtonText, styles.rejectButtonText]}>Reject</Text>
-                    </TouchableOpacity>
+                    {request.school_name ? <Text style={styles.requestEmployee}>School: {request.school_name}</Text> : null}
+                    <Text style={styles.requestEmployee}>
+                      Employee: {typeof request.employee_id === 'object' ? request.employee_id?.name : request.employee_id}
+                    </Text>
+                    <Text style={styles.requestPurpose}>{request.purpose}</Text>
+                    {delivery || transport ? (
+                      <Text style={styles.productItem}>
+                        Delivery: {delivery || '—'}
+                        {transport ? ` (${transport})` : ''}
+                      </Text>
+                    ) : null}
+                    {request.products && request.products.length > 0 && (
+                      <View style={styles.productsList}>
+                        {request.products.map((p: any, idx: number) => (
+                          <Text key={idx} style={styles.productItem}>
+                            • {p.product_name}
+                            {p.class ? ` · Cl ${p.class}` : ''}
+                            {p.level ? ` · ${p.level}` : ''} (Qty: {p.quantity})
+                          </Text>
+                        ))}
+                      </View>
+                    )}
+                    {isBde ? (
+                      <View style={[styles.badge, { backgroundColor: sc.bg }]}>
+                        <Text style={[styles.badgeText, { color: sc.fg }]}>{request.status || 'Pending'}</Text>
+                      </View>
+                    ) : (
+                      <View style={styles.requestActions}>
+                        <TouchableOpacity
+                          style={[styles.actionButton, styles.acceptButton]}
+                          onPress={() => handleAccept(request._id)}
+                          disabled={processingRequest === request._id}
+                        >
+                          {processingRequest === request._id ? (
+                            <ActivityIndicator color={colors.textLight} />
+                          ) : (
+                            <Text style={styles.actionButtonText}>Accept</Text>
+                          )}
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.actionButton, styles.rejectButton]}
+                          onPress={() => handleReject(request._id)}
+                          disabled={processingRequest === request._id}
+                        >
+                          <Text style={[styles.actionButtonText, styles.rejectButtonText]}>Reject</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
                   </View>
-                </View>
-              ))
+                );
+              })
             )}
           </View>
         ) : (
           <View>
-            <View style={styles.formCard}>
-              <Text style={styles.formTitle}>Create Employee Kit</Text>
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Employee ID *</Text>
-                <WebInput
-                  style={styles.input}
-                  placeholder="User ObjectId"
+            {!isBde ? (
+              <View style={styles.formCard}>
+                <Text style={styles.formTitle}>Create Employee Kit</Text>
+                <WebSelect
+                  label="Employee *"
                   value={form.employee_id}
-                  onChangeText={(text) => setForm({ ...form, employee_id: text })}
+                  onValueChange={(v) => setForm({ ...form, employee_id: v })}
+                  placeholder="Select employee"
+                  items={employees.map((emp) => ({
+                    value: String(emp._id),
+                    label: `${emp.name || emp.email || 'Employee'}${emp.empCode ? ` (${emp.empCode})` : ''}${emp.role ? ` · ${emp.role}` : ''}`,
+                  }))}
                 />
-              </View>
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Kit Type *</Text>
-                <View style={styles.kitTypeContainer}>
-                  {['Sales', 'Training', 'Field'].map((type) => (
-                    <TouchableOpacity
-                      key={type}
-                      style={[styles.kitTypeButton, form.kit_type === type && styles.kitTypeButtonActive]}
-                      onPress={() => setForm({ ...form, kit_type: type })}
-                    >
-                      <Text style={[styles.kitTypeText, form.kit_type === type && styles.kitTypeTextActive]}>
-                        {type}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Kit Type</Text>
+                  <View style={styles.kitTypeContainer}>
+                    {['Sales', 'Training', 'Field'].map((type) => (
+                      <TouchableOpacity
+                        key={type}
+                        style={[styles.kitTypeButton, form.kit_type === type && styles.kitTypeButtonActive]}
+                        onPress={() => setForm({ ...form, kit_type: type })}
+                      >
+                        <Text style={[styles.kitTypeText, form.kit_type === type && styles.kitTypeTextActive]}>{type}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 </View>
-              </View>
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Distribution Date *</Text>
-                <WebInput
-                  style={styles.input}
-                  placeholder="YYYY-MM-DD"
-                  value={form.distribution_date}
-                  onChangeText={(text) => setForm({ ...form, distribution_date: text })}
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Distribution Date *</Text>
+                  <WebInput
+                    style={styles.input}
+                    placeholder="YYYY-MM-DD"
+                    value={form.distribution_date}
+                    onChangeText={(text) => setForm({ ...form, distribution_date: text })}
+                  />
+                </View>
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Expected Return</Text>
+                  <WebInput
+                    style={styles.input}
+                    placeholder="YYYY-MM-DD"
+                    value={form.expected_return_date}
+                    onChangeText={(text) => setForm({ ...form, expected_return_date: text })}
+                  />
+                </View>
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Kit products</Text>
+                  {kitProducts.map((item, idx) => (
+                    <View key={idx} style={styles.kitProductRow}>
+                      <View style={{ flex: 1 }}>
+                        <WebSelect
+                          compact
+                          value={item.product}
+                          onValueChange={(v) => updateKitProduct(idx, { product: v })}
+                          placeholder="Select product"
+                          items={productNames.map((name) => ({ label: name, value: name }))}
+                        />
+                      </View>
+                      <WebInput
+                        style={styles.qtyInput}
+                        placeholder="Qty"
+                        keyboardType="number-pad"
+                        value={item.quantity}
+                        onChangeText={(t) => updateKitProduct(idx, { quantity: t.replace(/[^0-9]/g, '') })}
+                      />
+                      <TouchableOpacity
+                        onPress={() =>
+                          setKitProducts((rows) =>
+                            rows.length > 1 ? rows.filter((_, i) => i !== idx) : [{ product: '', quantity: '1' }]
+                          )
+                        }
+                      >
+                        <Text style={styles.removeText}>Remove</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                  <WebButton
+                    title="+ Add product"
+                    variant="outline"
+                    onPress={() => setKitProducts((rows) => [...rows, { product: '', quantity: '1' }])}
+                  />
+                </View>
+                <WebButton
+                  title={submitting ? 'Creating…' : 'Create Kit'}
+                  onPress={submitKit}
+                  loading={submitting}
+                  disabled={submitting}
                 />
               </View>
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Expected Return Date</Text>
-                <WebInput
-                  style={styles.input}
-                  placeholder="YYYY-MM-DD"
-                  value={form.expected_return_date}
-                  onChangeText={(text) => setForm({ ...form, expected_return_date: text })}
-                />
-              </View>
-              <TouchableOpacity
-                style={styles.submitButton}
-                onPress={submitKit}
-                disabled={submitting || !form.employee_id || !form.distribution_date}
-              >
-                {submitting ? (
-                  <ActivityIndicator color={colors.textLight} />
-                ) : (
-                  <Text style={styles.submitButtonText}>Create Kit</Text>
-                )}
-              </TouchableOpacity>
-            </View>
+            ) : null}
 
             <View style={styles.listCard}>
-              <Text style={styles.listTitle}>Employee Kits</Text>
+              <Text style={styles.listTitle}>{isBde ? 'My Kits' : 'Employee Kits'}</Text>
               {loadingKits ? (
                 <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
               ) : empDCs.length === 0 ? (
@@ -275,19 +382,45 @@ export default function DCEmpScreen({ navigation }: any) {
                   <Text style={styles.emptyText}>No employee kits</Text>
                 </View>
               ) : (
-                empDCs.map((kit) => (
-                  <View key={kit._id} style={styles.kitCard}>
-                    <View style={styles.kitHeader}>
-                      <Text style={styles.kitCode}>{kit.emp_dc_code}</Text>
-                      <Text style={styles.kitStatus}>{kit.status}</Text>
+                empDCs.map((kit) => {
+                  const returned = kit.status === 'returned';
+                  return (
+                    <View key={kit._id} style={styles.kitCard}>
+                      <View style={styles.kitHeader}>
+                        <Text style={styles.kitCode}>{kit.emp_dc_code}</Text>
+                        <Text style={styles.kitStatus}>
+                          {String(kit.status || '').replace(/^./, (c: string) => c.toUpperCase())}
+                        </Text>
+                      </View>
+                      <Text style={styles.kitEmployee}>
+                        Employee: {typeof kit.employee_id === 'object' ? kit.employee_id?.name : kit.employee_id}
+                      </Text>
+                      <Text style={styles.kitType}>Kit: {kit.kit_type}</Text>
+                      <Text style={styles.kitType}>
+                        Products:{' '}
+                        {Array.isArray(kit.products) && kit.products.length
+                          ? kit.products.map((p: any) => `${p.product} × ${p.quantity}`).join(', ')
+                          : '-'}
+                      </Text>
+                      <Text style={styles.kitDate}>Date: {formatDate(kit.distribution_date)}</Text>
+                      <Text style={styles.kitDate}>Expected Return: {formatDate(kit.expected_return_date)}</Text>
+                      <View style={styles.kitAction}>
+                        {isBde ? (
+                          <Text style={styles.kitStatus}>{returned ? 'Returned' : 'With you'}</Text>
+                        ) : returned ? (
+                          <Text style={styles.kitStatus}>Returned</Text>
+                        ) : (
+                          <WebButton
+                            title={returningId === kit._id ? 'Saving…' : 'Mark Returned'}
+                            variant="outline"
+                            disabled={returningId === kit._id}
+                            onPress={() => markReturned(kit)}
+                          />
+                        )}
+                      </View>
                     </View>
-                    <Text style={styles.kitEmployee}>
-                      Employee: {typeof kit.employee_id === 'object' ? kit.employee_id?.name : kit.employee_id}
-                    </Text>
-                    <Text style={styles.kitType}>Kit Type: {kit.kit_type}</Text>
-                    <Text style={styles.kitDate}>Distribution: {formatDate(kit.distribution_date)}</Text>
-                  </View>
-                ))
+                  );
+                })
               )}
             </View>
           </View>
@@ -353,6 +486,13 @@ const styles = StyleSheet.create({
   kitEmployee: { ...typography.body.medium, color: colors.textPrimary, marginBottom: 4 },
   kitType: { ...typography.body.medium, color: colors.textPrimary, marginBottom: 4 },
   kitDate: { ...typography.body.small, color: colors.textSecondary },
+  kitAction: { marginTop: 8, alignItems: 'flex-start' },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 },
+  badge: { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3, marginTop: 4 },
+  badgeText: { fontSize: 12, fontWeight: '600' },
+  kitProductRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  qtyInput: { width: 70, marginBottom: 0 },
+  removeText: { color: colors.error, fontSize: 13, fontWeight: '600' },
 });
 
 

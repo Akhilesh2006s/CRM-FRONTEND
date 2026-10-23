@@ -21,6 +21,7 @@ import { navigateRoot } from '../../navigation/navigationRef';
 import { getRoleFlags } from '../../utils/roles';
 import HierarchyDashboardScreen from '../Hierarchy/HierarchyDashboardScreen';
 import ProductManagerScreen from '../ProductManager/ProductManagerScreen';
+import PartnerDashboard from '../../components/partner/PartnerDashboard';
 import { fmtINR, sumAggAmount, sumAggCount } from '../../utils/format';
 import { DASHBOARD_STAT_ICONS } from '../../config/moduleIcons';
 
@@ -88,7 +89,8 @@ export default function DashboardScreen({ navigation }: { navigation?: any }) {
         : null;
 
   const load = useCallback(async () => {
-    if (hierarchyLevel || flags.isManager) {
+    // Partner / Vendor use their own dashboard (PartnerDashboard) — no CRM / DC figures are loaded.
+    if (hierarchyLevel || flags.isManager || flags.isPartner) {
       setLoading(false);
       setRefreshing(false);
       return;
@@ -187,6 +189,10 @@ export default function DashboardScreen({ navigation }: { navigation?: any }) {
     executiveAnalytics?.leads?.byPriority?.find((p: any) => p._id === 'Warm')?.count ?? 0;
   const cold =
     executiveAnalytics?.leads?.byPriority?.find((p: any) => p._id === 'Cold')?.count ?? 0;
+
+  if (flags.isPartner) {
+    return <PartnerDashboard userName={user?.name} role={user?.role} />;
+  }
 
   if (flags.isManager && user?._id) {
     return <ProductManagerScreen embedded managerId={user._id} navigation={navigation} />;

@@ -15,18 +15,33 @@ import ScreenShell from '../../ui/ScreenShell';
 import { WebButton, WebSelect } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { showAlert } from '../../utils/showAlert';
+import {
+  type ApprovalExpense,
+  expenseStatusColor,
+  expenseStatusText,
+  firstLevelAmount,
+} from '../../lib/expenseApproval';
 
-type Expense = {
+type Person = { _id: string; name: string; email?: string; empCode?: string; role?: string };
+
+type Expense = ApprovalExpense & {
   _id: string;
   title?: string;
   amount: number;
   category?: string;
-  status?: string;
   createdAt?: string;
-  employeeId?: { _id: string; name?: string; email?: string };
-  trainerId?: { _id: string; name?: string; email?: string };
+  employeeId?: Person | null;
+  trainerId?: Person | null;
+  /** Backend-resolved employee: employeeId, else trainerId, else submitter */
+  employee?: Person | null;
   pendingMonth?: string;
 };
+
+const getEmployee = (e: Expense) => e.employee || e.employeeId || e.trainerId || e.createdBy || null;
+
+const formatAmount = (value?: number) =>
+  typeof value === 'number' && Number.isFinite(value) ? value.toFixed(2) : '-';
 
 type OptionItem = { _id: string; name: string };
 
@@ -53,40 +68,14 @@ function formatRaisedDate(dateString?: string) {
 
 function getExpenseType(category?: string) {
   if (!category) return '-';
-  if (category === 'Other') return 'Others';
-  return category;
+  if (category === 'Other' || category === 'others') return 'Others';
+  return category.charAt(0).toUpperCase() + category.slice(1);
 }
 
 function getPendingMonth(expense: Expense) {
   if (expense.pendingMonth) return expense.pendingMonth;
   if (!expense.createdAt) return '-';
   return new Date(expense.createdAt).toLocaleString('en-US', { month: 'long' });
-}
-
-function getStatusDisplay(status?: string) {
-  if (status === 'Pending') return 'Pending at Executive Manager';
-  if (status === 'Executive Manager Approved') {
-    return 'Approved by Executive Manager, Pending at Manager';
-  }
-  if (status === 'Approved') return 'Approved';
-  return status || '-';
-}
-
-function statusStyle(status?: string) {
-  switch (status) {
-    case 'Approved':
-      return { bg: '#DCFCE7', fg: '#15803D' };
-    case 'Manager Approved':
-      return { bg: '#DBEAFE', fg: '#1D4ED8' };
-    case 'Executive Manager Approved':
-      return { bg: '#F3E8FF', fg: '#7E22CE' };
-    case 'Pending':
-      return { bg: '#FEF3C7', fg: '#B45309' };
-    case 'Rejected':
-      return { bg: '#FEE2E2', fg: '#B91C1C' };
-    default:
-      return { bg: '#F1F5F9', fg: '#64748B' };
-  }
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {
@@ -106,7 +95,6 @@ export default function ExpensePendingScreen({ navigation }: any) {
   const [filters, setFilters] = useState({ employeeId: '', trainerId: '' });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [approving, setApproving] = useState<string | null>(null);
 
   const loadFilters = useCallback(async () => {
     try {
@@ -153,41 +141,18 @@ export default function ExpensePendingScreen({ navigation }: any) {
 
   const handleSearch = () => loadData(filters);
 
-  const handleEdit = (expense: Expense) => {
-    const employeeId = expense.employeeId?._id || expense.trainerId?._id;
-    if (employeeId) {
-      navigation.navigate('ExpenseManagerUpdate', {
-        employeeId,
-        employeeName: expense.employeeId?.name || expense.trainerId?.name || 'Employee',
-      });
-    } else {
-      navigation.navigate('ExpenseEdit', { id: expense._id });
+  // Approving needs an amount (and optional remarks) per item, so it happens on the
+  // per-employee review page — same as web /dashboard/expenses/manager-update/[employeeId].
+  const openReview = (expense: Expense) => {
+    const emp = getEmployee(expense);
+    if (!emp?._id) {
+      showAlert('Error', 'This expense has no employee to review');
+      return;
     }
+    navigation.navigate('ExpenseManagerUpdate', { employeeId: emp._id, employeeName: emp.name || 'Employee' });
   };
 
-  const handleApprove = async (expense: Expense) => {
-    setApproving(expense._id);
-    try {
-      const oversightRoles = new Set(['Admin', 'Super Admin', 'Coordinator', 'Finance Manager']);
-      const nextStatus =
-        expense.status === 'Pending' && oversightRoles.has(user?.role || '')
-          ? 'Executive Manager Approved'
-          : 'Approved';
-
-      await apiService.put(`/expenses/${expense._id}/approve`, { status: nextStatus });
-      Alert.alert(
-        'Success',
-        nextStatus === 'Executive Manager Approved'
-          ? 'Expense forwarded for manager approval'
-          : 'Expense approved successfully',
-      );
-      loadData(filters);
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to approve expense');
-    } finally {
-      setApproving(null);
-    }
-  };
+  const isFinance = user?.role === 'Finance Manager';
 
   return (
     <ScreenShell
@@ -203,6 +168,11 @@ export default function ExpensePendingScreen({ navigation }: any) {
         keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
+        <Text style={styles.pageHint}>
+          {isFinance
+            ? 'Expenses approved at first level and awaiting your final approval.'
+            : 'Expenses awaiting your approval. Open one to review it, then approve or reject it on the review page.'}
+        </Text>
         <View style={styles.filterCard}>
           <WebSelect
             placeholder="All Employees"
@@ -221,52 +191,33 @@ export default function ExpensePendingScreen({ navigation }: any) {
 
         {expenses.length === 0 ? (
           <View style={styles.emptyBox}>
-            <Text style={styles.emptyText}>No pending expenses found.</Text>
-            <Text style={styles.emptyHint}>
-              New submissions appear here while awaiting Executive Manager or Manager approval.
-            </Text>
+            <Text style={styles.emptyText}>No expenses are awaiting your approval.</Text>
           </View>
         ) : (
           expenses.map((expense, index) => {
-            const badge = statusStyle(expense.status);
+            const badge = expenseStatusColor(expense.status);
             return (
-              <View key={expense._id} style={styles.card}>
+              <TouchableOpacity key={expense._id} style={styles.card} onPress={() => openReview(expense)} activeOpacity={0.85}>
                 <View style={styles.cardTop}>
-                  <Text style={styles.employeeName}>
-                    {expense.employeeId?.name || expense.trainerId?.name || '-'}
-                  </Text>
-                  <Text style={styles.amount}>{Number(expense.amount || 0).toFixed(2)}</Text>
+                  <Text style={styles.employeeName}>{getEmployee(expense)?.name || '-'}</Text>
+                  <Text style={styles.amount}>{formatAmount(expense.employeeAmount ?? expense.amount)}</Text>
                 </View>
                 <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
-                  <Text style={[styles.statusBadgeText, { color: badge.fg }]}>
-                    {getStatusDisplay(expense.status)}
-                  </Text>
+                  <Text style={[styles.statusBadgeText, { color: badge.text }]}>{expenseStatusText(expense)}</Text>
                 </View>
                 <InfoRow label="S.No" value={String(index + 1)} />
                 <InfoRow label="Raised Date" value={formatRaisedDate(expense.createdAt)} />
                 <InfoRow label="Exp Type" value={getExpenseType(expense.category)} />
+                <InfoRow label="1st Level Amount" value={formatAmount(firstLevelAmount(expense))} />
                 <InfoRow label="Pending Months" value={getPendingMonth(expense)} />
 
                 <View style={styles.actions}>
-                  <TouchableOpacity style={styles.editBtn} onPress={() => handleEdit(expense)}>
-                    <Ionicons name="pencil" size={16} color="#EA580C" />
-                    <Text style={styles.editBtnText}>Edit</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.approveBtn,
-                      approving === expense._id && styles.approveBtnDisabled,
-                    ]}
-                    onPress={() => handleApprove(expense)}
-                    disabled={approving === expense._id}
-                  >
+                  <View style={styles.approveBtn}>
                     <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" />
-                    <Text style={styles.approveBtnText}>
-                      {approving === expense._id ? 'Approving…' : 'Approve'}
-                    </Text>
-                  </TouchableOpacity>
+                    <Text style={styles.approveBtnText}>Review</Text>
+                  </View>
                 </View>
-              </View>
+              </TouchableOpacity>
             );
           })
         )}
@@ -277,6 +228,7 @@ export default function ExpensePendingScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   content: { flex: 1 },
+  pageHint: { fontSize: 13, color: colors.textSecondary },
   contentContainer: { padding: 16, paddingBottom: 32, gap: 12 },
   filterCard: {
     backgroundColor: '#FFFFFF',
@@ -380,7 +332,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#2563EB',
+    backgroundColor: '#16A34A',
   },
   approveBtnDisabled: { opacity: 0.6 },
   approveBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },

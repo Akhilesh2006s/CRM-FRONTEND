@@ -76,7 +76,7 @@ function resolveRemarks(row: StockReturn): string {
 }
 
 function statusStyle(status: string) {
-  if (status === 'Pending Manager Approval') return { bg: '#FEF3C7', fg: '#92400E' };
+  if (status === 'Pending Manager Approval' || status === 'WAREHOUSE_MANAGER_PENDING') return { bg: '#FEF3C7', fg: '#92400E' };
   if (status === 'Received') return { bg: '#DBEAFE', fg: '#1E40AF' };
   if (status === 'Partially Approved') return { bg: '#F3E8FF', fg: '#6B21A8' };
   if (status === 'Stock Updated' || status === 'Approved') return { bg: '#DCFCE7', fg: '#166534' };
@@ -263,7 +263,7 @@ export default function ReturnsWarehouseManagerScreen({ navigation }: any) {
           </View>
         ) : (
           sortedReturns.map((row, index) => {
-            const status = row.status || '-';
+            const status = row.status === 'WAREHOUSE_MANAGER_PENDING' ? 'Pending Manager Approval' : row.status || '-';
             const badge = statusStyle(status);
             return (
               <View key={row._id} style={styles.card}>

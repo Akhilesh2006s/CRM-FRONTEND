@@ -32,7 +32,7 @@ export default function EmployeeEditScreen({ navigation, route }: any) {
     if (!id) return;
     (async () => {
       try {
-        const emp = await apiService.get<any>(`/employees/${id}`);
+        const emp = await apiService.get(`/employees/${id}`);
         setForm({
           name: emp.name || '',
           email: emp.email || '',

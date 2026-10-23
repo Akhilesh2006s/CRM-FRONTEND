@@ -84,19 +84,19 @@ export default function ExpenseEditScreen({ navigation, route }: any) {
       loading={loading}
     >
 <ScrollView style={styles.content} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
-        <FormField label="Title *" value={form.title} onChangeText={(text) => setForm((f) => ({ ...f, title: text }))} />
+        <FormField label="Title *" value={form.title} onChangeText={(text: string) => setForm((f) => ({ ...f, title: text }))} />
         <FormField
           label="Amount *"
           value={form.amount}
-          onChangeText={(text) => setForm((f) => ({ ...f, amount: text }))}
+          onChangeText={(text: string) => setForm((f) => ({ ...f, amount: text }))}
           keyboardType="decimal-pad"
         />
-        <FormField label="Category *" value={form.category} onChangeText={(text) => setForm((f) => ({ ...f, category: text }))} />
-        <FormField label="Date *" value={form.date} onChangeText={(text) => setForm((f) => ({ ...f, date: text }))} placeholder="YYYY-MM-DD" />
+        <FormField label="Category *" value={form.category} onChangeText={(text: string) => setForm((f) => ({ ...f, category: text }))} />
+        <FormField label="Date *" value={form.date} onChangeText={(text: string) => setForm((f) => ({ ...f, date: text }))} placeholder="YYYY-MM-DD" />
         <FormField
           label="Pending Month"
           value={form.pendingMonth}
-          onChangeText={(text) => setForm((f) => ({ ...f, pendingMonth: text }))}
+          onChangeText={(text: string) => setForm((f) => ({ ...f, pendingMonth: text }))}
           placeholder="e.g. January"
         />
         <View style={styles.fieldContainer}>
@@ -104,7 +104,7 @@ export default function ExpenseEditScreen({ navigation, route }: any) {
           <WebInput
             style={[styles.input, { minHeight: 100, textAlignVertical: 'top' }]}
             value={form.description}
-            onChangeText={(text) => setForm((f) => ({ ...f, description: text }))}
+            onChangeText={(text: string) => setForm((f) => ({ ...f, description: text }))}
             placeholder="Enter description" multiline
           />
         </View>

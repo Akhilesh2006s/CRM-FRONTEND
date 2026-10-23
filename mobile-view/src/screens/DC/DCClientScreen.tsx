@@ -388,7 +388,7 @@ export default function DCClientScreen({ navigation }: any) {
                     <>
                       <TouchableOpacity
                         style={[styles.cardButton, styles.cardButtonEdit]}
-                        onPress={() => orderId && navigation.navigate('ClientEditPO', { orderId })}
+                        onPress={() => orderId && navigation.navigate('ClientEditPO', { orderId, dcId: dc._isConvertedLead ? undefined : dc._id })}
                         disabled={!orderId}
                       >
                         <Text style={styles.cardButtonTextEdit}>Edit PO</Text>
@@ -428,7 +428,7 @@ export default function DCClientScreen({ navigation }: any) {
                       {orderId ? (
                         <TouchableOpacity
                           style={[styles.cardButton, styles.cardButtonEdit]}
-                          onPress={() => navigation.navigate('ClientEditPO', { orderId })}
+                          onPress={() => navigation.navigate('ClientEditPO', { orderId, dcId: dc._isConvertedLead ? undefined : dc._id })}
                         >
                           <Text style={styles.cardButtonTextEdit}>Edit PO</Text>
                         </TouchableOpacity>

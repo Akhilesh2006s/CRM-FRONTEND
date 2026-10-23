@@ -46,7 +46,7 @@ export type RootStackParamList = {
   HierarchyAssign: undefined;
   ProductManager: { managerId?: string } | undefined;
   ProductManagerAssign: undefined;
-  ExecutiveManagerLeaves: { managerId: string };
+  ExecutiveManagerLeaves: { managerId?: string } | undefined;
   POChangeRequests: undefined;
   POChangeRequestDetail: { orderId: string };
   
@@ -109,8 +109,17 @@ export type RootStackParamList = {
   ExpenseEdit: { id: string };
   ExpensePending: undefined;
   ExpenseFinancePending: undefined;
-  ExpenseMy: undefined;
-  ExpenseManagerUpdate: { employeeId: string };
+  ExpenseMy: { view?: 'pending' | 'completed' } | undefined;
+  ViewTickets: { view?: 'all' | 'solved' | 'pending' } | undefined;
+  RaiseTicket: undefined;
+  ExpenseExecutiveManagerPending: { tab?: 'pending' | 'decided' } | undefined;
+  CrossSaleLeads: undefined;
+  MyPayslips: undefined;
+  EmployeeVerification: undefined;
+  AttendanceRoster: undefined;
+  MyAttendance: undefined;
+  ExpenseApprovers: undefined;
+  ExpenseManagerUpdate: { employeeId: string; employeeName?: string };
   
   // Reports
   ReportsLeads: undefined;

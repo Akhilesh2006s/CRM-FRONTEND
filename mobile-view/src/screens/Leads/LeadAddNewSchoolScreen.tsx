@@ -18,8 +18,12 @@ import { useAuth } from '../../context/AuthContext';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
+import {
+  LEAD_PRODUCT_STATUSES,
+  validateLeadStyleProducts,
+  type LeadProductStatus,
+} from '../../lib/crm/leadProductRules';
 
-const LEAD_STATUS_OPTIONS = ['Hot', 'Warm', 'Cold'] as const;
 const SCHOOL_TYPE_OPTIONS = [
   { label: 'New', value: 'New' },
   { label: 'Existing', value: 'Existing' },
@@ -29,23 +33,34 @@ const TERM_OPTIONS = [
   { label: 'Term 2', value: 'Term 2' },
   { label: 'Both', value: 'Both' },
 ];
-const PRODUCT_STATUS_OPTIONS = [
-  { label: 'Hot', value: 'Hot' },
-  { label: 'Warm', value: 'Warm' },
-  { label: 'Not Interested', value: 'Not Interested' },
-  { label: 'Management Not Met', value: 'Management Not Met' },
-  { label: 'Visit Again', value: 'Visit Again' },
-];
+const PRODUCT_STATUS_OPTIONS = LEAD_PRODUCT_STATUSES.map((s) => ({ label: s, value: s }));
 
+/** Same shape as the web new-school page; numbers kept as strings so empty fields stay empty. */
 type ProductSelection = {
   name: string;
   checked: boolean;
   term: string;
-  status: 'Hot' | 'Warm' | 'Not Interested' | 'Management Not Met' | 'Visit Again';
-  strength: number;
-  unitPrice: number;
-  chance: number;
+  status: LeadProductStatus;
+  strength: string;
+  unit_price: string;
+  chance: string;
+  not_interested_reason: string;
 };
+
+/** Digits only, no leading zeros, optionally capped (web normalizeIntegerInput). */
+function normalizeIntegerInput(raw: string, max?: number): string {
+  let value = String(raw || '').replace(/\D/g, '');
+  if (value.length > 1) value = value.replace(/^0+/, '') || '0';
+  if (value && max !== undefined && Number(value) > max) value = String(max);
+  return value;
+}
+
+function isBeforeToday(ymd: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return false;
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  return ymd < today;
+}
 
 function parseFollowUpDate(s: string): string | undefined {
   if (!s?.trim()) return undefined;
@@ -58,15 +73,19 @@ function parseFollowUpDate(s: string): string | undefined {
 
 export default function LeadAddNewSchoolScreen({ navigation }: any) {
   const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'Super Admin' || Boolean((user as any)?.isSuperAdmin);
+  const [bdeOptions, setBdeOptions] = useState<{ _id: string; name: string; zone?: string; cluster?: string }[]>([]);
   const [form, setForm] = useState({
     school_type: 'New',
     school_name: '',
     school_code: '',
     contact_person: '',
     contact_mobile: '',
+    contact_designation: '',
     email: '',
     decision_maker_name: '',
     decision_maker_mobile: '',
+    financial_contact_designation: '',
     location: '',
     city: '',
     address: '',
@@ -78,7 +97,6 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
     cluster: '',
     latitude: '',
     longitude: '',
-    lead_status: 'Warm',
     zone: '',
     branches: '',
     strength: '',
@@ -86,6 +104,7 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
     average_fee: '',
     follow_up_date: '',
     cluster_code: '',
+    assigned_to: '',
   });
   const [products, setProducts] = useState<ProductSelection[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -101,7 +120,32 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
+    if (!isSuperAdmin) return;
+    const roles = ['Executive', 'Sales BDE', 'Employee'];
+    Promise.all(
+      roles.map((role) =>
+        apiService.get(`/employees?isActive=true&role=${encodeURIComponent(role)}`).catch(() => []),
+      ),
+    ).then((batches) => {
+      const seen = new Set<string>();
+      const list: { _id: string; name: string; zone?: string; cluster?: string }[] = [];
+      for (const batch of batches) {
+        for (const u of Array.isArray(batch) ? batch : []) {
+          const id = String(u?._id || u?.id || '');
+          const name = String(u?.name || '').trim();
+          if (!id || !name || seen.has(id)) continue;
+          seen.add(id);
+          list.push({ _id: id, name, zone: u.assignedCity || u.zone || '', cluster: u.cluster || '' });
+        }
+      }
+      list.sort((a, b) => a.name.localeCompare(b.name));
+      setBdeOptions(list);
+    });
+  }, [isSuperAdmin]);
+
+  useEffect(() => {
     const loadUserZone = async () => {
+      if (isSuperAdmin) return;
       if (!user?._id) return;
       try {
         const userProfile = await apiService.get('/auth/me');
@@ -138,12 +182,13 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
         setProducts(
           names.map((name: string) => ({
             name,
-            checked: false,
+            checked: true,
             term: 'Term 1',
-            status: 'Warm' as const,
-            strength: 0,
-            unitPrice: 0,
-            chance: 0,
+            status: '' as const,
+            strength: '',
+            unit_price: '',
+            chance: '',
+            not_interested_reason: '',
           })),
         );
       } catch (err) {
@@ -232,17 +277,29 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
     setProducts((prev) => prev.map((p, i) => (i === index ? { ...p, ...patch } : p)));
   };
 
-  const handleProductCheck = (index: number, checked: boolean) => {
-    updateProduct(index, { checked });
-  };
+  // Products cannot be deselected (all are required, as on the web).
 
   const handleProductStatusChange = (index: number, status: ProductSelection['status']) => {
-    const patch: Partial<ProductSelection> = { status };
-    if (status !== 'Hot' && status !== 'Warm') {
-      patch.strength = 0;
-      patch.chance = 0;
-    }
-    updateProduct(index, patch);
+    setProducts((prev) =>
+      prev.map((p, i) => {
+        if (i !== index) return p;
+        if (status === 'Not Interested') {
+          return { ...p, status, strength: '', unit_price: '', chance: '0' };
+        }
+        if (status !== 'Hot' && status !== 'Warm') {
+          return { ...p, status, strength: '', unit_price: '', chance: '', not_interested_reason: '' };
+        }
+        return { ...p, status, chance: p.chance === '0' ? '' : p.chance, not_interested_reason: '' };
+      }),
+    );
+  };
+
+  const handleProductUnitPriceChange = (index: number, raw: string) => {
+    let value = String(raw || '').replace(/[^\d.]/g, '');
+    const parts = value.split('.');
+    if (parts.length > 2) value = `${parts[0]}.${parts.slice(1).join('')}`;
+    if (value.startsWith('.')) value = `0${value}`;
+    updateProduct(index, { unit_price: value });
   };
 
   const clearMessages = () => {
@@ -258,37 +315,44 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
-    if (!form.contact_person?.trim()) {
-      setErrorMessage('Contact person is required');
+    if (isSuperAdmin && !form.assigned_to) {
+      setErrorMessage('Select the BDE this school is assigned to');
       return;
     }
-    if (!form.contact_mobile?.trim()) {
-      setErrorMessage('Contact mobile is required');
+    if (!form.contact_person?.trim()) {
+      setErrorMessage('School contact person name is required');
+      return;
+    }
+    if (!form.contact_designation?.trim()) {
+      setErrorMessage('School contact designation is required');
       return;
     }
     if (!form.decision_maker_name?.trim()) {
-      setErrorMessage('Decision Maker Name is required');
+      setErrorMessage('Financial contact person name is required');
       return;
     }
-    if (!form.decision_maker_mobile?.trim()) {
-      setErrorMessage('Decision Maker Mobile Number is required');
+    if (!form.financial_contact_designation?.trim()) {
+      setErrorMessage('Financial contact designation is required');
       return;
     }
-    const mobileError = phoneDigitsError(form.contact_mobile, true) || phoneDigitsError(form.decision_maker_mobile, true);
-    if (mobileError) {
-      setErrorMessage(mobileError);
+    if (!form.email?.trim()) {
+      setErrorMessage('Email is required');
       return;
     }
-    if (form.pincode.length !== 6) {
-      setErrorMessage('Valid 6-digit pincode is required');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      setErrorMessage('Please enter a valid email address');
+      return;
+    }
+    if (phoneDigitsError(form.contact_mobile, true)) {
+      setErrorMessage('Contact mobile must be 10 to 15 digits');
+      return;
+    }
+    if (phoneDigitsError(form.decision_maker_mobile, true)) {
+      setErrorMessage('Financial contact mobile must be 10 to 15 digits');
       return;
     }
     if (!form.area?.trim()) {
-      setErrorMessage('Area is required. Enter pincode and select an area.');
-      return;
-    }
-    if (!form.address?.trim()) {
-      setErrorMessage('Address is required');
+      setErrorMessage('Area is required. Please enter pincode and select an area.');
       return;
     }
     if (!form.average_fee?.trim()) {
@@ -307,76 +371,86 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
       setErrorMessage('Remarks is required');
       return;
     }
+    if (!form.zone?.trim()) {
+      setErrorMessage('Zone is required');
+      return;
+    }
+    if (!form.cluster?.trim()) {
+      setErrorMessage('Cluster is required');
+      return;
+    }
     if (!form.follow_up_date?.trim()) {
       setErrorMessage('Follow-up date is required');
       return;
     }
-
-    const selectedProducts = products.filter((p) => p.checked);
-    if (selectedProducts.length === 0) {
-      setErrorMessage('Please select at least one product in Products Interested.');
+    if (isBeforeToday(form.follow_up_date)) {
+      setErrorMessage('Follow-up date cannot be in the past');
       return;
     }
 
-    for (const p of selectedProducts) {
-      if ((p.status === 'Hot' || p.status === 'Warm') && (!p.strength || p.strength <= 0)) {
-        setErrorMessage(`Enter strength for "${p.name}" when status is ${p.status}.`);
-        return;
-      }
-      if (p.status === 'Hot' && p.chance < 80) {
-        setErrorMessage(`Chance % for "${p.name}" must be at least 80% when status is Hot.`);
-        return;
-      }
-      if (p.status === 'Warm' && p.chance < 20) {
-        setErrorMessage(`Chance % for "${p.name}" must be at least 20% when status is Warm.`);
-        return;
-      }
+    // All products are mandatory / pre-selected
+    const selectedProducts = products.filter((p) => p.checked);
+    if (selectedProducts.length === 0) {
+      setErrorMessage('All products must be included. Please wait for products to load.');
+      return;
+    }
+    const productError = validateLeadStyleProducts(selectedProducts);
+    if (productError) {
+      setErrorMessage(productError);
+      return;
     }
 
     setSubmitting(true);
     try {
-      const productsPayload = selectedProducts.map((p) => ({
-        product_name: p.name,
-        quantity: 1,
-        unit_price: p.unitPrice || 0,
-        term: p.term || 'Term 1',
-        status: p.status,
-        strength: p.strength || 0,
-        chance: p.status === 'Hot' || p.status === 'Warm' ? p.chance || 0 : 0,
-      }));
+      const productsPayload = selectedProducts.map((p) => {
+        const strengthNum = Number(p.strength) || 0;
+        const hotOrWarm = p.status === 'Hot' || p.status === 'Warm';
+        return {
+          product_name: p.name,
+          quantity: strengthNum > 0 ? strengthNum : 1,
+          unit_price: hotOrWarm ? Number(p.unit_price) || 0 : 0,
+          term: p.term || 'Term 1',
+          status: p.status,
+          strength: strengthNum,
+          chance: hotOrWarm ? Number(p.chance) || 0 : 0,
+          not_interested_reason:
+            p.status === 'Not Interested' ? p.not_interested_reason.trim() : '',
+        };
+      });
 
+      // Same payload as web new-school (no lead_status / priority: the backend derives them).
       const payload = {
-        school_name: form.school_name.trim(),
+        school_name: form.school_name,
         school_type: form.school_type || 'New',
-        contact_person: form.contact_person.trim(),
-        contact_mobile: form.contact_mobile.trim(),
-        contact_person2: form.decision_maker_name.trim(),
-        contact_mobile2: form.decision_maker_mobile.trim(),
-        decision_maker: form.decision_maker_name.trim(),
-        email: form.email?.trim() || undefined,
-        location: form.location?.trim() || undefined,
-        address: form.address.trim(),
-        pincode: form.pincode,
+        contact_person: form.contact_person,
+        contact_mobile: sanitizePhoneDigits(form.contact_mobile),
+        contact_designation: form.contact_designation.trim(),
+        contact_person2: form.decision_maker_name || undefined,
+        contact_mobile2: sanitizePhoneDigits(form.decision_maker_mobile),
+        financial_contact_designation: form.financial_contact_designation.trim(),
+        location: form.location || undefined,
+        address: form.address || undefined,
+        pincode: form.pincode || undefined,
         state: form.state || undefined,
         city: form.city || undefined,
         region: form.region || undefined,
-        area: form.area.trim(),
-        mandal: form.mandal?.trim() || undefined,
-        cluster: form.cluster?.trim() || undefined,
+        area: form.area || undefined,
+        mandal: form.mandal || undefined,
+        cluster: form.cluster || undefined,
         latitude: form.latitude ? Number(form.latitude) : undefined,
         longitude: form.longitude ? Number(form.longitude) : undefined,
         zone: form.zone || undefined,
-        lead_status: form.lead_status || 'Warm',
         branches: form.branches ? Number(form.branches) : undefined,
         no_of_branches: form.branches ? Number(form.branches) : undefined,
-        strength: form.strength ? Number(form.strength) : undefined,
-        remarks: form.remarks.trim(),
+        strength: form.strength && form.strength.trim() ? Number(form.strength) : undefined,
+        remarks: form.remarks || undefined,
         average_fee: form.average_fee ? Number(form.average_fee) : undefined,
         avg_fee: form.average_fee ? Number(form.average_fee) : undefined,
+        email: form.email,
         products: productsPayload,
         follow_up_date: parseFollowUpDate(form.follow_up_date),
-        assigned_to: user?._id,
-        cluster_code: form.cluster_code?.trim() || undefined,
+        assigned_to: isSuperAdmin ? form.assigned_to : user?._id,
+        cluster_code: form.cluster || form.cluster_code || undefined,
       };
 
       await apiService.post('/dc-orders/create', payload);
@@ -384,7 +458,10 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
       setErrorMessage(null);
       scrollRef.current?.scrollTo({ y: 0, animated: true });
     } catch (error: any) {
-      setErrorMessage(error.message || 'Failed to create lead');
+      const raw = error?.message || 'Failed to create lead';
+      setErrorMessage(
+        /school code already exists/i.test(raw) ? 'This school already exists. Go to Renewal Leads.' : raw,
+      );
       setSuccessMessage(null);
     } finally {
       setSubmitting(false);
@@ -420,6 +497,24 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
 
         <Text style={styles.mandatoryNote}>Fields marked with * are mandatory.</Text>
 
+        {isSuperAdmin ? (
+          <WebSelect
+            label="Assign to (BDE) *"
+            value={form.assigned_to}
+            onValueChange={(v) => {
+              const bde = bdeOptions.find((b) => b._id === v);
+              setForm((f) => ({
+                ...f,
+                assigned_to: v,
+                zone: bde?.zone || f.zone,
+                cluster: bde?.cluster || f.cluster,
+              }));
+            }}
+            items={bdeOptions.map((b) => ({ label: b.name, value: b._id }))}
+            placeholder={bdeOptions.length === 0 ? 'No BDEs found' : 'Select BDE'}
+          />
+        ) : null}
+
         <FormField
           label="School name *"
           value={form.school_name}
@@ -442,14 +537,14 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
         />
 
         <FormField
-          label="Contact person *"
+          label="School contact person *"
           value={form.contact_person}
           onChangeText={(text) => setForm((f) => ({ ...f, contact_person: text }))}
           placeholder="Enter contact person name"
         />
 
         <FormField
-          label="Contact mobile *"
+          label="School contact mobile *"
           value={form.contact_mobile}
           onChangeText={(text) => setForm((f) => ({ ...f, contact_mobile: sanitizePhoneDigits(text) }))}
           placeholder="10 to 15 digits"
@@ -458,7 +553,14 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
         />
 
         <FormField
-          label="Email"
+          label="School contact designation *"
+          value={form.contact_designation}
+          onChangeText={(text) => setForm((f) => ({ ...f, contact_designation: text }))}
+          placeholder="e.g. Principal"
+        />
+
+        <FormField
+          label="Email *"
           value={form.email}
           onChangeText={(text) => setForm((f) => ({ ...f, email: text }))}
           placeholder="Enter email"
@@ -466,19 +568,26 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
         />
 
         <FormField
-          label="Decision Maker Name *"
+          label="Financial contact person *"
           value={form.decision_maker_name}
           onChangeText={(text) => setForm((f) => ({ ...f, decision_maker_name: text }))}
-          placeholder="Enter decision maker name"
+          placeholder="Enter financial contact name"
         />
 
         <FormField
-          label="Decision Maker Mobile Number *"
+          label="Financial contact mobile *"
           value={form.decision_maker_mobile}
           onChangeText={(text) => setForm((f) => ({ ...f, decision_maker_mobile: sanitizePhoneDigits(text) }))}
           placeholder="10 to 15 digits"
           keyboardType="phone-pad"
           maxLength={15}
+        />
+
+        <FormField
+          label="Financial contact designation *"
+          value={form.financial_contact_designation}
+          onChangeText={(text) => setForm((f) => ({ ...f, financial_contact_designation: text }))}
+          placeholder="e.g. Accountant"
         />
 
         <FormField
@@ -537,7 +646,7 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
         <Text style={styles.hint}>Select the exact post office area for this location.</Text>
 
         <View style={styles.textAreaContainer}>
-          <Text style={styles.label}>Address *</Text>
+          <Text style={styles.label}>Address</Text>
           <WebInput
             style={styles.textArea}
             value={form.address}
@@ -570,7 +679,7 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
           placeholder="Enter mandal"
         />
         <FormField
-          label="Cluster"
+          label="Cluster *"
           value={form.cluster}
           onChangeText={(text) => setForm((f) => ({ ...f, cluster: text }))}
           placeholder="Enter cluster"
@@ -611,7 +720,7 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Products Interested *</Text>
+          <Text style={styles.sectionTitle}>Products * (all required — cannot deselect)</Text>
           {loadingProducts ? (
             <ActivityIndicator color={colors.primary} style={{ marginVertical: 12 }} />
           ) : products.length === 0 ? (
@@ -621,79 +730,68 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
               const hotOrWarm = product.status === 'Hot' || product.status === 'Warm';
               return (
                 <View key={product.name} style={styles.productCard}>
-                  <TouchableOpacity
-                    style={styles.productHeader}
-                    onPress={() => handleProductCheck(index, !product.checked)}
-                  >
-                    <View
-                      style={[
-                        styles.checkbox,
-                        product.checked && styles.checkboxSelected,
-                      ]}
-                    >
-                      {product.checked ? <Text style={styles.checkboxMark}>✓</Text> : null}
+                  <View style={styles.productHeader}>
+                    <View style={[styles.checkbox, styles.checkboxSelected]}>
+                      <Text style={styles.checkboxMark}>✓</Text>
                     </View>
                     <Text style={styles.productName}>{product.name}</Text>
-                  </TouchableOpacity>
-                  {product.checked ? (
-                    <View style={styles.productFields}>
-                      <WebSelect
-                        label="Status"
-                        value={product.status}
-                        onValueChange={(v) =>
-                          handleProductStatusChange(index, v as ProductSelection['status'])
-                        }
-                        items={PRODUCT_STATUS_OPTIONS}
-                      />
+                  </View>
+                  <View style={styles.productFields}>
+                    <WebSelect
+                      label="Status *"
+                      value={product.status}
+                      onValueChange={(v) =>
+                        handleProductStatusChange(index, v as ProductSelection['status'])
+                      }
+                      items={PRODUCT_STATUS_OPTIONS}
+                      placeholder="Select status"
+                    />
+                    <FormField
+                      label={hotOrWarm ? 'Strength *' : 'Strength'}
+                      value={product.strength}
+                      onChangeText={(text) =>
+                        updateProduct(index, { strength: normalizeIntegerInput(text) })
+                      }
+                      placeholder={hotOrWarm ? 'Qty' : '—'}
+                      keyboardType="number-pad"
+                      editable={hotOrWarm}
+                    />
+                    <FormField
+                      label={hotOrWarm ? 'Unit Price (₹) *' : 'Unit Price (₹)'}
+                      value={product.unit_price}
+                      onChangeText={(text) => handleProductUnitPriceChange(index, text)}
+                      placeholder={hotOrWarm ? '0' : '—'}
+                      keyboardType="number-pad"
+                      editable={hotOrWarm}
+                    />
+                    <FormField
+                      label={hotOrWarm ? 'Chance % *' : 'Chance %'}
+                      value={product.status === 'Not Interested' ? '0' : product.chance}
+                      onChangeText={(text) =>
+                        updateProduct(index, { chance: normalizeIntegerInput(text, 100) })
+                      }
+                      placeholder={product.status === 'Hot' ? '80-100' : product.status === 'Warm' ? '20+' : '—'}
+                      keyboardType="number-pad"
+                      editable={hotOrWarm}
+                    />
+                    {product.status === 'Not Interested' ? (
                       <FormField
-                        label="Strength"
-                        value={hotOrWarm ? String(product.strength || '') : '0'}
-                        onChangeText={(text) =>
-                          updateProduct(index, { strength: Number(text) || 0 })
-                        }
-                        placeholder="Qty"
-                        keyboardType="number-pad"
-                        editable={hotOrWarm}
+                        label="Reason not interested *"
+                        value={product.not_interested_reason}
+                        onChangeText={(text) => updateProduct(index, { not_interested_reason: text })}
+                        placeholder="Why is the school not interested?"
                       />
-                      <FormField
-                        label="Unit Price"
-                        value={product.unitPrice ? String(product.unitPrice) : ''}
-                        onChangeText={(text) =>
-                          updateProduct(index, { unitPrice: Math.max(0, Number(text) || 0) })
-                        }
-                        placeholder="Enter unit price"
-                        keyboardType="number-pad"
-                      />
-                      <FormField
-                        label="Chance %"
-                        value={hotOrWarm ? String(product.chance ?? '') : '0'}
-                        onChangeText={(text) =>
-                          updateProduct(index, {
-                            chance: Math.min(100, Math.max(0, Number(text) || 0)),
-                          })
-                        }
-                        placeholder="%"
-                        keyboardType="number-pad"
-                        editable={hotOrWarm}
-                      />
-                    </View>
-                  ) : null}
+                    ) : null}
+                  </View>
                 </View>
               );
             })
           )}
           <Text style={styles.hint}>
-            Select products and set Status, Strength, and Chance % (required for Hot/Warm). Term is set after the lead is closed.
+            All products are required. Choose a status for each. Strength, Unit Price, and Chance % are required only for Hot and Warm.
           </Text>
         </View>
 
-        <WebSelect
-          label="Lead status *"
-          value={form.lead_status}
-          onValueChange={(v) => setForm((f) => ({ ...f, lead_status: v }))}
-          items={LEAD_STATUS_OPTIONS.map((o) => ({ label: o, value: o }))}
-        />
-        <Text style={styles.hint}>Pipeline status (Hot / Warm / Cold).</Text>
 
         <FormField
           label="Zone"
@@ -803,7 +901,7 @@ function FormField({
   value: string;
   onChangeText: (text: string) => void;
   placeholder?: string;
-  keyboardType?: 'default' | 'phone-pad' | 'number-pad' | 'email-address';
+  keyboardType?: 'default' | 'phone-pad' | 'number-pad' | 'email-address' | 'decimal-pad';
   editable?: boolean;
   maxLength?: number;
 }) {

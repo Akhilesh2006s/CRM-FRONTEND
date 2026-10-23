@@ -16,6 +16,22 @@ import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebInput } from '../../ui/WebPrimitives';
+import {
+  ProductClassesField,
+  ProductRelatedItemsField,
+  ProductSpecimenItemsField,
+  ProductStreamsField,
+} from '../../components/products/ProductExtraFields';
+import {
+  DEFAULT_PRODUCT_CLASSES,
+  productExtraFieldsFromApi,
+  productExtraPayload,
+  relatedItemsError,
+  specimenItemsError,
+  type ProductRelatedItem,
+  type ProductSpecimenItem,
+  type StreamCombo,
+} from '../../lib/productFields';
 import MessageBanner from '../../components/MessageBanner';
 
 const TERM_OPTIONS = ['Term 1', 'Term 2', 'Term 3'] as const;
@@ -45,6 +61,23 @@ export default function ProductEditScreen({ navigation, route }: any) {
     prodStatus: 1,
     calculationType: 'normal' as 'normal' | 'level_based' | 'subject_based',
   });
+  // Classes, Streams, Related Items and Specimen Set (same fields as the web product form).
+  const [classes, setClasses] = useState<string[]>([...DEFAULT_PRODUCT_CLASSES]);
+  const [streams, setStreams] = useState<StreamCombo[]>([]);
+  const [relatedItems, setRelatedItems] = useState<ProductRelatedItem[]>([]);
+  const [specimenItems, setSpecimenItems] = useState<ProductSpecimenItem[]>([]);
+  const [catalogueNames, setCatalogueNames] = useState<string[]>([]);
+
+  useEffect(() => {
+    apiService
+      .get('/products/active')
+      .then((res: any) => {
+        const list = Array.isArray(res) ? res : res?.data || [];
+        const names = list.map((p: any) => String(p.productName || p.name || '').trim()).filter(Boolean);
+        setCatalogueNames([...new Set<string>(names)].sort((a, b) => a.localeCompare(b)));
+      })
+      .catch(() => setCatalogueNames([]));
+  }, []);
 
   useEffect(() => {
     if (id) loadProduct();
@@ -75,6 +108,11 @@ export default function ProductEditScreen({ navigation, route }: any) {
         calculationType:
           (product.calculationType === 'none' ? 'normal' : product.calculationType) || 'normal',
       });
+      const extra = productExtraFieldsFromApi(product);
+      setClasses(extra.classes);
+      setStreams(extra.streams);
+      setRelatedItems(extra.relatedItems);
+      setSpecimenItems(extra.specimenItems);
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to load product');
       navigation.goBack();
@@ -189,7 +227,7 @@ export default function ProductEditScreen({ navigation, route }: any) {
       return;
     }
     if (form.hasSubjects && form.subjects.length === 0) {
-      setErrorMessage('At least one subject is required when subjects are enabled');
+      setErrorMessage('At least one deliverable is required when deliverables are enabled');
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
@@ -209,7 +247,14 @@ export default function ProductEditScreen({ navigation, route }: any) {
       return;
     }
     if (form.calculationType === 'subject_based' && !form.hasSubjects) {
-      setErrorMessage('Subject-based payment requires at least one Special Note');
+      setErrorMessage('Subject-based payment requires at least one Deliverable');
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+      return;
+    }
+
+    const itemsError = relatedItemsError(relatedItems) || specimenItemsError(specimenItems);
+    if (itemsError) {
+      setErrorMessage(itemsError);
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
@@ -227,6 +272,7 @@ export default function ProductEditScreen({ navigation, route }: any) {
         categories: form.hasCategory ? form.categories : [],
         prodStatus: form.prodStatus,
         calculationType: form.calculationType,
+        ...productExtraPayload({ classes, streams, relatedItems, specimenItems }),
       });
       setSuccessMessage('Product updated successfully.');
       setErrorMessage(null);
@@ -328,6 +374,8 @@ export default function ProductEditScreen({ navigation, route }: any) {
             </View>
           )}
 
+          <ProductClassesField value={classes} onChange={setClasses} />
+
           <View style={styles.formSection}>
             <Text style={styles.label}>Term / Level</Text>
             <Text style={styles.hint}>
@@ -384,9 +432,13 @@ export default function ProductEditScreen({ navigation, route }: any) {
             )}
           </View>
 
+          <ProductStreamsField value={streams} subjects={form.hasSubjects ? form.subjects : []} onChange={setStreams} />
+          <ProductRelatedItemsField value={relatedItems} onChange={setRelatedItems} />
+          <ProductSpecimenItemsField value={specimenItems} onChange={setSpecimenItems} productOptions={catalogueNames} />
+
           <View style={styles.formSection}>
             <View style={styles.switchRow}>
-              <Text style={styles.label}>Special Notes</Text>
+              <Text style={styles.label}>Deliverables</Text>
               <Switch
                 value={form.hasSubjects}
                 onValueChange={(value) => setForm({ ...form, hasSubjects: value })}
@@ -398,17 +450,17 @@ export default function ProductEditScreen({ navigation, route }: any) {
 
           {form.hasSubjects && (
             <View style={styles.formSection}>
-              <Text style={styles.label}>Special Notes *</Text>
+              <Text style={styles.label}>Deliverables *</Text>
               <View style={styles.addRow}>
                 <WebInput
                   style={[styles.input, styles.addInput]}
-                  placeholder="Enter special note"
+                  placeholder="Enter deliverable"
                   value={form.newSubject}
                   onChangeText={(text) => setForm({ ...form, newSubject: text })}
                   onSubmitEditing={addSubject}
                 />
                 <TouchableOpacity style={styles.addButton} onPress={addSubject}>
-                  <Text style={styles.addButtonText}>Add Special Note</Text>
+                  <Text style={styles.addButtonText}>Add Deliverable</Text>
                 </TouchableOpacity>
               </View>
               {form.subjects.length > 0 && (

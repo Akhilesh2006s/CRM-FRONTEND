@@ -7,6 +7,7 @@ import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/We
 import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { leaveTypeLabel } from '../../lib/leaveTypes';
+import LeaveApprovalStatus from '../../components/leaves/LeaveApprovalStatus';
 
 export default function LeavesApprovedScreen({ navigation }: any) {
   const { user } = useAuth();
@@ -69,35 +70,6 @@ export default function LeavesApprovedScreen({ navigation }: any) {
             <View key={leave._id} style={styles.card}>
               <View style={styles.cardHeader}>
                 <Text style={styles.employeeName}>{leaveTypeLabel(leave.leaveType)}</Text>
-                <View
-                  style={[
-                    styles.statusBadge,
-                    {
-                      backgroundColor:
-                        leave.status === 'Approved'
-                          ? colors.success + '20'
-                          : leave.status === 'Rejected'
-                            ? colors.error + '20'
-                            : colors.warning + '20',
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.statusBadgeText,
-                      {
-                        color:
-                          leave.status === 'Approved'
-                            ? colors.success
-                            : leave.status === 'Rejected'
-                              ? colors.error
-                              : colors.warning,
-                      },
-                    ]}
-                  >
-                    {leave.status || 'Pending'}
-                  </Text>
-                </View>
               </View>
               <View style={styles.cardBody}>
                 <View style={styles.infoRow}>
@@ -119,6 +91,7 @@ export default function LeavesApprovedScreen({ navigation }: any) {
                   </View>
                 )}
               </View>
+              <LeaveApprovalStatus leave={{ ...leave, status: leave.status || 'Pending' }} showRejectionReason />
             </View>
           ))
         )}

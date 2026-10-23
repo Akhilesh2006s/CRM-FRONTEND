@@ -36,7 +36,7 @@ export default function EmployeesInactiveScreen({ navigation }: any) {
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await apiService.get<Employee[]>('/employees?isActive=false');
+      const data = await apiService.get('/employees?isActive=false');
       setItems(Array.isArray(data) ? data : []);
     } catch (error: any) {
       showAlert('Error', error.message || 'Failed to load inactive employees');

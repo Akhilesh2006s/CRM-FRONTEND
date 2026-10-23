@@ -20,19 +20,25 @@ import { useAuth } from '../context/AuthContext';
 import { colors, gradients } from '../theme/colors';
 import { typography } from '../theme/typography';
 
-const ATTENDANCE_REASONS = [
-  { label: 'Employee', value: 'employee' },
+/** Same reasons / labels as web app/dashboard/attendance/page.tsx (Office is the default). */
+export const ATTENDANCE_REASONS = [
+  { label: 'Office', value: 'office' },
+  { label: 'Field work', value: 'employee' },
   { label: 'Collection', value: 'collection' },
   { label: 'Service', value: 'service' },
   { label: 'Training', value: 'training' },
-  { label: 'Office', value: 'office' },
   { label: 'Other', value: 'other' },
 ];
 
-export default function AttendanceCard() {
+export function attendanceReasonLabel(value?: string | null): string {
+  if (!value) return '—';
+  return ATTENDANCE_REASONS.find((r) => r.value === value)?.label || value;
+}
+
+export default function AttendanceCard({ onChange }: { onChange?: () => void } = {}) {
   const { user, checkAuth } = useAuth();
   const [showModal, setShowModal] = useState(false);
-  const [attendanceReason, setAttendanceReason] = useState('');
+  const [attendanceReason, setAttendanceReason] = useState('office');
   const [photo, setPhoto] = useState<string | null>(null);
   const [pincode, setPincode] = useState('');
   const [town, setTown] = useState('');
@@ -165,6 +171,7 @@ export default function AttendanceCard() {
       }
       
       await checkCurrentAttendance();
+      onChange?.();
       
       // Wait a bit for state to update
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -175,7 +182,7 @@ export default function AttendanceCard() {
           onPress: () => {
             setShowModal(false);
             // Reset form
-            setAttendanceReason('');
+            setAttendanceReason('office');
             setPhoto(null);
             setPincode('');
             setTown('');
@@ -197,6 +204,7 @@ export default function AttendanceCard() {
       await apiService.post('/attendance/check-out', {});
       setCurrentAttendance(null);
       await checkCurrentAttendance();
+      onChange?.();
       Alert.alert('Success', 'Attendance checked out successfully');
     } catch (error: any) {
       Alert.alert('Error', error?.message || 'Failed to check out');
@@ -244,7 +252,7 @@ export default function AttendanceCard() {
             activeOpacity={0.7}
           >
             <LinearGradient
-              colors={gradients.success}
+              colors={gradients.success as [string, string]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.buttonGradient}
@@ -267,7 +275,7 @@ export default function AttendanceCard() {
       >
         <ScrollView style={styles.modalContainer}>
           <LinearGradient
-            colors={gradients.primary}
+            colors={gradients.primary as [string, string]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.modalHeader}
@@ -378,7 +386,7 @@ export default function AttendanceCard() {
               activeOpacity={0.8}
             >
               <LinearGradient
-                colors={gradients.primary}
+                colors={gradients.primary as [string, string]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.buttonGradient}

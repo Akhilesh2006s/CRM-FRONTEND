@@ -6,6 +6,7 @@ import { typography } from '../../theme/typography';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
+import { uniqueProductNames } from '../../lib/crm/productNames';
 
 export default function WarehouseDCAtWarehouseScreen({ navigation }: any) {
   const [dcs, setDcs] = useState<any[]>([]);
@@ -121,7 +122,7 @@ export default function WarehouseDCAtWarehouseScreen({ navigation }: any) {
                       <View style={styles.infoContent}>
                         <Text style={styles.infoLabel}>Product</Text>
                         <Text style={styles.infoValue} numberOfLines={2}>
-                          {dc.product || (dc.productDetails?.[0]?.product) || dc.saleId?.product || 'N/A'}
+                          {uniqueProductNames(dc.productDetails).join(', ') || dc.product || dc.saleId?.product || 'N/A'}
                         </Text>
                       </View>
                     </View>
@@ -131,7 +132,9 @@ export default function WarehouseDCAtWarehouseScreen({ navigation }: any) {
                       <View style={styles.infoContent}>
                         <Text style={styles.infoLabel}>Quantity</Text>
                         <Text style={styles.infoValue}>
-                          {dc.requestedQuantity ?? dc.saleId?.quantity ?? '0'}
+                          {(Array.isArray(dc.productDetails) && dc.productDetails.length
+                            ? dc.productDetails.reduce((sum: number, p: any) => sum + Math.max(Number(p.quantity) || 0, Number(p.strength) || 0), 0)
+                            : 0) || dc.requestedQuantity || dc.saleId?.quantity || '0'}
                         </Text>
                       </View>
                     </View>

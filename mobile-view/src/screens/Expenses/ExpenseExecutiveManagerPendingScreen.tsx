@@ -1,212 +1,238 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-  RefreshControl,
-  Alert,
-  TextInput,
-  Modal,
-} from 'react-native';
-import { Picker } from '@react-native-picker/picker';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { apiService } from '../../services/api';
-import { useAuth } from '../../context/AuthContext';
-import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
-import ScreenShell, { PageSection } from '../../ui/ScreenShell';
-import { WebInput, WebButton, DataTable } from '../../ui/WebPrimitives';
+import { colors, radii } from '../../theme/colors';
+import ScreenShell from '../../ui/ScreenShell';
+import { WebSelect } from '../../ui/WebPrimitives';
+import MessageBanner from '../../components/MessageBanner';
 import { navigateRoot } from '../../navigation/navigationRef';
+import { type ApprovalExpense, expenseStatusColor, expenseStatusText } from '../../lib/expenseApproval';
 
-type Expense = {
+type Person = { _id: string; name: string; email?: string };
+
+type Expense = ApprovalExpense & {
   _id: string;
-  title: string;
+  title?: string;
   amount: number;
   category: string;
-  status: string;
   createdAt: string;
-  employeeId?: { _id: string; name: string };
+  date?: string;
+  pendingMonth?: string;
+  employeeId?: Person | null;
+  trainerId?: Person | null;
+  /** Backend-resolved employee: employeeId, else trainerId, else submitter */
+  employee?: Person | null;
 };
 
 type Employee = { _id: string; name: string };
+type Tab = 'pending' | 'decided';
 
-export default function ExpenseExecutiveManagerPendingScreen() {
-  const { user } = useAuth();
+const getEmployee = (e: Expense) => e.employee || e.employeeId || e.trainerId || e.createdBy || null;
+
+const getExpenseType = (category: string) => {
+  if (category === 'Other' || category === 'others') return 'Others';
+  if (!category) return '-';
+  return category.charAt(0).toUpperCase() + category.slice(1);
+};
+
+const formatDateTime = (d?: string) => {
+  if (!d) return '-';
+  const date = new Date(d);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleString('en-IN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+};
+
+const getPendingMonth = (e: Expense) =>
+  e.pendingMonth || new Date(e.createdAt).toLocaleString('en-US', { month: 'long' });
+
+/** Team expenses: awaiting this Zonal Manager, or already approved / rejected by them (with current status). */
+export default function ExpenseExecutiveManagerPendingScreen({ navigation, route }: any) {
+  const tab: Tab = route?.params?.tab === 'decided' ? 'decided' : 'pending';
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [employeeId, setEmployeeId] = useState('all');
-  const [approving, setApproving] = useState<string | null>(null);
-  const [sendBackId, setSendBackId] = useState<string | null>(null);
-  const [sendBackRemarks, setSendBackRemarks] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
-  const loadEmployees = useCallback(async () => {
-    if (!user?._id) return;
-    try {
-      const data = await apiService.get(`/executive-managers/${user._id}/employees`);
-      setEmployees(Array.isArray(data) ? data : []);
-    } catch {
-      setEmployees([]);
-    }
-  }, [user?._id]);
+  useEffect(() => {
+    apiService
+      .get('/executive-managers/my/executives')
+      .then((data: any) => setEmployees(Array.isArray(data) ? data : []))
+      .catch(() => setEmployees([]));
+  }, []);
 
   const loadExpenses = useCallback(async () => {
     try {
-      const q = employeeId !== 'all' ? `?employeeId=${employeeId}` : '';
-      const data = await apiService.get(`/expenses/executive-manager-pending${q}`);
+      setError(null);
+      const q = employeeId !== 'all' ? `?employeeId=${encodeURIComponent(employeeId)}` : '';
+      const base = tab === 'decided' ? '/expenses/my-decisions' : '/expenses/executive-manager-pending';
+      const data = await apiService.get(`${base}${q}`);
       setExpenses(Array.isArray(data) ? data : []);
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to load expenses');
+      setError(e?.message || 'Failed to load expenses');
       setExpenses([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [employeeId]);
+  }, [employeeId, tab]);
 
-  useEffect(() => {
-    loadEmployees();
-  }, [loadEmployees]);
-
-  useEffect(() => {
-    loadExpenses();
-  }, [loadExpenses]);
-
-  const approve = async (id: string) => {
-    setApproving(id);
-    try {
-      await apiService.put(`/expenses/${id}/approve`, { status: 'Executive Manager Approved' });
+  useFocusEffect(
+    useCallback(() => {
       loadExpenses();
-    } catch (e: any) {
-      Alert.alert('Error', e.message || 'Approve failed');
-    } finally {
-      setApproving(null);
-    }
+    }, [loadExpenses])
+  );
+
+  const openReview = (exp: Expense) => {
+    const empId = getEmployee(exp)?._id;
+    if (empId) navigateRoot('ExpenseManagerUpdate', { employeeId: empId });
+    else navigateRoot('ExpenseEdit', { id: exp._id });
   };
 
-  const confirmSendBack = async () => {
-    if (!sendBackId || !sendBackRemarks.trim()) {
-      Alert.alert('Error', 'Remarks are required');
-      return;
-    }
-    setApproving(sendBackId);
-    try {
-      await apiService.put(`/expenses/${sendBackId}/approve`, {
-        status: 'Needs Correction',
-        managerRemarks: sendBackRemarks.trim(),
-      });
-      setSendBackId(null);
-      setSendBackRemarks('');
-      loadExpenses();
-    } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed');
-    } finally {
-      setApproving(null);
-    }
-  };
-
-  const editExpense = (exp: Expense) => {
-    const empId = exp.employeeId?._id;
-    if (empId) {
-      navigateRoot('ExpenseManagerUpdate', { employeeId: empId });
-    } else {
-      navigateRoot('ExpenseEdit', { id: exp._id });
-    }
+  const setTab = (t: Tab) => {
+    setLoading(true);
+    navigation.setParams({ tab: t });
   };
 
   return (
-    <ScreenShell title="Expense Executive Manager Pending"
-      loading={loading}
+    <ScreenShell
+      title={tab === 'decided' ? 'Team Expenses: Approved / Rejected' : 'Team Expenses to Approve'}
+      loading={loading && !refreshing}
       refreshing={refreshing}
-      onRefresh={() => { setRefreshing(true); load(); }}>
-      <PageSection title="Expense Executive Manager Pending">
-<Text style={styles.title}>EM Pending Expenses</Text>
-      <View style={styles.pickerWrap}>
-        <Picker selectedValue={employeeId} onValueChange={setEmployeeId}>
-          <Picker.Item label="All employees" value="all" />
-          {employees.map((e) => (
-            <Picker.Item key={e._id} label={e.name} value={e._id} />
-          ))}
-        </Picker>
+      onRefresh={() => {
+        setRefreshing(true);
+        loadExpenses();
+      }}
+    >
+      <View style={styles.tabRow}>
+        {(['pending', 'decided'] as Tab[]).map((t) => (
+          <TouchableOpacity key={t} style={[styles.tabBtn, tab === t && styles.tabBtnActive]} onPress={() => setTab(t)}>
+            <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
+              {t === 'pending' ? 'To Approve' : 'Approved / Rejected'}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
-      <FlatList
-        data={expenses}
-        keyExtractor={(item) => item._id}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadExpenses(); }} />
-        }
-        ListEmptyComponent={<Text style={styles.empty}>No pending expenses</Text>}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>{item.title}</Text>
-            <Text style={styles.meta}>₹{item.amount} · {item.category}</Text>
-            <Text style={styles.meta}>{item.employeeId?.name || '—'}</Text>
-            <View style={styles.actions}>
-              <TouchableOpacity style={styles.btnSecondary} onPress={() => editExpense(item)}>
-                <Text style={styles.btnSecondaryText}>Edit</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.btnWarn} onPress={() => setSendBackId(item._id)} disabled={!!approving}>
-                <Text style={styles.btnText}>Send back</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.btnPrimary} onPress={() => approve(item._id)} disabled={approving === item._id}>
-                {approving === item._id ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.btnText}>Approve</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
+
+      <WebSelect
+        label="Employee"
+        value={employeeId === 'all' ? '' : employeeId}
+        placeholder="All Employees"
+        onValueChange={(v) => setEmployeeId(v || 'all')}
+        items={employees.map((e) => ({ label: e.name, value: e._id }))}
       />
-      <Modal visible={!!sendBackId} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>Send back for correction</Text>
-            <WebInput
-              style={styles.modalInput}
-              placeholder="Remarks (required)"
-              value={sendBackRemarks}
-              onChangeText={setSendBackRemarks}
-              multiline
-            />
-            <View style={styles.modalActions}>
-              <TouchableOpacity onPress={() => { setSendBackId(null); setSendBackRemarks(''); }}>
-                <Text>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={confirmSendBack}>
-                <Text style={{ color: colors.primary, fontWeight: '600' }}>Submit</Text>
-              </TouchableOpacity>
+      <Text style={employees.length === 0 ? styles.warnHint : styles.hint}>
+        {employees.length === 0
+          ? 'No employees assigned to you. Please contact an administrator to assign employees.'
+          : `Showing expenses for ${employees.length} assigned employee${employees.length !== 1 ? 's' : ''}`}
+      </Text>
+
+      {error ? <MessageBanner type="error" message={error} onDismiss={() => setError(null)} /> : null}
+
+      {expenses.length === 0 ? (
+        <Text style={styles.empty}>
+          {tab === 'decided'
+            ? 'You have not approved or rejected any expenses yet.'
+            : employees.length === 0
+              ? 'No employees assigned to you. Please contact an administrator.'
+              : 'No expenses are awaiting your approval'}
+        </Text>
+      ) : tab === 'decided' ? (
+        expenses.map((exp, i) => {
+          const c = expenseStatusColor(exp.status);
+          return (
+            <View key={exp._id} style={styles.card}>
+              <View style={styles.rowBetween}>
+                <Text style={styles.cardTitle}>
+                  {i + 1}. {getEmployee(exp)?.name || '-'}
+                </Text>
+                <Text style={styles.meta}>{exp.date ? new Date(exp.date).toLocaleDateString('en-IN') : '-'}</Text>
+              </View>
+              <Text style={styles.meta}>Type: {getExpenseType(exp.category)}</Text>
+              <View style={styles.rowBetween}>
+                <Text style={styles.meta}>Claimed: {Number(exp.employeeAmount ?? exp.amount).toFixed(2)}</Text>
+                <Text style={styles.metaStrong}>
+                  Approved:{' '}
+                  {exp.status === 'Rejected' ? '-' : Number(exp.firstLevelApprovedAmount ?? exp.approvedAmount ?? 0).toFixed(2)}
+                </Text>
+              </View>
+              <View style={[styles.badge, { backgroundColor: c.bg }]}>
+                <Text style={[styles.badgeText, { color: c.text }]}>{expenseStatusText(exp)}</Text>
+              </View>
+              <Text style={styles.meta}>Your remarks: {exp.managerRemarks || exp.rejectionReason || '-'}</Text>
             </View>
-          </View>
-        </View>
-      </Modal>
-      </PageSection>
+          );
+        })
+      ) : (
+        expenses.map((exp, i) => (
+          <TouchableOpacity key={exp._id} style={styles.card} onPress={() => openReview(exp)} activeOpacity={0.8}>
+            <View style={styles.rowBetween}>
+              <Text style={styles.cardTitle}>
+                {i + 1}. {getEmployee(exp)?.name || '-'}
+              </Text>
+              <Text style={styles.metaStrong}>{Number(exp.amount).toFixed(2)}</Text>
+            </View>
+            <Text style={styles.meta}>Raised: {formatDateTime(exp.createdAt)}</Text>
+            <Text style={styles.meta}>
+              Type: {getExpenseType(exp.category)} · Pending month: {getPendingMonth(exp)}
+            </Text>
+            <View style={styles.reviewBtn}>
+              <Text style={styles.reviewBtnText}>Review & Approve</Text>
+            </View>
+          </TouchableOpacity>
+        ))
+      )}
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background, padding: 16 },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  title: { ...typography.heading.h2, marginBottom: 12 },
-  pickerWrap: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, marginBottom: 12 },
-  card: { backgroundColor: colors.backgroundLight, padding: 14, borderRadius: 12, marginBottom: 10 },
-  cardTitle: { fontWeight: '600', fontSize: 16 },
-  meta: { color: colors.textSecondary, marginTop: 4 },
-  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
-  btnPrimary: { backgroundColor: colors.primary, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
-  btnWarn: { backgroundColor: '#F59E0B', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
-  btnSecondary: { backgroundColor: colors.border, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
-  btnText: { color: '#fff', fontWeight: '600', fontSize: 13 },
-  btnSecondaryText: { fontWeight: '600', fontSize: 13 },
+  tabRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  tabBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.backgroundLight,
+  },
+  tabBtnActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  tabText: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
+  tabTextActive: { color: colors.primaryForeground },
+  hint: { fontSize: 12, color: colors.textSecondary, marginTop: -4, marginBottom: 12 },
+  warnHint: { fontSize: 12, color: colors.warning, marginTop: -4, marginBottom: 12 },
+  card: {
+    backgroundColor: colors.backgroundLight,
+    padding: 14,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 10,
+    gap: 4,
+  },
+  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
+  cardTitle: { fontWeight: '600', fontSize: 15, color: colors.textPrimary, flexShrink: 1 },
+  meta: { color: colors.textSecondary, fontSize: 13 },
+  metaStrong: { color: colors.textPrimary, fontSize: 14, fontWeight: '600' },
+  badge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: radii.sm, marginVertical: 4 },
+  badgeText: { fontSize: 12, fontWeight: '500' },
+  reviewBtn: {
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    backgroundColor: colors.success,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radii.md,
+  },
+  reviewBtnText: { color: '#fff', fontWeight: '600', fontSize: 13 },
   empty: { textAlign: 'center', color: colors.textSecondary, marginTop: 40 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-  modalBox: { backgroundColor: colors.background, padding: 20, borderTopLeftRadius: 16, borderTopRightRadius: 16 },
-  modalTitle: { fontSize: 18, fontWeight: '600', marginBottom: 12 },
-  modalInput: { borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, minHeight: 80, marginBottom: 16 },
-  modalActions: { flexDirection: 'row', justifyContent: 'space-between' },
 });

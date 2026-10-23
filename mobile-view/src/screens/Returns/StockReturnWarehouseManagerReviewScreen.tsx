@@ -13,11 +13,17 @@ import { typography } from '../../theme/typography';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
+import { printReturnSlip } from '../../lib/returnSlip';
 
 type ProductLine = {
   id: string;
   product: string;
   productName: string;
+  class: string;
+  productCategory: string;
+  level: string;
+  subject: string;
+  specs: string;
   soldQty: number;
   fieldExecQty: number;
   warehouseExecQty: number;
@@ -49,9 +55,16 @@ type ReturnDetail = {
   managerRemarks?: string;
   rejectionReason?: string;
   approvedAt?: string;
+  returnType?: string;
+  saleId?: string;
+  transport?: string;
   dcOrderId?: { school_name?: string; school_code?: string };
   products?: Array<{
     product: string;
+    class?: string;
+    productCategory?: string;
+    subject?: string;
+    specs?: string;
     level?: string;
     soldQty: number;
     returnQty: number;
@@ -68,10 +81,18 @@ type ReturnDetail = {
 };
 
 const DECISION_OPTIONS = ['Approve', 'Partial Approve', 'Reject', 'Send Back'];
-const STOCK_BUCKETS = ['Sellable', 'Damaged', 'Expired', 'QC / Hold'];
+/** Same buckets as web app/dashboard/returns/warehouse-manager/page.tsx */
+const STOCK_BUCKETS = ['Sellable', 'Marked by students', 'Wrong Print', 'Damaged', 'Expired', 'QC / Hold'];
+/** Warehouse conditions that map 1:1 onto a stock bucket (used as the default bucket). */
+const CONDITION_BUCKETS = ['Sellable', 'Marked by students', 'Wrong Print', 'Damaged', 'Expired'];
 
+/** The Warehouse Executive's "submit to manager" sets WAREHOUSE_MANAGER_PENDING. */
 function canDecide(status?: string) {
-  return status === 'Received' || status === 'Pending Manager Approval';
+  return status === 'WAREHOUSE_MANAGER_PENDING' || status === 'Received' || status === 'Pending Manager Approval';
+}
+
+function statusLabel(status?: string) {
+  return status === 'WAREHOUSE_MANAGER_PENDING' ? 'Pending Manager Approval' : status || '—';
 }
 
 function qtyDiff(field: number, wh: number) {
@@ -115,6 +136,11 @@ export default function StockReturnWarehouseManagerReviewScreen({ navigation, ro
           id: `line-${idx}`,
           product: p.product || '',
           productName: p.level || '',
+          class: p.class || '',
+          productCategory: p.productCategory || '',
+          level: p.level || '',
+          subject: p.subject || '',
+          specs: p.specs || '',
           soldQty: Number(p.soldQty) || 0,
           fieldExecQty: Number(p.returnQty) || 0,
           warehouseExecQty: Number(p.receivedQty) || 0,
@@ -123,7 +149,9 @@ export default function StockReturnWarehouseManagerReviewScreen({ navigation, ro
           mismatchRemark: p.mismatchRemark || '',
           managerDecision: p.managerDecision || '',
           approvedQty: Number(p.approvedQty) || 0,
-          stockBucket: p.stockBucket || '',
+          stockBucket:
+            p.stockBucket ||
+            (CONDITION_BUCKETS.includes(String(p.condition || '')) ? String(p.condition) : ''),
           managerRemark: p.managerRemark || '',
         })),
       );
@@ -177,8 +205,11 @@ export default function StockReturnWarehouseManagerReviewScreen({ navigation, ro
           Alert.alert('Validation', `Stock bucket required for ${l.product}`);
           return false;
         }
-        if (l.managerDecision === 'Partial Approve' && !l.managerRemark.trim()) {
-          Alert.alert('Validation', `Remark required for partial approval on ${l.product}`);
+        if (
+          !l.managerRemark.trim() &&
+          (l.managerDecision === 'Partial Approve' || l.approvedQty !== l.warehouseExecQty)
+        ) {
+          Alert.alert('Validation', `Reason is required for ${l.product} (partial approval or quantity override)`);
           return false;
         }
       }
@@ -206,9 +237,16 @@ export default function StockReturnWarehouseManagerReviewScreen({ navigation, ro
     if (!detail) return;
     setProcessing(true);
     try {
+      // Same payload shapes as web: reject sends no lines, send back only line remarks.
+      const products =
+        action === 'reject'
+          ? undefined
+          : action === 'send_back'
+            ? lines.map((l) => ({ product: l.product, managerRemark: l.managerRemark }))
+            : buildProductPayload();
       await apiService.put(`/stock-returns/${detail._id}/manager-action`, {
         action,
-        products: buildProductPayload(),
+        ...(products ? { products } : {}),
         managerRemarks,
         ...extra,
       });
@@ -278,7 +316,7 @@ export default function StockReturnWarehouseManagerReviewScreen({ navigation, ro
     <ScreenShell
       title="Return Review"
       subtitle={`Return No. ${detail.returnNumber ?? detail.returnId} · ${schoolName}${
-        readOnly ? ` (${detail.status} — view only)` : ''
+        readOnly ? ` (${statusLabel(detail.status)} — view only)` : ''
       }`}
       loading={false}
       noScroll
@@ -309,7 +347,7 @@ export default function StockReturnWarehouseManagerReviewScreen({ navigation, ro
             <InfoPair label="School" value={schoolName} />
             <InfoPair label="School code" value={schoolCode} />
             <InfoPair label="LR No" value={detail.lrNumber || '—'} />
-            <InfoPair label="Status" value={detail.status || '—'} />
+            <InfoPair label="Status" value={statusLabel(detail.status)} />
           </View>
           {detail.executiveRemarks ? (
             <InfoPair label="Field exec remarks" value={detail.executiveRemarks} />
@@ -364,7 +402,11 @@ export default function StockReturnWarehouseManagerReviewScreen({ navigation, ro
                   style={[styles.lineCard, mismatch && styles.lineCardMismatch]}
                 >
                   <Text style={styles.lineProduct}>{line.product || '—'}</Text>
-                  <InfoPair label="Name" value={line.productName || '—'} />
+                  <Text style={styles.lineMeta}>
+                    {[line.class ? `Class ${line.class}` : '', line.productCategory, line.level, line.subject || line.specs]
+                      .filter(Boolean)
+                      .join(' · ') || '—'}
+                  </Text>
                   <InfoPair label="Sold" value={String(line.soldQty)} />
 
                   <View style={styles.groupBlue}>
@@ -470,6 +512,39 @@ export default function StockReturnWarehouseManagerReviewScreen({ navigation, ro
         </View>
 
         <View style={styles.footer}>
+          <WebButton
+            title="Print Return Slip"
+            variant="outline"
+            onPress={() =>
+              printReturnSlip(
+                {
+                  returnId: detail.returnId,
+                  saleId: detail.saleId,
+                  returnType: detail.returnType,
+                  status: statusLabel(detail.status),
+                  executiveName: detail.executiveName,
+                  customerName: schoolName,
+                  schoolCode,
+                  returnDate: detail.returnDate,
+                  lrNumber: detail.lrNumber,
+                  transport: detail.transport,
+                  products: lines.map((l) => ({
+                    product: l.product,
+                    class: l.class,
+                    productCategory: l.productCategory,
+                    level: l.level,
+                    subject: l.subject,
+                    specs: l.specs,
+                    returnQty: l.fieldExecQty,
+                    receivedQty: l.warehouseExecQty,
+                    condition: l.condition,
+                    reason: l.reason,
+                  })),
+                },
+                { showReceived: true },
+              ).catch((e: any) => Alert.alert('Print', e?.message || 'Could not create the return slip'))
+            }
+          />
           <WebButton
             title="Back to list"
             variant="outline"
@@ -601,6 +676,11 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 10,
     gap: 6,
+  },
+  lineMeta: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: 4,
   },
   lineCardMismatch: {
     backgroundColor: '#FFFBEB',

@@ -22,9 +22,20 @@ import { phoneDigitsError, sanitizePhoneDigits } from '../../utils/phone';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebSelect } from '../../ui/WebPrimitives';
 import { useAuth } from '../../context/AuthContext';
+import { findMatchingOrderProduct } from '../../lib/crm/clientDcProductRows';
+import { printReturnSlip } from '../../lib/returnSlip';
 
-const RETURN_TYPES = ['Damaged', 'Expired', 'Excess', 'Wrong item', 'Replacement'];
-const RETURN_REASONS = ['Damaged', 'Expired', 'Excess', 'Wrong item', 'Replacement', 'Customer request', 'Quality issue', 'Other'];
+/** Same lists as web app/dashboard/returns/executive/page.tsx */
+const RETURN_TYPES = ['Damaged', 'Expired', 'Wrong Print', 'Excess', 'Wrong item', 'Replacement'];
+const RETURN_REASONS = ['Damaged', 'Expired', 'Wrong Print', 'Excess', 'Wrong item', 'Replacement', 'Customer request', 'Quality issue', 'Other'];
+/** Photo evidence is mandatory only for these return types. */
+const PHOTO_REQUIRED_TYPES = ['Damaged', 'Expired', 'Wrong Print'];
+
+/** Specimen copies and other Training Material went out free; they are not returned against a sale. */
+function isFreeDcLine(p: { category?: string; itemType?: string }): boolean {
+  const cat = String(p?.category || '').toLowerCase().replace(/[^a-z]/g, '');
+  return String(p?.itemType || '') === 'Specimen Copy' || cat.startsWith('training') || cat === 'shortage';
+}
 
 function defaultFinYear(fromDate?: string) {
   const d = fromDate ? new Date(fromDate) : new Date();
@@ -75,27 +86,38 @@ function loadCompletedDcOptions(dcs: any[]) {
     .filter(Boolean);
 }
 
+/** One DC line with its class / series / level / deliverables (web mergeDcProductLines). */
+function dcLineRow(raw: any, matched: any | null) {
+  const pick = (k: string) => String(raw?.[k] ?? matched?.[k] ?? '').trim();
+  return {
+    product_name: String(
+      raw?.product_name || raw?.product || raw?.productName || raw?.name || matched?.product_name || matched?.product || ''
+    ).trim(),
+    class: pick('class'),
+    level: pick('level'),
+    subject: pick('subject'),
+    productCategory: pick('productCategory'),
+    specs: pick('specs'),
+    category: raw?.category ?? matched?.category,
+    itemType: raw?.itemType ?? matched?.itemType,
+    quantity: productQuantity(raw) || productQuantity(matched),
+    unit_price: productUnitPrice(raw) || productUnitPrice(matched),
+  };
+}
+
 function normalizeDcProducts(dc: any, order: any | null) {
   const productDetails = Array.isArray(dc?.productDetails) ? dc.productDetails : [];
+  const orderList = Array.isArray(order?.products) ? order.products : [];
+  const used = new Set<number>();
   const fromDetails = productDetails
-    .map((p: any) => ({
-      product_name: String(p.product || p.productName || p.product_name || '').trim(),
-      quantity: productQuantity(p),
-      unit_price: productUnitPrice(p),
-    }))
+    .map((p: any, idx: number) => dcLineRow(p, findMatchingOrderProduct(orderList, p, idx, used)))
     .filter((p: { product_name: string }) => p.product_name);
 
   if (fromDetails.length > 0) return fromDetails;
 
-  const orderProducts = Array.isArray(order?.products)
-    ? order.products
-        .map((p: any) => ({
-          product_name: String(p.product_name || p.product || '').trim(),
-          quantity: productQuantity(p),
-          unit_price: productUnitPrice(p),
-        }))
-        .filter((p: { product_name: string }) => p.product_name)
-    : [];
+  const orderProducts = orderList
+    .map((p: any) => dcLineRow(p, p))
+    .filter((p: { product_name: string }) => p.product_name);
 
   if (orderProducts.length > 0) return orderProducts;
 
@@ -305,6 +327,11 @@ function ReadOnlyField({ label, value }: { label: string; value: string }) {
 type ProductRow = {
   id: string;
   product: string;
+  class: string;
+  level: string;
+  subject: string;
+  productCategory: string;
+  specs: string;
   soldQty: number;
   returnQty: string;
   unitPrice: string;
@@ -313,10 +340,15 @@ type ProductRow = {
 };
 
 function productsToRows(order: any): ProductRow[] {
-  const list = Array.isArray(order?.products) ? order.products : [];
+  const list = (Array.isArray(order?.products) ? order.products : []).filter((p: any) => !isFreeDcLine(p));
   return list.map((p: any, i: number) => ({
     id: `row-${order._id}-${i}`,
     product: p.product_name || p.product || '',
+    class: String(p.class || ''),
+    level: String(p.level || ''),
+    subject: String(p.subject || ''),
+    productCategory: String(p.productCategory || ''),
+    specs: String(p.specs || ''),
     soldQty: productQuantity(p),
     returnQty: '',
     unitPrice: String(productUnitPrice(p)),
@@ -324,6 +356,8 @@ function productsToRows(order: any): ProductRow[] {
     remarks: '',
   }));
 }
+
+const EMPTY_LINE_FIELDS = { class: '', level: '', subject: '', productCategory: '', specs: '' };
 
 export default function StockReturnAddScreen({ navigation, route }: any) {
   const { user } = useAuth();
@@ -343,7 +377,11 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
   const [warehouse, setWarehouse] = useState('Main Warehouse');
   const [returnDate, setReturnDate] = useState(new Date().toISOString().split('T')[0]);
   const [returnType, setReturnType] = useState('');
+  /** Every return line: the DC's lines (kept while switching product) plus rows added by hand. */
   const [productRows, setProductRows] = useState<ProductRow[]>([]);
+  /** Ids of rows that came from the selected DC; only those of `returnProduct` are shown. */
+  const [dcLineIds, setDcLineIds] = useState<string[]>([]);
+  const [returnProduct, setReturnProduct] = useState('');
   const [evidencePhotos, setEvidencePhotos] = useState<string[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [executiveRemarks, setExecutiveRemarks] = useState('');
@@ -380,8 +418,16 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
     setContactMobile(order.contact_mobile || '');
     setAddress(order.address || '');
     if (order.lrNo) setLrNumber(order.lrNo);
-    setProductRows(productsToRows(order));
+    const rows = productsToRows(order);
+    setProductRows(rows);
+    setDcLineIds(rows.map((r) => r.id));
+    // Choose the product first; a DC with a single product selects it straight away.
+    const names = [...new Set(rows.map((r) => r.product).filter(Boolean))];
+    setReturnProduct(names.length === 1 ? names[0] : '');
   };
+
+  const dcProductNames = [...new Set(productRows.filter((r) => dcLineIds.includes(r.id)).map((r) => r.product).filter(Boolean))];
+  const visibleRows = productRows.filter((r) => !dcLineIds.includes(r.id) || r.product === returnProduct);
 
   const handleCompletedDcSelect = async (completedDcId: string) => {
     setSelectedCompletedDcId(completedDcId);
@@ -393,6 +439,8 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
       setSaleId('');
       setDcOrderId('');
       setProductRows([]);
+      setDcLineIds([]);
+      setReturnProduct('');
     }
 
     try {
@@ -464,6 +512,11 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
               ret.products.map((p: any, i: number) => ({
                 id: `row-${i}-${p.product}`,
                 product: p.product || '',
+                class: String(p.class || ''),
+                level: String(p.level || ''),
+                subject: String(p.subject || ''),
+                productCategory: String(p.productCategory || ''),
+                specs: String(p.specs || ''),
                 soldQty: Number(p.soldQty) || 0,
                 returnQty: String(p.returnQty ?? ''),
                 unitPrice: String(p.unitPrice ?? ''),
@@ -491,6 +544,7 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
       {
         id: `product-${Date.now()}`,
         product: '',
+        ...EMPTY_LINE_FIELDS,
         soldQty: 0,
         returnQty: '',
         unitPrice: '',
@@ -588,10 +642,9 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
     returnedProductRows.length > 0 &&
     !hasInvalidReturnQuantity &&
     returnedProductRows.every((r) => (r.reason || '').trim() !== '');
-  const evidenceRequired = returnType === 'Damaged' || returnType === 'Expired';
-  const evidenceOk =
-    evidencePhotos.length > 0 &&
-    (!evidenceRequired || (executiveRemarks || '').trim() !== '');
+  // Web rule: photo evidence only for Damaged / Expired / Wrong Print; remarks are optional.
+  const evidenceRequired = PHOTO_REQUIRED_TYPES.includes(returnType);
+  const evidenceOk = !evidenceRequired || evidencePhotos.length > 0;
   const canSubmit =
     productsValid &&
     evidenceOk &&
@@ -608,6 +661,11 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
       .filter((r) => parseInt(r.returnQty, 10) > 0)
       .map((r) => ({
         product: r.product,
+        class: r.class,
+        level: r.level,
+        subject: r.subject,
+        productCategory: r.productCategory || undefined,
+        specs: r.specs || undefined,
         soldQty: r.soldQty,
         returnQty: parseInt(r.returnQty, 10) || 0,
         unitPrice: parseFloat(r.unitPrice) || 0,
@@ -654,7 +712,7 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
     try {
       const payload = { ...buildPayload(), status: 'Draft' };
       if (payload.products.length === 0) {
-        payload.products = [{ product: '—', soldQty: 0, returnQty: 0, reason: 'Draft', remarks: '' }];
+        payload.products = [{ product: '—', class: '', level: '', subject: '', productCategory: undefined, specs: undefined, soldQty: 0, returnQty: 0, unitPrice: 0, reason: 'Draft', remarks: '' }];
         payload.totalItems = 0;
         payload.totalQuantity = 0;
       }
@@ -677,7 +735,7 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
     if (!canSubmit) {
       Alert.alert(
         'Validation',
-        'Please complete all required fields: Customer, Sale/DC, Warehouse, Return Date & Type, LR No, Fin Year, at least one product with Return Qty and Reason, and at least one photo. Damaged/Expired returns also require executive remarks.'
+        'Please complete all required fields: Customer, Sale/DC, Warehouse, Return Date & Type, LR No, Fin Year and at least one product with Return Qty and Reason. Damaged, Expired or Wrong Print returns also need photo evidence.'
       );
       return;
     }
@@ -745,9 +803,14 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
           </View>
 
           <Text style={styles.sectionTitle}>Products</Text>
-          <View style={viewStyles.tableCard}>
+          <ScrollView horizontal showsHorizontalScrollIndicator>
+          <View style={[viewStyles.tableCard, { minWidth: 640 }]}>
             <View style={styles.tableHeader}>
               <Text style={[styles.th, viewStyles.colProduct]}>Product</Text>
+              <Text style={[styles.th, viewStyles.colMeta]}>Class</Text>
+              <Text style={[styles.th, viewStyles.colMetaWide]}>Series</Text>
+              <Text style={[styles.th, viewStyles.colMeta]}>Term / Level</Text>
+              <Text style={[styles.th, viewStyles.colMetaWide]}>Deliverables</Text>
               <Text style={[styles.th, viewStyles.colQty]}>Sold Qty</Text>
               <Text style={[styles.th, viewStyles.colQty]}>Return Qty</Text>
               <Text style={[styles.th, viewStyles.colReason]}>Reason</Text>
@@ -761,6 +824,10 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
                   <Text style={[styles.td, viewStyles.colProduct]} numberOfLines={1}>
                     {row.product}
                   </Text>
+                  <Text style={[styles.td, viewStyles.colMeta]}>{row.class || '-'}</Text>
+                  <Text style={[styles.td, viewStyles.colMetaWide]}>{row.productCategory || '-'}</Text>
+                  <Text style={[styles.td, viewStyles.colMeta]}>{row.level || '-'}</Text>
+                  <Text style={[styles.td, viewStyles.colMetaWide]}>{row.subject || row.specs || '-'}</Text>
                   <Text style={[styles.td, viewStyles.colQty]}>{row.soldQty}</Text>
                   <Text style={[styles.td, viewStyles.colQty]}>{row.returnQty || '0'}</Text>
                   <Text style={[styles.td, viewStyles.colReason]} numberOfLines={2}>
@@ -773,6 +840,7 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
               ))
             )}
           </View>
+          </ScrollView>
 
           <Text style={styles.sectionTitle}>Evidence Photos</Text>
           {evidencePhotos.length > 0 ? (
@@ -807,6 +875,19 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
             />
           </View>
 
+          <TouchableOpacity
+            style={[viewStyles.closeButton, viewStyles.printButton]}
+            onPress={() =>
+              printReturnSlip({
+                ...existingReturn,
+                returnId: displayReturnId || existingReturn.returnId,
+                saleId: saleIdDisplay,
+                products: productRows.map((r) => ({ ...r, returnQty: parseInt(r.returnQty, 10) || 0 })),
+              }).catch((e: any) => Alert.alert('Print', e?.message || 'Could not create the return slip'))
+            }
+          >
+            <Text style={viewStyles.printButtonText}>Print Return Slip</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={viewStyles.closeButton} onPress={() => navigation.goBack()}>
             <Text style={viewStyles.closeButtonText}>Close</Text>
           </TouchableOpacity>
@@ -941,10 +1022,27 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
             </TouchableOpacity>
           </View>
 
+          {dcProductNames.length > 0 ? (
+            <View>
+              <WebSelect
+                label="Product to return *"
+                value={returnProduct}
+                onValueChange={setReturnProduct}
+                placeholder="Select product (e.g. EEL, IIT)"
+                items={dcProductNames.map((n) => ({ label: n, value: n }))}
+              />
+              <Text style={styles.hint}>Only the classes, series and levels sent for this product are listed.</Text>
+            </View>
+          ) : null}
+
           <ScrollView horizontal showsHorizontalScrollIndicator>
             <View style={formStyles.productTable}>
               <View style={formStyles.productTableHeader}>
                 <Text style={[formStyles.productTh, formStyles.colProductName]}>Product</Text>
+                <Text style={[formStyles.productTh, formStyles.colMetaCell]}>Class</Text>
+                <Text style={[formStyles.productTh, formStyles.colMetaWideCell]}>Series</Text>
+                <Text style={[formStyles.productTh, formStyles.colMetaCell]}>Term / Level</Text>
+                <Text style={[formStyles.productTh, formStyles.colMetaWideCell]}>Deliverables</Text>
                 <Text style={[formStyles.productTh, formStyles.colSoldQty]}>Sold Qty</Text>
                 <Text style={[formStyles.productTh, formStyles.colReturnQty]}>Return Qty</Text>
                 <Text style={[formStyles.productTh, formStyles.colUnitPrice]}>Unit Price</Text>
@@ -952,16 +1050,18 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
                 <Text style={[formStyles.productTh, formStyles.colRemarksCell]}>Remarks</Text>
                 <Text style={[formStyles.productTh, formStyles.colActionCell]}>Action</Text>
               </View>
-              {productRows.length === 0 ? (
+              {visibleRows.length === 0 ? (
                 <View style={formStyles.productTableEmpty}>
                   <Text style={styles.emptyText}>
-                    {selectedCompletedDcId
-                      ? 'No products on this DC. Tap + Add Product to add a row.'
-                      : 'Select Sale/DC Order above to load products, or tap + Add Product.'}
+                    {dcProductNames.length > 0 && !returnProduct
+                      ? 'Select the product to return.'
+                      : selectedCompletedDcId
+                        ? 'No products on this DC. Tap + Add Product to add a row.'
+                        : 'Select Sale/DC Order above to load products, or tap + Add Product.'}
                   </Text>
                 </View>
               ) : (
-                productRows.map((row) => (
+                visibleRows.map((row) => (
                   <View key={row.id} style={formStyles.productTableRow}>
                     <View style={formStyles.colProductName}>
                       {row.product ? (
@@ -981,6 +1081,11 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
                             if (op) {
                               updateProductRow(row.id, 'soldQty', productQuantity(op));
                               updateProductRow(row.id, 'unitPrice', String(productUnitPrice(op)));
+                              updateProductRow(row.id, 'class', String(op.class || ''));
+                              updateProductRow(row.id, 'level', String(op.level || ''));
+                              updateProductRow(row.id, 'subject', String(op.subject || ''));
+                              updateProductRow(row.id, 'productCategory', String(op.productCategory || ''));
+                              updateProductRow(row.id, 'specs', String(op.specs || ''));
                             }
                           }}
                           placeholder="Select product"
@@ -988,6 +1093,10 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
                         />
                       )}
                     </View>
+                    <Text style={[formStyles.metaText, formStyles.colMetaCell]}>{row.class || '-'}</Text>
+                    <Text style={[formStyles.metaText, formStyles.colMetaWideCell]}>{row.productCategory || '-'}</Text>
+                    <Text style={[formStyles.metaText, formStyles.colMetaCell]}>{row.level || '-'}</Text>
+                    <Text style={[formStyles.metaText, formStyles.colMetaWideCell]}>{row.subject || row.specs || '-'}</Text>
                     <View style={formStyles.colSoldQty}>
                       <WebInput
                         style={[formStyles.tableInput, formStyles.readOnlyInput]}
@@ -1044,15 +1153,11 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
 
         {/* Evidence & Remarks */}
         <View style={formStyles.section}>
-          <Text style={styles.sectionTitle}>
-            Evidence & Remarks
-            {' *'}
-          </Text>
-          <Text style={styles.warningText}>At least one photo is mandatory for every stock return.</Text>
-          {evidenceRequired && (
-            <Text style={styles.warningText}>Executive remarks are also mandatory for Damaged/Expired.</Text>
-          )}
-          <Text style={formStyles.label}>Photo Upload *</Text>
+          <Text style={styles.sectionTitle}>Evidence & Remarks</Text>
+          {evidenceRequired ? (
+            <Text style={styles.warningText}>Photo evidence is mandatory for Damaged, Expired or Wrong Print returns.</Text>
+          ) : null}
+          <Text style={formStyles.label}>{evidenceRequired ? 'Photo Upload *' : 'Photo Upload'}</Text>
           <TouchableOpacity style={styles.photoButton} onPress={addPhoto} disabled={uploadingPhoto}>
             {uploadingPhoto ? (
               <ActivityIndicator color={colors.primary} />
@@ -1330,6 +1435,9 @@ const formStyles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   colProductName: { width: 100, paddingRight: 8 },
+  colMetaCell: { width: 70, paddingRight: 8 },
+  colMetaWideCell: { width: 110, paddingRight: 8 },
+  metaText: { ...typography.body.small, color: colors.textPrimary },
   colSoldQty: { width: 72, paddingRight: 8 },
   colReturnQty: { width: 72, paddingRight: 8 },
   colUnitPrice: { width: 80, paddingRight: 8 },
@@ -1427,6 +1535,10 @@ const viewStyles = StyleSheet.create({
   colQty: { width: 52, paddingRight: 4 },
   colReason: { flex: 1, minWidth: 60 },
   colRemarks: { flex: 1, minWidth: 56 },
+  colMeta: { width: 60, paddingRight: 4 },
+  colMetaWide: { width: 90, paddingRight: 4 },
+  printButton: { backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.primary, marginBottom: 8 },
+  printButtonText: { ...typography.body.medium, color: colors.primary, fontWeight: '600' },
   evidencePhoto: {
     width: 100,
     height: 100,

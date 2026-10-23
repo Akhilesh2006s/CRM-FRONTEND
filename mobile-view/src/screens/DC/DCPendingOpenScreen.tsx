@@ -25,65 +25,52 @@ import { useAuth } from '../../context/AuthContext';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
-import {
-  applyCatalogDefaultsToRow,
-  findCatalogProduct,
-  getCatalogProductNames,
-  getProductCategoryOptions,
-  getProductLevelsOptions,
-  getProductSpecsOptions,
-  getProductSubjectsOptions,
-} from '../../utils/productCatalog';
+import { useDcCatalog } from '../../hooks/useDcCatalog';
+import { DcCategoryPicker } from '../../components/dc/DcCategoryPicker';
+import { DC_ROW_CATEGORIES, canonicalDcRowCategory } from '../../lib/crm/dcRowCategory';
+import { withBilledTotals } from '../../lib/crm/dcPaymentDivisors';
+import { splitDeliverableRows } from '../../lib/crm/deliverableStockRows';
+import { keepMyClientsOwnedProductRows } from '../../lib/crm/clientDcProductRows';
+import { resolveExistingProductTerm } from '../../lib/crm/productTerm';
 
 const CLASSES = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
-const CATEGORY_OPTIONS = [
-  'NA',
-  'Training Mterial',
-  'new Students',
-  'Old Students',
-  'Excess',
-  'Exchange',
-  'Shortage',
-  'Excess-OldStudents',
-  'Excess NewStudents',
-];
 const DC_CATEGORIES = ['Term 1', 'Term 2', 'Term 3', 'Full Year'];
 const TERMS = ['Term 1', 'Term 2', 'Both'];
+const CATEGORY_OPTIONS: string[] = [...DC_ROW_CATEGORIES];
 
 type ProductRow = {
   id: string;
   product: string;
+  productName?: string;
   class: string;
   category: string;
   productCategory?: string;
   specs: string;
   subject?: string;
+  itemType?: string;
+  section?: string;
+  program?: string;
+  stream?: string;
+  quantity: number;
   strength: number;
   level: string;
   term: string;
+  price?: number;
+  unit_price?: number;
+  total?: number;
 };
 
-const DEFAULT_ROW: Omit<ProductRow, 'id'> = {
-  product: 'Abacus',
-  class: '1',
-  category: 'new Students',
-  specs: 'Regular',
-  strength: 0,
-  level: 'L1',
-  term: 'Term 1',
-};
-
-function resolveLineQty(p: { quantity?: unknown; strength?: unknown; qty?: unknown }) {
-  for (const raw of [p.quantity, p.strength, p.qty]) {
-    const n = Number(raw);
-    if (Number.isFinite(n) && n > 0) return n;
-  }
-  for (const raw of [p.quantity, p.strength, p.qty]) {
-    const n = Number(raw);
-    if (Number.isFinite(n) && n >= 0) return n;
-  }
-  return 0;
+/** Quantity of a pending row (quantity, else strength) — web pendingRowQty. */
+function pendingRowQty(row: { quantity?: number; strength?: number }) {
+  const q = Number(row.quantity);
+  if (Number.isFinite(q) && q > 0) return q;
+  const s = Number(row.strength);
+  return Number.isFinite(s) && s > 0 ? s : 0;
 }
+
+const normalizeSku = (v: any) => String(v || '').trim().toLowerCase().replace(/\s+/g, '');
+const STUDENT_CATEGORY_VALUES = [...CATEGORY_OPTIONS, 'New Students', 'Existing Students', 'Both', 'New School', 'Existing School'];
+const isStudentCategory = (v: any) => STUDENT_CATEGORY_VALUES.some((sc) => normalizeSku(sc) === normalizeSku(v));
 
 const dash = (v?: string | null) => {
   const s = String(v || '').trim();
@@ -222,7 +209,23 @@ export default function DCPendingOpenScreen({ navigation, route }: any) {
 
   const [dc, setDc] = useState<any>(null);
   const [dcOrder, setDcOrder] = useState<DcOrderData | null>(null);
-  const [products, setProducts] = useState<any[]>([]);
+  const catalog = useDcCatalog();
+  const {
+    productNames: availableProducts,
+    getProductLevels,
+    getProductSpecs,
+    getProductSubjects,
+    getProductCategories,
+    getCalculationType,
+    getCatalogFallbackCount,
+  } = catalog;
+  const getDefaultLevel = (productName: string) => getProductLevels(productName)[0] || '';
+  /** Exact (case-insensitive) catalogue product name; never a partial-name rename (web matchCatalogProduct). */
+  const matchCatalogProduct = (raw: string) => {
+    const key = String(raw || '').trim().toLowerCase();
+    if (!key) return String(raw || '').trim();
+    return availableProducts.find((ap) => ap.toLowerCase() === key) || String(raw).trim();
+  };
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -243,11 +246,20 @@ export default function DCPendingOpenScreen({ navigation, route }: any) {
 
   const isSeniorCoordinator = user?.role === 'Senior Coordinator';
   const isSuperAdmin = user?.role === 'Super Admin';
+  const isAdmin = isSuperAdmin || user?.role === 'Admin';
   const isTermWiseDc = fromTermWise || dc?.status === 'scheduled_for_later';
   const canSubmitToWarehouse = !isTermWiseDc && (isSeniorCoordinator || isSuperAdmin);
+  const isShortageDc = dc?.dcType === 'shortage';
 
   useEffect(() => {
-    if (fromTermWise && dcId) {
+    if (!dcId) {
+      setLoading(false);
+      setErrorMessage('No DC selected');
+      return;
+    }
+    // Rows are matched against the catalogue, so wait for it (web maps with the loaded catalogue).
+    if (catalog.loading) return;
+    if (fromTermWise) {
       (async () => {
         try {
           const fullDC = await apiService.get(`/dc/${dcId}`);
@@ -265,18 +277,56 @@ export default function DCPendingOpenScreen({ navigation, route }: any) {
           /* fall through to pending open */
         }
         loadData();
-        loadProducts();
       })();
       return;
     }
-    if (dcId) {
-      loadData();
-      loadProducts();
-    } else {
-      setLoading(false);
-      setErrorMessage('No DC selected');
-    }
-  }, [dcId, fromTermWise]);
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dcId, fromTermWise, catalog.loading]);
+
+  /** Saved DC line -> editable row (web openDCForm): exact product name, category from the saved row. */
+  const mapDetailToRow = (p: any, idx: number, shortage: boolean): ProductRow => {
+    const matchedProduct = matchCatalogProduct(String(p.product || p.productName || p.product_name || '').trim());
+    const rawProductCategory = typeof p.productCategory === 'string' ? p.productCategory.trim() : '';
+    const rawCategory = typeof p.category === 'string' ? p.category.trim() : '';
+    const skuCategories = getProductCategories(matchedProduct);
+    const normalizedCategory = canonicalDcRowCategory(rawCategory);
+    const finalCategory = shortage
+      ? 'Shortage'
+      : CATEGORY_OPTIONS.includes(normalizedCategory)
+        ? normalizedCategory
+        : 'New Students';
+    const matchedSkuFromProductCategory = rawProductCategory
+      ? skuCategories.find((c) => normalizeSku(c) === normalizeSku(rawProductCategory))
+      : undefined;
+    const matchedSkuFromCategory =
+      !matchedSkuFromProductCategory && rawCategory && !isStudentCategory(rawCategory)
+        ? skuCategories.find((c) => normalizeSku(c) === normalizeSku(rawCategory))
+        : undefined;
+    // Older records stored the series in `category`.
+    const finalProductCategory =
+      matchedSkuFromProductCategory || matchedSkuFromCategory || (!isStudentCategory(rawCategory) ? rawCategory : '');
+    return {
+      id: String(idx + 1),
+      product: matchedProduct,
+      class: p.class || '1',
+      category: finalCategory,
+      productCategory: finalProductCategory || undefined,
+      productName: p.productName || p.product || matchedProduct,
+      quantity: Number(p.quantity) || Number(p.strength) || 0,
+      strength: Number(p.strength) || Number(p.quantity) || 0,
+      level: p.itemType ? p.level || '' : p.level || getDefaultLevel(matchedProduct),
+      specs: p.specs || 'Regular',
+      subject: p.subject || undefined,
+      itemType: p.itemType || undefined,
+      section: p.section || undefined,
+      program: p.program || undefined,
+      stream: p.stream || undefined,
+      price: Number(p.unit_price) || Number(p.price) || 0,
+      total: Number(p.total) || 0,
+      term: resolveExistingProductTerm(p),
+    };
+  };
 
   const loadData = async () => {
     try {
@@ -310,44 +360,51 @@ export default function DCPendingOpenScreen({ navigation, route }: any) {
         setDcOrder(null);
       }
 
-      // Prefer this DC's productDetails; fall back to request snapshot / order products.
+      const shortage = fullDC.dcType === 'shortage';
+      // Show THIS DC's lines (My Clients lines only); never rebuild from the unsplit order.
       const dcDetails = Array.isArray(fullDC.productDetails) ? fullDC.productDetails : [];
       const requestDetails = Array.isArray(orderData?.dcRequestData?.productDetails)
         ? orderData!.dcRequestData!.productDetails!
         : [];
-      const orderProducts = Array.isArray(orderData?.products) ? orderData!.products! : [];
-      const source =
-        dcDetails.length > 0 ? dcDetails : requestDetails.length > 0 ? requestDetails : orderProducts;
+      const sourceDetails = dcDetails.length > 0 ? dcDetails : requestDetails;
+      const validDetails = keepMyClientsOwnedProductRows(sourceDetails).filter(
+        (p: any) => p && (p.product || p.productName) && (p.quantity > 0 || p.strength > 0),
+      );
+      const orderProducts = Array.isArray(orderData?.products) ? keepMyClientsOwnedProductRows(orderData!.products!) : [];
 
-      if (source.length > 0) {
+      if (validDetails.length > 0) {
+        setProductRows(splitDeliverableRows(validDetails).map((p: any, idx: number) => mapDetailToRow(p, idx, shortage)));
+      } else if (orderProducts.length > 0) {
         setProductRows(
-          source.map((p: any, idx: number) => {
-            const qty = resolveLineQty(p);
+          splitDeliverableRows(orderProducts).map((p: any, idx: number) => {
+            const row = mapDetailToRow(p, idx, shortage);
+            const rawProductCategory = typeof p.productCategory === 'string' ? p.productCategory.trim() : '';
             return {
-              id: String(idx + 1),
-              product: p.product || p.productName || p.product_name || 'Abacus',
-              class: p.class != null && String(p.class).trim() ? String(p.class) : '1',
-              category: p.category || 'new Students',
-              productCategory: p.productCategory || undefined,
-              specs: p.specs || '',
-              subject: p.subject,
-              strength: qty > 0 ? qty : Number(fullDC.requestedQuantity) || 0,
-              level: p.level || '',
-              term: p.term || 'Term 1',
+              ...row,
+              productName: row.product,
+              productCategory: rawProductCategory || undefined,
+              quantity: Number(p.quantity) || 0,
+              total: Number(p.total) || (Number(p.unit_price) || 0) * (Number(p.quantity) || 0),
             };
           }),
         );
       } else {
-        const rawProduct = fullDC.product || 'Abacus';
+        const rawProduct = String(fullDC.product || 'ABACUS');
+        const matchedProduct = matchCatalogProduct(rawProduct);
+        const fallbackQuantity = Number(fullDC.requestedQuantity) || 0;
         setProductRows([
           {
             id: '1',
-            product: rawProduct,
+            product: matchedProduct,
+            productName: matchedProduct,
             class: '1',
-            category: 'new Students',
-            specs: 'Regular',
-            strength: fullDC.requestedQuantity || 0,
-            level: 'L1',
+            category: shortage ? 'Shortage' : 'New Students',
+            quantity: fallbackQuantity,
+            strength: fallbackQuantity,
+            level: getDefaultLevel(matchedProduct),
+            specs: getProductSpecs(matchedProduct)[0] || '',
+            price: 0,
+            total: 0,
             term: 'Term 1',
           },
         ]);
@@ -360,46 +417,29 @@ export default function DCPendingOpenScreen({ navigation, route }: any) {
     }
   };
 
-  const loadProducts = async () => {
-    try {
-      const data = await apiService.get('/products/active').catch(() => apiService.get('/products'));
-      const list = Array.isArray(data) ? data : data?.data || data?.products || [];
-      setProducts(list);
-    } catch {
-      setProducts([]);
-    }
-  };
+  const getProductNames = (): string[] => availableProducts;
 
-  const getProductLevels = (productName: string): string[] =>
-    getProductLevelsOptions(products, productName);
-
-  const getProductSpecs = (productName: string): string[] =>
-    getProductSpecsOptions(products, productName);
-
-  const getProductSubjects = (productName: string): string[] =>
-    getProductSubjectsOptions(products, productName);
-
-  const getProductCategories = (productName: string): string[] =>
-    getProductCategoryOptions(products, productName);
-
-  const getProductNames = (): string[] => getCatalogProductNames(products);
-
+  /** Product change resets level / series / specs / deliverable to catalogue defaults (web). */
   const applyProductDefaults = (row: ProductRow, productName: string): ProductRow => {
-    const catalogEntry = findCatalogProduct(products, productName);
-    const canonicalName = catalogEntry?.productName || productName;
-    return applyCatalogDefaultsToRow(
-      { ...row, product: canonicalName },
-      products,
-    ) as ProductRow;
+    const cats = getProductCategories(productName);
+    const subjects = getProductSubjects(productName);
+    return {
+      ...row,
+      product: productName,
+      productName,
+      level: getDefaultLevel(productName),
+      productCategory: cats.length ? cats[0] || '' : undefined,
+      specs: getProductSpecs(productName)[0] || '',
+      subject: subjects.length ? subjects[0] || '' : undefined,
+    };
   };
 
   const updateProductRow = (id: string, field: keyof ProductRow, value: any) => {
     setProductRows((prev) =>
       prev.map((r) => {
         if (r.id !== id) return r;
-        if (field === 'product') {
-          return applyProductDefaults({ ...r, product: value, strength: r.strength }, value);
-        }
+        if (field === 'product') return applyProductDefaults(r, value);
+        if (field === 'quantity') return { ...r, quantity: value, strength: value };
         return { ...r, [field]: value };
       }),
     );
@@ -410,42 +450,58 @@ export default function DCPendingOpenScreen({ navigation, route }: any) {
   };
 
   const validateDcDetails = (): boolean => {
-    if (!financeRemarks.trim()) {
-      setErrorMessage('Finance Remarks * is required');
+    const fail = (message: string) => {
+      setErrorMessage(message);
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       return false;
-    }
-    if (!smeRemarks.trim()) {
-      setErrorMessage('SME Remarks * is required');
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
-      return false;
-    }
-    if (!splApproval.trim()) {
-      setErrorMessage('SPL Approval * is required');
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
-      return false;
-    }
-    if (!dcDate.trim()) {
-      setErrorMessage('DC Date * is required');
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
-      return false;
-    }
-    if (!dcRemarks.trim()) {
-      setErrorMessage('DC Remarks * is required');
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
-      return false;
-    }
-    if (!dcCategory.trim()) {
-      setErrorMessage('DC Category * is required');
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
-      return false;
-    }
-    if (!dcNotes.trim()) {
-      setErrorMessage('DC Notes * is required');
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
-      return false;
-    }
+    };
+    if (!financeRemarks.trim()) return fail('Finance Remarks * is required');
+    if (!smeRemarks.trim()) return fail('SME Remarks * is required');
+    if (!splApproval.trim()) return fail('SPL Approval * is required');
+    if (!dcDate.trim()) return fail('DC Date * is required');
+    if (!dcRemarks.trim()) return fail('DC Remarks * is required');
+    if (!dcCategory.trim()) return fail('DC Category * is required');
+    if (!dcNotes.trim()) return fail('DC Notes * is required');
     return true;
+  };
+
+  /**
+   * Rows as web Pending DC sends them on PUT /dc/:id: billed totals (free rows ₹0), unit price,
+   * item type and IIT identity kept; a shortage DC sends every row as 'Shortage'.
+   */
+  const buildProductDetails = () =>
+    withBilledTotals(
+      productRows.map((r) => (isShortageDc ? { ...r, category: 'Shortage' } : r)) as any[],
+      getCalculationType,
+      getCatalogFallbackCount,
+    ).map((row: any) => ({
+      product: row.product,
+      class: row.class || '1',
+      category: isShortageDc ? 'Shortage' : row.category,
+      productCategory: row.productCategory || undefined,
+      productName: row.productName,
+      quantity: pendingRowQty(row),
+      strength: pendingRowQty(row),
+      level: row.level,
+      specs: row.specs || '',
+      subject: row.subject || undefined,
+      itemType: row.itemType || undefined,
+      section: row.section || undefined,
+      program: row.program || undefined,
+      stream: row.stream || undefined,
+      term: row.term || 'Term 1',
+      unit_price: Number(row.price) || Number(row.unit_price) || 0,
+      price: Number(row.price) || Number(row.unit_price) || 0,
+      total: Number(row.total) || 0,
+    }));
+
+  const termFlags = () => {
+    const allTerm2 = productRows.length > 0 && productRows.every((row) => (row.term || 'Term 1') === 'Term 2');
+    const hasTerm1 = productRows.some((row) => {
+      const term = row.term || 'Term 1';
+      return term === 'Term 1' || term === 'Both';
+    });
+    return { term2Only: allTerm2 && !hasTerm1, hasTerm1 };
   };
 
   const handleSave = async () => {
@@ -456,35 +512,31 @@ export default function DCPendingOpenScreen({ navigation, route }: any) {
 
     setSaving(true);
     try {
-      const totalQuantity = productRows.reduce((sum, row) => sum + (Number(row.strength) || 0), 0);
-      const productDetails = productRows.map((row) => ({
-        product: row.product,
-        class: row.class || '1',
-        category: row.category || 'new Students',
-        productCategory: row.productCategory || undefined,
-        productName: row.product,
-        quantity: Number(row.strength) || 0,
-        strength: Number(row.strength) || 0,
-        level: row.level || '',
-        specs: row.specs || '',
-        subject: row.subject,
-        term: row.term || 'Term 1',
-      }));
+      // A Term-2-only DC stays in Term-Wise DC (scheduled_for_later); Term 1 / Both is Pending DC.
+      const { term2Only, hasTerm1 } = termFlags();
+      let statusToUse = dc.status || 'pending_dc';
+      if (term2Only) statusToUse = 'scheduled_for_later';
+      else if (hasTerm1) statusToUse = 'pending_dc';
 
       await apiService.put(`/dc/${dcId}`, {
         financeRemarks,
         splApproval,
-        dcDate: dcDate || undefined,
+        dcDate,
         dcRemarks,
         dcCategory,
         dcNotes,
         smeRemarks,
-        productDetails,
-        requestedQuantity: totalQuantity || dc.requestedQuantity,
+        status: statusToUse,
+        productDetails: buildProductDetails(),
       });
 
-      setSuccessMessage('DC saved successfully.');
+      setSuccessMessage(
+        statusToUse === 'scheduled_for_later'
+          ? 'DC saved successfully! It will remain in Term-Wise DC.'
+          : 'DC saved successfully!',
+      );
       scrollRef.current?.scrollTo({ y: 0, animated: true });
+      loadData();
     } catch (e: any) {
       setErrorMessage(e?.message || 'Failed to save DC');
       scrollRef.current?.scrollTo({ y: 0, animated: true });
@@ -498,38 +550,31 @@ export default function DCPendingOpenScreen({ navigation, route }: any) {
     setErrorMessage(null);
     if (!validateDcDetails()) return;
 
-    const totalQuantity = productRows.reduce((sum, row) => sum + (Number(row.strength) || 0), 0);
+    const totalQuantity = productRows.reduce((sum, row) => sum + pendingRowQty(row), 0);
     if (totalQuantity <= 0) {
-      setErrorMessage('Please add at least one product with quantity (Strength) > 0');
+      setErrorMessage('Please add at least one product with quantity > 0');
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+      return;
+    }
+    if (termFlags().term2Only) {
+      setErrorMessage(
+        'Term 2 DCs should be managed from the Term-Wise DC page. This DC will remain in Term-Wise DC. Please use the Term-Wise DC page to submit Term 2 DCs.',
+      );
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
 
     setSubmitting(true);
     try {
-      const productDetails = productRows.map((row) => ({
-        product: row.product,
-        class: row.class || '1',
-        category: row.category || 'new Students',
-        productCategory: row.productCategory || undefined,
-        productName: row.product,
-        quantity: Number(row.strength) || 0,
-        strength: Number(row.strength) || 0,
-        level: row.level || '',
-        specs: row.specs || '',
-        subject: row.subject,
-        term: row.term || 'Term 1',
-      }));
-
       await apiService.put(`/dc/${dcId}`, {
         financeRemarks,
         splApproval,
-        dcDate: dcDate || undefined,
+        dcDate,
         dcRemarks,
         dcCategory,
         dcNotes,
         smeRemarks,
-        productDetails,
+        productDetails: buildProductDetails(),
         requestedQuantity: totalQuantity,
       });
 
@@ -538,7 +583,7 @@ export default function DCPendingOpenScreen({ navigation, route }: any) {
         remarks: dcRemarks || smeRemarks || '',
       });
 
-      setSuccessMessage('DC submitted to Warehouse successfully.');
+      setSuccessMessage('DC submitted to Warehouse');
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       setTimeout(() => navigation.goBack(), 1500);
     } catch (e: any) {
@@ -548,7 +593,6 @@ export default function DCPendingOpenScreen({ navigation, route }: any) {
       setSubmitting(false);
     }
   };
-
   const clearMessages = () => {
     setErrorMessage(null);
     setSuccessMessage(null);
@@ -621,7 +665,7 @@ export default function DCPendingOpenScreen({ navigation, route }: any) {
           <FormField label="School Code" value={order?.school_code || order?.dc_code || '-'} editable={false} />
           <FormField label="Contact Person" value={order?.contact_person || '-'} editable={false} />
           <FormField label="Contact Mobile" value={order?.contact_mobile || dc?.customerPhone || '-'} editable={false} />
-          <FormField label="Assigned To" value={assignedName} editable={false} />
+          <FormField label="Assigned To" value={assignedName || "-"} editable={false} />
         </View>
         )}
 
@@ -698,10 +742,10 @@ export default function DCPendingOpenScreen({ navigation, route }: any) {
               <View style={styles.tableHeader}>
                 <Text style={[styles.th, styles.colProduct]}>Product</Text>
                 <Text style={[styles.th, styles.colClass]}>Class</Text>
-                <Text style={[styles.th, styles.colCategory]}>Category</Text>
+                <Text style={[styles.th, styles.colCategory]}>Enrollment Category</Text>
                 <Text style={[styles.th, styles.colProductCategory]}>Series</Text>
                 <Text style={[styles.th, styles.colSpecs]}>Specs</Text>
-                <Text style={[styles.th, styles.colSubject]}>Special Notes</Text>
+                <Text style={[styles.th, styles.colSubject]}>Deliverables</Text>
                 <Text style={[styles.th, styles.colQty]}>Quantity</Text>
                 <Text style={[styles.th, styles.colLevel]}>Term / Level</Text>
                 <Text style={[styles.th, styles.colTerm]}>Term</Text>
@@ -738,22 +782,17 @@ export default function DCPendingOpenScreen({ navigation, route }: any) {
                         style={styles.cellPicker}
                         {...(Platform.OS === 'android' ? { mode: 'dropdown' as const } : {})}
                       >
-                        {CLASSES.map((c) => (
+                        {(CLASSES.includes(row.class) || !row.class ? CLASSES : [row.class, ...CLASSES]).map((c) => (
                           <Picker.Item key={c} label={c} value={c} />
                         ))}
                       </Picker>
                     </View>
                     <View style={[styles.cell, styles.colCategory]}>
-                      <Picker
-                        selectedValue={row.category}
-                        onValueChange={(v) => updateProductRow(row.id, 'category', v)}
-                        style={styles.cellPicker}
-                        {...(Platform.OS === 'android' ? { mode: 'dropdown' as const } : {})}
-                      >
-                        {CATEGORY_OPTIONS.map((c) => (
-                          <Picker.Item key={c} label={c} value={c} />
-                        ))}
-                      </Picker>
+                      <DcCategoryPicker
+                        value={isShortageDc ? 'Shortage' : row.category}
+                        disabled={isShortageDc}
+                        onChange={(v) => updateProductRow(row.id, 'category', v)}
+                      />
                     </View>
                     <View style={[styles.cell, styles.colProductCategory]}>
                       {skuOpts.length > 0 ? (
@@ -812,8 +851,8 @@ export default function DCPendingOpenScreen({ navigation, route }: any) {
                     <View style={[styles.cell, styles.colQty]}>
                       <WebInput
                         style={styles.cellInput}
-                        value={row.strength ? String(row.strength) : ''}
-                        onChangeText={(v) => updateProductRow(row.id, 'strength', Number(v) || 0)}
+                        value={pendingRowQty(row) ? String(pendingRowQty(row)) : ''}
+                        onChangeText={(v) => updateProductRow(row.id, 'quantity', Number(v.replace(/[^0-9]/g, '')) || 0)}
                         keyboardType="numeric"
                         placeholder="0"
                       />
@@ -864,7 +903,7 @@ export default function DCPendingOpenScreen({ navigation, route }: any) {
                 <View style={styles.footerLeadingSpacer} />
                 <Text style={styles.footerLabel}>Grand Total:</Text>
                 <Text style={styles.footerValue}>
-                  {productRows.reduce((sum, r) => sum + (Number(r.strength) || 0), 0)}
+                  {productRows.reduce((sum, r) => sum + pendingRowQty(r), 0)}
                 </Text>
                 <View style={styles.footerTrailingSpacer} />
               </View>

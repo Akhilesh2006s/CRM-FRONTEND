@@ -36,7 +36,7 @@ const I = {
   finance: '🏦',
 };
 
-export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
+function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
   const flags = getRoleFlags(user);
   const {
     role,
@@ -88,10 +88,8 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
       {
         title: 'Vendor',
         icon: I.partner,
-        items: [
-          { label: 'Stocks', screen: 'PartnerStocks' },
-          { label: 'My DCs', screen: 'PartnerDCs' },
-        ],
+        // DCs are internal: vendors see their stock only (web Partner menu).
+        items: [{ label: 'Stocks', screen: 'PartnerStocks' }],
       },
     ];
   }
@@ -200,11 +198,95 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
       },
       {
         title: 'Expenses',
-        items: [{ label: 'Pending Expenses', screen: 'ExpenseExecutiveManagerPending' }],
+        items: [
+          { label: 'Create Expenses', screen: 'ExpenseCreate' },
+          { label: 'My Pending Expenses', screen: 'ExpenseMy', params: { view: 'pending' } },
+          { label: 'My Completed Expenses', screen: 'ExpenseMy', params: { view: 'completed' } },
+          { label: 'Team Expenses to Approve', screen: 'ExpenseExecutiveManagerPending' },
+          { label: 'Team Approved / Rejected', screen: 'ExpenseExecutiveManagerPending', params: { tab: 'decided' } },
+          { label: 'Expense Approvers', screen: 'ExpenseApprovers' },
+          { label: 'Employee Track', screen: 'ReportsEmployeeTrack' },
+        ],
       },
       {
         title: 'Leave Management',
-        items: [{ label: 'Leave Management', screen: 'ExecutiveManagerLeaves', params: { managerId } }],
+        items: [
+          { label: 'Team Leaves', screen: 'ExecutiveManagerLeaves', params: { managerId } },
+          { label: 'Leave Request', screen: 'LeaveRequest' },
+          { label: 'My Leaves', screen: 'LeavesApproved' },
+        ],
+      },
+      {
+        title: 'Employees',
+        items: [{ label: 'Employee Verification', screen: 'EmployeeVerification' }],
+      },
+    ];
+  }
+
+  const isHrRole = role === 'HR Manager' || role === 'HR Executive';
+  if (isHrRole) {
+    return [
+      {
+        title: 'Employees',
+        icon: I.employees,
+        items: [
+          { label: 'New Employee', screen: 'EmployeeNew', icon: '➕' },
+          { label: 'Employee Approval Status', screen: 'EmployeeVerification', icon: '✅' },
+          { label: 'Active Employees', screen: 'EmployeesActive', icon: '👥' },
+          { label: 'Inactive Employees', screen: 'EmployeesInactive', icon: '🚫' },
+          { label: 'Team Attendance', screen: 'AttendanceRoster', icon: '🕒' },
+        ],
+      },
+      {
+        title: 'Leave Management',
+        icon: I.leaves,
+        items: [
+          { label: 'Pending Leaves', screen: 'LeavesPending', icon: '⏳' },
+          { label: 'Leaves Report', screen: 'LeavesReport', icon: '📊' },
+          { label: 'Leave Request', screen: 'LeaveRequest', icon: '➕' },
+          { label: 'My Leaves', screen: 'LeavesApproved', icon: '📅' },
+        ],
+      },
+      {
+        title: 'Expenses',
+        icon: I.expenses,
+        items: [
+          { label: 'Create Expenses', screen: 'ExpenseCreate', icon: '➕' },
+          { label: 'Pending Expenses', screen: 'ExpenseMy', params: { view: 'pending' }, icon: '⏳' },
+          { label: 'Completed Expenses', screen: 'ExpenseMy', params: { view: 'completed' }, icon: '✅' },
+        ],
+      },
+      {
+        title: 'Settings',
+        icon: I.settings,
+        items: [{ label: 'Change Password', screen: 'SettingsPassword', icon: '🔐' }],
+      },
+    ];
+  }
+
+  if (role === 'Office Team') {
+    return [
+      {
+        title: 'Leave Management',
+        icon: I.leaves,
+        items: [
+          { label: 'Leave Request', screen: 'LeaveRequest', icon: '➕' },
+          { label: 'My Leaves', screen: 'LeavesApproved', icon: '📅' },
+        ],
+      },
+      {
+        title: 'Expenses',
+        icon: I.expenses,
+        items: [
+          { label: 'Create Expenses', screen: 'ExpenseCreate', icon: '➕' },
+          { label: 'Pending Expenses', screen: 'ExpenseMy', params: { view: 'pending' }, icon: '⏳' },
+          { label: 'Completed Expenses', screen: 'ExpenseMy', params: { view: 'completed' }, icon: '✅' },
+        ],
+      },
+      {
+        title: 'Settings',
+        icon: I.settings,
+        items: [{ label: 'Change Password', screen: 'SettingsPassword', icon: '🔐' }],
       },
     ];
   }
@@ -215,6 +297,20 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
         title: 'My Products',
         icon: I.managers,
         items: [{ label: 'Assigned products', screen: 'ProductManager' }],
+      },
+      {
+        title: 'Employees',
+        icon: I.employees,
+        items: [{ label: 'Employee Verification', screen: 'EmployeeVerification' }],
+      },
+      {
+        title: 'Leave Management',
+        icon: I.leaves,
+        items: [
+          { label: 'Pending Leaves', screen: 'LeavesPending' },
+          { label: 'Leave Request', screen: 'LeaveRequest' },
+          { label: 'My Leaves', screen: 'LeavesApproved' },
+        ],
       },
       {
         title: 'Settings',
@@ -296,6 +392,7 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
         title: 'Finance',
         items: [
           { label: 'Finance Approved Exp List', screen: 'ExpenseFinancePending' },
+          { label: 'Expense Approvers', screen: 'ExpenseApprovers' },
           { label: 'Payments', screen: 'PaymentList' },
         ],
       },
@@ -311,6 +408,7 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
         { label: 'All Leads', screen: 'LeadsList', icon: '📋' },
         { label: 'Add Lead', screen: 'LeadAdd', icon: '➕' },
         { label: 'Followup Leads', screen: 'LeadFollowup', icon: '📞' },
+        { label: 'Cross-Sale Leads', screen: 'CrossSaleLeads', icon: '🔁' },
         { label: 'School Visits', screen: 'SchoolVisits', icon: '📍' },
       ],
     },
@@ -334,7 +432,9 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
           ? [{ label: 'Assign Managers', screen: 'ExecutiveManagers', icon: '🛡️' }]
           : []),
         { label: 'New Employee', screen: 'EmployeeNew', icon: '➕' },
+        { label: 'Employee Verification', screen: 'EmployeeVerification', icon: '✅' },
         { label: 'Active Employees', screen: 'EmployeesActive', icon: '👥' },
+        { label: 'Team Attendance', screen: 'AttendanceRoster', icon: '🕒' },
         { label: 'Inactive Employees', screen: 'EmployeesInactive', icon: '🚫' },
         ...(isSuperAdmin
           ? [
@@ -411,6 +511,7 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
       items: [
         { label: 'Pending Expenses List', screen: 'ExpensePending', icon: '⏳' },
         { label: 'Finance Approved Exp List', screen: 'ExpenseFinancePending', icon: '🏦' },
+        { label: 'Expense Approvers', screen: 'ExpenseApprovers', icon: '🏷️' },
         { label: 'Create Expense', screen: 'ExpenseCreate', icon: '➕' },
         { label: 'My Expenses', screen: 'ExpenseMy', icon: '📄' },
       ],
@@ -452,7 +553,6 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
       items: [
         { label: 'All Products', screen: 'ProductsList', icon: '📦' },
         { label: 'Add Product', screen: 'ProductNew', icon: '➕' },
-        { label: 'Deliverables', screen: 'DeliverablesList', icon: '📋' },
       ],
     });
     sections.push({
@@ -489,4 +589,67 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
       s.title !== 'Reports' &&
       s.title !== 'Settings'
   );
+}
+
+const NON_EMPLOYEE_ROLES = new Set(['Vendor', 'Partner', 'Franchise']);
+const TEAM_ATTENDANCE_ROLES = new Set([
+  'Admin', 'Super Admin', 'HR Manager', 'HR Executive', 'Executive Manager', 'Coordinator',
+  'Senior Coordinator', 'Regional Manager', 'Regional Head', 'National Head',
+]);
+
+const TICKET_INBOX_ROLES = new Set(['Admin', 'Super Admin', 'Coordinator', 'Senior Coordinator']);
+
+const hasScreen = (sections: NavSection[], screen: string) =>
+  sections.some((section) => section.items.some((item) => item.screen === screen));
+
+/**
+ * Menu per role, plus what every employee login gets (as on the web): Create / Pending /
+ * Completed expenses instead of "My Expenses", own Attendance, Team Attendance for managers,
+ * and My Pay Slips.
+ */
+export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
+  const role = String((user as { role?: string } | null | undefined)?.role || '');
+  let sections = roleNavSections(user).map((section) => ({
+    ...section,
+    items: section.items.flatMap((item): NavLink[] => {
+      if (item.screen === 'ExpenseMy' && !item.params) {
+        return [
+          { label: 'Pending Expenses', screen: 'ExpenseMy', params: { view: 'pending' }, icon: '⏳' },
+          { label: 'Completed Expenses', screen: 'ExpenseMy', params: { view: 'completed' }, icon: '✅' },
+        ];
+      }
+      if (item.screen === 'ExpenseCreate' && item.label === 'Create Expense') return [{ ...item, label: 'Create Expenses' }];
+      return [item];
+    }),
+  }));
+  // Tickets: everyone can raise one; Admin / Coordinators also work the ticket inbox.
+  const tickets: NavLink[] = [{ label: 'Raise Ticket', screen: 'RaiseTicket', icon: '🎫' }];
+  if (TICKET_INBOX_ROLES.has(role)) {
+    tickets.push(
+      { label: 'All Tickets', screen: 'ViewTickets', params: { view: 'all' }, icon: '📥' },
+      { label: 'Pending Tickets', screen: 'ViewTickets', params: { view: 'pending' }, icon: '⏳' },
+      { label: 'Solved Tickets', screen: 'ViewTickets', params: { view: 'solved' }, icon: '✅' },
+    );
+  }
+  const ticketsAt = sections.findIndex((section) => section.title === 'Settings');
+  const ticketSection: NavSection = { title: 'Tickets', icon: '🎫', items: tickets };
+  sections = ticketsAt >= 0
+    ? [...sections.slice(0, ticketsAt), ticketSection, ...sections.slice(ticketsAt)]
+    : [...sections, ticketSection];
+  if (!role || NON_EMPLOYEE_ROLES.has(role)) return sections;
+
+  const extra: NavLink[] = [];
+  if (!hasScreen(sections, 'MyAttendance')) extra.push({ label: 'Attendance', screen: 'MyAttendance', icon: '🕒' });
+  if (TEAM_ATTENDANCE_ROLES.has(role) && !hasScreen(sections, 'AttendanceRoster')) {
+    extra.push({ label: 'Team Attendance', screen: 'AttendanceRoster', icon: '👥' });
+  }
+  if (!hasScreen(sections, 'MyPayslips')) extra.push({ label: 'My Pay Slips', screen: 'MyPayslips', icon: '🧾' });
+  if (extra.length) {
+    const settingsAt = sections.findIndex((section) => section.title === 'Settings');
+    const mine: NavSection = { title: 'My Work', icon: I.employees, items: extra };
+    sections = settingsAt >= 0
+      ? [...sections.slice(0, settingsAt), mine, ...sections.slice(settingsAt)]
+      : [...sections, mine];
+  }
+  return sections;
 }

@@ -21,6 +21,15 @@ import { WebInput } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 import { useAuth } from '../../context/AuthContext';
 import { getRoleFlags } from '../../utils/roles';
+import { printReturnSlip } from '../../lib/returnSlip';
+
+function printSlip(ret: any) {
+  printReturnSlip({
+    ...ret,
+    saleId: ret.saleId || ret.dcOrderId?.dc_code || '',
+    customerName: ret.customerName || ret.dcOrderId?.school_name || '',
+  }).catch((e: any) => Alert.alert('Print', e?.message || 'Could not create the return slip'));
+}
 
 function formatDate(dateString?: string) {
   if (!dateString) return '-';
@@ -176,9 +185,14 @@ export default function ReturnsEmployeeScreen({ navigation, route }: any) {
                 <InfoRow label="Sale ID" value={getSaleId(ret)} />
                 <InfoRow label="Return Type" value={cell(ret.returnType)} />
                 <InfoRow label="Return Qty" value={String(getQty(ret))} />
-                <TouchableOpacity style={styles.viewButton} onPress={() => openReturn(ret)}>
-                  <Text style={styles.viewButtonText}>View</Text>
-                </TouchableOpacity>
+                <View style={styles.cardActions}>
+                  <TouchableOpacity style={[styles.viewButton, styles.cardActionBtn]} onPress={() => openReturn(ret)}>
+                    <Text style={styles.viewButtonText}>View</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.printBtn, styles.cardActionBtn]} onPress={() => printSlip(ret)}>
+                    <Text style={styles.printBtnText}>Print</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             ))
           )}
@@ -278,9 +292,14 @@ export default function ReturnsEmployeeScreen({ navigation, route }: any) {
                   </View>
                 )}
                 <InfoRow label="Created" value={formatCreated(ret.createdAt)} />
-                <TouchableOpacity style={styles.viewButton} onPress={() => openReturn(ret)}>
-                  <Text style={styles.viewButtonText}>View</Text>
-                </TouchableOpacity>
+                <View style={styles.cardActions}>
+                  <TouchableOpacity style={[styles.viewButton, styles.cardActionBtn]} onPress={() => openReturn(ret)}>
+                    <Text style={styles.viewButtonText}>View</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.printBtn, styles.cardActionBtn]} onPress={() => printSlip(ret)}>
+                    <Text style={styles.printBtnText}>Print</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             );
           })
@@ -369,6 +388,18 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   viewButtonText: { ...typography.label.medium, color: '#059669', fontWeight: '600' },
+  cardActions: { flexDirection: 'row', gap: 8 },
+  cardActionBtn: { flex: 1 },
+  printBtn: {
+    marginTop: 10,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    alignItems: 'center',
+    backgroundColor: colors.backgroundLight,
+  },
+  printBtnText: { ...typography.label.medium, color: colors.primary, fontWeight: '600' },
   addReturnButton: {
     backgroundColor: colors.primary,
     borderRadius: 12,
