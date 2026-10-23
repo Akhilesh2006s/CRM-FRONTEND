@@ -24,6 +24,10 @@ type PayrollRow = {
   paidDays: number
   presentDays?: number
   approvedLeaveDays?: number
+  autoPaidDays?: number
+  lopDays?: number
+  attendanceTracked?: boolean
+  paidDaysEdited?: boolean
   gross: number
   basic: number
   hra: number
@@ -111,9 +115,12 @@ export default function PayrollPage() {
   const rowsPayload = () =>
     (data?.rows || []).map((r) => {
       const i = inputs[r.employeeId]
+      // Paid days are sent only when HR changed them; otherwise they stay automatic.
+      const entered = i?.paidDays === '' || i?.paidDays === undefined ? null : Number(i.paidDays)
+      const auto = r.autoPaidDays ?? r.daysInMonth
       return {
         employeeId: r.employeeId,
-        paidDays: i?.paidDays === '' ? r.daysInMonth : Number(i?.paidDays),
+        paidDays: entered === null || (entered === auto && !r.paidDaysEdited) ? null : entered,
         tds: Number(i?.tds) || 0,
         advances: Number(i?.advances) || 0,
         ptOverride: i?.ptOverride === '' || i?.ptOverride === undefined ? null : Number(i.ptOverride),
@@ -245,7 +252,10 @@ export default function PayrollPage() {
       <Card className="p-3">
         <div className="mb-3 flex items-center gap-2">
           <Input className="bg-white max-w-xs" placeholder="Search name, code, department, zone" value={search} onChange={(e) => setSearch(e.target.value)} />
-          <span className="text-xs text-neutral-500">Edit paid days, TDS, advances or PT, then Save &amp; recalculate.</span>
+          <span className="text-xs text-neutral-500">
+            Paid days are automatic: days in month minus loss-of-pay days (Mon–Sat with no check-in and no approved leave; Sundays paid;
+            no check-ins all month = full month). Edit paid days, TDS, advances or PT, then Save &amp; recalculate. Clear a paid-days box to go back to automatic.
+          </span>
         </div>
         {loading ? (
           <p className="py-8 text-center text-neutral-500">Loading…</p>
@@ -278,8 +288,19 @@ export default function PayrollPage() {
                     </td>
                     <td className="px-2 py-1.5 text-center whitespace-nowrap">
                       {editable ? `${r.presentDays ?? 0} / ${r.approvedLeaveDays ?? 0}` : '-'}
+                      {editable && (
+                        <div className="text-neutral-400">
+                          {r.attendanceTracked ? `LOP ${r.lopDays ?? 0}` : 'no check-ins'}
+                        </div>
+                      )}
                     </td>
-                    <td className="px-2 py-1.5">{numInput(r.employeeId, 'paidDays', 'w-16')}<div className="text-neutral-400">of {r.daysInMonth}</div></td>
+                    <td className="px-2 py-1.5">
+                      {numInput(r.employeeId, 'paidDays', 'w-16')}
+                      <div className="text-neutral-400">of {r.daysInMonth}</div>
+                      {editable && (r.paidDaysEdited
+                        ? <div className="text-amber-700">edited (auto {r.autoPaidDays})</div>
+                        : <div className="text-neutral-400">auto</div>)}
+                    </td>
                     <td className="px-2 py-1.5 text-right">{inr(r.earnedGross)}</td>
                     <td className="px-2 py-1.5">{numInput(r.employeeId, 'ptOverride', 'w-16', String(r.pt))}</td>
                     <td className="px-2 py-1.5">{numInput(r.employeeId, 'tds')}</td>
