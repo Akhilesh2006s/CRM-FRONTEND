@@ -1021,23 +1021,15 @@ export function Sidebar() {
       { label: 'Sign out', icon: LogOut, href: '/auth/login' },
     ]
   } else if (isCoordinator) {
-    // For Coordinator role, only show: Dashboard, Clients, Users / Employees, Trainings & Services, Warehouse, Payments, Reports, Settings, Sign out
-    const allowedMenuItems = ['Dashboard', 'Clients', 'Users / Employees', 'Trainings & Services', 'View Tickets', 'Warehouse', 'Payments', 'Reports', 'Settings', 'Sign out']
+    // For Coordinator role, only show: Dashboard, Clients, Trainings & Services, Warehouse, Payments, Reports, Settings, Sign out
+    // (no Users / Employees: the Coordinator does not manage the employee list)
+    const allowedMenuItems = ['Dashboard', 'Clients', 'Trainings & Services', 'View Tickets', 'Warehouse', 'Payments', 'Reports', 'Settings', 'Sign out']
     finalNav = NAV.filter(item => allowedMenuItems.includes(item.label))
       .map(item => {
         if (item.label === 'Clients' && item.children) {
           return {
             ...item,
             children: item.children.filter(child => !child.adminOnly),
-          }
-        }
-        // Filter Users / Employees menu items to only show "Active Employees" for Coordinator
-        if (item.label === 'Users / Employees' && item.children) {
-          return {
-            ...item,
-            children: item.children.filter(child => 
-              child.label === 'Active Employees'
-            )
           }
         }
         // Filter Trainings & Services menu items to exclude "Add Trainer" for Coordinator

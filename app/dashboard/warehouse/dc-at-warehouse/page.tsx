@@ -1,6 +1,6 @@
 'use client'
 
-import { isMarkerSpecs } from '@/lib/dcRowCategory'
+import { isMarkerSpecs, isSpecimenRow } from '@/lib/dcRowCategory'
 import { withBilledTotals } from '@/lib/dcPaymentDivisors'
 
 import { expandDeliverableStockRows } from '@/lib/deliverableStockRows'
@@ -27,6 +27,11 @@ import {
   validateDcStockAgainstInventory,
 } from '@/lib/warehouseInventoryMatch'
 import { consolidateStockRows } from '@/lib/warehouseStockList'
+
+/** Specimen and related-item lines describe themselves (product set, item name); never copy a stock
+ * item's series / deliverable / level onto them. */
+const keepsOwnIdentity = (row: { itemType?: unknown; specs?: unknown }) =>
+  Boolean(String(row?.itemType || '').trim()) || isSpecimenRow(row)
 
 type ProductDetail = {
   product: string
@@ -364,12 +369,12 @@ export default function WarehouseDcAtWarehouse() {
           return {
             product: productName,
             productName,
-            productCategory: mapped.productCategory,
+            productCategory: keepsOwnIdentity(p) ? p.productCategory || '' : mapped.productCategory,
             class: p.class || 'NA',
             category: p.category || 'Training-Material',
             specs: resolveProductMasterSpec(productName, p.specs),
             // IIT combination rows keep what was raised; stock matching expands the combination itself.
-            subject: p.stream ? subjectValue : mapped.subject || undefined,
+            subject: p.stream ? subjectValue : keepsOwnIdentity(p) ? p.subject || undefined : mapped.subject || undefined,
             section: p.section || undefined,
             program: p.program || undefined,
             stream: p.stream || undefined,
@@ -383,7 +388,7 @@ export default function WarehouseDcAtWarehouse() {
             total:
               (Number(p.quantity) || Number(p.strength) || 0) *
               (Number(p.unit_price) || Number(p.price) || 0),
-            level: mapped.level,
+            level: keepsOwnIdentity(p) ? p.level || '' : mapped.level,
             term: (p as any).term,
             itemType: (p as any).itemType || undefined,
             lineId: (p as any).lineId || undefined,
@@ -604,7 +609,7 @@ export default function WarehouseDcAtWarehouse() {
         return {
           ...p,
           // IIT combination rows keep the fields entered when the DC was raised.
-          ...(p.stream ? {} : {
+          ...(p.stream || keepsOwnIdentity(p) ? {} : {
             productCategory: mapped.productCategory,
             specs: mapped.specs,
             subject: mapped.subject || undefined,
@@ -799,7 +804,7 @@ export default function WarehouseDcAtWarehouse() {
         return {
           ...p,
           // IIT combination rows keep the fields entered when the DC was raised.
-          ...(p.stream ? {} : {
+          ...(p.stream || keepsOwnIdentity(p) ? {} : {
             productCategory: mapped.productCategory,
             specs: mapped.specs,
             subject: mapped.subject || undefined,

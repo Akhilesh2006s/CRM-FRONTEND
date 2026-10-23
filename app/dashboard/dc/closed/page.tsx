@@ -2167,7 +2167,7 @@ export default function ClosedSalesPage() {
                 </div>
                 <div className="mt-3">
                   <AbacusMaterialsSummary
-                    materials={(selectedDeal as any)?.abacusMaterials || (selectedDeal as any)?.dcRequestData?.abacusMaterials}
+                    materials={(selectedDeal as any)?.abacusMaterials || (selectedDeal as any)?.dcRequestData?.abacusMaterials || (selectedDeal ? (dealDCs[selectedDeal._id] as any)?.abacusMaterials : undefined)}
                   />
                 </div>
               </div>
