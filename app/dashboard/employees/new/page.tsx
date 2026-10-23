@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import { PayrollDetailsFields, emptyPayrollDetails, payrollDetailsFromEmployee, payrollDetailsPayload, type PayrollDetails } from '@/components/employees/PayrollDetailsFields'
 import { useRouter } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -43,6 +44,7 @@ const roleRequiresZones = (role: string) =>
   isSingleZoneRole(role) || ['Trainer', 'Coordinator', 'Senior Coordinator'].includes(role)
 
 export default function NewEmployeePage() {
+  const [payrollDetails, setPayrollDetails] = useState<PayrollDetails>(emptyPayrollDetails())
   const router = useRouter()
   const [form, setForm] = useState({
     firstName: '',
@@ -641,6 +643,7 @@ export default function NewEmployeePage() {
           'Executive',
         address1: temporaryAddress,
         yearlySalary: Number(form.yearlySalary),
+        ...payrollDetailsPayload(payrollDetails),
         monthlyTakeHome: form.monthlyTakeHome.trim() === '' ? 0 : Number(form.monthlyTakeHome),
         references: form.references.map((r) => {
           const m = validateStrictIndianMobile(r.mobile)
@@ -829,6 +832,7 @@ export default function NewEmployeePage() {
               placeholder="After deductions"
             />
           </div>
+          <PayrollDetailsFields value={payrollDetails} onChange={setPayrollDetails} />
           <div>
             <Label>Contact No (Company) *</Label>
             <Input

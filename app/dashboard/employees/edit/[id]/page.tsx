@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { PayrollDetailsFields, emptyPayrollDetails, payrollDetailsFromEmployee, payrollDetailsPayload, type PayrollDetails } from '@/components/employees/PayrollDetailsFields'
 import { useRouter, useParams } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -36,6 +37,8 @@ const ONBOARDING_ITEMS = [
 ]
 
 export default function EditEmployeePage() {
+  const [payrollDetails, setPayrollDetails] = useState<PayrollDetails>(emptyPayrollDetails())
+  const [ctc, setCtc] = useState('')
   const router = useRouter()
   const params = useParams()
   const id = params?.id as string
@@ -136,6 +139,8 @@ export default function EditEmployeePage() {
           onboardingOtherNote: emp.onboardingOtherNote || '',
           taggedEmployeeIds: (emp.taggedEmployeeIds || []).map((x: any) => String(x._id || x)),
         })
+        setPayrollDetails(payrollDetailsFromEmployee(emp))
+        setCtc(emp.yearlySalary ? String(emp.yearlySalary) : '')
         setTagOptions(Array.isArray(employees) ? employees.filter((e) => e._id !== id) : [])
         if (emp.dateOfJoining) {
           const parsed = new Date(emp.dateOfJoining)
@@ -308,6 +313,15 @@ export default function EditEmployeePage() {
               filterTagOptions(tagOptions, form.role).some((e) => e._id === id)
             )
           : [],
+      }
+      Object.assign(payload, payrollDetailsPayload(payrollDetails))
+      if (ctc.trim() !== '') {
+        if (!(Number(ctc) > 0)) {
+          setError('CTC (per year) must be greater than 0')
+          setSubmitting(false)
+          return
+        }
+        payload.yearlySalary = Number(ctc)
       }
       if (form.role !== 'Executive') delete payload.cluster
       if (!form.dateOfJoining) delete payload.dateOfJoining
@@ -522,6 +536,12 @@ export default function EditEmployeePage() {
               </SelectContent>
             </Select>
           </div>
+          <div>
+            <Label htmlFor="ctc">CTC (₹ per year)</Label>
+            <Input id="ctc" type="number" min="0" step="1" className="bg-white text-neutral-900" value={ctc} onChange={(e) => setCtc(e.target.value)} placeholder="e.g. 360000" />
+            {Number(ctc) > 0 && <p className="text-xs text-neutral-500 mt-1">₹{Math.round(Number(ctc) / 12).toLocaleString('en-IN')} per month</p>}
+          </div>
+          <PayrollDetailsFields value={payrollDetails} onChange={setPayrollDetails} />
           {form.role === 'Office Team' && (
             <div>
               <Label>Designation *</Label>

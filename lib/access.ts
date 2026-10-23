@@ -194,6 +194,10 @@ export function canAccessPath(
   if (['vendor', 'partner'].includes(role) && (pathname === '/dashboard/dcs' || pathname.startsWith('/dashboard/dcs/'))) {
     return false
   }
+  // Monthly payroll is run by the HR Manager (Super Admin passes above).
+  if (pathname === '/dashboard/employees/payroll' || pathname.startsWith('/dashboard/employees/payroll/')) {
+    return role === 'hr manager'
+  }
   // Every employee sees and records their own attendance.
   if (pathname === '/dashboard/attendance' || pathname.startsWith('/dashboard/attendance/')) {
     return !['vendor', 'partner', 'franchise'].includes(role)

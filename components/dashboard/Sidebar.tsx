@@ -348,6 +348,7 @@ const NAV: NavItem[] = [
       { label: 'Move Schools', href: '/dashboard/employees/move-schools', icon: Database },
       { label: 'Cluster Schools', href: '/dashboard/employees/cluster-schools', icon: Database },
       { label: 'Chain', href: '/dashboard/employees/chain' },
+      { label: 'Payroll', href: '/dashboard/employees/payroll' },
       { label: 'Salary', href: '/dashboard/employees/salary' },
       { label: 'Pay Slips', href: '/dashboard/employees/payslips' },
       { label: 'Employee History', href: '/dashboard/employees/history' },
@@ -889,6 +890,7 @@ export function Sidebar() {
           { label: 'Attendance', href: '/dashboard/employees/attendance' },
           ...(!isHrExecutive
             ? [
+                { label: 'Payroll', href: '/dashboard/employees/payroll' },
                 { label: 'Salary', href: '/dashboard/employees/salary' },
                 { label: 'Pay Slips', href: '/dashboard/employees/payslips' },
               ]
