@@ -56,6 +56,7 @@ export function useCloseLeadProductConfig(options: UseCloseLeadProductConfigOpti
     getProductSubjects,
     hasProductSubjects,
     getProductStreams,
+    getProductStreamCombos,
     getProductRelatedItems,
     getProductSpecimenItems,
     getProductCategories,
@@ -682,6 +683,7 @@ export function useCloseLeadProductConfig(options: UseCloseLeadProductConfigOpti
       getCatalogFallbackCount,
       requireDeliverables: opts?.requireDeliverables,
       requireUnitPrice: opts?.requireUnitPrice,
+      getStreamCombos: getProductStreamCombos,
     })
 
   return {
@@ -716,6 +718,7 @@ export function useCloseLeadProductConfig(options: UseCloseLeadProductConfigOpti
     getProductSubjects,
     hasProductSubjects,
     getProductStreams,
+    getProductStreamCombos,
     getProductRelatedItems,
     getProductSpecimenItems,
     getProductCategories,

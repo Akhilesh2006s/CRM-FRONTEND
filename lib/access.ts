@@ -190,6 +190,10 @@ export function canAccessPath(
   ) {
     return true
   }
+  // Vendors / Partners never see DCs (Admin keeps Vendor → My DCs).
+  if (['vendor', 'partner'].includes(role) && (pathname === '/dashboard/dcs' || pathname.startsWith('/dashboard/dcs/'))) {
+    return false
+  }
   // Every employee sees and records their own attendance.
   if (pathname === '/dashboard/attendance' || pathname.startsWith('/dashboard/attendance/')) {
     return !['vendor', 'partner', 'franchise'].includes(role)

@@ -13,6 +13,7 @@ import { apiRequest } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
 import { ProductStreamsField } from '@/components/products/ProductStreamsField'
+import type { StreamCombo } from '@/lib/iitStreams'
 import { ProductRelatedItemsField, relatedItemsError } from '@/components/products/ProductRelatedItemsField'
 import type { ProductRelatedItem, ProductSpecimenItem } from '@/lib/dcRowCategory'
 import { ProductSpecimenItemsField, specimenItemsError } from '@/components/products/ProductSpecimenItemsField'
@@ -43,7 +44,7 @@ export default function NewProductPage() {
     newSpec: '',
     hasCategory: false,
     categories: [] as string[],
-    streams: [] as string[],
+    streams: [] as StreamCombo[],
     relatedItems: [] as ProductRelatedItem[],
     specimenItems: [] as ProductSpecimenItem[],
     newCategory: '',
@@ -198,7 +199,8 @@ export default function NewProductPage() {
         specs: form.hasSpecs ? form.specs : [],
         hasCategory: form.hasCategory,
         categories: form.hasCategory ? form.categories : [],
-        streams: form.streams,
+        streamCombos: form.streams,
+        streams: form.streams.map((combo) => combo.name),
         relatedItems: form.relatedItems,
         specimenItems: form.specimenItems,
         prodStatus: form.prodStatus,
@@ -380,7 +382,7 @@ export default function NewProductPage() {
             )}
           </div>
 
-          <ProductStreamsField value={form.streams} onChange={(streams) => setForm({ ...form, streams })} />
+          <ProductStreamsField value={form.streams} subjects={form.subjects} onChange={(streams) => setForm({ ...form, streams })} />
           <ProductRelatedItemsField value={form.relatedItems} onChange={(relatedItems) => setForm({ ...form, relatedItems })} />
           <ProductSpecimenItemsField
             value={form.specimenItems}

@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/collapsible'
 import { Package, PlusCircle, X, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
-import { DEFAULT_IIT_STREAMS, iitStreamLabel, matchIitStream } from '@/lib/iitStreams'
+import { CUSTOM_STREAM_SEPARATOR, isCustomStream, matchStream, streamLabel } from '@/lib/iitStreams'
 import {
   specsFromCatalog,
   getLineClassSelections,
@@ -123,7 +123,7 @@ function CloseLeadProductConfigView({
     getProductClasses,
     getProductSpecs,
     getProductSubjects,
-    getProductStreams,
+    getProductStreamCombos,
     hasProductSubjects,
     getProductCategories,
     hasProductCategories,
@@ -147,6 +147,8 @@ function CloseLeadProductConfigView({
   } = cfg
 
   const [unitPriceDraftByLine, setUnitPriceDraftByLine] = useState<Record<string, string>>({})
+  /** IIT rows where the BDE chose "Add other combination" (subjects picked by hand). */
+  const [customStreamRows, setCustomStreamRows] = useState<Record<string, boolean>>({})
 
   const handleUnitPriceChange = (sectionId: string, lineId: string, raw: string) => {
     const value = sanitizeUnitPriceInput(raw)
@@ -282,8 +284,7 @@ function CloseLeadProductConfigView({
                         const isOpen = expandedLineBySection[section.id] === line.id
                         const lineClasses = getLineClassSelections(line, section)
                         const isIit = isIitProduct(line.product)
-                        const configuredStreams = isIit ? getProductStreams(line.product) : []
-                        const streamOptions = configuredStreams.length ? configuredStreams : DEFAULT_IIT_STREAMS
+                        const streamCombos = isIit ? getProductStreamCombos(line.product) : []
                         const classSummary =
                           isIit ? (line.iitAssignments || []).map((row) =>
                             `Cl ${row.class}${row.section && row.section !== 'ALL' ? row.section : ''} ${row.program} (${row.strength})`
@@ -354,13 +355,53 @@ function CloseLeadProductConfigView({
                                         <div><Label className="text-xs">Section</Label><Input aria-label="IIT section" value={row.section === 'ALL' ? '' : row.section} onChange={(e) => change({ section: e.target.value.toUpperCase() })} placeholder="A / all" /></div>
                                         <div><Label className="text-xs">Program *</Label><Input aria-label="IIT program" value={row.program} onChange={(e) => change({ program: e.target.value })} list={`iit-programs-${line.id}`} placeholder="Prime" /></div>
                                         <div><Label className="text-xs">Stream *</Label>
-                                          <Select value={matchIitStream(row.stream, streamOptions) || undefined} onValueChange={(value) => change({ stream: value })}>
-                                            <SelectTrigger aria-label="IIT stream" title={row.stream ? iitStreamLabel(row.stream) : undefined} className="w-full min-w-0 [&>span]:truncate [&>span]:block [&>span]:min-w-0 text-left"><SelectValue placeholder="Select stream" /></SelectTrigger>
-                                            <SelectContent>
-                                              {streamOptions.map((option) => <SelectItem key={option} value={option}>{iitStreamLabel(option)}</SelectItem>)}
-                                            </SelectContent>
-                                          </Select>
-                                          {row.stream && !matchIitStream(row.stream, streamOptions) && <p className="text-xs text-red-600 mt-1">&quot;{row.stream}&quot; is not in this product&apos;s streams. Select one.</p>}
+                                          {(() => {
+                                            const custom = customStreamRows[row.id] || isCustomStream(row.stream)
+                                            const matched = matchStream(row.stream, streamCombos)
+                                            // While picking, one ticked subject has no " + " yet, so split the raw value.
+                                            const picked = custom ? String(row.stream || '').split('+').map((x) => x.trim()).filter(Boolean) : []
+                                            const subjectChoices = productSubjects.length ? productSubjects : [...new Set(streamCombos.flatMap((c) => c.subjects))]
+                                            return (
+                                              <>
+                                                <Select
+                                                  value={custom ? '__other__' : matched || undefined}
+                                                  onValueChange={(value) => {
+                                                    if (value === '__other__') {
+                                                      setCustomStreamRows((prev) => ({ ...prev, [row.id]: true }))
+                                                      change({ stream: '' })
+                                                    } else {
+                                                      setCustomStreamRows((prev) => ({ ...prev, [row.id]: false }))
+                                                      change({ stream: value })
+                                                    }
+                                                  }}
+                                                >
+                                                  <SelectTrigger aria-label="IIT stream" title={row.stream ? streamLabel(row.stream, streamCombos) : undefined} className="w-full min-w-0 [&>span]:truncate [&>span]:block [&>span]:min-w-0 text-left"><SelectValue placeholder="Select stream" /></SelectTrigger>
+                                                  <SelectContent>
+                                                    {streamCombos.map((combo) => <SelectItem key={combo.name} value={combo.name}>{streamLabel(combo.name, streamCombos)}</SelectItem>)}
+                                                    <SelectItem value="__other__">+ Add other combination</SelectItem>
+                                                  </SelectContent>
+                                                </Select>
+                                                {custom && (
+                                                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 rounded border bg-neutral-50 p-2">
+                                                    {subjectChoices.map((subject) => (
+                                                      <label key={subject} className="flex items-center gap-1 text-xs cursor-pointer">
+                                                        <Checkbox
+                                                          checked={picked.includes(subject)}
+                                                          onCheckedChange={(checked) => {
+                                                            const next = subjectChoices.filter((s) => (s === subject ? checked === true : picked.includes(s)))
+                                                            change({ stream: next.join(CUSTOM_STREAM_SEPARATOR) })
+                                                          }}
+                                                        />
+                                                        {subject}
+                                                      </label>
+                                                    ))}
+                                                    {subjectChoices.length === 0 && <span className="text-xs text-amber-700">Add subjects to this product first.</span>}
+                                                  </div>
+                                                )}
+                                                {!custom && row.stream && !matched && <p className="text-xs text-red-600 mt-1">&quot;{row.stream}&quot; is not in this product&apos;s streams. Select one.</p>}
+                                              </>
+                                            )
+                                          })()}
                                         </div>
                                         <div><Label className="text-xs">Students *</Label><Input aria-label="IIT student strength" type="number" min={1} value={row.strength || ''} onChange={(e) => change({ strength: Number(e.target.value) || 0 })} /></div>
                                         <div><Label className="text-xs">Rate / student ₹ *</Label><Input aria-label="IIT unit price" type="number" min={0} step="0.01" value={row.unitPrice || ''} onChange={(e) => change({ unitPrice: Number(e.target.value) || 0 })} /></div>

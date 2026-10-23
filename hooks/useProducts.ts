@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { apiRequest } from '@/lib/api'
 import { normalizeCalculationType, type CalculationType } from '@/lib/paymentDivisor'
 import type { ProductRelatedItem, ProductSpecimenItem } from '@/lib/dcRowCategory'
+import { productStreamCombos, type StreamCombo } from '@/lib/iitStreams'
 
 type Product = {
   _id: string
@@ -15,6 +16,7 @@ type Product = {
   hasCategory?: boolean
   categories?: string[]
   streams?: string[]
+  streamCombos?: StreamCombo[]
   relatedItems?: ProductRelatedItem[]
   specimenItems?: ProductSpecimenItem[]
   prodStatus: number
@@ -129,7 +131,8 @@ export function useProducts() {
       const product = findProduct(productName)
       return product?.hasSubjects === true && product?.subjects && Array.isArray(product.subjects) && product.subjects.length > 0
     },
-    // IIT subject combinations configured on the product (e.g. MBiPC, MPC, M)
+    // Streams as subject combinations of the product (named in Products → Streams)
+    getProductStreamCombos: (productName: string): StreamCombo[] => productStreamCombos(findProduct(productName)),
     getProductStreams: (productName: string): string[] => {
       const product = findProduct(productName)
       return Array.isArray(product?.streams) ? product.streams.filter(Boolean) : []

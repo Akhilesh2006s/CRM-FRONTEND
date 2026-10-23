@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { StockMovementsCard } from '@/components/warehouse/StockMovementsCard'
 import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -128,6 +129,8 @@ export default function WarehouseStock() {
           </Table>
         </div>
       </Card>
+
+      <StockMovementsCard />
     </div>
   )
 }

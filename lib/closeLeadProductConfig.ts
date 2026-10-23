@@ -1,6 +1,6 @@
 import { computeBucketAmount, roundToTwo, type CalculationType } from '@/lib/paymentDivisor'
 import { applyPaymentDivisorsToBreakdown } from '@/lib/dcPaymentDivisors'
-import { iitStreamSubjects } from '@/lib/iitStreams'
+import { isCustomStream, matchStream, streamSubjects, type StreamCombo } from '@/lib/iitStreams'
 import { normalizeProductTerm, termFromLevelLabel, type ProductTerm } from '@/lib/productTerm'
 
 /** Keep only specs that exist on the product. Falls back to the first catalog spec. */
@@ -1130,6 +1130,8 @@ export type ValidateCloseLeadProductsOpts = {
   requireDeliverables?: boolean
   /** When true (Close Lead default), require unit price > 0. */
   requireUnitPrice?: boolean
+  /** The product's streams (subject combinations) for IIT rows. */
+  getStreamCombos?: (productName: string) => StreamCombo[]
 }
 
 /** Shared validation matching Close Lead Turn-to-Client product checks. */
@@ -1144,8 +1146,9 @@ export function validateCloseLeadProductConfig(
       for (const row of line.iitAssignments) {
         if (!/^\d+$/.test(row.class.trim()) || Number(row.class) <= 0 || !row.program.trim() || !row.stream.trim() || Number(row.strength) <= 0 || Number(row.unitPrice) <= 0)
           return { ok: false, message: 'Each IIT assignment needs class, program, stream, strength, and a unit price greater than zero.' }
-        if (!iitStreamSubjects(row.stream).length)
-          return { ok: false, message: `IIT class ${row.class.trim()}: select a stream from the list.` }
+        const combos = opts.getStreamCombos?.(line.product) || []
+        if (isCustomStream(row.stream) ? streamSubjects(row.stream).length < 2 : !matchStream(row.stream, combos))
+          return { ok: false, message: `IIT class ${row.class.trim()}: select a stream, or tick at least two subjects for another combination.` }
         const key = row.class.trim().toLowerCase()
         const sectionName = normalizeIitSection(row.section).toLowerCase()
         const prior = used.get(key) || new Set<string>()

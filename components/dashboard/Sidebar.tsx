@@ -1288,11 +1288,10 @@ export function Sidebar() {
       { label: 'Sign out', icon: LogOut, href: '/auth/login' },
     ]
   } else if (isPartner) {
-    // For Partner role: Dashboard + Stocks + DCs (assigned products only)
+    // Vendor / Partner: Dashboard + Stocks of their assigned products. DCs are internal.
     finalNav = [
       { label: 'My Dashboard', icon: LayoutDashboard, href: '/dashboard' },
       { label: 'Stocks', icon: Boxes, href: '/dashboard/stocks' },
-      { label: 'My DCs', icon: Truck, href: '/dashboard/dcs' },
       { label: 'Sign out', icon: LogOut, href: '/auth/login' },
     ]
   } else {

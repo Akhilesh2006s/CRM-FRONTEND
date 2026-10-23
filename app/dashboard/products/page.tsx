@@ -10,6 +10,7 @@ import { apiRequest } from '@/lib/api'
 import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
 import { ProductStreamsField } from '@/components/products/ProductStreamsField'
+import { productStreamCombos, type StreamCombo } from '@/lib/iitStreams'
 import { ProductRelatedItemsField, relatedItemsError } from '@/components/products/ProductRelatedItemsField'
 import type { ProductRelatedItem, ProductSpecimenItem } from '@/lib/dcRowCategory'
 import { ProductSpecimenItemsField, specimenItemsError } from '@/components/products/ProductSpecimenItemsField'
@@ -32,6 +33,7 @@ type Product = {
   hasCategory?: boolean
   categories?: string[]
   streams?: string[]
+  streamCombos?: StreamCombo[]
   relatedItems?: ProductRelatedItem[]
   specimenItems?: ProductSpecimenItem[]
   prodStatus: number
@@ -70,7 +72,7 @@ export default function ProductsPage() {
     newSpec: '',
     hasCategory: false,
     categories: [] as string[],
-    streams: [] as string[],
+    streams: [] as StreamCombo[],
     relatedItems: [] as ProductRelatedItem[],
     specimenItems: [] as ProductSpecimenItem[],
     newCategory: '',
@@ -154,7 +156,7 @@ export default function ProductsPage() {
       newSpec: '',
       hasCategory: product.hasCategory || false,
       categories: product.categories || [],
-      streams: product.streams || [],
+      streams: productStreamCombos(product),
       relatedItems: (product.relatedItems || []).map((item) => ({ ...item })),
       specimenItems: (product.specimenItems || []).map((item) => ({ ...item })),
       newCategory: '',
@@ -305,7 +307,8 @@ export default function ProductsPage() {
         specs: editForm.hasSpecs ? editForm.specs : [],
         hasCategory: editForm.hasCategory,
         categories: editForm.hasCategory ? editForm.categories : [],
-        streams: editForm.streams,
+        streamCombos: editForm.streams,
+        streams: editForm.streams.map((combo) => combo.name),
         relatedItems: editForm.relatedItems,
         specimenItems: editForm.specimenItems,
         prodStatus: editForm.prodStatus,
@@ -581,7 +584,7 @@ export default function ProductsPage() {
               )}
             </div>
 
-            <ProductStreamsField value={editForm.streams} onChange={(streams) => setEditForm({ ...editForm, streams })} />
+            <ProductStreamsField value={editForm.streams} subjects={editForm.subjects} onChange={(streams) => setEditForm({ ...editForm, streams })} />
             <ProductRelatedItemsField value={editForm.relatedItems} onChange={(relatedItems) => setEditForm({ ...editForm, relatedItems })} />
             <ProductSpecimenItemsField
               value={editForm.specimenItems}
