@@ -5,18 +5,22 @@ import { typography } from '../../theme/typography';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
+import { type ApprovalExpense, type ExpensePerson, firstLevelApprovedBy } from '../../lib/expenseApproval';
 
-interface Expense {
+type Expense = ApprovalExpense & {
   _id: string;
   title: string;
   amount: number;
-  approvedAmount?: number;
   category: string;
   createdAt: string;
-  employeeId?: { _id: string; name: string };
-  trainerId?: { _id: string; name: string };
+  employeeId?: ExpensePerson | null;
+  trainerId?: ExpensePerson | null;
+  /** Backend-resolved employee: employeeId, else trainerId, else submitter */
+  employee?: ExpensePerson | null;
   pendingMonth?: string;
-}
+};
+
+const money = (v?: number) => (typeof v === 'number' && Number.isFinite(v) ? v.toFixed(2) : '-');
 
 interface OptionItem {
   _id: string;
@@ -141,18 +145,18 @@ export default function ExpenseFinancePendingScreen({ navigation }: any) {
         {expenses.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyIcon}>📄</Text>
-            <Text style={styles.emptyText}>No finance pending expenses found</Text>
+            <Text style={styles.emptyText}>No finance approved expenses found</Text>
           </View>
         ) : (
           expenses.map((expense) => (
             <TouchableOpacity key={expense._id} style={styles.card} onPress={() => navigation.navigate('ExpenseEdit', { id: expense._id })} activeOpacity={0.7}>
               <View style={styles.cardHeader}>
                 <Text style={styles.expenseTitle}>{expense.title || 'Expense'}</Text>
-                <Text style={styles.amountText}>₹{expense.amount?.toFixed(2) || '0.00'}</Text>
+                <Text style={styles.amountText}>₹{money(expense.approvedAmount)}</Text>
               </View>
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Employee:</Text>
-                <Text style={styles.infoValue}>{expense.employeeId?.name || expense.trainerId?.name || 'Unknown'}</Text>
+                <Text style={styles.infoValue}>{(expense.employee || expense.employeeId || expense.trainerId)?.name || 'Unknown'}</Text>
               </View>
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Category:</Text>
@@ -162,10 +166,24 @@ export default function ExpenseFinancePendingScreen({ navigation }: any) {
                 <Text style={styles.infoLabel}>Raised:</Text>
                 <Text style={styles.infoValue}>{formatDate(expense.createdAt)}</Text>
               </View>
-              {expense.approvedAmount ? (
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Claimed:</Text>
+                <Text style={styles.infoValue}>₹{money(expense.employeeAmount ?? expense.amount)}</Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>First level:</Text>
+                <Text style={styles.infoValue}>
+                  {firstLevelApprovedBy(expense)?.name || '-'} · ₹{money(expense.firstLevelApprovedAmount)}
+                </Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Finance:</Text>
+                <Text style={styles.infoValue}>{expense.approvedBy?.name || '-'}</Text>
+              </View>
+              {expense.financeRemarks ? (
                 <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Manager Approved:</Text>
-                  <Text style={styles.infoValue}>₹{expense.approvedAmount.toFixed(2)}</Text>
+                  <Text style={styles.infoLabel}>Finance remarks:</Text>
+                  <Text style={styles.infoValue}>{expense.financeRemarks}</Text>
                 </View>
               ) : null}
             </TouchableOpacity>

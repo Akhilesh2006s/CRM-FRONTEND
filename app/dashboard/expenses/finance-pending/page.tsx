@@ -9,33 +9,22 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Pencil } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { type ApprovalExpense, type ExpensePerson, firstLevelApprovedBy } from '@/lib/expenseApproval'
 
-type Expense = {
+type Expense = ApprovalExpense & {
   _id: string
   title: string
   amount: number
-  employeeAmount?: number
-  approvedAmount?: number
   category: string
-  status: 'Pending' | 'Manager Approved' | 'Approved' | 'Rejected'
   createdAt: string
-  employeeId?: {
-    _id: string
-    name: string
-    email: string
-  }
-  trainerId?: {
-    _id: string
-    name: string
-    email: string
-  }
-  managerApprovedBy?: {
-    _id: string
-    name: string
-    email: string
-  }
+  employeeId?: ExpensePerson | null
+  trainerId?: ExpensePerson | null
+  /** Backend-resolved employee: employeeId, else trainerId, else submitter */
+  employee?: ExpensePerson | null
   pendingMonth?: string
 }
+
+const money = (v?: number) => (typeof v === 'number' && Number.isFinite(v) ? v.toFixed(2) : '-')
 
 type Employee = {
   _id: string
@@ -170,8 +159,11 @@ export default function FinancePendingExpensesPage() {
                 <TableHead className="font-semibold">S.No</TableHead>
                 <TableHead className="font-semibold">Employee Name</TableHead>
                 <TableHead className="font-semibold text-right">Emp.Amount</TableHead>
-                <TableHead className="font-semibold">Approved Manager</TableHead>
-                <TableHead className="font-semibold text-right">Approved Amount</TableHead>
+                <TableHead className="font-semibold">First-level Approver</TableHead>
+                <TableHead className="font-semibold text-right">First-level Amount</TableHead>
+                <TableHead className="font-semibold">Finance Approver</TableHead>
+                <TableHead className="font-semibold text-right">Final Amount</TableHead>
+                <TableHead className="font-semibold">Finance Remarks</TableHead>
                 <TableHead className="font-semibold">Action</TableHead>
                 <TableHead className="font-semibold">Pending Months</TableHead>
               </TableRow>
@@ -179,17 +171,17 @@ export default function FinancePendingExpensesPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-neutral-500">
+                  <TableCell colSpan={10} className="text-center py-8 text-neutral-500">
                     Loading expenses...
                   </TableCell>
                 </TableRow>
               ) : expenses.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8">
+                  <TableCell colSpan={10} className="text-center py-8">
                     <div className="flex flex-col items-center gap-2">
-                      <p className="text-neutral-500 font-medium">No finance pending expenses found</p>
+                      <p className="text-neutral-500 font-medium">No finance approved expenses found</p>
                       <p className="text-sm text-neutral-400">
-                        Expenses need to be approved by managers first before they appear here.
+                        Expenses appear here once the Finance Manager gives final approval.
                       </p>
                     </div>
                   </TableCell>
@@ -202,17 +194,16 @@ export default function FinancePendingExpensesPage() {
                   >
                     <TableCell>{index + 1}</TableCell>
                     <TableCell className="font-medium">
-                      {expense.employeeId?.name || expense.trainerId?.name || '-'}
+                      {(expense.employee || expense.employeeId || expense.trainerId)?.name || '-'}
                     </TableCell>
                     <TableCell className="text-right font-medium">
-                      {(expense.employeeAmount || expense.amount).toFixed(2)}
+                      {money(expense.employeeAmount ?? expense.amount)}
                     </TableCell>
-                    <TableCell>
-                      {expense.managerApprovedBy?.name || '-'}
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      {(expense.approvedAmount || expense.amount).toFixed(2)}
-                    </TableCell>
+                    <TableCell>{firstLevelApprovedBy(expense)?.name || '-'}</TableCell>
+                    <TableCell className="text-right">{money(expense.firstLevelApprovedAmount)}</TableCell>
+                    <TableCell>{expense.approvedBy?.name || '-'}</TableCell>
+                    <TableCell className="text-right font-medium">{money(expense.approvedAmount)}</TableCell>
+                    <TableCell className="max-w-[220px] whitespace-pre-wrap">{expense.financeRemarks || '-'}</TableCell>
                     <TableCell>
                       <button
                         onClick={() => handleEdit(expense._id)}

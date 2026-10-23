@@ -15,22 +15,26 @@ import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 import { downloadExpensesReport } from '../../utils/downloadExpensesReport';
+import {
+  type ApprovalExpense,
+  type ExpensePerson,
+  expenseStatusColor,
+  expenseStatusText,
+  firstLevelApprovedBy,
+} from '../../lib/expenseApproval';
 
-type Expense = {
+type Expense = ApprovalExpense & {
   _id: string;
   expItemId?: string;
   amount: number;
-  employeeAmount?: number;
-  approvedAmount?: number;
   category?: string;
   date?: string;
-  createdAt?: string;
-  status?: string;
-  managerRemarks?: string;
-  employeeId?: { _id: string; name?: string; zone?: string };
-  trainerId?: { _id: string; name?: string; zone?: string };
-  managerApprovedBy?: { _id: string; name?: string };
-  approvedBy?: { _id: string; name?: string };
+  employeeId?: (ExpensePerson & { zone?: string }) | null;
+  trainerId?: (ExpensePerson & { zone?: string }) | null;
+  /** Backend-resolved employee: employeeId, else trainerId, else submitter */
+  employee?: (ExpensePerson & { zone?: string }) | null;
+  /** Server-computed status text (same wording as the export) */
+  statusText?: string;
 };
 
 type Employee = {
@@ -76,29 +80,6 @@ function formatExpDate(dateString?: string) {
   const date = new Date(dateString);
   if (Number.isNaN(date.getTime())) return '-';
   return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-}
-
-function getStatusDisplay(status?: string) {
-  if (status === 'Pending') return 'Pending at Manager';
-  if (status === 'Manager Approved') return 'Pending at Finance';
-  return status || '-';
-}
-
-function statusStyle(status?: string) {
-  switch (status) {
-    case 'Pending':
-      return { bg: '#FEF3C7', fg: '#B45309' };
-    case 'Manager Approved':
-      return { bg: '#DBEAFE', fg: '#1D4ED8' };
-    case 'Executive Manager Approved':
-      return { bg: '#FCE7F3', fg: '#BE185D' };
-    case 'Approved':
-      return { bg: '#DCFCE7', fg: '#15803D' };
-    case 'Rejected':
-      return { bg: '#FEE2E2', fg: '#B91C1C' };
-    default:
-      return { bg: '#F1F5F9', fg: '#64748B' };
-  }
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {
@@ -244,11 +225,11 @@ export default function ReportsExpensesScreen() {
             value={filters.status}
             onValueChange={(v) => setFilters((f) => ({ ...f, status: v }))}
             items={[
-              { label: 'Pending', value: 'Pending' },
-              { label: 'Manager Approved', value: 'Manager Approved' },
-              { label: 'Executive Manager Approved', value: 'Executive Manager Approved' },
+              { label: 'Pending at first level', value: 'Pending' },
+              { label: 'Pending at Finance', value: 'finance' },
               { label: 'Approved', value: 'Approved' },
               { label: 'Rejected', value: 'Rejected' },
+              { label: 'Sent back for correction', value: 'Needs Correction' },
             ]}
           />
           <WebLabel>From Date</WebLabel>
@@ -272,19 +253,18 @@ export default function ReportsExpensesScreen() {
           </View>
         ) : (
           expenses.map((expense, index) => {
-            const badge = statusStyle(expense.status);
+            const badge = expenseStatusColor(expense.status || '');
             const expNo = expense.expItemId || String(expense._id).slice(-5);
             const employeeName =
-              expense.employeeId?.name || expense.trainerId?.name || '-';
+              (expense.employee || expense.employeeId || expense.trainerId)?.name || '-';
             const expenseAmount = Number(expense.employeeAmount ?? expense.amount ?? 0);
-            const approvedAmount = Number(expense.approvedAmount ?? 0);
             return (
               <View key={expense._id} style={styles.card}>
                 <View style={styles.cardTop}>
                   <Text style={styles.expNo}>#{expNo}</Text>
                   <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
-                    <Text style={[styles.statusBadgeText, { color: badge.fg }]}>
-                      {getStatusDisplay(expense.status)}
+                    <Text style={[styles.statusBadgeText, { color: badge.text }]}>
+                      {expense.statusText || expenseStatusText(expense)}
                     </Text>
                   </View>
                 </View>
@@ -292,11 +272,22 @@ export default function ReportsExpensesScreen() {
                 <InfoRow label="Created On" value={formatCreatedOn(expense.createdAt)} />
                 <InfoRow label="Exp Date" value={formatExpDate(expense.date)} />
                 <InfoRow label="Employee Name" value={employeeName} />
-                <InfoRow label="Approved Manager" value={expense.managerApprovedBy?.name || '-'} />
-                <InfoRow label="Approved Fin" value={expense.approvedBy?.name || '-'} />
                 <InfoRow label="Expense Amount" value={expenseAmount.toFixed(2)} />
-                <InfoRow label="Approved Amount" value={approvedAmount.toFixed(2)} />
-                <InfoRow label="Approved Remarks" value={expense.managerRemarks || '-'} />
+                <InfoRow label="1st Level Approver" value={firstLevelApprovedBy(expense)?.name || '-'} />
+                <InfoRow
+                  label="1st Level Amount"
+                  value={typeof expense.firstLevelApprovedAmount === 'number' ? expense.firstLevelApprovedAmount.toFixed(2) : '-'}
+                />
+                <InfoRow
+                  label="1st Level Remarks"
+                  value={firstLevelApprovedBy(expense) ? expense.managerRemarks || '-' : '-'}
+                />
+                <InfoRow label="Finance Approver" value={expense.status === 'Approved' ? expense.approvedBy?.name || '-' : '-'} />
+                <InfoRow
+                  label="Final Amount"
+                  value={expense.status === 'Approved' && typeof expense.approvedAmount === 'number' ? expense.approvedAmount.toFixed(2) : '-'}
+                />
+                <InfoRow label="Finance Remarks" value={expense.financeRemarks || '-'} />
               </View>
             );
           })

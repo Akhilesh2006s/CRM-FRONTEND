@@ -11,36 +11,21 @@ import { apiRequest } from '@/lib/api'
 import { downloadReportFile } from '@/lib/reportDownload'
 import { toast } from 'sonner'
 import { Download } from 'lucide-react'
+import { type ApprovalExpense, type ExpensePerson, expenseStatusColor, expenseStatusText, firstLevelApprovedBy } from '@/lib/expenseApproval'
 
-type Expense = {
+type Expense = ApprovalExpense & {
   _id: string
   expItemId?: string
   amount: number
-  employeeAmount?: number
-  approvedAmount?: number
   category: string
   date: string
   createdAt: string
-  status: 'Pending' | 'Manager Approved' | 'Approved' | 'Rejected'
-  managerRemarks?: string
-  employeeId?: {
-    _id: string
-    name: string
-    zone?: string
-  }
-  trainerId?: {
-    _id: string
-    name: string
-    zone?: string
-  }
-  managerApprovedBy?: {
-    _id: string
-    name: string
-  }
-  approvedBy?: {
-    _id: string
-    name: string
-  }
+  employeeId?: (ExpensePerson & { zone?: string }) | null
+  trainerId?: (ExpensePerson & { zone?: string }) | null
+  /** Backend-resolved employee: employeeId, else trainerId, else submitter */
+  employee?: (ExpensePerson & { zone?: string }) | null
+  /** Server-computed status text (same wording as the export) */
+  statusText?: string
 }
 
 type Employee = {
@@ -79,7 +64,7 @@ export default function ExpensesReportPage() {
           if (emp.zone) uniqueZones.add(emp.zone)
         })
         allExpenses.forEach(exp => {
-          const zone = exp.employeeId?.zone || exp.trainerId?.zone
+          const zone = exp.employee?.zone || exp.employeeId?.zone || exp.trainerId?.zone
           if (zone) uniqueZones.add(zone)
         })
         setZones(Array.from(uniqueZones).sort())
@@ -154,11 +139,7 @@ export default function ExpensesReportPage() {
     return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
   }
 
-  const getStatusDisplay = (status: string) => {
-    if (status === 'Pending') return 'Pending at Product Manager'
-    if (status === 'Manager Approved') return 'Pending at Finance'
-    return status
-  }
+  const money = (v?: number) => (typeof v === 'number' && Number.isFinite(v) ? v.toFixed(2) : '-')
 
   return (
     <div className="space-y-6">
@@ -226,10 +207,11 @@ export default function ExpensesReportPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="Pending">Pending</SelectItem>
-                <SelectItem value="Manager Approved">Product Manager Approved</SelectItem>
+                <SelectItem value="Pending">Pending at first level</SelectItem>
+                <SelectItem value="finance">Pending at Finance</SelectItem>
                 <SelectItem value="Approved">Approved</SelectItem>
                 <SelectItem value="Rejected">Rejected</SelectItem>
+                <SelectItem value="Needs Correction">Sent back for correction</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -272,24 +254,26 @@ export default function ExpensesReportPage() {
                 <TableHead className="font-semibold">Created On</TableHead>
                 <TableHead className="font-semibold">Exp Date</TableHead>
                 <TableHead className="font-semibold">Employee Name</TableHead>
-                <TableHead className="font-semibold">Approved Manager</TableHead>
-                <TableHead className="font-semibold">Approved Fin</TableHead>
                 <TableHead className="font-semibold text-right">Expense Amount</TableHead>
-                <TableHead className="font-semibold text-right">Approved Amount</TableHead>
-                <TableHead className="font-semibold">Approved Remarks</TableHead>
+                <TableHead className="font-semibold">First-level Approver</TableHead>
+                <TableHead className="font-semibold text-right">First-level Amount</TableHead>
+                <TableHead className="font-semibold">First-level Remarks</TableHead>
+                <TableHead className="font-semibold">Finance Approver</TableHead>
+                <TableHead className="font-semibold text-right">Final Amount</TableHead>
+                <TableHead className="font-semibold">Finance Remarks</TableHead>
                 <TableHead className="font-semibold">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="text-center py-8 text-neutral-500">
+                  <TableCell colSpan={13} className="text-center py-8 text-neutral-500">
                     Loading expenses...
                   </TableCell>
                 </TableRow>
               ) : expenses.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="text-center py-8 text-neutral-500">
+                  <TableCell colSpan={13} className="text-center py-8 text-neutral-500">
                     No expenses found
                   </TableCell>
                 </TableRow>
@@ -306,34 +290,36 @@ export default function ExpensesReportPage() {
                     <TableCell>{formatDate(expense.createdAt)}</TableCell>
                     <TableCell>{formatExpDate(expense.date)}</TableCell>
                     <TableCell className="font-medium">
-                      {expense.employeeId?.name || expense.trainerId?.name || '-'}
-                    </TableCell>
-                    <TableCell>
-                      {expense.managerApprovedBy?.name || '-'}
-                    </TableCell>
-                    <TableCell>
-                      {expense.approvedBy?.name || '-'}
+                      {(expense.employee || expense.employeeId || expense.trainerId)?.name || '-'}
                     </TableCell>
                     <TableCell className="text-right font-medium">
-                      {(expense.employeeAmount || expense.amount).toFixed(2)}
+                      {money(expense.employeeAmount ?? expense.amount)}
+                    </TableCell>
+                    <TableCell>
+                      {firstLevelApprovedBy(expense)?.name ||
+                        (expense.rejectedStage === 'first' ? expense.rejectedBy?.name : '') ||
+                        '-'}
+                    </TableCell>
+                    <TableCell className="text-right">{money(expense.firstLevelApprovedAmount)}</TableCell>
+                    <TableCell className="max-w-[220px] whitespace-pre-wrap">
+                      {(firstLevelApprovedBy(expense) || expense.rejectedStage === 'first') && expense.managerRemarks
+                        ? expense.managerRemarks
+                        : '-'}
+                    </TableCell>
+                    <TableCell>
+                      {expense.status === 'Approved'
+                        ? expense.approvedBy?.name || '-'
+                        : expense.rejectedStage === 'finance'
+                          ? expense.rejectedBy?.name || '-'
+                          : '-'}
                     </TableCell>
                     <TableCell className="text-right font-medium">
-                      {(expense.approvedAmount || 0).toFixed(2)}
+                      {expense.status === 'Approved' ? money(expense.approvedAmount) : '-'}
                     </TableCell>
+                    <TableCell className="max-w-[220px] whitespace-pre-wrap">{expense.financeRemarks || '-'}</TableCell>
                     <TableCell>
-                      {expense.managerRemarks || '-'}
-                    </TableCell>
-                    <TableCell>
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        expense.status === 'Pending' 
-                          ? 'bg-amber-100 text-amber-700'
-                          : expense.status === 'Manager Approved'
-                          ? 'bg-blue-100 text-blue-700'
-                          : expense.status === 'Approved'
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-red-100 text-red-700'
-                      }`}>
-                        {getStatusDisplay(expense.status)}
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${expenseStatusColor(expense.status)}`}>
+                        {expense.statusText || expenseStatusText(expense)}
                       </span>
                     </TableCell>
                   </TableRow>
