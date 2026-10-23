@@ -101,6 +101,8 @@ type DC = {
     contract_years?: number
     contract_start?: string
     contract_end?: string
+    location?: string
+    city?: string
   }
   customerName?: string
   customerPhone?: string
