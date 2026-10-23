@@ -3360,7 +3360,13 @@ export default function ClientDCPage() {
                     return (
                       <TableRow key={d._id} className={chainRowClass(d, 'hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-neutral-50 transition-all duration-200 border-b border-neutral-100/80 hover:shadow-sm')}>
                         <TableCell className="font-medium text-neutral-600">{idx + 1}</TableCell>
-                        <TableCell className="font-semibold text-blue-600">{schoolCode}</TableCell>
+                        <TableCell className="font-semibold text-blue-600">
+                          {schoolCode}
+                          {/* Town / area under the code, as on the follow-up cards. */}
+                          {typeof d.dcOrderId === 'object' && (d.dcOrderId?.location || d.dcOrderId?.city) && (
+                            <div className="text-xs font-normal text-neutral-500">{d.dcOrderId?.location || d.dcOrderId?.city}</div>
+                          )}
+                        </TableCell>
                         <TableCell className="font-semibold text-neutral-900">{customerName}</TableCell>
                         <TableCell className="text-neutral-700">{phone}</TableCell>
                         <TableCell className="max-w-[320px] whitespace-normal break-words text-neutral-700" title={product}>{product}</TableCell>
