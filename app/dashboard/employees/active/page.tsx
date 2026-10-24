@@ -132,6 +132,8 @@ export default function ActiveEmployeesPage() {
   const isSeniorCoordinator = currentUser?.role === 'Senior Coordinator'
   const isHrManager = currentUser?.role === 'HR Manager'
   const isHrExecutive = currentUser?.role === 'HR Executive'
+  // Only Admin / Super Admin may clear a mobile device binding (backend route rule).
+  const canResetDevice = ['Admin', 'Super Admin'].includes(currentUser?.role || '')
   const canViewCompleteDetails =
     ['Admin', 'Super Admin', 'HR Manager', 'HR Executive'].includes(currentUser?.role || '') ||
     (!rbacActive ? false : hasPermission('employees.active.edit'))
@@ -202,6 +204,16 @@ export default function ActiveEmployeesPage() {
       load()
     } catch (e: any) {
       toast.error(e?.message || 'Failed to reset password')
+    }
+  }
+
+  const resetDevice = async (id: string, name: string) => {
+    if (!confirm(`Reset the app device for ${name}? Their next app login binds the phone they use.`)) return
+    try {
+      await apiRequest(`/employees/${id}/reset-device`, { method: 'PUT', body: JSON.stringify({}) })
+      toast.success(`Device reset for ${name}. They can log in on their new phone now.`)
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to reset device')
     }
   }
 
@@ -429,6 +441,11 @@ export default function ActiveEmployeesPage() {
                             Reset Password
                           </Button>
                         </Can>
+                      )}
+                      {canResetDevice && (
+                        <Button size="sm" variant="secondary" onClick={() => resetDevice(e._id, e.name)}>
+                          Reset Device
+                        </Button>
                       )}
                       {canDeactivate && (
                         <Button size="sm" variant="outline" className="text-amber-700 border-amber-300" onClick={() => setOffboarding({ id: e._id, name: e.name, status: '', checklist: [] })}>

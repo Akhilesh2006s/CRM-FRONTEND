@@ -82,6 +82,25 @@ export default function EmployeesActiveScreen({ navigation }: any) {
     );
   };
 
+  const resetDevice = (id: string, name: string) => {
+    showConfirm(
+      'Reset Device',
+      `Reset the app device for ${name}? Their next app login binds the phone they use.`,
+      async () => {
+        try {
+          setBusyId(id);
+          await apiService.put(`/employees/${id}/reset-device`, {});
+          showAlert('Success', `Device reset for ${name}. They can log in on their new phone now.`);
+        } catch (e: any) {
+          showAlert('Error', e?.message || 'Failed to reset device');
+        } finally {
+          setBusyId(null);
+        }
+      },
+      'Reset',
+    );
+  };
+
   const deactivate = (id: string, name: string) => {
     showConfirm(
       'Deactivate employee',
@@ -104,6 +123,8 @@ export default function EmployeesActiveScreen({ navigation }: any) {
   };
 
   const isCoordinator = user?.role === 'Coordinator' || user?.role === 'Senior Coordinator';
+  // Only Admin / Super Admin may clear a mobile device binding (backend route rule).
+  const canResetDevice = user?.role === 'Admin' || user?.role === 'Super Admin';
   const filtered = items.filter(
     (e) =>
       e.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -178,6 +199,15 @@ export default function EmployeesActiveScreen({ navigation }: any) {
                   >
                     <Text style={styles.resetButtonText}>Reset Password</Text>
                   </TouchableOpacity>
+                  {canResetDevice ? (
+                    <TouchableOpacity
+                      style={styles.resetButton}
+                      onPress={() => resetDevice(e._id, e.name)}
+                      disabled={busyId === e._id}
+                    >
+                      <Text style={styles.resetButtonText}>Reset Device</Text>
+                    </TouchableOpacity>
+                  ) : null}
                   <TouchableOpacity
                     style={[styles.deactivateButton, busyId === e._id && styles.buttonDisabled]}
                     onPress={() => deactivate(e._id, e.name)}
