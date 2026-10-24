@@ -38,6 +38,16 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
+  // The login is shared by every tab of this browser. When another tab signs in as someone
+  // else (or signs out), reload so this tab never shows one user while acting as another.
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === 'authToken' || event.key === null) window.location.reload()
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
+
   return (
     <div className="flex h-[100dvh] max-h-[100dvh] overflow-hidden bg-neutral-50/50">
       <Sidebar />
