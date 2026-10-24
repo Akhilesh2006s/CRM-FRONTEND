@@ -81,13 +81,36 @@ type ProductInterested = {
   isFromPreviousDc: boolean
 }
 
+/** What the BDE expects for each product this year. */
+type RenewalOption = 'renewed' | 'not_renewed' | 'cross_sale'
+
+const RENEWAL_OPTION_LABELS: Record<RenewalOption, string> = {
+  renewed: 'Renewed',
+  not_renewed: 'Not Renewed',
+  cross_sale: 'Cross-Sale',
+}
+
 type RenewalProductLine = {
   product_name: string
   term: string
   strength: number | ''
+  unit_price: number | ''
   renewal_pct: number | ''
   isFromPreviousDc: boolean
+  option: RenewalOption
+  reason: string
 }
+
+const newCrossSaleLine = (): RenewalProductLine => ({
+  product_name: '',
+  term: 'Term 1',
+  strength: '',
+  unit_price: '',
+  renewal_pct: 100,
+  isFromPreviousDc: false,
+  option: 'cross_sale',
+  reason: '',
+})
 
 function dedupeSchoolProducts(products?: DcOrderSearchRow['products']) {
   const seen = new Set<string>()
@@ -107,17 +130,18 @@ function dedupeSchoolProducts(products?: DcOrderSearchRow['products']) {
 function buildRenewProductsFromSchool(school: DcOrderSearchRow | null): RenewalProductLine[] {
   const deduped = dedupeSchoolProducts(school?.products)
   if (deduped.length > 0) {
-    return deduped.map((p) => ({
+    return deduped.map((p): RenewalProductLine => ({
       product_name: p.product_name,
       term: p.term,
       strength: '',
+      unit_price: '',
       renewal_pct: '',
       isFromPreviousDc: true,
+      option: 'renewed',
+      reason: '',
     }))
   }
-  return [
-    { product_name: '', term: 'Term 1', strength: '', renewal_pct: 100, isFromPreviousDc: false },
-  ]
+  return [newCrossSaleLine()]
 }
 
 function productRenewalPctDisplay(p: {
@@ -190,9 +214,7 @@ export default function RenewalLeadsPage() {
   const [renewContactMobile, setRenewContactMobile] = useState('')
   const [renewRemarks, setRenewRemarks] = useState('')
   const [renewRecommendations, setRenewRecommendations] = useState('')
-  const [renewProducts, setRenewProducts] = useState<RenewalProductLine[]>([
-    { product_name: '', term: 'Term 1', strength: '', renewal_pct: 100, isFromPreviousDc: false },
-  ])
+  const [renewProducts, setRenewProducts] = useState<RenewalProductLine[]>([newCrossSaleLine()])
   const [creatingRenewal, setCreatingRenewal] = useState(false)
   const [dueRefreshKey, setDueRefreshKey] = useState(0)
   const isAdmin = currentUser?.role === 'Admin' || currentUser?.role === 'Super Admin'
@@ -352,10 +374,7 @@ export default function RenewalLeadsPage() {
   }
 
   const addRenewProduct = () => {
-    setRenewProducts((p) => [
-      ...p,
-      { product_name: '', term: 'Term 1', strength: '', renewal_pct: 100, isFromPreviousDc: false },
-    ])
+    setRenewProducts((p) => [...p, newCrossSaleLine()])
   }
 
   const removeRenewProduct = (i: number) => {
@@ -374,6 +393,64 @@ export default function RenewalLeadsPage() {
 
   const priorDcProducts = renewProducts.filter((r) => r.isFromPreviousDc)
   const additionalProducts = renewProducts.filter((r) => !r.isFromPreviousDc)
+
+  /** Strength / Price / Chance for Renewed and Cross-Sale; the reason for Not Renewed. */
+  const renderLineFields = (row: RenewalProductLine, i: number) => {
+    const numberValue = (v: number | '') => (v === '' ? '' : v)
+    const setNumber = (field: 'strength' | 'unit_price' | 'renewal_pct', value: string) =>
+      updateRenewProduct(i, field, value === '' ? '' : Number(value) || '')
+    if (row.option === 'not_renewed') {
+      return (
+        <div className="space-y-1">
+          <Label className="text-xs text-neutral-600">Reason for not renewing *</Label>
+          <Input
+            placeholder="e.g. Budget cut, moved to another vendor"
+            value={row.reason}
+            onChange={(e) => updateRenewProduct(i, 'reason', e.target.value)}
+            disabled={!selectedSchool}
+          />
+        </div>
+      )
+    }
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="space-y-1">
+          <Label className="text-xs text-neutral-600">Strength (students) *</Label>
+          <Input
+            type="number"
+            min={1}
+            placeholder="e.g. 120"
+            value={numberValue(row.strength)}
+            onChange={(e) => setNumber('strength', e.target.value)}
+            disabled={!selectedSchool}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-neutral-600">Price per student (₹) *</Label>
+          <Input
+            type="number"
+            min={1}
+            placeholder="e.g. 1500"
+            value={numberValue(row.unit_price)}
+            onChange={(e) => setNumber('unit_price', e.target.value)}
+            disabled={!selectedSchool}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-neutral-600">Chance (%) *</Label>
+          <Input
+            type="number"
+            min={1}
+            max={100}
+            placeholder="1 to 100"
+            value={numberValue(row.renewal_pct)}
+            onChange={(e) => setNumber('renewal_pct', e.target.value)}
+            disabled={!selectedSchool}
+          />
+        </div>
+      </div>
+    )
+  }
 
   const submitRenewalLead = async () => {
     if (!selectedSchool?._id) {
@@ -394,30 +471,42 @@ export default function RenewalLeadsPage() {
       toast.error('Add at least one product')
       return
     }
-    const invalidRows = rows.some((r) => {
+    for (const r of rows) {
+      if (r.option === 'not_renewed') {
+        if (!r.reason.trim()) {
+          toast.error(`Enter why ${r.product_name} was not renewed`)
+          return
+        }
+        continue
+      }
       const strength = Number(r.strength)
+      const price = Number(r.unit_price)
       const pct = Number(r.renewal_pct)
-      return (
-        !Number.isFinite(strength) ||
-        strength <= 0 ||
-        !Number.isFinite(pct) ||
-        pct < 1 ||
-        pct > 100
-      )
-    })
-    if (invalidRows) {
-      toast.error('Each product must have Strength > 0 and Chance % between 1 and 100')
-      return
+      if (!(strength > 0) || !(price > 0) || !(pct >= 1 && pct <= 100)) {
+        toast.error(`${r.product_name}: enter Strength, Price and Chance % (1 to 100)`)
+        return
+      }
     }
-    const products = rows.map((r) => ({
-      product_name: r.product_name.trim(),
-      quantity: Number(r.strength) || 1,
-      strength: Number(r.strength) || 1,
-      term: r.term,
-      unit_price: 0,
-      renewal_pct: Number(r.renewal_pct),
-      is_from_previous_dc: r.isFromPreviousDc,
-    }))
+    const products = rows.map((r) =>
+      r.option === 'not_renewed'
+        ? {
+            product_name: r.product_name.trim(),
+            term: r.term,
+            renewal_option: r.option,
+            not_interested_reason: r.reason.trim(),
+            is_from_previous_dc: r.isFromPreviousDc,
+          }
+        : {
+            product_name: r.product_name.trim(),
+            quantity: Number(r.strength),
+            strength: Number(r.strength),
+            term: r.term,
+            unit_price: Number(r.unit_price),
+            renewal_pct: Number(r.renewal_pct),
+            renewal_option: r.option,
+            is_from_previous_dc: r.isFromPreviousDc,
+          }
+    )
     setCreatingRenewal(true)
     try {
       await apiRequest('/leads/create', {
@@ -438,9 +527,7 @@ export default function RenewalLeadsPage() {
       setSchoolQuery('')
       setRenewRemarks('')
       setRenewRecommendations('')
-      setRenewProducts([
-        { product_name: '', term: 'Term 1', strength: '', renewal_pct: 100, isFromPreviousDc: false },
-      ])
+      setRenewProducts([newCrossSaleLine()])
       await loadLeads()
     } catch (e: any) {
       toast.error(e?.message || 'Failed to create renewal lead')
@@ -826,65 +913,53 @@ export default function RenewalLeadsPage() {
             </div>
 
             <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-              Enter Strength and Chance % manually for each product. Prior DC products have no
-              defaults. New products default Chance % to 100%.
+              For each product choose Renewed, Not Renewed or Cross-Sale. Renewed and Cross-Sale need
+              Strength, Price (per student) and Chance %; Not Renewed needs the reason.
             </div>
 
             {selectedSchool && priorDcProducts.length > 0 && (
               <div className="space-y-2">
                 <Label className="text-neutral-800">Previous DC products</Label>
                 <p className="text-xs text-neutral-500">
-                  Enter strength and chance % for each product on file.
+                  Products the school took last year. Choose what is expected this year.
                 </p>
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {renewProducts.map((row, i) =>
                     !row.isFromPreviousDc ? null : (
-                      <div key={`prior-${i}`} className="flex flex-wrap gap-2 items-center">
-                        <span className="flex-1 min-w-[140px] text-sm font-medium text-neutral-800 py-2">
-                          {row.product_name}
-                          <span className="text-xs font-normal text-neutral-500 ml-1">({row.term})</span>
-                        </span>
-                        <Input
-                          type="number"
-                          min={1}
-                          className="w-20"
-                          placeholder="Strength"
-                          value={row.strength === '' ? '' : row.strength}
-                          onChange={(e) => {
-                            const v = e.target.value
-                            updateRenewProduct(i, 'strength', v === '' ? '' : Number(v) || '')
-                          }}
-                          disabled={!selectedSchool}
-                        />
-                        <div className="flex items-center gap-1">
-                          <Input
-                            type="number"
-                            min={1}
-                            max={100}
-                            className="w-20"
-                            placeholder="Chance %"
-                            value={row.renewal_pct === '' ? '' : row.renewal_pct}
-                            onChange={(e) => {
-                              const v = e.target.value
-                              updateRenewProduct(
-                                i,
-                                'renewal_pct',
-                                v === '' ? '' : Number(v) || ''
-                              )
-                            }}
+                      <div key={`prior-${i}`} className="rounded-md border border-neutral-200 bg-white p-3 space-y-3">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <span className="flex-1 min-w-[160px] text-sm font-medium text-neutral-800">
+                            {row.product_name}
+                            <span className="text-xs font-normal text-neutral-500 ml-1">({row.term})</span>
+                          </span>
+                          <Select
+                            value={row.option}
+                            onValueChange={(v) => updateRenewProduct(i, 'option', v as RenewalOption)}
                             disabled={!selectedSchool}
-                          />
-                          <span className="text-sm text-neutral-500">%</span>
+                          >
+                            <SelectTrigger className="w-[160px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(Object.keys(RENEWAL_OPTION_LABELS) as RenewalOption[]).map((key) => (
+                                <SelectItem key={key} value={key}>
+                                  {RENEWAL_OPTION_LABELS[key]}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removeRenewProduct(i)}
+                            disabled={!selectedSchool}
+                            aria-label={`Remove ${row.product_name}`}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
                         </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => removeRenewProduct(i)}
-                          disabled={!selectedSchool}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
+                        {renderLineFields(row, i)}
                       </div>
                     )
                   )}
@@ -894,92 +969,66 @@ export default function RenewalLeadsPage() {
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label className="text-neutral-800">Additional products</Label>
+                <Label className="text-neutral-800">Additional products (Cross-Sale)</Label>
                 <Button type="button" size="sm" variant="outline" onClick={addRenewProduct} disabled={!selectedSchool}>
                   Add product
                 </Button>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {renewProducts.map((row, i) =>
                   row.isFromPreviousDc ? null : (
-                    <div key={`new-${i}`} className="flex flex-wrap gap-2 items-end">
-                      <div className="flex-1 min-w-[140px]">
+                    <div key={`new-${i}`} className="rounded-md border border-neutral-200 bg-white p-3 space-y-3">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex-1 min-w-[160px]">
+                          <Select
+                            value={row.product_name || undefined}
+                            onValueChange={(v) => updateRenewProduct(i, 'product_name', v)}
+                            disabled={!selectedSchool}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Product" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {availableProductNames.map((name) => (
+                                <SelectItem key={name} value={name}>
+                                  {name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                         <Select
-                          value={row.product_name || undefined}
-                          onValueChange={(v) => updateRenewProduct(i, 'product_name', v)}
+                          value={row.term}
+                          onValueChange={(v) => updateRenewProduct(i, 'term', v)}
                           disabled={!selectedSchool}
                         >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Product" />
+                          <SelectTrigger className="w-[120px]">
+                            <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            {availableProductNames.map((name) => (
-                              <SelectItem key={name} value={name}>
-                                {name}
-                              </SelectItem>
-                            ))}
+                            <SelectItem value="Term 1">Term 1</SelectItem>
+                            <SelectItem value="Term 2">Term 2</SelectItem>
+                            <SelectItem value="Both">Both</SelectItem>
                           </SelectContent>
                         </Select>
+                        <span className="rounded bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">Cross-Sale</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeRenewProduct(i)}
+                          disabled={!selectedSchool || (additionalProducts.length <= 1 && priorDcProducts.length === 0)}
+                          aria-label="Remove product"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
                       </div>
-                      <Select
-                        value={row.term}
-                        onValueChange={(v) => updateRenewProduct(i, 'term', v)}
-                        disabled={!selectedSchool}
-                      >
-                        <SelectTrigger className="w-[120px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Term 1">Term 1</SelectItem>
-                          <SelectItem value="Term 2">Term 2</SelectItem>
-                          <SelectItem value="Both">Both</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Input
-                        type="number"
-                        min={1}
-                        className="w-20"
-                        placeholder="Strength"
-                        value={row.strength === '' ? '' : row.strength}
-                        onChange={(e) => {
-                          const v = e.target.value
-                          updateRenewProduct(i, 'strength', v === '' ? '' : Number(v) || '')
-                        }}
-                        disabled={!selectedSchool}
-                      />
-                      <div className="flex items-center gap-1">
-                        <Input
-                          type="number"
-                          min={1}
-                          max={100}
-                          className="w-20"
-                          value={row.renewal_pct === '' ? '' : row.renewal_pct}
-                          onChange={(e) => {
-                            const v = e.target.value
-                            updateRenewProduct(
-                              i,
-                              'renewal_pct',
-                              v === '' ? '' : Number(v) || 100
-                            )
-                          }}
-                          disabled={!selectedSchool}
-                        />
-                        <span className="text-sm text-neutral-500 pb-2">%</span>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeRenewProduct(i)}
-                        disabled={!selectedSchool || additionalProducts.length <= 1}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
+                      {renderLineFields(row, i)}
                     </div>
                   )
                 )}
                 {selectedSchool && additionalProducts.length === 0 && priorDcProducts.length > 0 && (
-                  <p className="text-xs text-neutral-500">Use Add product for new lines (defaults to 100%).</p>
+                  <p className="text-xs text-neutral-500">Use Add product for a product the school did not take last year.</p>
                 )}
               </div>
             </div>

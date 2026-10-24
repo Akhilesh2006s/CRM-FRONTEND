@@ -59,6 +59,15 @@ type Lead = {
   school_id?: any;
 };
 
+/** What the BDE expects for each product this year (Renewal create form). */
+type RenewalOption = 'renewed' | 'not_renewed' | 'cross_sale';
+
+const RENEWAL_OPTIONS: { label: string; value: RenewalOption }[] = [
+  { label: 'Renewed', value: 'renewed' },
+  { label: 'Not Renewed', value: 'not_renewed' },
+  { label: 'Cross-Sale', value: 'cross_sale' },
+];
+
 /** Matches web renewal create / update product lines. */
 type RenewProductLine = {
   product_name: string;
@@ -66,6 +75,10 @@ type RenewProductLine = {
   strength: number | '';
   renewal_pct: number | '';
   isFromPreviousDc: boolean;
+  /** Create form only: Renewed / Not Renewed / Cross-Sale, price and not-renewed reason. */
+  option?: RenewalOption;
+  unit_price?: number | '';
+  reason?: string;
 };
 
 const PRIORITIES = [
@@ -94,17 +107,18 @@ function dedupeSchoolProducts(products?: DcOrderRow['products']) {
 function buildRenewProductsFromSchool(school: DcOrderRow | null): RenewProductLine[] {
   const deduped = dedupeSchoolProducts(school?.products);
   if (deduped.length > 0) {
-    return deduped.map((p) => ({
+    return deduped.map((p): RenewProductLine => ({
       product_name: p.product_name,
       term: p.term,
-      strength: '' as const,
-      renewal_pct: '' as const,
+      strength: '',
+      unit_price: '',
+      renewal_pct: '',
       isFromPreviousDc: true,
+      option: 'renewed',
+      reason: '',
     }));
   }
-  return [
-    { product_name: '', term: 'Term 1', strength: '', renewal_pct: 100, isFromPreviousDc: false },
-  ];
+  return [emptyAdditionalLine()];
 }
 
 function schoolDisplayCode(row: DcOrderRow | null) {
@@ -157,7 +171,16 @@ function priorityColor(priority?: string) {
 }
 
 function emptyAdditionalLine(): RenewProductLine {
-  return { product_name: '', term: 'Term 1', strength: '', renewal_pct: 100, isFromPreviousDc: false };
+  return {
+    product_name: '',
+    term: 'Term 1',
+    strength: '',
+    unit_price: '',
+    renewal_pct: 100,
+    isFromPreviousDc: false,
+    option: 'cross_sale',
+    reason: '',
+  };
 }
 
 /** Matches web `dashboard/leads/renewal` */
@@ -334,20 +357,21 @@ export default function LeadsRenewalListScreen() {
       Alert.alert('Validation', 'Add at least one product');
       return;
     }
-    const invalidRows = rows.some((r) => {
+    for (const r of rows) {
+      if (r.option === 'not_renewed') {
+        if (!String(r.reason || '').trim()) {
+          Alert.alert('Validation', `Enter why ${r.product_name} was not renewed`);
+          return;
+        }
+        continue;
+      }
       const strength = Number(r.strength);
+      const price = Number(r.unit_price);
       const pct = Number(r.renewal_pct);
-      return (
-        !Number.isFinite(strength) ||
-        strength <= 0 ||
-        !Number.isFinite(pct) ||
-        pct < 1 ||
-        pct > 100
-      );
-    });
-    if (invalidRows) {
-      Alert.alert('Validation', 'Each product must have Strength > 0 and Chance % between 1 and 100');
-      return;
+      if (!(strength > 0) || !(price > 0) || !(pct >= 1 && pct <= 100)) {
+        Alert.alert('Validation', `${r.product_name}: enter Strength, Price and Chance % (1 to 100)`);
+        return;
+      }
     }
     setCreatingRenewal(true);
     try {
@@ -358,15 +382,26 @@ export default function LeadsRenewalListScreen() {
         contact_mobile: renewContactMobile.trim(),
         remarks: renewRemarks,
         recommendations: renewRecommendations,
-        products: rows.map((r) => ({
-          product_name: r.product_name.trim(),
-          quantity: Number(r.strength) || 1,
-          strength: Number(r.strength) || 1,
-          term: r.term || 'Term 1',
-          unit_price: 0,
-          renewal_pct: Number(r.renewal_pct),
-          is_from_previous_dc: r.isFromPreviousDc,
-        })),
+        products: rows.map((r) =>
+          r.option === 'not_renewed'
+            ? {
+                product_name: r.product_name.trim(),
+                term: r.term || 'Term 1',
+                renewal_option: r.option,
+                not_interested_reason: String(r.reason || '').trim(),
+                is_from_previous_dc: r.isFromPreviousDc,
+              }
+            : {
+                product_name: r.product_name.trim(),
+                quantity: Number(r.strength),
+                strength: Number(r.strength),
+                term: r.term || 'Term 1',
+                unit_price: Number(r.unit_price),
+                renewal_pct: Number(r.renewal_pct),
+                renewal_option: r.option || 'cross_sale',
+                is_from_previous_dc: r.isFromPreviousDc,
+              },
+        ),
       });
       Alert.alert('Success', 'Renewal lead created');
       setDueRefreshKey((key) => key + 1);
@@ -498,6 +533,43 @@ export default function LeadsRenewalListScreen() {
     } catch {
       Alert.alert('Error', 'Could not load history');
     }
+  };
+
+  /** Create form: Strength / Price / Chance for Renewed and Cross-Sale; the reason for Not Renewed. */
+  const renderCreateLineFields = (row: RenewProductLine, i: number) => {
+    const editable = !!selectedSchool;
+    if (row.option === 'not_renewed') {
+      return (
+        <View>
+          <WebLabel>Reason for not renewing *</WebLabel>
+          <WebInput
+            placeholder="e.g. Budget cut, moved to another vendor"
+            value={row.reason || ''}
+            onChangeText={(v) => updateRenewProduct(i, 'reason', v)}
+            editable={editable}
+          />
+        </View>
+      );
+    }
+    const num = (v?: number | '') => (v === '' || v == null ? '' : String(v));
+    const set = (field: 'strength' | 'unit_price' | 'renewal_pct', v: string) =>
+      updateRenewProduct(i, field, v === '' ? '' : Number(v) || '');
+    return (
+      <View style={styles.lineFields}>
+        <View style={styles.lineField}>
+          <WebLabel>Strength (students) *</WebLabel>
+          <WebInput placeholder="e.g. 120" value={num(row.strength)} onChangeText={(v) => set('strength', v)} keyboardType="number-pad" editable={editable} />
+        </View>
+        <View style={styles.lineField}>
+          <WebLabel>Price per student (₹) *</WebLabel>
+          <WebInput placeholder="e.g. 1500" value={num(row.unit_price)} onChangeText={(v) => set('unit_price', v)} keyboardType="number-pad" editable={editable} />
+        </View>
+        <View style={styles.lineField}>
+          <WebLabel>Chance (%) *</WebLabel>
+          <WebInput placeholder="1 to 100" value={num(row.renewal_pct)} onChangeText={(v) => set('renewal_pct', v)} keyboardType="number-pad" editable={editable} />
+        </View>
+      </View>
+    );
   };
 
   const renderStrengthChanceInputs = (
@@ -647,15 +719,15 @@ export default function LeadsRenewalListScreen() {
 
         <View style={styles.infoBanner}>
           <Text style={styles.infoBannerText}>
-            Enter Strength and Chance % manually for each product. Prior DC products have no
-            defaults. New products default Chance % to 100%.
+            For each product choose Renewed, Not Renewed or Cross-Sale. Renewed and Cross-Sale need
+            Strength, Price (per student) and Chance %; Not Renewed needs the reason.
           </Text>
         </View>
 
         {selectedSchool && priorDcProducts.length > 0 ? (
           <View style={styles.block}>
             <Text style={styles.sectionLabel}>Previous DC products</Text>
-            <Text style={styles.hint}>Enter strength and chance % for each product on file.</Text>
+            <Text style={styles.hint}>Products the school took last year. Choose what is expected this year.</Text>
             {renewProducts.map((row, i) =>
               !row.isFromPreviousDc ? null : (
                 <View key={`prior-${i}`} style={styles.productRow}>
@@ -663,7 +735,19 @@ export default function LeadsRenewalListScreen() {
                     {row.product_name}{' '}
                     <Text style={styles.hint}>({row.term})</Text>
                   </Text>
-                  {renderStrengthChanceInputs(row, i, updateRenewProduct, !!selectedSchool)}
+                  <View style={styles.optionRow}>
+                    {RENEWAL_OPTIONS.map((o) => (
+                      <TouchableOpacity
+                        key={o.value}
+                        style={[styles.optionChip, row.option === o.value && styles.optionChipOn]}
+                        onPress={() => updateRenewProduct(i, 'option', o.value)}
+                        disabled={!selectedSchool}
+                      >
+                        <Text style={[styles.optionText, row.option === o.value && styles.optionTextOn]}>{o.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  {renderCreateLineFields(row, i)}
                   <WebButton
                     title="Remove"
                     variant="outline"
@@ -678,7 +762,7 @@ export default function LeadsRenewalListScreen() {
 
         <View style={styles.block}>
           <View style={styles.rowBetween}>
-            <Text style={styles.sectionLabel}>Additional products</Text>
+            <Text style={styles.sectionLabel}>Additional products (Cross-Sale)</Text>
             <WebButton
               title="Add product"
               variant="outline"
@@ -702,8 +786,8 @@ export default function LeadsRenewalListScreen() {
                   onValueChange={(v) => updateRenewProduct(i, 'term', v)}
                   items={TERMS}
                 />
-                {renderStrengthChanceInputs(row, i, updateRenewProduct, !!selectedSchool)}
-                {additionalProducts.length > 1 ? (
+                {renderCreateLineFields(row, i)}
+                {additionalProducts.length > 1 || priorDcProducts.length > 0 ? (
                   <WebButton
                     title="Remove"
                     variant="outline"
@@ -715,7 +799,7 @@ export default function LeadsRenewalListScreen() {
             ),
           )}
           {selectedSchool && additionalProducts.length === 0 && priorDcProducts.length > 0 ? (
-            <Text style={styles.hint}>Use Add product for new lines (defaults to 100%).</Text>
+            <Text style={styles.hint}>Use Add product for a product the school did not take last year.</Text>
           ) : null}
         </View>
 
@@ -1112,4 +1196,11 @@ const styles = StyleSheet.create({
   dateBtn: { color: colors.primary, marginVertical: 12, fontWeight: '500' },
   historyItem: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
   historyDate: { fontWeight: '600', marginBottom: 4 },
+  lineFields: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  lineField: { flexGrow: 1, flexBasis: 140, minWidth: 140 },
+  optionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginVertical: 6 },
+  optionChip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1, borderColor: '#D4D4D4', backgroundColor: '#fff' },
+  optionChipOn: { backgroundColor: '#2563EB', borderColor: '#2563EB' },
+  optionText: { fontSize: 13, color: '#262626' },
+  optionTextOn: { color: '#fff', fontWeight: '600' },
 });
