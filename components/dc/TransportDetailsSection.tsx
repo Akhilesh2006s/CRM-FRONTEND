@@ -6,16 +6,25 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
+import { TransportNameField, TransportToFields, transportToError, transportToLabel } from '@/components/dc/TransportFields'
 
 export type TransportDetails = {
   transport_name?: string
   transport_location?: string
   transportation_landmark?: string
   pincode?: string
+  transport_to?: string
+  transport_to_name?: string
+  transport_to_mobile?: string
 }
 
+const SAVED_KEYS: (keyof TransportDetails)[] = [
+  'transport_name', 'transport_location', 'transportation_landmark', 'pincode',
+  'transport_to', 'transport_to_name', 'transport_to_mobile',
+]
+
+/** Plain text fields (Transport Name and Transport To have their own dropdowns). */
 const FIELDS: { key: keyof TransportDetails; label: string }[] = [
-  { key: 'transport_name', label: 'Transport Name' },
   { key: 'transport_location', label: 'Transport Location' },
   { key: 'transportation_landmark', label: 'Transportation Landmark' },
   { key: 'pincode', label: 'Pincode' },
@@ -32,12 +41,17 @@ export function TransportDetailsSection({
   canEdit,
   onSaved,
   title = 'Delivery and Address',
+  bde,
+  school,
 }: {
   dcOrderId?: string
   details: TransportDetails
   canEdit: boolean
   onSaved?: (details: TransportDetails) => void
   title?: string
+  /** Prefill for Transport To = BDE / School. */
+  bde?: { name?: string; mobile?: string }
+  school?: { name?: string; mobile?: string }
 }) {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -54,9 +68,14 @@ export function TransportDetailsSection({
       toast.error('Pincode must be 6 digits.')
       return
     }
+    const toProblem = draft.transport_to || draft.transport_to_name ? transportToError(draft) : ''
+    if (toProblem) {
+      toast.error(toProblem)
+      return
+    }
     setSaving(true)
     try {
-      const payload = Object.fromEntries(FIELDS.map(({ key }) => [key, String(draft[key] || '').trim()]))
+      const payload = Object.fromEntries(SAVED_KEYS.map((key) => [key, String(draft[key] || '').trim()]))
       await apiRequest(`/dc-orders/${dcOrderId}`, { method: 'PUT', body: JSON.stringify(payload) })
       onSaved?.(payload)
       setEditing(false)
@@ -87,6 +106,23 @@ export function TransportDetailsSection({
         )}
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {editing ? (
+          <>
+            <TransportNameField label="Transport Name" value={draft.transport_name || ''} onChange={(transport_name) => setDraft({ ...draft, transport_name })} />
+            <TransportToFields value={draft} onChange={(next) => setDraft({ ...draft, ...next })} bde={bde} school={school} />
+          </>
+        ) : (
+          <>
+            <div>
+              <Label className="text-sm font-medium mb-2 block">Transport Name</Label>
+              <Input value={details.transport_name || ''} disabled className="h-11 text-sm" placeholder="-" />
+            </div>
+            <div>
+              <Label className="text-sm font-medium mb-2 block">Transport To</Label>
+              <Input value={transportToLabel(details)} disabled className="h-11 text-sm" placeholder="-" />
+            </div>
+          </>
+        )}
         {FIELDS.map(({ key, label }) => (
           <div key={key}>
             <Label className="text-sm font-medium mb-2 block">{label}</Label>

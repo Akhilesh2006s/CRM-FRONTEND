@@ -36,6 +36,8 @@ import {
   type EditPOProductVariant,
 } from '../../utils/editPOProductIdentity';
 import { useDcCatalog } from '../../hooks/useDcCatalog';
+import { useAuth } from '../../context/AuthContext';
+import { TransportNameField, TransportToFields, transportToError } from '../../components/dc/TransportFields';
 import { DcCategoryPicker } from '../../components/dc/DcCategoryPicker';
 import {
   collectOriginalEditPoVariantKeys,
@@ -193,11 +195,15 @@ export default function ClientEditPOScreen({ navigation, route }: any) {
   const [originalVariantKeys, setOriginalVariantKeys] = useState<string[]>([]);
   const [originalPdfUrl, setOriginalPdfUrl] = useState('');
   const [showAddProductModal, setShowAddProductModal] = useState(false);
+  const { user: authUser } = useAuth();
   const [transport, setTransport] = useState({
     transport_name: '',
     transport_location: '',
     transportation_landmark: '',
     pincode: '',
+    transport_to: '',
+    transport_to_name: '',
+    transport_to_mobile: '',
   });
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [newPdfUrl, setNewPdfUrl] = useState('');
@@ -290,6 +296,9 @@ export default function ClientEditPOScreen({ navigation, route }: any) {
         transport_location: pe?.transport_location ?? data.transport_location ?? '',
         transportation_landmark: pe?.transportation_landmark ?? data.transportation_landmark ?? '',
         pincode: pe?.pincode ?? data.pincode ?? '',
+        transport_to: data.transport_to ?? '',
+        transport_to_name: data.transport_to_name ?? '',
+        transport_to_mobile: data.transport_to_mobile ?? '',
       });
 
       // This client's DC (My Clients): params first, else the non Term-Wise DC on the order.
@@ -589,6 +598,11 @@ export default function ClientEditPOScreen({ navigation, route }: any) {
       );
       return;
     }
+    const transportToProblem = transportToError(transport);
+    if (transportToProblem) {
+      showAlert('Required', transportToProblem);
+      return;
+    }
     // Quantity always; unit price only for billed rows (specimen / Training Material go free).
     const invalid = products.filter((row) => {
       if (!row.product_name?.trim()) return false;
@@ -674,6 +688,9 @@ export default function ClientEditPOScreen({ navigation, route }: any) {
       transport_location,
       transportation_landmark,
       pincode,
+      transport_to: transport.transport_to,
+      transport_to_name: transport.transport_to_name,
+      transport_to_mobile: transport.transport_to_mobile,
       originatingDcId: dcId || undefined,
     };
     const dcProductDetailsPayload = named.map((row) => {
@@ -833,12 +850,17 @@ export default function ClientEditPOScreen({ navigation, route }: any) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Transport Details</Text>
           <Text style={styles.hint}>All fields are mandatory before you can Request DC.</Text>
-          <Text style={styles.label}>Transport Name *</Text>
-          <WebInput
-            style={styles.fieldInput}
+          <TransportNameField
+            inputStyle={styles.fieldInput}
             value={transport.transport_name}
-            onChangeText={(t) => setTransport((tr) => ({ ...tr, transport_name: t }))}
-            placeholder="Transport name"
+            onChange={(t) => setTransport((tr) => ({ ...tr, transport_name: t }))}
+          />
+          <TransportToFields
+            inputStyle={styles.fieldInput}
+            value={transport}
+            onChange={(next) => setTransport((tr) => ({ ...tr, ...next }))}
+            bde={{ name: (authUser as any)?.name, mobile: (authUser as any)?.mobile || (authUser as any)?.phone }}
+            school={{ name: order?.school_name, mobile: order?.contact_mobile }}
           />
           <Text style={styles.label}>Transport Location *</Text>
           <WebInput

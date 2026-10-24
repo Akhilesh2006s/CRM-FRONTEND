@@ -1859,6 +1859,7 @@ export default function ClosedSalesPage() {
                 <TransportDetailsSection
                   dcOrderId={selectedDeal._id}
                   details={selectedDeal}
+                  school={{ name: (selectedDeal as any)?.school_name, mobile: (selectedDeal as any)?.contact_mobile }}
                   canEdit={canEditTransportDetails(currentUser?.role)}
                   onSaved={(saved) => {
                     setSelectedDeal((deal) => (deal ? { ...deal, ...saved } : deal))
@@ -2371,6 +2372,7 @@ export default function ClosedSalesPage() {
                 title="Transport details"
                 dcOrderId={selectedDeal._id}
                 details={selectedDeal}
+                school={{ name: (selectedDeal as any)?.school_name, mobile: (selectedDeal as any)?.contact_mobile }}
                 canEdit={canEditTransportDetails(currentUser?.role)}
                 onSaved={(saved) => setSelectedDeal((prev) => (prev ? { ...prev, ...saved } : prev))}
               />

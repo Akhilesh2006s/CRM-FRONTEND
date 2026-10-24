@@ -25,7 +25,8 @@ import StockReturnFromCompletedDcDialog from '@/components/warehouse/StockReturn
 import { toast } from 'sonner'
 import { dcRowCategoryOrDefault, isSpecimenRow } from '@/lib/dcRowCategory'
 import { Pencil, X, Upload, FileText, Download, Loader2 } from 'lucide-react'
-import jsPDF from 'jspdf'
+import { buildDcChallanPdf, dcChallanDataUrl, loadDcPrintOptions, type DcPrintOptions } from '@/lib/dcChallanPdf'
+import { DcPrintOptionsDialog } from '@/components/dc/DcPrintOptionsDialog'
 import { sortDcsNewestFirst } from '@/lib/dcListSort'
 
 /** PO-stage remarks (dcRemarks) â shown read-only as PO Remarks in the edit modal. */
@@ -95,6 +96,8 @@ export default function CompletedDCPage() {
   const [pdfLoading, setPdfLoading] = useState(false)
   const pdfBlobRef = useRef<string | null>(null)
   const [pdfDC, setPdfDC] = useState<Row | null>(null)
+  const [printRow, setPrintRow] = useState<Row | null>(null)
+  const [printBusy, setPrintBusy] = useState(false)
 
   const revokePdfBlob = () => {
     if (pdfBlobRef.current?.startsWith("blob:")) {
@@ -742,257 +745,48 @@ export default function CompletedDCPage() {
     }
   }
 
+  /** Full DC with its school order (transport, Transport To) populated for the challan. */
+  const loadDcForChallan = async (dcId: string) => {
+    const fullDC = await apiRequest<any>(`/dc/${dcId}`)
+    if (!fullDC) throw new Error('DC not found')
+    if (fullDC.dcOrderId && typeof fullDC.dcOrderId !== 'object') {
+      fullDC.dcOrderId = await apiRequest<any>(`/dc-orders/${fullDC.dcOrderId}`).catch(() => null)
+    }
+    return fullDC
+  }
+
+  /** Delivery Challan PDF (data URL) saved on the DC; uses the warehouse's chosen print fields. */
   const generateDeliveryChallanPDF = async (dcId: string, formData: any) => {
     try {
-      // Fetch full DC details with populated data
-      const fullDC = await apiRequest<any>(`/dc/${dcId}`)
-      
-      if (!fullDC) {
-        throw new Error('DC not found')
-      }
-
-      // Get address from dcOrderId (delivery and address)
-      let address = ''
-      if (fullDC.dcOrderId) {
-        const dcOrder = typeof fullDC.dcOrderId === 'object' ? fullDC.dcOrderId : await apiRequest<any>(`/dc-orders/${fullDC.dcOrderId}`)
-        if (dcOrder) {
-          const addressParts = []
-          if (dcOrder.transport_location) addressParts.push(dcOrder.transport_location)
-          if (dcOrder.transport_name) addressParts.push(dcOrder.transport_name)
-          if (dcOrder.transportation_landmark) addressParts.push(dcOrder.transportation_landmark)
-          if (dcOrder.pincode) addressParts.push(dcOrder.pincode)
-          address = addressParts.join(', ')
-          
-          // If no transport address, try regular address field
-          if (!address && dcOrder.address) {
-            address = dcOrder.address
-          }
-        }
-      }
-
-      // Get school information
-      const dcOrderData = typeof fullDC.dcOrderId === 'object' ? fullDC.dcOrderId : null
-      const schoolName = dcOrderData?.school_name || fullDC.customerName || ''
-      const schoolCode = dcOrderData?.school_code || ''
-      const phoneNo = dcOrderData?.contact_mobile || fullDC.customerPhone || ''
-      const schoolType = dcOrderData?.school_type || 'Existing'
-      const dcNo = fullDC.dc_code || (fullDC.dcNo ? fullDC.dcNo : fullDC._id.toString().slice(-6))
-      const dcDate = fullDC.dcDate ? new Date(fullDC.dcDate).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB')
-
-      // Get product details
-      const productDetails = fullDC.productDetails || []
-      
-      // Group products by class and student type (category)
-      const groupedProducts: any[] = []
-      productDetails.forEach((p: any) => {
-        const classNum = p.class || '1'
-        const studentType = fullDC.dcType === 'shortage'
-          ? 'Shortage'
-          : isSpecimenRow(p) ? 'Training Material' : dcRowCategoryOrDefault(p.category)
-        const productName = p.productName || p.product || ''
-        const quantity = p.quantity || 0
-        
-        if (productName && quantity > 0) {
-          groupedProducts.push({
-            class: classNum,
-            studentType,
-            product: productName,
-            qty: quantity
-          })
-        }
-      })
-      // Abacus kits ship as Training Material rows (no class).
-      const abacusKit = fullDC.abacusMaterials || {}
-      ;[['Student Abacus', abacusKit.studentAbacusQuantity], ['Master Abacus', abacusKit.masterAbacusQuantity], ['Flash Cards', abacusKit.flashCardSetsQuantity]]
-        .forEach(([product, qty]) => {
-          if (Number(qty) > 0) groupedProducts.push({ class: 'NA', studentType: 'Training Material', product: `Abacus ${product}`, qty: Number(qty) })
-        })
-
-      // Calculate total quantity
-      const totalQty = groupedProducts.reduce((sum, p) => sum + (p.qty || 0), 0)
-
-      // Create PDF
-      const pdf = new jsPDF('p', 'mm', 'a4')
-      const pageWidth = pdf.internal.pageSize.getWidth()
-      const pageHeight = pdf.internal.pageSize.getHeight()
-      let yPos = 20
-
-      // Header - Company Info (top left)
-      pdf.setFontSize(8)
-      pdf.setTextColor(100, 100, 100)
-      pdf.text('II Floor, A.N.K Towers,', 10, yPos)
-      pdf.text('KPHB Colony, Hyderabad-72', 10, yPos + 4)
-      pdf.text('Land line: 040-64592499', 10, yPos + 8)
-      pdf.text('Mobile: 09348 0999 33', 10, yPos + 12)
-
-      // Delivery Challan Banner
-      yPos = 50
-      pdf.setFillColor(0, 102, 204) // Blue color
-      pdf.rect(10, yPos, pageWidth - 20, 10, 'F')
-      pdf.setTextColor(255, 255, 255)
-      pdf.setFontSize(16)
-      pdf.setFont('helvetica', 'bold')
-      pdf.text('Delivery Challan', pageWidth / 2, yPos + 7, { align: 'center' })
-
-      yPos += 20
-
-      // DC Information and Transit Information side by side
-      pdf.setTextColor(0, 0, 0)
-      pdf.setFontSize(10)
-      pdf.setFont('helvetica', 'normal')
-
-      // DC Information (Left)
-      const leftX = 10
-      const rightX = pageWidth / 2 + 5
-      let infoY = yPos
-
-      pdf.setFont('helvetica', 'bold')
-      pdf.text('DC Information', leftX, infoY)
-      pdf.setFont('helvetica', 'normal')
-      infoY += 6
-
-      pdf.text(`DC No: ${dcNo}`, leftX, infoY)
-      infoY += 5
-      pdf.text(`DC Date: ${dcDate}`, leftX, infoY)
-      infoY += 5
-      pdf.text(`School Type: ${schoolType}`, leftX, infoY)
-      infoY += 5
-      pdf.text(`School Name: ${schoolName}${schoolCode ? ` (${schoolCode})` : ''}`, leftX, infoY)
-      infoY += 5
-      pdf.text(`Phone No: ${phoneNo}`, leftX, infoY)
-      infoY += 5
-      pdf.text(`Address: ${address || ''}`, leftX, infoY)
-
-      // Transit Information (Right)
-      infoY = yPos
-      pdf.setFont('helvetica', 'bold')
-      pdf.text('Transit Information', rightX, infoY)
-      pdf.setFont('helvetica', 'normal')
-      infoY += 6
-
-      pdf.text(`Transport: ${formData.transport || ''}`, rightX, infoY)
-      infoY += 5
-      pdf.text(`Transport Area: ${formData.transportArea || ''}`, rightX, infoY)
-      infoY += 5
-      pdf.text(`LR No: ${formData.lrNo || ''}`, rightX, infoY)
-      infoY += 5
-      pdf.text(`#Boxes: ${formData.boxes || ''}`, rightX, infoY)
-      infoY += 5
-      const lrDate = formData.lrDate ? new Date(formData.lrDate).toLocaleDateString('en-GB') : ''
-      pdf.text(`LR Date: ${lrDate}`, rightX, infoY)
-      infoY += 5
-      pdf.text(`Remarks: ${formData.remarks || ''}`, rightX, infoY)
-
-      // Product Table
-      yPos = infoY + 15
-      const tableStartY = yPos
-      const tableWidth = pageWidth - 20
-      const colWidths = [20, 45, 90, 25]
-      const colHeaders = ['Class', 'Category', 'Product', 'Qty']
-      const colX = [leftX, leftX + colWidths[0], leftX + colWidths[0] + colWidths[1], leftX + colWidths[0] + colWidths[1] + colWidths[2]]
-
-      // Table Header
-      pdf.setFillColor(240, 240, 240)
-      pdf.rect(leftX, yPos, tableWidth, 8, 'F')
-      pdf.setFont('helvetica', 'bold')
-      pdf.setFontSize(9)
-      pdf.text(colHeaders[0], colX[0], yPos + 5)
-      pdf.text(colHeaders[1], colX[1], yPos + 5)
-      pdf.text(colHeaders[2], colX[2], yPos + 5)
-      pdf.text(colHeaders[3], colX[3], yPos + 5)
-
-      yPos += 8
-
-      // Table Rows
-      pdf.setFont('helvetica', 'normal')
-      pdf.setFontSize(8)
-      groupedProducts.forEach((product) => {
-        if (yPos > pageHeight - 50) {
-          pdf.addPage()
-          yPos = 20
-          // Redraw table header on new page
-          pdf.setFillColor(240, 240, 240)
-          pdf.rect(leftX, yPos, tableWidth, 8, 'F')
-          pdf.setFont('helvetica', 'bold')
-          pdf.setFontSize(9)
-          pdf.text(colHeaders[0], colX[0], yPos + 5)
-          pdf.text(colHeaders[1], colX[1], yPos + 5)
-          pdf.text(colHeaders[2], colX[2], yPos + 5)
-          pdf.text(colHeaders[3], colX[3], yPos + 5)
-          yPos += 8
-          pdf.setFont('helvetica', 'normal')
-          pdf.setFontSize(8)
-        }
-        
-        // Handle text wrapping for long product names
-        const maxProductWidth = colWidths[2] - 2
-        const productLines = pdf.splitTextToSize(product.product, maxProductWidth)
-        const rowHeight = Math.max(6, productLines.length * 3 + 2)
-        
-        pdf.text(product.class.toString(), colX[0], yPos + 4)
-        pdf.text(product.studentType, colX[1], yPos + 4)
-        pdf.text(productLines, colX[2], yPos + 4)
-        pdf.text(product.qty.toString(), colX[3], yPos + 4)
-        yPos += rowHeight
-      })
-
-      // Total Row
-      yPos += 2
-      pdf.setFont('helvetica', 'bold')
-      pdf.setFillColor(240, 240, 240)
-      pdf.rect(leftX, yPos, tableWidth, 8, 'F')
-      pdf.text('Total', colX[2], yPos + 5)
-      pdf.text(totalQty.toString(), colX[3], yPos + 5)
-
-      // Footer
-      yPos = pageHeight - 30
-      pdf.setFont('helvetica', 'normal')
-      pdf.setFontSize(8)
-      pdf.setTextColor(0, 0, 0)
-      pdf.text('CRM', pageWidth - 10, yPos, { align: 'right' })
-      
-      // Footer bar
-      yPos = pageHeight - 20
-      pdf.setFillColor(0, 102, 204)
-      
-      // Footer text with proper wrapping
-      const footerText = 'CRM  update company address in settings before printing'
-      const maxFooterWidth = pageWidth - 30 // Leave margins on both sides
-      const footerLines = pdf.splitTextToSize(footerText, maxFooterWidth)
-      
-      // Calculate footer bar height based on number of lines
-      const lineHeight = 3.5
-      const footerBarHeight = Math.max(10, footerLines.length * lineHeight + 4) // Minimum 10mm, or based on content
-      
-      pdf.rect(10, yPos, pageWidth - 20, footerBarHeight, 'F')
-      pdf.setTextColor(255, 255, 255)
-      pdf.setFontSize(7)
-      
-      // Center the text vertically in the footer bar
-      const totalFooterHeight = footerLines.length * lineHeight
-      let footerY = yPos + (footerBarHeight - totalFooterHeight) / 2 + lineHeight
-      
-      footerLines.forEach((line: string) => {
-        pdf.text(line, pageWidth / 2, footerY, { align: 'center' })
-        footerY += lineHeight
-      })
-
-      // Convert PDF to base64
-      const pdfBlob = pdf.output('blob')
-      const base64Pdf = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onloadend = () => {
-          const result = reader.result as string
-          resolve(result)
-        }
-        reader.onerror = reject
-        reader.readAsDataURL(pdfBlob)
-      })
-
-      return base64Pdf
+      const fullDC = await loadDcForChallan(dcId)
+      return await dcChallanDataUrl(fullDC, formData, loadDcPrintOptions())
     } catch (error: any) {
       console.error('Error generating PDF:', error)
       throw new Error(error?.message || 'Failed to generate PDF')
+    }
+  }
+
+  /** Print the challan for a row with the fields picked in the print dialog. */
+  const printChallan = async (options: DcPrintOptions) => {
+    if (!printRow) return
+    setPrintBusy(true)
+    try {
+      const fullDC = await loadDcForChallan(printRow.dcId || printRow._id)
+      const transit = {
+        transport: fullDC.transport || printRow.transport,
+        transportArea: fullDC.transportArea || printRow.transportArea,
+        lrNo: fullDC.lrNo || printRow.lrNo,
+        boxes: fullDC.boxes || printRow.boxes,
+        lrDate: fullDC.lrDate || printRow.lrDate,
+        remarks: listRemarks(fullDC),
+      }
+      const url = buildDcChallanPdf(fullDC, transit, options).output('bloburl') as unknown as string
+      window.open(url, '_blank')
+      setPrintRow(null)
+    } catch (err: any) {
+      toast.error(err?.message || 'Could not prepare the Delivery Challan')
+    } finally {
+      setPrintBusy(false)
     }
   }
 
@@ -1534,6 +1328,7 @@ export default function CompletedDCPage() {
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Button size="sm" variant="secondary" onClick={(e) => { e.stopPropagation(); openEditDialog(r) }}><Pencil size={14} /></Button>
+                      <Button size="sm" variant="outline" title="Print Delivery Challan" onClick={(e) => { e.stopPropagation(); setPrintRow(r) }}>Print DC</Button>
                       {(r.poDocument || r.poPhotoUrl) && (
                         <Button 
                           size="sm" 
@@ -1969,6 +1764,12 @@ export default function CompletedDCPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <DcPrintOptionsDialog
+        open={!!printRow}
+        onOpenChange={(open) => { if (!open) setPrintRow(null) }}
+        onPrint={printChallan}
+        busy={printBusy}
+      />
     </div>
   )
 }

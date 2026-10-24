@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { CreditCard, Search, FileText, Pencil, Package, X } from 'lucide-react'
 import { getCurrentUser } from '@/lib/auth'
+import { TransportNameField, TransportToFields, transportToLabel } from '@/components/dc/TransportFields'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { useProducts } from '@/hooks/useProducts'
@@ -155,6 +156,9 @@ export default function TermWiseDCPage() {
     transport_location: '',
     transportation_landmark: '',
     pincode: '',
+    transport_to: '',
+    transport_to_name: '',
+    transport_to_mobile: '',
   })
   const [submittingEdit, setSubmittingEdit] = useState(false)
   
@@ -178,6 +182,9 @@ export default function TermWiseDCPage() {
     transport_location: '',
     transportation_landmark: '',
     pincode: '',
+    transport_to: '',
+    transport_to_name: '',
+    transport_to_mobile: '',
   })
   const [requestDCProductRows, setRequestDCProductRows] = useState<Array<{
     id: string
@@ -477,6 +484,9 @@ export default function TermWiseDCPage() {
         transport_location: dcOrder.pendingEdit?.transport_location || dcOrder.transport_location || '',
         transportation_landmark: dcOrder.pendingEdit?.transportation_landmark || dcOrder.transportation_landmark || '',
         pincode: dcOrder.pendingEdit?.pincode || dcOrder.pincode || '',
+        transport_to: dcOrder.transport_to || '',
+        transport_to_name: dcOrder.transport_to_name || '',
+        transport_to_mobile: dcOrder.transport_to_mobile || '',
       }
       
       setEditFormData(formData)
@@ -672,6 +682,9 @@ export default function TermWiseDCPage() {
         transport_location: dcOrder.pendingEdit?.transport_location || dcOrder.transport_location || '',
         transportation_landmark: dcOrder.pendingEdit?.transportation_landmark || dcOrder.transportation_landmark || '',
         pincode: dcOrder.pendingEdit?.pincode || dcOrder.pincode || '',
+        transport_to: dcOrder.transport_to || '',
+        transport_to_name: dcOrder.transport_to_name || '',
+        transport_to_mobile: dcOrder.transport_to_mobile || '',
       }
       
       setRequestDCFormData(formData)
@@ -1287,13 +1300,17 @@ export default function TermWiseDCPage() {
               <h3 className="text-lg font-semibold">Transport Details</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Transport Name *</Label>
-                  <Input
+                  <TransportNameField
                     value={editFormData.transport_name}
-                    onChange={(e) => setEditFormData({ ...editFormData, transport_name: e.target.value })}
-                    placeholder="Enter transport name"
+                    onChange={(transport_name) => setEditFormData({ ...editFormData, transport_name })}
                   />
                 </div>
+                <TransportToFields
+                  value={editFormData}
+                  onChange={(next) => setEditFormData({ ...editFormData, ...next })}
+                  bde={{ name: currentUser?.name, mobile: (currentUser as any)?.mobile || (currentUser as any)?.phone }}
+                  school={{ name: (editFormData as any).school_name, mobile: (editFormData as any).contact_mobile }}
+                />
                 <div>
                   <Label>Transport Location *</Label>
                   <Input
@@ -1548,6 +1565,10 @@ export default function TermWiseDCPage() {
                     className="bg-neutral-50"
                     placeholder="Transport name"
                   />
+                </div>
+                <div>
+                  <Label>Transport To</Label>
+                  <Input value={transportToLabel(requestDCFormData) || '-'} readOnly className="bg-neutral-50" />
                 </div>
                 <div>
                   <Label>Transport Location *</Label>

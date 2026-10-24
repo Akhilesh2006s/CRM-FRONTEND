@@ -22,6 +22,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Pencil, Package, Plus, Upload, X, Search, CreditCard, FileText, PlusCircle, Filter, Calendar, RefreshCw } from 'lucide-react'
 import { getCurrentUser } from '@/lib/auth'
+import { TransportNameField, TransportToFields, transportToError, transportToLabel } from '@/components/dc/TransportFields'
 import { toast } from 'sonner'
 import { sanitizePhoneInput, validatePhoneDigits } from '@/lib/phone'
 import { ContractPeriod } from '@/components/clients/ContractPeriod'
@@ -374,6 +375,9 @@ export default function ClientDCPage() {
     transport_location: '',
     transportation_landmark: '',
     pincode: '',
+    transport_to: '',
+    transport_to_name: '',
+    transport_to_mobile: '',
   })
   const [submittingEdit, setSubmittingEdit] = useState(false)
   const [uploadingPO, setUploadingPO] = useState(false)
@@ -1269,6 +1273,7 @@ export default function ClientDCPage() {
           transport_location: '',
           transportation_landmark: '',
           pincode: '',
+          transport_to_label: '',
         }
       }
       // Same source/priority as Edit PO: pending snapshot, then saved DcOrder fields
@@ -1280,6 +1285,7 @@ export default function ClientDCPage() {
           pe?.transportation_landmark ?? order.transportation_landmark ?? ''
         ).trim(),
         pincode: String(pe?.pincode ?? order.pincode ?? '').trim(),
+        transport_to_label: transportToLabel(order),
       }
     }
 
@@ -2513,6 +2519,9 @@ export default function ClientDCPage() {
         transport_location: pe?.transport_location ?? dcOrder.transport_location ?? '',
         transportation_landmark: pe?.transportation_landmark ?? dcOrder.transportation_landmark ?? '',
         pincode: pe?.pincode ?? dcOrder.pincode ?? '',
+        transport_to: dcOrder.transport_to ?? '',
+        transport_to_name: dcOrder.transport_to_name ?? '',
+        transport_to_mobile: dcOrder.transport_to_mobile ?? '',
       }
 
       console.log('📋 Edit PO Dialog opened - Form data initialized:', {
@@ -2635,6 +2644,12 @@ export default function ClientDCPage() {
 
       if (!transport_name || !transport_location || !pincode) {
         toast.error('Please fill Transport Name, Transport Location, and Pincode before saving PO changes.')
+        setSubmittingEdit(false)
+        return
+      }
+      const transportToProblem = transportToError(editFormData)
+      if (transportToProblem) {
+        toast.error(transportToProblem)
         setSubmittingEdit(false)
         return
       }
@@ -4197,6 +4212,10 @@ export default function ClientDCPage() {
                   />
                 </div>
                 <div>
+                  <Label>Transport To</Label>
+                  <Input value={transportToLabel((dcOrderData || {}) as any) || '-'} readOnly disabled className="bg-neutral-50" />
+                </div>
+                <div>
                   <Label>Transport Location</Label>
                   <Input
                     value={
@@ -4816,13 +4835,17 @@ export default function ClientDCPage() {
                 <Label className="text-lg font-semibold mb-4 block">Transport Details</Label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label>Transport Name *</Label>
-                    <Input
+                    <TransportNameField
                       value={editFormData.transport_name}
-                      onChange={(e) => setEditFormData({ ...editFormData, transport_name: e.target.value })}
-                      placeholder="Enter transport name"
+                      onChange={(transport_name) => setEditFormData({ ...editFormData, transport_name })}
                     />
                   </div>
+                  <TransportToFields
+                    value={editFormData}
+                    onChange={(next) => setEditFormData({ ...editFormData, ...next })}
+                    bde={{ name: currentUser?.name, mobile: (currentUser as any)?.mobile || (currentUser as any)?.phone }}
+                    school={{ name: editFormData.school_name, mobile: editFormData.contact_mobile }}
+                  />
                   <div>
                     <Label>Transport Location *</Label>
                     <Input

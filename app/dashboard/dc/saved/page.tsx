@@ -1159,6 +1159,7 @@ export default function SavedDCPage() {
                 title="Transport details"
                 dcOrderId={selectedDeal._id}
                 details={selectedDeal as any}
+                school={{ name: (selectedDeal as any)?.school_name, mobile: (selectedDeal as any)?.contact_mobile }}
                 canEdit={canEditTransportDetails(currentUser?.role)}
                 onSaved={(saved) => setSelectedDeal((prev) => (prev ? { ...prev, ...saved } : prev))}
               />

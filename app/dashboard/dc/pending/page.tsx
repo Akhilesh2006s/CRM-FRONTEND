@@ -919,7 +919,12 @@ export default function PendingDCPage() {
                         transport_location: pe.transport_location || order.transport_location,
                         transportation_landmark: pe.transportation_landmark || order.transportation_landmark,
                         pincode: pe.pincode || order.pincode,
+                        transport_to: order.transport_to,
+                        transport_to_name: order.transport_to_name,
+                        transport_to_mobile: order.transport_to_mobile,
                       }}
+                      school={{ name: order.school_name, mobile: order.contact_mobile }}
+                      bde={typeof order.assigned_to === 'object' && order.assigned_to ? { name: order.assigned_to.name, mobile: order.assigned_to.mobile || order.assigned_to.phone } : undefined}
                       canEdit={canEditTransportDetails(currentUser?.role)}
                       onSaved={(saved) => setSelectedDC((dc: any) => dc && typeof dc.dcOrderId === 'object'
                         ? { ...dc, dcOrderId: { ...dc.dcOrderId, ...saved, pendingEdit: { ...(dc.dcOrderId.pendingEdit || {}), ...saved } } }
