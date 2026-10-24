@@ -17,7 +17,7 @@ import {
 } from '@/lib/expenseTravelRates'
 import { toast } from 'sonner'
 
-type FieldErrors = Partial<Record<'receiptNumber' | 'bill' | 'hotelName' | 'hotelAddress' | 'checkInDate' | 'checkOutDate' | 'approxKms', string>>
+type FieldErrors = Partial<Record<'receiptNumber' | 'remarks' | 'bill' | 'hotelName' | 'hotelAddress' | 'checkInDate' | 'checkOutDate' | 'approxKms', string>>
 
 export default function CreateExpensePage() {
   const router = useRouter()
@@ -96,6 +96,7 @@ export default function CreateExpensePage() {
 
   const validate = (): FieldErrors => {
     const errors: FieldErrors = {}
+    if (!form.remarks.trim()) errors.remarks = 'Remarks are required.'
     if (isTravelType && amountLocked && !(Number(form.approxKms) > 0)) errors.approxKms = 'Enter the kilometres travelled.'
     if (needsHotel) {
       if (!form.hotelName.trim()) errors.hotelName = 'Hotel Name is required.'
@@ -109,7 +110,6 @@ export default function CreateExpensePage() {
       }
     }
     if (!billOptional) {
-      if (!form.receiptNumber.trim()) errors.receiptNumber = 'Receipt No is required.'
       if (!billFile) errors.bill = 'Bill upload is required.'
     }
     return errors
@@ -335,20 +335,28 @@ export default function CreateExpensePage() {
           </div>
 
           <div>
-            <Label htmlFor="receiptNumber">Receipt No.{billOptional ? '' : ' *'}</Label>
+            <Label htmlFor="receiptNumber">Bill Number</Label>
             <Input
               id="receiptNumber"
               value={form.receiptNumber}
               onChange={(e) => update({ receiptNumber: e.target.value })}
               className={`bg-white ${errorClass('receiptNumber')}`}
-              placeholder={billOptional ? 'Optional for Auto' : 'Enter receipt number'}
+              placeholder="Optional"
             />
             {errorText('receiptNumber')}
           </div>
 
           <div>
-            <Label htmlFor="remarks">Remarks</Label>
-            <Textarea id="remarks" value={form.remarks} onChange={(e) => update({ remarks: e.target.value })} className="bg-white" placeholder="Enter remarks" rows={3} />
+            <Label htmlFor="remarks">Remarks *</Label>
+            <Textarea
+              id="remarks"
+              value={form.remarks}
+              onChange={(e) => update({ remarks: e.target.value })}
+              className={`bg-white ${errorClass('remarks')}`}
+              placeholder="What was this expense for?"
+              rows={3}
+            />
+            {errorText('remarks')}
           </div>
 
           <div>

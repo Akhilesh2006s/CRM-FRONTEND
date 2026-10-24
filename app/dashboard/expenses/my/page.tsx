@@ -85,7 +85,7 @@ function ExpenseView({ expense, onClose }: { expense: Expense | null; onClose: (
               <DetailRow label="Hotel Address" value={expense.hotelAddress} />
               <DetailRow label="Check-in" value={expense.checkInDate ? formatDate(expense.checkInDate) : undefined} />
               <DetailRow label="Check-out" value={expense.checkOutDate ? formatDate(expense.checkOutDate) : undefined} />
-              <DetailRow label="Receipt No." value={expense.receiptNumber} />
+              <DetailRow label="Bill Number" value={expense.receiptNumber} />
               <DetailRow label="Remarks" value={expense.employeeRemarks} />
             </div>
             <section>

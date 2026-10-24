@@ -161,8 +161,14 @@ export default function ManagerExpenseUpdatePage() {
     if (form.decision === 'approve') {
       const n = parsedAmount(expense)
       if (n === null || Number.isNaN(n) || n < 0) return 'enter a valid approval amount'
+      if (Math.abs(n - startingAmount(expense)) > 0.001 && !form.remarks.trim()) return 'remarks are required when you change the amount'
     }
     return null
+  }
+
+  /** The amount the reviewer starts from: the claim at first level, the first-level amount at Finance. */
+  function startingAmount(expense: Expense): number {
+    return expenseStage(expense) === 'finance' ? firstLevelAmount(expense) ?? claimedAmount(expense) : claimedAmount(expense)
   }
 
   const handleSubmit = async () => {
@@ -343,7 +349,7 @@ export default function ManagerExpenseUpdatePage() {
           </div>
         </div>
         <p className="text-xs text-neutral-500 mt-3">
-          Approving needs an approved amount (first level) or the final amount (Finance); remarks are optional.
+          Approving needs an approved amount (first level) or the final amount (Finance). Remarks are required only when you change the amount.
           Either level can reject an item.
         </p>
       </Card>
@@ -473,7 +479,7 @@ export default function ManagerExpenseUpdatePage() {
                           <Textarea
                             value={form?.remarks || ''}
                             onChange={(e) => setForm(expense._id, { remarks: e.target.value })}
-                            placeholder="Remarks (optional)"
+                            placeholder={edited ? 'Remarks (required: amount changed)' : 'Remarks (optional)'}
                             className="min-h-[60px] resize-none bg-white text-sm"
                             rows={2}
                           />

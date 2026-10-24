@@ -41,7 +41,12 @@ const BDE_ROLES = new Set(['executive', 'sales bde', 'sales executive', 'employe
 function expenseApprovalAccess(user: AuthUserWithPermissions, pathname: string): boolean | undefined {
   const under = (p: string) => pathname === p || pathname.startsWith(p + '/')
   if (under('/dashboard/expenses/approvers')) {
-    return ['Admin', 'Finance Manager', 'Executive Manager'].includes(String(user.role || ''))
+    // Super Admin passes earlier; Admin and the Finance Manager manage approver tags.
+    return ['Admin', 'Finance Manager'].includes(String(user.role || ''))
+  }
+  // Every employee can raise and follow their own expenses.
+  if (under('/dashboard/expenses/create') || under('/dashboard/expenses/my')) {
+    return !['Vendor', 'Partner', 'Franchise'].includes(String(user.role || ''))
   }
   if (under('/dashboard/expenses/pending') || under('/dashboard/expenses/manager-update')) {
     return (

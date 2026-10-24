@@ -408,7 +408,7 @@ function ExpenseDetailsDialog({
                   <DetailRow label="Check-out" value={(expense as any).checkOutDate ? formatDay((expense as any).checkOutDate) : undefined} />
                   <DetailRow label="Description" value={expense.description} />
                   <DetailRow label="Employee Remarks" value={expense.employeeRemarks} />
-                  <DetailRow label="Receipt No." value={expense.receiptNumber} />
+                  <DetailRow label="Bill Number" value={expense.receiptNumber} />
                   <DetailRow label="Item ID" value={expense.expItemId} />
                   <DetailRow label="Payment Method" value={expense.paymentMethod} />
                 </div>

@@ -204,7 +204,6 @@ function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
           { label: 'My Completed Expenses', screen: 'ExpenseMy', params: { view: 'completed' } },
           { label: 'Team Expenses to Approve', screen: 'ExpenseExecutiveManagerPending' },
           { label: 'Team Approved / Rejected', screen: 'ExpenseExecutiveManagerPending', params: { tab: 'decided' } },
-          { label: 'Expense Approvers', screen: 'ExpenseApprovers' },
           { label: 'Employee Track', screen: 'ReportsEmployeeTrack' },
         ],
       },
@@ -637,6 +636,25 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
     ? [...sections.slice(0, ticketsAt), ticketSection, ...sections.slice(ticketsAt)]
     : [...sections, ticketSection];
   if (!role || NON_EMPLOYEE_ROLES.has(role)) return sections;
+
+  // Every employee login can raise its own expenses.
+  if (!hasScreen(sections, 'ExpenseCreate')) {
+    const expenses: NavSection = {
+      title: 'Expenses',
+      icon: I.expenses,
+      items: [
+        { label: 'Create Expenses', screen: 'ExpenseCreate', icon: '➕' },
+        { label: 'Pending Expenses', screen: 'ExpenseMy', params: { view: 'pending' }, icon: '⏳' },
+        { label: 'Completed Expenses', screen: 'ExpenseMy', params: { view: 'completed' }, icon: '✅' },
+      ],
+    };
+    const at = sections.findIndex((section) => section.title === 'Expenses');
+    if (at >= 0) sections[at] = { ...sections[at], items: [...expenses.items, ...sections[at].items] };
+    else {
+      const settingsAt = sections.findIndex((section) => section.title === 'Settings');
+      sections = settingsAt >= 0 ? [...sections.slice(0, settingsAt), expenses, ...sections.slice(settingsAt)] : [...sections, expenses];
+    }
+  }
 
   const extra: NavLink[] = [];
   if (!hasScreen(sections, 'MyAttendance')) extra.push({ label: 'Attendance', screen: 'MyAttendance', icon: '🕒' });

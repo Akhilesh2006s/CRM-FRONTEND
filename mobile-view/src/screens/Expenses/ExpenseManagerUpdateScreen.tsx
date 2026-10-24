@@ -142,6 +142,8 @@ export default function ExpenseManagerUpdateScreen({ navigation, route }: any) {
     if (form.decision === 'approve') {
       const n = parsedAmount(e);
       if (n === null || Number.isNaN(n) || n < 0) return 'enter a valid approval amount';
+      const start = expenseStage(e) === 'finance' ? firstLevelAmount(e) ?? claimedAmount(e) : claimedAmount(e);
+      if (Math.abs(n - start) > 0.001 && !form.remarks.trim()) return 'remarks are required when you change the amount';
     }
     return null;
   };
@@ -236,7 +238,7 @@ export default function ExpenseManagerUpdateScreen({ navigation, route }: any) {
           {employee?.role ? <Text style={styles.muted}> · {employee.role}</Text> : null}
         </Text>
         <Text style={styles.hint}>
-          Approving needs an approved amount (first level) or the final amount (Finance); remarks are optional. Either
+          Approving needs an approved amount (first level) or the final amount (Finance); remarks are required only when you change the amount. Either
           level can reject an item.
         </Text>
       </View>
@@ -317,7 +319,7 @@ export default function ExpenseManagerUpdateScreen({ navigation, route }: any) {
               <WebInput
                 value={form?.remarks || ''}
                 onChangeText={(t) => setForm(exp._id, { remarks: t })}
-                placeholder="Remarks (optional)"
+                placeholder="Remarks (required if you change the amount)"
                 multiline
                 style={styles.remarks}
               />

@@ -16,7 +16,7 @@ type TravelPerKmRates = { bikeRatePerKm?: number; carRatePerKm?: number };
 
 type ExpenseType = '' | 'travel' | 'food' | 'accommodation' | 'others';
 
-type FieldKey = 'receiptNumber' | 'bill' | 'hotelName' | 'hotelAddress' | 'checkInDate' | 'checkOutDate' | 'approxKms';
+type FieldKey = 'receiptNumber' | 'remarks' | 'bill' | 'hotelName' | 'hotelAddress' | 'checkInDate' | 'checkOutDate' | 'approxKms';
 type FieldErrors = Partial<Record<FieldKey, string>>;
 
 const TYPE_OPTIONS = [
@@ -179,10 +179,8 @@ export default function ExpenseCreateScreen({ navigation }: any) {
         errors.checkOutDate = 'Check-out must be on or after Check-in.';
       }
     }
-    if (!billOptional) {
-      if (!form.receiptNumber.trim()) errors.receiptNumber = 'Receipt No is required.';
-      if (!billFile) errors.bill = 'Bill upload is required.';
-    }
+    if (!form.remarks.trim()) errors.remarks = 'Remarks are required.';
+    if (!billOptional && !billFile) errors.bill = 'Bill upload is required.';
     return errors;
   };
 
@@ -377,14 +375,21 @@ export default function ExpenseCreateScreen({ navigation }: any) {
           </View>
 
           <FormField
-            label={`Receipt No.${billOptional ? '' : ' *'}`}
+            label="Bill Number"
             value={form.receiptNumber}
             onChangeText={(t) => update({ receiptNumber: t })}
-            placeholder={billOptional ? 'Optional for Auto' : 'Enter receipt number'}
+            placeholder="Optional"
             error={fieldErrors.receiptNumber}
           />
 
-          <FormField label="Remarks" value={form.remarks} onChangeText={(t) => update({ remarks: t })} placeholder="Enter remarks" multiline />
+          <FormField
+            label="Remarks *"
+            value={form.remarks}
+            onChangeText={(t) => update({ remarks: t })}
+            placeholder="What was this expense for?"
+            multiline
+            error={fieldErrors.remarks}
+          />
 
           <View style={styles.fieldContainer}>
             <Text style={styles.label}>{`Upload Bill${billOptional ? ' (optional for Auto)' : ' *'}`}</Text>

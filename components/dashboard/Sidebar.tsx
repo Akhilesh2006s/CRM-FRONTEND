@@ -105,8 +105,20 @@ function ensureExpenseApprovalNav(
   if (isAdmin || r === 'Finance Manager' || (permissions || []).includes('expenses.pending.page.view')) {
     wanted.push({ label: 'Pending Expenses List', href: '/dashboard/expenses/pending' })
   }
-  if (isAdmin || r === 'Finance Manager' || r === 'Executive Manager') {
+  if (isAdmin || r === 'Finance Manager') {
     wanted.push({ label: 'Expense Approvers', href: '/dashboard/expenses/approvers' })
+  }
+  // Every employee login can raise its own expenses.
+  if (r && !NON_EMPLOYEE_NAV_ROLES.has(r)) {
+    const linksCreate = nav.some((item) =>
+      item.href === '/dashboard/expenses/create' || (item.children || []).some((c) => c.href === '/dashboard/expenses/create'))
+    if (!linksCreate) {
+      wanted.unshift(
+        { label: 'Create Expenses', href: '/dashboard/expenses/create' },
+        { label: 'Pending Expenses', href: '/dashboard/expenses/my?view=pending' },
+        { label: 'Completed Expenses', href: '/dashboard/expenses/my?view=completed' },
+      )
+    }
   }
   if (wanted.length === 0) return nav
 
