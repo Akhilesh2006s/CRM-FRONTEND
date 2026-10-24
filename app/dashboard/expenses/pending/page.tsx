@@ -115,6 +115,8 @@ export default function ManagerPendingExpensesPage() {
   const [loading, setLoading] = useState(true)
   const [employees, setEmployees] = useState<Employee[]>([])
   const [trainers, setTrainers] = useState<Trainer[]>([])
+  const [queueEmployees, setQueueEmployees] = useState<Employee[]>([])
+  const [queueTrainers, setQueueTrainers] = useState<Trainer[]>([])
   const [filters, setFilters] = useState({
     employeeId: 'all',
     trainerId: 'all',
@@ -154,6 +156,20 @@ export default function ManagerPendingExpensesPage() {
 
       const data = await apiRequest<Expense[]>(`/expenses/manager-pending${params.toString() ? `?${params.toString()}` : ''}`)
       setExpenses(data || [])
+      // Logins that can't list every employee (e.g. a tagged Product Manager) filter by
+      // the people in their own queue.
+      if (!params.toString()) {
+        const people = (key: 'employeeId' | 'trainerId') => {
+          const seen = new Map<string, string>()
+          for (const e of data || []) {
+            const p = e[key]
+            if (p && typeof p === 'object' && p._id) seen.set(String(p._id), p.name || 'Unknown')
+          }
+          return [...seen].map(([_id, name]) => ({ _id, name }))
+        }
+        setQueueEmployees(people('employeeId'))
+        setQueueTrainers(people('trainerId'))
+      }
     } catch (error: any) {
       toast.error(error?.message || 'Failed to load expenses')
       setExpenses([])
@@ -199,7 +215,7 @@ export default function ManagerPendingExpensesPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Employees</SelectItem>
-                {employees.map((emp) => (
+                {(employees.length ? employees : queueEmployees).map((emp) => (
                   <SelectItem key={emp._id} value={emp._id}>
                     {emp.name}
                   </SelectItem>
@@ -217,7 +233,7 @@ export default function ManagerPendingExpensesPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Trainers</SelectItem>
-                {trainers.map((trainer) => (
+                {(trainers.length ? trainers : queueTrainers).map((trainer) => (
                   <SelectItem key={trainer._id} value={trainer._id}>
                     {trainer.name}
                   </SelectItem>

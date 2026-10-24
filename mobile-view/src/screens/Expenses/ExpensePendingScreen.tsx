@@ -118,7 +118,22 @@ export default function ExpensePendingScreen({ navigation }: any) {
       if (nextFilters.trainerId) params.append('trainerId', nextFilters.trainerId);
       const qs = params.toString();
       const data = await apiService.get(`/expenses/manager-pending${qs ? `?${qs}` : ''}`);
-      setExpenses(Array.isArray(data) ? data : (data as any)?.data || []);
+      const list = Array.isArray(data) ? data : (data as any)?.data || [];
+      setExpenses(list);
+      // Logins that can't list every employee (e.g. a tagged Product Manager) filter by
+      // the people in their own queue.
+      if (!qs) {
+        const people = (key: 'employeeId' | 'trainerId') => {
+          const seen = new Map<string, string>();
+          for (const e of list) {
+            const p = e?.[key];
+            if (p && typeof p === 'object' && p._id) seen.set(String(p._id), p.name || 'Unknown');
+          }
+          return [...seen].map(([_id, name]) => ({ _id, name }));
+        };
+        setEmployees((current: any[]) => (current.length ? current : people('employeeId')) as any);
+        setTrainers((current: any[]) => (current.length ? current : people('trainerId')) as any);
+      }
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to load expenses');
       setExpenses([]);

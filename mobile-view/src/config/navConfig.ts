@@ -303,6 +303,12 @@ function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
         items: [{ label: 'Employee Verification', screen: 'EmployeeVerification' }],
       },
       {
+        // Claims the admin tagged to this Product Manager (e.g. their Trainers').
+        title: 'Expenses',
+        icon: I.expenses,
+        items: [{ label: 'Pending Expenses List', screen: 'ExpensePending', icon: '⏳' }],
+      },
+      {
         title: 'Leave Management',
         icon: I.leaves,
         items: [
