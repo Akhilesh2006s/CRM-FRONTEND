@@ -44,6 +44,7 @@ export default function AttendanceCard({ onChange }: { onChange?: () => void } =
   const [town, setTown] = useState('');
   const [remarks, setRemarks] = useState('');
   const [loading, setLoading] = useState(false);
+  const [locating, setLocating] = useState(false);
   const [locationData, setLocationData] = useState<{ latitude: number; longitude: number } | null>(null);
   const [currentAttendance, setCurrentAttendance] = useState<any>(null);
   const [isFirstTime, setIsFirstTime] = useState(false);
@@ -101,14 +102,13 @@ export default function AttendanceCard({ onChange }: { onChange?: () => void } =
 
   const getLocation = async () => {
     try {
-      setLoading(true);
+      setLocating(true);
       const location = await getCurrentLocation();
       setLocationData(location);
-      Alert.alert('Success', 'Location captured successfully');
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to get location');
     } finally {
-      setLoading(false);
+      setLocating(false);
     }
   };
 
@@ -332,10 +332,10 @@ export default function AttendanceCard({ onChange }: { onChange?: () => void } =
               <TouchableOpacity
                 style={[styles.locationButton, locationData && styles.locationButtonSuccess]}
                 onPress={getLocation}
-                disabled={loading}
+                disabled={loading || locating}
               >
                 <Text style={styles.locationButtonText}>
-                  {locationData ? 'Location Captured ✓' : 'Capture Location'}
+                  {locating ? 'Getting location…' : locationData ? 'Location Captured ✓' : 'Capture Location'}
                 </Text>
               </TouchableOpacity>
               {locationData && (

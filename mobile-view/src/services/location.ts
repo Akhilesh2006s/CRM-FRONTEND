@@ -14,9 +14,16 @@ export const getCurrentLocation = async (): Promise<LocationData> => {
       throw new Error('Location permission not granted');
     }
 
-    const location = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced,
-    });
+    // A GPS fix can stall indoors on some Android phones and never resolve, so give up after
+    // 20 seconds and fall back to the phone's last known position.
+    const location = await Promise.race([
+      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 20000)),
+    ]) ?? await Location.getLastKnownPositionAsync();
+
+    if (!location) {
+      throw new Error('Could not get your location. Turn on GPS / Location, move near a window and try again.');
+    }
 
     return {
       latitude: location.coords.latitude,
