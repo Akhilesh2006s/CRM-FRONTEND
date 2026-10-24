@@ -152,3 +152,39 @@ export function isFollowUpProductLineComplete(row: LeadProductInterestedRow): bo
   if (row.status === 'Warm' && chance < 20) return false
   return true
 }
+
+/** One follow-up card row per product: a product's class lines (renewals keep one per class) are merged. */
+export type LeadProductDisplayRow = {
+  product_name: string
+  /** Distinct line statuses, e.g. "Warm" or "Warm / Hot". */
+  status: string
+  /** Students across all the product's lines. */
+  strength: number
+  /** Distinct chance values, e.g. "85" or "70 / 85"; '' when none. */
+  chance: string
+  classes: string[]
+}
+
+export function groupInterestedRowsForDisplay(rows: LeadProductInterestedRow[]): LeadProductDisplayRow[] {
+  const groups = new Map<string, { name: string; statuses: string[]; strength: number; chances: string[]; classes: string[] }>()
+  for (const row of rows) {
+    const key = `${row.product_name.trim().toLowerCase()}|${row.sale_type || ''}`
+    let g = groups.get(key)
+    if (!g) {
+      g = { name: row.product_name, statuses: [], strength: 0, chances: [], classes: [] }
+      groups.set(key, g)
+    }
+    if (row.status && !g.statuses.includes(row.status)) g.statuses.push(row.status)
+    const strength = Number(row.strength)
+    if (strength > 0) g.strength += strength
+    if (Number(row.chance) > 0 && !g.chances.includes(String(row.chance))) g.chances.push(String(row.chance))
+    if (row.class && !g.classes.includes(row.class)) g.classes.push(row.class)
+  }
+  return Array.from(groups.values()).map((g) => ({
+    product_name: g.name,
+    status: g.statuses.join(' / '),
+    strength: g.strength,
+    chance: g.chances.join(' / '),
+    classes: g.classes,
+  }))
+}

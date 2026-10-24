@@ -25,6 +25,7 @@ import {
   PRICED_LINE_STATUSES,
   isFollowUpProductLineComplete,
   leadProductsToInterestedRows,
+  groupInterestedRowsForDisplay,
   lineDetailLabel,
   normalizeLeadProductLineStatus,
   type LeadProductInterestedRow,
@@ -764,7 +765,7 @@ export default function LeadFollowupScreen({ navigation }: any) {
         ) : (
           leads.map((lead) => {
             const isOverdue = isFollowUpDateOverdue(lead.follow_up_date);
-            const productRows = leadProductsToInterestedRows(lead);
+            const productRows = groupInterestedRowsForDisplay(leadProductsToInterestedRows(lead));
 
             return (
               <View key={lead._id} style={[styles.card, lead.isChain && styles.cardChain]}>
@@ -840,8 +841,9 @@ export default function LeadFollowupScreen({ navigation }: any) {
                           <Text style={styles.productLineMeta}>
                             {[
                               p.status,
-                              Number(p.strength) > 0 ? `Str ${p.strength}` : null,
-                              Number(p.chance) > 0 ? `${p.chance}%` : null,
+                              p.strength > 0 ? `Str ${p.strength}` : null,
+                              p.chance ? `${p.chance}%` : null,
+                              p.classes.length > 1 ? `Classes ${p.classes.join(', ')}` : null,
                             ]
                               .filter(Boolean)
                               .join(' · ')}

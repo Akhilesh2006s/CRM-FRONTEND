@@ -24,6 +24,7 @@ import {
 import {
   isFollowUpProductLineComplete,
   leadProductsToInterestedRows,
+  groupInterestedRowsForDisplay,
   normalizeLeadProductLineStatus,
   DROPPED_LINE_STATUSES,
   PRICED_LINE_STATUSES,
@@ -1074,7 +1075,7 @@ export default function FollowupLeadsPage() {
                       </div>
                     )}
                     {(() => {
-                      const interested = leadProductsToInterestedRows(lead)
+                      const interested = groupInterestedRowsForDisplay(leadProductsToInterestedRows(lead))
                       if (interested.length === 0) return null
                       return (
                         <div className="rounded-lg border border-violet-100 bg-violet-50/40 p-3">
@@ -1091,11 +1092,14 @@ export default function FollowupLeadsPage() {
                                 <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-white border border-neutral-200">
                                   {row.status}
                                 </span>
-                                {Number(row.strength) > 0 && (
+                                {row.strength > 0 && (
                                   <span className="text-xs text-neutral-600">Str {row.strength}</span>
                                 )}
-                                {Number(row.chance) > 0 && (
+                                {row.chance && (
                                   <span className="text-xs text-neutral-600">{row.chance}%</span>
+                                )}
+                                {row.classes.length > 1 && (
+                                  <span className="text-xs text-neutral-500">Classes {row.classes.join(', ')}</span>
                                 )}
                               </li>
                             ))}
