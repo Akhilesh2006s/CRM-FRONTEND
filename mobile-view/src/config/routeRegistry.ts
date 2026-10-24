@@ -126,7 +126,7 @@ export const ROUTE_REGISTRY: RouteEntry[] = [
   { webPath: '/dashboard/settings/sms', mobileScreen: 'SettingsSMS', module: 'Settings', status: 'done' },
   { webPath: '/dashboard/settings/backup', mobileScreen: 'SettingsBackup', module: 'Settings', status: 'done' },
   { webPath: '/dashboard/settings/expenses', mobileScreen: 'SettingsExpenses', module: 'Settings', status: 'done' },
-  { webPath: '/dashboard/settings/roles', module: 'Settings', status: 'partial', notes: 'Web only — Roles & Permissions' },
+  { webPath: '/dashboard/settings/roles', mobileScreen: 'SettingsRoles', module: 'Settings', status: 'done' },
 
   { webPath: '/dashboard/stocks', mobileScreen: 'PartnerStocks', module: 'Vendor', status: 'done' },
   { webPath: '/dashboard/dcs', mobileScreen: 'PartnerDCs', module: 'Vendor', status: 'done' },
@@ -139,6 +139,17 @@ export const ROUTE_REGISTRY: RouteEntry[] = [
   { webPath: '/dashboard/leads/cross-sale', mobileScreen: 'CrossSaleLeads', module: 'Leads', status: 'done' },
   { webPath: '/dashboard/complaints/raise', mobileScreen: 'RaiseTicket', module: 'Tickets', status: 'done' },
   { webPath: '/dashboard/complaints', mobileScreen: 'ViewTickets', module: 'Tickets', status: 'done' },
+  { webPath: '/dashboard/employees/payroll', mobileScreen: 'EmployeesPayroll', module: 'Employees', status: 'done' },
+  { webPath: '/dashboard/employees/salary', mobileScreen: 'EmployeesSalary', module: 'Employees', status: 'done' },
+  { webPath: '/dashboard/employees/history', mobileScreen: 'EmployeesHistory', module: 'Employees', status: 'done' },
+  { webPath: '/dashboard/employees/move-schools', mobileScreen: 'EmployeesMoveSchools', module: 'Employees', status: 'done' },
+  { webPath: '/dashboard/employees/cluster-schools', mobileScreen: 'EmployeesClusterSchools', module: 'Employees', status: 'done' },
+  { webPath: '/dashboard/employees/chain', mobileScreen: 'EmployeesChain', module: 'Employees', status: 'done' },
+  { webPath: '/dashboard/training/request', mobileScreen: 'TrainingRequest', module: 'Training', status: 'done' },
+  { webPath: '/dashboard/training/requests', mobileScreen: 'TrainingRequests', module: 'Training', status: 'done' },
+  { webPath: '/dashboard/collateral', mobileScreen: 'SalesCollateral', module: 'Leads', status: 'done' },
+  { webPath: '/dashboard/reports/operational', mobileScreen: 'ReportsOperational', module: 'Reports', status: 'done' },
+  { webPath: '/dashboard/dc/grid', mobileScreen: 'DCGrid', module: 'Clients', status: 'done' },
 ];
 
 export function getParitySummary() {

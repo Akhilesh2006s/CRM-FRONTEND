@@ -33,6 +33,7 @@ import {
   validateDcStockAgainstInventory,
 } from '../../components/dc/warehouseStockHelpers';
 import { consolidateStockRows } from '../../components/dc/warehouseStockList';
+import { TransportNameField, transportToLabel } from '../../components/dc/TransportFields';
 
 /** Specimen and related-item lines describe themselves (product set, item name); never copy a stock
  * item's series / deliverable / level onto them. */
@@ -259,6 +260,9 @@ export default function WarehouseDCAtWarehouseDetailScreen({ navigation, route }
   const isMaker = role === 'Warehouse Executive' || role === 'Admin' || role === 'Super Admin';
   const [dc, setDc] = useState<any>(null);
   const [lrNo, setLrNo] = useState('');
+  // Transport / Transport Area are editable here as on web (saved on the DC as transport / transportArea).
+  const [transportName, setTransportName] = useState('');
+  const [transportLocation, setTransportLocation] = useState('');
   const [vehicleNo, setVehicleNo] = useState('');
   const [returnRemarks, setReturnRemarks] = useState('');
   const [loading, setLoading] = useState(true);
@@ -345,6 +349,8 @@ export default function WarehouseDCAtWarehouseDetailScreen({ navigation, route }
       setDcCategory(fullDC.dcCategory || 'Term 1');
       setDcNotes(fullDC.dcNotes || '');
       setLrNo(fullDC.lrNo || '');
+      setTransportName(String(fullDC.transport || order.transport_name || '').trim());
+      setTransportLocation(String(fullDC.transportArea || order.transport_location || '').trim());
       setVehicleNo(fullDC.vehicleNo || '');
 
       if (Array.isArray(fullDC.productDetails) && fullDC.productDetails.length > 0) {
@@ -440,8 +446,7 @@ export default function WarehouseDCAtWarehouseDetailScreen({ navigation, route }
   const insufficientQuantity = !stockCheck.ok;
 
   const dcOrder = typeof dc?.dcOrderId === 'object' && dc?.dcOrderId ? dc.dcOrderId : {};
-  const transportName = dc?.transport || dcOrder.transport_name || '';
-  const transportLocation = dc?.transportArea || dcOrder.transport_location || '';
+  const transportToText = transportToLabel(dcOrder);
   const transportLandmark = dcOrder.transportation_landmark || '';
   const pincode = dcOrder.pincode || '';
   const executiveName = dc?.managerId?.name || dc?.employeeId?.name || '';
@@ -734,8 +739,17 @@ export default function WarehouseDCAtWarehouseDetailScreen({ navigation, route }
 
       <View style={[styles.section, styles.deliverySection]}>
         <Text style={styles.sectionTitle}>Delivery & Address Information</Text>
-        <Field label="Transport Name" value={transportName} editable={false} placeholder="Not provided" />
-        <Field label="Transport Location" value={transportLocation} editable={false} placeholder="Not provided" />
+        <View style={styles.field}>
+          <Text style={styles.label}>Transport Name</Text>
+          <TransportNameField label={null} inputStyle={styles.input} value={transportName} onChange={setTransportName} />
+        </View>
+        <Field
+          label="Transport Location"
+          value={transportLocation}
+          onChangeText={setTransportLocation}
+          placeholder="Transport area / location"
+        />
+        <Field label="Transport To" value={transportToText} editable={false} placeholder="Not provided" />
         <Field label="Transport Landmark" value={transportLandmark} editable={false} placeholder="Not provided" />
         <Field label="Pincode" value={pincode} editable={false} placeholder="Not provided" />
       </View>

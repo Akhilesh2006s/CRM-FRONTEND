@@ -601,6 +601,73 @@ const TICKET_INBOX_ROLES = new Set(['Admin', 'Super Admin', 'Coordinator', 'Seni
 const hasScreen = (sections: NavSection[], screen: string) =>
   sections.some((section) => section.items.some((item) => item.screen === screen));
 
+/** Screens ported from the web, added to a role's menu in the section the web shows them under. */
+const BDE_ROLES = new Set(['Executive', 'Sales BDE', 'Employee', 'BDE']);
+const COORDINATOR_ROLES = new Set(['Coordinator', 'Senior Coordinator']);
+const WEB_PORTED_LINKS: { section: string; link: NavLink; allowed: (role: string, superAdmin: boolean) => boolean }[] = [
+  { section: 'Employees', link: { label: 'Payroll', screen: 'EmployeesPayroll', icon: '💰' }, allowed: (r, sa) => sa || r === 'HR Manager' },
+  { section: 'Employees', link: { label: 'Salary', screen: 'EmployeesSalary', icon: '💵' }, allowed: (r, sa) => sa || r === 'Admin' || r === 'HR Manager' },
+  {
+    section: 'Employees',
+    link: { label: 'Employee History', screen: 'EmployeesHistory', icon: '🗂️' },
+    allowed: (r, sa) => sa || ['Admin', 'HR Manager', 'HR Executive'].includes(r),
+  },
+  { section: 'Employees', link: { label: 'Move Schools', screen: 'EmployeesMoveSchools', icon: '🔀' }, allowed: (r, sa) => sa || r === 'Admin' },
+  { section: 'Employees', link: { label: 'Cluster Schools', screen: 'EmployeesClusterSchools', icon: '🏫' }, allowed: (_r, sa) => sa },
+  { section: 'Employees', link: { label: 'Chain', screen: 'EmployeesChain', icon: '🔗' }, allowed: (r, sa) => sa || r === 'Admin' },
+  {
+    section: 'Training & Services',
+    link: { label: 'Training Request', screen: 'TrainingRequest', icon: '📝' },
+    allowed: (r) => BDE_ROLES.has(r) || r === 'Trainer',
+  },
+  {
+    section: 'Training & Services',
+    link: { label: 'Training Requests', screen: 'TrainingRequests', icon: '📋' },
+    allowed: (r, sa) => sa || r === 'Admin' || COORDINATOR_ROLES.has(r),
+  },
+  { section: 'Leads', link: { label: 'Sales Collateral', screen: 'SalesCollateral', icon: '📁' }, allowed: (r, sa) => sa || BDE_ROLES.has(r) },
+  {
+    section: 'Reports',
+    link: { label: 'Operational Reports', screen: 'ReportsOperational', icon: '📊' },
+    allowed: (r, sa) => sa || r === 'Admin' || r === 'Finance Manager' || COORDINATOR_ROLES.has(r),
+  },
+  { section: 'Settings', link: { label: 'Roles & Permissions', screen: 'SettingsRoles', icon: '🔐' }, allowed: (_r, sa) => sa },
+  { section: 'Expenses', link: { label: 'My Trips (GPS km)', screen: 'MyTrips', icon: '🛵' }, allowed: () => true },
+];
+
+function addWebPortedLinks(sections: NavSection[], role: string, superAdmin: boolean): NavSection[] {
+  let out = sections;
+  // Grid DC sits right after Create Sale, as on the web.
+  if ((superAdmin || role === 'Admin' || COORDINATOR_ROLES.has(role)) && !hasScreen(out, 'DCGrid')) {
+    const grid: NavLink = { label: 'Create DC / Main DCs', screen: 'DCGrid', icon: '🧮' };
+    const at = out.findIndex((s) => s.items.some((item) => item.screen === 'DCCreateSale'));
+    const target = at >= 0 ? at : out.findIndex((s) => s.title === 'Clients' || s.title === 'Clients & DC' || s.title === 'DC');
+    if (target >= 0) {
+      out = out.map((s, i) => {
+        if (i !== target) return s;
+        const after = s.items.findIndex((item) => item.screen === 'DCCreateSale');
+        const items = [...s.items];
+        items.splice(after >= 0 ? after + 1 : items.length, 0, grid);
+        return { ...s, items };
+      });
+    }
+  }
+  for (const { section, link, allowed } of WEB_PORTED_LINKS) {
+    if (!allowed(role, superAdmin) || hasScreen(out, link.screen)) continue;
+    const at = out.findIndex((s) => s.title === section);
+    if (at >= 0) {
+      out = out.map((s, i) => (i === at ? { ...s, items: [...s.items, link] } : s));
+    } else {
+      const settingsAt = out.findIndex((s) => s.title === 'Settings');
+      const added: NavSection = { title: section, icon: I.employees, items: [link] };
+      out = settingsAt >= 0 && section !== 'Settings'
+        ? [...out.slice(0, settingsAt), added, ...out.slice(settingsAt)]
+        : [...out, added];
+    }
+  }
+  return out;
+}
+
 /**
  * Menu per role, plus what every employee login gets (as on the web): Create / Pending /
  * Completed expenses instead of "My Expenses", own Attendance, Team Attendance for managers,
@@ -669,5 +736,6 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
       ? [...sections.slice(0, settingsAt), mine, ...sections.slice(settingsAt)]
       : [...sections, mine];
   }
-  return sections;
+  const superAdmin = role === 'Super Admin' || !!(user as { isSuperAdmin?: boolean } | null | undefined)?.isSuperAdmin;
+  return addWebPortedLinks(sections, role, superAdmin);
 }

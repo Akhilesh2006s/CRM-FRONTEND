@@ -1,12 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  RefreshControl,
-} from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { useFocusEffect } from '@react-navigation/native';
@@ -16,6 +9,9 @@ import { apiService } from '../../services/api';
 import { isTransportComplete, TRANSPORT_REQUIRED_MESSAGE } from '../../utils/dcTransport';
 import { showAlert } from '../../utils/showAlert';
 import { navigateRoot } from '../../navigation/navigationRef';
+import { useAuth } from '../../context/AuthContext';
+import TermWiseEditPOModal from '../../components/dc/TermWiseEditPOModal';
+import { termWiseProductLabel } from '../../lib/termWiseDc';
 
 function getOrderId(dc: any): string | null {
   if (dc.dcOrderId && typeof dc.dcOrderId === 'object' && dc.dcOrderId._id) return dc.dcOrderId._id;
@@ -47,23 +43,9 @@ function getPhone(dc: any): string {
   );
 }
 
+/** Rows Close Lead routed to this Term-Wise DC (web: closeLeadDestination === TERM_WISE_DC). */
 function getTerm2Products(dc: any): string {
-  if (dc.productDetails && Array.isArray(dc.productDetails)) {
-    const term2 = dc.productDetails.filter((p: any) => (p.term || 'Term 1') === 'Term 2');
-    if (term2.length > 0) {
-      return term2
-        .map((p: any) => p.product || p.productName || '')
-        .filter(Boolean)
-        .join(', ');
-    }
-  }
-  if (typeof dc.dcOrderId === 'object' && Array.isArray(dc.dcOrderId?.products)) {
-    const term2 = dc.dcOrderId.products.filter((p: any) => (p.term || 'Term 1') === 'Term 2');
-    if (term2.length > 0) {
-      return term2.map((p: any) => p.product_name || p.product || '').filter(Boolean).join(', ');
-    }
-  }
-  return dc.product || '-';
+  return termWiseProductLabel(dc);
 }
 
 function formatStatus(status?: string): string {
@@ -76,6 +58,9 @@ export default function DCTermWiseScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [editDc, setEditDc] = useState<any | null>(null);
+  const { user } = useAuth();
+  const bde = { name: user?.name, mobile: (user as any)?.mobile || (user as any)?.phone };
 
   useFocusEffect(
     useCallback(() => {
@@ -108,7 +93,8 @@ export default function DCTermWiseScreen({ navigation }: any) {
         const q = searchQuery.toLowerCase();
         return (
           getSchoolName(dc).toLowerCase().includes(q) ||
-          getPhone(dc).includes(q) ||
+          (dc.saleId?.customerName || '').toLowerCase().includes(q) ||
+          getPhone(dc).toLowerCase().includes(q) ||
           getTerm2Products(dc).toLowerCase().includes(q) ||
           (dc.status || '').toLowerCase().includes(q)
         );
@@ -118,7 +104,7 @@ export default function DCTermWiseScreen({ navigation }: any) {
   return (
     <ScreenShell
       title="Term-Wise DC"
-      subtitle="View clients with Term 2 products"
+      subtitle="Term-Wise DC rows (paired Level 2 / Term 2 from Close Lead)"
       loading={loading && !refreshing}
       refreshing={refreshing}
       onRefresh={onRefresh}
@@ -131,17 +117,14 @@ export default function DCTermWiseScreen({ navigation }: any) {
           onChangeText={setSearchQuery}
         />
       </View>
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={styles.contentContainer}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
-        }
-      >
+      <View style={styles.contentContainer}>
+        {filtered.length > 0 ? (
+          <Text style={styles.countText}>Term 2 · Total: {filtered.length} client(s)</Text>
+        ) : null}
         {filtered.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyIcon}>📄</Text>
-            <Text style={styles.emptyText}>No term-wise DCs found</Text>
+            <Text style={styles.emptyText}>No clients found.</Text>
           </View>
         ) : (
           filtered.map((dc, idx) => {
@@ -166,18 +149,20 @@ export default function DCTermWiseScreen({ navigation }: any) {
                   <MetaRow label="Client Turned" value={turnedDate} />
                 </View>
                 <View style={styles.cardActions}>
-                  <TouchableOpacity
-                    style={[styles.actionBtn, styles.editBtn]}
-                    onPress={() => {
-                      if (!orderId) {
-                        showAlert('Error', 'DC Order not found for this client.');
-                        return;
-                      }
-                      navigation.navigate('ClientEditPO', { orderId, dcId: dc._id });
-                    }}
-                  >
-                    <Text style={[styles.actionBtnText, styles.editBtnText]}>Edit PO</Text>
-                  </TouchableOpacity>
+                  {dc.poPhotoUrl || orderId ? (
+                    <TouchableOpacity
+                      style={[styles.actionBtn, styles.editBtn]}
+                      onPress={() => {
+                        if (!orderId) {
+                          showAlert('Error', 'Cannot edit: DC Order not found');
+                          return;
+                        }
+                        setEditDc(dc);
+                      }}
+                    >
+                      <Text style={[styles.actionBtnText, styles.editBtnText]}>Edit PO</Text>
+                    </TouchableOpacity>
+                  ) : null}
                   <TouchableOpacity
                     style={[styles.actionBtn, styles.requestBtn]}
                     onPress={async () => {
@@ -207,7 +192,16 @@ export default function DCTermWiseScreen({ navigation }: any) {
             );
           })
         )}
-      </ScrollView>
+      </View>
+      <TermWiseEditPOModal
+        dc={editDc}
+        bde={bde}
+        onClose={() => setEditDc(null)}
+        onSaved={() => {
+          setEditDc(null);
+          loadDCs();
+        }}
+      />
     </ScreenShell>
   );
 }
@@ -224,7 +218,7 @@ function MetaRow({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  searchContainer: { padding: 16, paddingBottom: 8 },
+  searchContainer: { paddingBottom: 8 },
   searchInput: {
     backgroundColor: colors.backgroundLight,
     borderRadius: 12,
@@ -232,8 +226,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  content: { flex: 1 },
-  contentContainer: { padding: 16, paddingBottom: 32 },
+  contentContainer: { paddingBottom: 16 },
+  countText: { ...typography.body.small, color: colors.textSecondary, marginBottom: 10 },
   emptyContainer: { alignItems: 'center', paddingVertical: 48 },
   emptyIcon: { fontSize: 48, marginBottom: 12 },
   emptyText: { ...typography.body.medium, color: colors.textSecondary },

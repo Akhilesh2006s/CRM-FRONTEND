@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Linking } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Linking, Image, ActivityIndicator } from 'react-native';
 import { colors, radii } from '../../theme/colors';
 import ScreenShell from '../../ui/ScreenShell';
 import MessageBanner from '../../components/MessageBanner';
@@ -15,6 +15,7 @@ type RosterRow = {
   pincode?: string;
   latitude?: number;
   longitude?: number;
+  source?: 'login_selfie' | 'manual';
   employeeId?: { name?: string; empCode?: string; role?: string; zone?: string } | string;
 };
 
@@ -46,6 +47,22 @@ export default function AttendanceRosterScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  /** Selfies opened on this screen: photo data URL, 'loading' or 'none'. */
+  const [selfies, setSelfies] = useState<Record<string, string>>({});
+
+  const toggleSelfie = async (id: string) => {
+    if (selfies[id]) {
+      setSelfies(({ [id]: _, ...rest }) => rest);
+      return;
+    }
+    setSelfies((s) => ({ ...s, [id]: 'loading' }));
+    try {
+      const res = await apiService.get(`/attendance/${id}/photo`);
+      setSelfies((s) => ({ ...s, [id]: res?.photo || 'none' }));
+    } catch {
+      setSelfies((s) => ({ ...s, [id]: 'none' }));
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -109,6 +126,17 @@ export default function AttendanceRosterScreen() {
                 </TouchableOpacity>
               ) : null}
             </View>
+            <TouchableOpacity onPress={() => toggleSelfie(row._id)}>
+              <Text style={styles.link}>
+                {selfies[row._id] ? 'Hide selfie' : 'View selfie'}
+                {row.source === 'login_selfie' ? ' (app selfie)' : ''}
+              </Text>
+            </TouchableOpacity>
+            {selfies[row._id] === 'loading' ? <ActivityIndicator /> : null}
+            {selfies[row._id] === 'none' ? <Text style={styles.meta}>No photo saved for this check-in.</Text> : null}
+            {selfies[row._id] && !['loading', 'none'].includes(selfies[row._id]) ? (
+              <Image source={{ uri: selfies[row._id] }} style={styles.selfie} resizeMode="contain" />
+            ) : null}
           </View>
         );
       })}
@@ -132,5 +160,6 @@ const styles = StyleSheet.create({
   meta: { fontSize: 12, color: colors.textSecondary, flexShrink: 1 },
   statusIn: { fontSize: 12, fontWeight: '600', color: colors.success },
   statusOut: { fontSize: 12, color: colors.textSecondary },
+  selfie: { width: '100%', aspectRatio: 3 / 4, borderRadius: radii.md, backgroundColor: colors.border },
   link: { fontSize: 12, color: colors.primary, textDecorationLine: 'underline' },
 });

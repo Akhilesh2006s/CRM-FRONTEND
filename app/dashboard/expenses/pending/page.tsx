@@ -54,6 +54,7 @@ type Expense = ApprovalExpense & {
   travelFrom?: string
   travelTo?: string
   approxKms?: number
+  tripId?: string
   gpsDistance?: number
   pendingMonth?: string
 }
@@ -421,7 +422,7 @@ function ExpenseDetailsDialog({
                     <DetailRow label="Mode" value={expense.transportType} />
                     <DetailRow label="From" value={expense.travelFrom} />
                     <DetailRow label="To" value={expense.travelTo} />
-                    <DetailRow label="Claimed Distance" value={expense.approxKms ? `${expense.approxKms} km` : undefined} />
+                    <DetailRow label="Claimed Distance" value={expense.approxKms ? `${expense.approxKms} km${expense.tripId ? ' (GPS-tracked trip)' : ''}` : undefined} />
                     <DetailRow label="GPS Distance" value={expense.gpsDistance ? `${expense.gpsDistance} km` : undefined} />
                   </div>
                 </section>

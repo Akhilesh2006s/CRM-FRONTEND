@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { apiRequest } from '@/lib/api'
 import { displayRoleName } from '@/lib/roleLabels'
 import { formatEmployeeCode } from '@/lib/employeeCode'
@@ -15,6 +18,7 @@ type RosterRow = {
   pincode?: string
   latitude?: number
   longitude?: number
+  source?: 'login_selfie' | 'manual'
   employeeId?: { name?: string; empCode?: string; role?: string; zone?: string } | string
 }
 
@@ -25,29 +29,65 @@ function when(value?: string) {
   return date.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
+/** Today's date in India as yyyy-mm-dd. */
+function todayIST() {
+  return new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10)
+}
+
+/** yyyy-mm-dd (India day) to the UTC instants the API filters on. */
+function dayRange(day: string) {
+  const start = new Date(`${day}T00:00:00+05:30`)
+  return { from: start.toISOString(), to: new Date(start.getTime() + 86400000 - 1).toISOString() }
+}
+
 export default function AttendanceRosterPage() {
   const [rows, setRows] = useState<RosterRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [day, setDay] = useState(todayIST())
+  const [selfie, setSelfie] = useState<{ row: RosterRow; photo: string | null; loading: boolean } | null>(null)
 
   useEffect(() => {
     ;(async () => {
+      setLoading(true)
+      setError('')
       try {
-        const data = await apiRequest<RosterRow[]>('/attendance/roster')
-        setRows(Array.isArray(data) ? data : [])
+        const query = day ? `?fromDate=${encodeURIComponent(dayRange(day).from)}&toDate=${day}` : ''
+        const data = await apiRequest<RosterRow[]>(`/attendance/roster${query}`)
+        const { from, to } = day ? dayRange(day) : { from: '', to: '' }
+        const list = Array.isArray(data) ? data : []
+        setRows(day ? list.filter((r) => r.startTime && r.startTime >= from && r.startTime <= to) : list)
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : 'Failed to load attendance')
       } finally {
         setLoading(false)
       }
     })()
-  }, [])
+  }, [day])
+
+  const viewSelfie = async (row: RosterRow) => {
+    setSelfie({ row, photo: null, loading: true })
+    try {
+      const res = await apiRequest<{ photo: string | null }>(`/attendance/${row._id}/photo`)
+      setSelfie({ row, photo: res?.photo || null, loading: false })
+    } catch {
+      setSelfie({ row, photo: null, loading: false })
+    }
+  }
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Attendance</h1>
-        <p className="text-sm text-neutral-600 mt-1">HR, Admin and Coordinators see every employee (Coordinators view only). A head sees the people under them.</p>
+        <p className="text-sm text-neutral-600 mt-1">HR, Admin and Coordinators see every employee (Coordinators view only). A head sees the people under them. Employees check in from the app with a live selfie.</p>
+      </div>
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <label htmlFor="day" className="text-sm font-medium text-neutral-700">Date</label>
+          <Input id="day" type="date" value={day} onChange={(e) => setDay(e.target.value)} className="mt-1 w-44 bg-white" />
+        </div>
+        <Button variant="outline" size="sm" onClick={() => setDay(todayIST())}>Today</Button>
+        <Button variant="outline" size="sm" onClick={() => setDay('')}>All recent</Button>
       </div>
       <Card className="p-0 overflow-x-auto">
         {loading && <p className="p-4 text-sm">Loading…</p>}
@@ -66,6 +106,7 @@ export default function AttendanceRosterPage() {
                 <th className="py-2 px-3 text-left">Check out</th>
                 <th className="py-2 px-3 text-left">Location</th>
                 <th className="py-2 px-3 text-left">Reason</th>
+                <th className="py-2 px-3 text-left">Selfie</th>
               </tr>
             </thead>
             <tbody>
@@ -100,6 +141,12 @@ export default function AttendanceRosterPage() {
                       )}
                     </td>
                     <td className="py-2 px-3">{row.attendanceReason || '—'}</td>
+                    <td className="py-2 px-3 whitespace-nowrap">
+                      <Button variant="link" size="sm" className="h-auto p-0 text-sky-700" onClick={() => viewSelfie(row)}>
+                        View
+                      </Button>
+                      {row.source === 'login_selfie' && <span className="ml-2 text-xs text-green-700">App selfie</span>}
+                    </td>
                   </tr>
                 )
               })}
@@ -107,6 +154,26 @@ export default function AttendanceRosterPage() {
           </table>
         )}
       </Card>
+
+      <Dialog open={!!selfie} onOpenChange={(open) => !open && setSelfie(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {selfie && typeof selfie.row.employeeId === 'object' && selfie.row.employeeId?.name ? selfie.row.employeeId.name : 'Check-in selfie'}
+            </DialogTitle>
+            <DialogDescription>
+              {selfie ? `${when(selfie.row.startTime)} · ${[selfie.row.town, selfie.row.pincode].filter(Boolean).join(' - ')}` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          {selfie?.loading ? (
+            <p className="text-sm text-neutral-600">Loading…</p>
+          ) : selfie?.photo ? (
+            <img src={selfie.photo} alt="Check-in selfie" className="w-full rounded border object-contain max-h-[70vh]" />
+          ) : (
+            <p className="text-sm text-neutral-600">No photo saved for this check-in.</p>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -39,7 +39,18 @@ export function transportToError(v: TransportTo): string {
   return '';
 }
 
-export function TransportNameField({ value, onChange, inputStyle }: { value: string; onChange: (v: string) => void; inputStyle?: any }) {
+export function TransportNameField({
+  value,
+  onChange,
+  inputStyle,
+  label = 'Transport Name *',
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  inputStyle?: any;
+  /** Field label; null when the screen renders its own label. */
+  label?: string | null;
+}) {
   const [others, setOthers] = useState(!isListed(value) && Boolean(String(value || '').trim()));
   useEffect(() => {
     if (String(value || '').trim() && !isListed(value)) setOthers(true);
@@ -47,7 +58,7 @@ export function TransportNameField({ value, onChange, inputStyle }: { value: str
   const selected = others ? 'Others' : TRANSPORT_COMPANIES.find((c) => c.toLowerCase() === String(value || '').trim().toLowerCase()) || '';
   return (
     <>
-      <Text style={styles.label}>Transport Name *</Text>
+      {label ? <Text style={styles.label}>{label}</Text> : null}
       <WebSelect
         value={selected}
         placeholder="Select transport"

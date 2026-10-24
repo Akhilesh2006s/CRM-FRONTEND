@@ -40,6 +40,7 @@ type Expense = ApprovalExpense & {
   travelFrom?: string
   travelTo?: string
   approxKms?: number
+  tripId?: string
   employeeId?: ExpensePerson | null
   trainerId?: ExpensePerson | null
   /** Backend-resolved employee: employeeId, else trainerId, else submitter */
@@ -415,7 +416,7 @@ export default function ManagerExpenseUpdatePage() {
                         </TableCell>
                         <TableCell className="whitespace-nowrap font-medium">
                           {isTravel(expense) && expense.approxKms
-                            ? `${expense.approxKms} Kms${expense.transportType ? ` · ${expense.transportType}` : ''}`
+                            ? `${expense.approxKms} Kms${expense.transportType ? ` · ${expense.transportType}` : ''}${expense.tripId ? ' · GPS trip' : ''}`
                             : <span className="text-neutral-400">-</span>}
                         </TableCell>
                         <TableCell className="min-w-[200px] max-w-xs">

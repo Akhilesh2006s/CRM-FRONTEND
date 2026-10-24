@@ -33,6 +33,7 @@ type Expense = ApprovalExpense & {
   travelFrom?: string;
   travelTo?: string;
   approxKms?: number;
+  tripId?: string;
   employeeId?: ExpensePerson | null;
   trainerId?: ExpensePerson | null;
   employee?: ExpensePerson | null;
@@ -269,7 +270,7 @@ export default function ExpenseManagerUpdateScreen({ navigation, route }: any) {
                   <Text style={styles.gps}>GPS: {gpsKm(exp)} Kms</Text>
                   <Text style={styles.meta}>
                     Claimed:{' '}
-                    {exp.approxKms ? `${exp.approxKms} Kms${exp.transportType ? ` · ${exp.transportType}` : ''}` : '-'}
+                    {exp.approxKms ? `${exp.approxKms} Kms${exp.transportType ? ` · ${exp.transportType}` : ''}${exp.tripId ? ' · GPS trip' : ''}` : '-'}
                   </Text>
                 </View>
               ) : null}

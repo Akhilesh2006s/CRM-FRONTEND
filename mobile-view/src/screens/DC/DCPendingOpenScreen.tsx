@@ -32,6 +32,11 @@ import { withBilledTotals } from '../../lib/crm/dcPaymentDivisors';
 import { splitDeliverableRows } from '../../lib/crm/deliverableStockRows';
 import { keepMyClientsOwnedProductRows } from '../../lib/crm/clientDcProductRows';
 import { resolveExistingProductTerm } from '../../lib/crm/productTerm';
+import {
+  TransportDetailsSection,
+  canEditTransportDetails,
+  transportDetailsFromOrder,
+} from '../../components/dc/TransportDetailsSection';
 
 const CLASSES = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
 const DC_CATEGORIES = ['Term 1', 'Term 2', 'Term 3', 'Full Year'];
@@ -680,25 +685,32 @@ export default function DCPendingOpenScreen({ navigation, route }: any) {
         </View>
         )}
 
-        {!isTermWiseDc && (
+        {!isTermWiseDc && order && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Delivery and Address</Text>
-          <FormField
-            label="Transport Name"
-            value={order?.pendingEdit?.transport_name || order?.transport_name || '-'}
-            editable={false}
+          <TransportDetailsSection
+            dcOrderId={order._id}
+            details={transportDetailsFromOrder(order)}
+            school={{ name: order.school_name, mobile: order.contact_mobile }}
+            bde={
+              typeof order.assigned_to === 'object' && order.assigned_to
+                ? {
+                    name: (order.assigned_to as any).name,
+                    mobile: (order.assigned_to as any).mobile || (order.assigned_to as any).phone,
+                  }
+                : undefined
+            }
+            canEdit={canEditTransportDetails(user?.role)}
+            inputStyle={styles.input}
+            disabledInputStyle={styles.inputDisabled}
+            onSaved={(saved) => {
+              const merge = (o: any) =>
+                o ? { ...o, ...saved, pendingEdit: { ...(o.pendingEdit || {}), ...saved } } : o;
+              setDcOrder((o) => merge(o));
+              setDc((d: any) =>
+                d && d.dcOrderId && typeof d.dcOrderId === 'object' ? { ...d, dcOrderId: merge(d.dcOrderId) } : d
+              );
+            }}
           />
-          <FormField
-            label="Transport Location"
-            value={order?.pendingEdit?.transport_location || order?.transport_location || '-'}
-            editable={false}
-          />
-          <FormField
-            label="Transportation Landmark"
-            value={order?.pendingEdit?.transportation_landmark || order?.transportation_landmark || '-'}
-            editable={false}
-          />
-          <FormField label="Pincode" value={order?.pendingEdit?.pincode || order?.pincode || '-'} editable={false} />
         </View>
         )}
 

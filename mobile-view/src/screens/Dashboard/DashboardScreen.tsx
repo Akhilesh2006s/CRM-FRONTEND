@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import AttendanceCard from '../../components/AttendanceCard';
+import TripCard from '../../components/TripCard';
 import { Ionicons } from '@expo/vector-icons';
 import StatCard from '../../components/dashboard/StatCard';
 import SimpleBarChart from '../../components/dashboard/SimpleBarChart';
@@ -236,6 +237,11 @@ export default function DashboardScreen({ navigation }: { navigation?: any }) {
             <View style={styles.block}>
               <AttendanceCard />
               </View>
+          ) : null}
+          {showAttendance ? (
+            <View style={styles.block}>
+              <TripCard />
+            </View>
           ) : null}
 
           {flags.isAdmin ? (

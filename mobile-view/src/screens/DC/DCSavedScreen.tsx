@@ -16,6 +16,12 @@ import { typography } from '../../theme/typography';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebLabel } from '../../ui/WebPrimitives';
 import { apiService, getApiUrl } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
+import {
+  TransportDetailsSection,
+  canEditTransportDetails,
+  transportDetailsFromOrder,
+} from '../../components/dc/TransportDetailsSection';
 
 type DcOrder = {
   _id: string;
@@ -180,6 +186,20 @@ export default function DCSavedScreen({ navigation }: any) {
   });
 
   const [locationDeal, setLocationDeal] = useState<DcOrder | null>(null);
+  const { user } = useAuth();
+
+  /** Web: onSaved merges the saved transport keys into selectedDeal; keep the list row in sync too. */
+  const onTransportSaved = (saved: Record<string, any>) => {
+    const id = locationDeal?._id;
+    if (!id) return;
+    const merge = (d: any) => ({
+      ...d,
+      ...saved,
+      pendingEdit: d.pendingEdit ? { ...d.pendingEdit, ...saved } : d.pendingEdit,
+    });
+    setLocationDeal((prev) => (prev ? merge(prev) : prev));
+    setItems((prev) => prev.map((d) => (d._id === id ? merge(d) : d)));
+  };
 
   const loadData = useCallback(async () => {
     try {
@@ -441,6 +461,7 @@ export default function DCSavedScreen({ navigation }: any) {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
+            <ScrollView keyboardShouldPersistTaps="handled">
             <Text style={styles.modalTitle}>View Location</Text>
             <WebLabel>School</WebLabel>
             <Text style={styles.modalBody}>{locationDeal?.school_name || '-'}</Text>
@@ -452,9 +473,24 @@ export default function DCSavedScreen({ navigation }: any) {
             <Text style={styles.modalBody}>{locationDeal?.address || locationDeal?.location || '-'}</Text>
             <WebLabel>Zone</WebLabel>
             <Text style={styles.modalBody}>{locationDeal?.zone || '-'}</Text>
+            {locationDeal ? (
+              <View style={styles.transportSection}>
+                <TransportDetailsSection
+                  title="Transport details"
+                  dcOrderId={locationDeal._id}
+                  details={transportDetailsFromOrder(locationDeal)}
+                  school={{ name: locationDeal.school_name, mobile: locationDeal.contact_mobile }}
+                  canEdit={canEditTransportDetails(user?.role)}
+                  inputStyle={styles.input}
+                  disabledInputStyle={styles.inputDisabled}
+                  onSaved={onTransportSaved}
+                />
+              </View>
+            ) : null}
             <View style={styles.modalActions}>
               <WebButton title="Close" variant="outline" onPress={() => setLocationDeal(null)} />
             </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -546,6 +582,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     gap: 6,
+    maxHeight: '90%',
   },
   modalTitle: {
     ...typography.heading.h2,
@@ -560,4 +597,20 @@ const styles = StyleSheet.create({
   modalActions: {
     marginTop: 8,
   },
+  transportSection: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: 12,
+    marginTop: 4,
+  },
+  input: {
+    ...typography.body.medium,
+    backgroundColor: colors.backgroundLight,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 12,
+    color: colors.textPrimary,
+  },
+  inputDisabled: { backgroundColor: colors.background, opacity: 0.8 },
 });

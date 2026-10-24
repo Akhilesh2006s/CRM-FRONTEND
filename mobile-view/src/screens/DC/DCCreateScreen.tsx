@@ -29,6 +29,11 @@ import MessageBanner from '../../components/MessageBanner';
 import { useDcCatalog } from '../../hooks/useDcCatalog';
 import { DcCategoryPicker } from '../../components/dc/DcCategoryPicker';
 import { AbacusMaterialsSummary } from '../../components/dc/AbacusMaterials';
+import {
+  TransportDetailsSection,
+  canEditTransportDetails,
+  transportDetailsFromOrder,
+} from '../../components/dc/TransportDetailsSection';
 import { canonicalDcRowCategory, dcRowCategoryOrDefault } from '../../lib/crm/dcRowCategory';
 import { withBilledTotals } from '../../lib/crm/dcPaymentDivisors';
 import { splitDeliverableRows } from '../../lib/crm/deliverableStockRows';
@@ -838,20 +843,8 @@ function RaiseDCForm({
     return address.split(',')[0]?.trim() || '';
   };
 
-  const transportName =
-    deal?.pendingEdit?.transport_name || deal?.transport_name || deal?.dcRequestData?.transport_name || '';
-  const transportLocation =
-    deal?.pendingEdit?.transport_location ||
-    deal?.transport_location ||
-    deal?.dcRequestData?.transport_location ||
-    '';
-  const transportationLandmark =
-    deal?.pendingEdit?.transportation_landmark ||
-    deal?.transportation_landmark ||
-    deal?.dcRequestData?.transportation_landmark ||
-    '';
-  const transportPincode =
-    deal?.pendingEdit?.pincode || deal?.pincode || deal?.dcRequestData?.pincode || '';
+  // Transport Name / Transport To / location / landmark / pincode (BDE's pending edit first, as before).
+  const transportDetails = React.useMemo(() => transportDetailsFromOrder(deal), [deal]);
 
   const assignedToName = getAssignedToName();
 
@@ -1217,16 +1210,21 @@ function RaiseDCForm({
 
         {!isUpdateMode ? (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Delivery and Address</Text>
-            <Text style={styles.sectionSubtitle}>Transport details for this order</Text>
-            <FormField label="Transport Name" value={transportName || '-'} editable={false} />
-            <FormField label="Transport Location" value={transportLocation || '-'} editable={false} />
-            <FormField
-              label="Transportation Landmark"
-              value={transportationLandmark || '-'}
-              editable={false}
+            <TransportDetailsSection
+              dcOrderId={isLead ? undefined : deal?._id || dealId}
+              details={transportDetails}
+              canEdit={canEditTransportDetails(user?.role)}
+              school={{ name: deal?.school_name, mobile: deal?.contact_mobile }}
+              inputStyle={styles.input}
+              disabledInputStyle={styles.inputDisabled}
+              onSaved={(saved) =>
+                setDeal((d: any) =>
+                  d
+                    ? { ...d, ...saved, pendingEdit: d.pendingEdit ? { ...d.pendingEdit, ...saved } : d.pendingEdit }
+                    : d
+                )
+              }
             />
-            <FormField label="Pincode" value={transportPincode || '-'} editable={false} />
           </View>
         ) : null}
 

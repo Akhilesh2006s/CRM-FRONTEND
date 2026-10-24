@@ -13,6 +13,7 @@ import {
 } from './src/services/tracking';
 import LoginScreen from './src/screens/Auth/LoginScreen';
 import FirstTimeAttendanceScreen from './src/screens/Attendance/FirstTimeAttendanceScreen';
+import CheckInGate from './src/components/CheckInGate';
 import DashboardScreen from './src/screens/Dashboard/DashboardScreen';
 import DCCaptureScreen from './src/screens/DC/DCCaptureScreen';
 import DCListScreen from './src/screens/DC/DCListScreen';
@@ -162,6 +163,19 @@ import MyPayslipsScreen from './src/screens/Employees/MyPayslipsScreen';
 import CrossSaleLeadsScreen from './src/screens/Leads/CrossSaleLeadsScreen';
 import RaiseTicketScreen from './src/screens/Tickets/RaiseTicketScreen';
 import ViewTicketsScreen from './src/screens/Tickets/ViewTicketsScreen';
+import DCGridScreen from './src/screens/DC/DCGridScreen';
+import PayrollScreen from './src/screens/Employees/PayrollScreen';
+import SalaryScreen from './src/screens/Employees/SalaryScreen';
+import EmployeeHistoryScreen from './src/screens/Employees/EmployeeHistoryScreen';
+import MoveSchoolsScreen from './src/screens/Employees/MoveSchoolsScreen';
+import ClusterSchoolsScreen from './src/screens/Employees/ClusterSchoolsScreen';
+import ChainScreen from './src/screens/Employees/ChainScreen';
+import TrainingRequestScreen from './src/screens/Training/TrainingRequestScreen';
+import TrainingRequestsReviewScreen from './src/screens/Training/TrainingRequestsReviewScreen';
+import SalesCollateralScreen from './src/screens/Collateral/SalesCollateralScreen';
+import ReportsOperationalScreen from './src/screens/Reports/ReportsOperationalScreen';
+import SettingsRolesScreen from './src/screens/Settings/SettingsRolesScreen';
+import MyTripsScreen from './src/screens/Expenses/MyTripsScreen';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { Component } from 'react';
 
@@ -441,6 +455,19 @@ function AuthenticatedStack() {
         <Stack.Screen name="CrossSaleLeads" component={CrossSaleLeadsScreen} />
         <Stack.Screen name="RaiseTicket" component={RaiseTicketScreen} />
         <Stack.Screen name="ViewTickets" component={ViewTicketsScreen} />
+        <Stack.Screen name="DCGrid" component={DCGridScreen} />
+        <Stack.Screen name="EmployeesPayroll" component={PayrollScreen} />
+        <Stack.Screen name="EmployeesSalary" component={SalaryScreen} />
+        <Stack.Screen name="EmployeesHistory" component={EmployeeHistoryScreen} />
+        <Stack.Screen name="EmployeesMoveSchools" component={MoveSchoolsScreen} />
+        <Stack.Screen name="EmployeesClusterSchools" component={ClusterSchoolsScreen} />
+        <Stack.Screen name="EmployeesChain" component={ChainScreen} />
+        <Stack.Screen name="TrainingRequest" component={TrainingRequestScreen} />
+        <Stack.Screen name="TrainingRequests" component={TrainingRequestsReviewScreen} />
+        <Stack.Screen name="SalesCollateral" component={SalesCollateralScreen} />
+        <Stack.Screen name="ReportsOperational" component={ReportsOperationalScreen} />
+        <Stack.Screen name="SettingsRoles" component={SettingsRolesScreen} />
+        <Stack.Screen name="MyTrips" component={MyTripsScreen} />
     </Stack.Navigator>
   );
 }
@@ -465,7 +492,7 @@ function AppNavigator() {
     <View style={{ flex: 1 }}>
       <NavigationContainer ref={rootNavigationRef}>
         <StatusBar style="dark" />
-        {user ? <AuthenticatedStack /> : <AuthStack />}
+        {user ? <CheckInGate><AuthenticatedStack /></CheckInGate> : <AuthStack />}
       </NavigationContainer>
       {loading && !user ? (
         <View

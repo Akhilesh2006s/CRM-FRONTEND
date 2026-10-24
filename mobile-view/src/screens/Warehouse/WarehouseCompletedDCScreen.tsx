@@ -27,6 +27,9 @@ import { useAuth } from '../../context/AuthContext';
 import { DC_ROW_CATEGORIES, dcRowCategoryOrDefault, isBillableDcRow, isSpecimenRow } from '../../lib/crm/dcRowCategory';
 import { useDcCatalog } from '../../hooks/useDcCatalog';
 import { AbacusMaterialsSummary } from '../../components/dc/AbacusMaterials';
+import { DcPrintOptionsModal } from '../../components/dc/DcPrintOptionsModal';
+import { TransportNameField } from '../../components/dc/TransportFields';
+import { loadDcForChallan, printDcChallan, type DcPrintOptions } from '../../lib/dcChallan';
 
 /** Native only — react-native-webview throws on Expo web. */
 let NativeWebView: any = null;
@@ -266,6 +269,8 @@ export default function WarehouseCompletedDCScreen({ navigation }: any) {
     poRemarks: '',
   });
   const [saving, setSaving] = useState(false);
+  const [printRow, setPrintRow] = useState<CompletedRow | null>(null);
+  const [printBusy, setPrintBusy] = useState(false);
 
   const { hasProductCategories, getProductCategories } = useDcCatalog();
   const [studentTypeById, setStudentTypeById] = useState<Record<string, string>>({});
@@ -430,6 +435,33 @@ export default function WarehouseCompletedDCScreen({ navigation }: any) {
       Alert.alert('Error', e?.message || 'Failed to update DC');
     } finally {
       setSaving(false);
+    }
+  };
+
+  /** Print the Delivery Challan for a row with the fields picked in the print options (web printChallan). */
+  const printChallan = async (options: DcPrintOptions) => {
+    if (!printRow) return;
+    setPrintBusy(true);
+    try {
+      const fullDC = await loadDcForChallan(apiService, printRow.dcId || printRow._id);
+      const transit = {
+        transport: fullDC.transport || printRow.transport,
+        transportArea: fullDC.transportArea || printRow.transportArea,
+        lrNo: fullDC.lrNo || printRow.lrNo,
+        boxes: fullDC.boxes || printRow.boxes,
+        lrDate: fullDC.lrDate || printRow.lrDate,
+        // LR / warehouse remarks, falling back to PO-stage remarks (web listRemarks).
+        remarks: String(fullDC.deliveryNotes ?? '').trim() || String(fullDC.dcRemarks ?? '').trim(),
+      };
+      await printDcChallan(fullDC, transit, options, async () => {
+        setPrintRow(null);
+        // Let the options modal finish closing before the share / print sheet is presented.
+        await new Promise((r) => setTimeout(r, 350));
+      });
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Could not prepare the Delivery Challan');
+    } finally {
+      setPrintBusy(false);
     }
   };
 
@@ -812,6 +844,14 @@ export default function WarehouseCompletedDCScreen({ navigation }: any) {
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.chipBtn, styles.chipOutline]}
+                    onPress={() => setPrintRow(row)}
+                    disabled={printBusy}
+                    accessibilityLabel="Print Delivery Challan"
+                  >
+                    <Text style={styles.chipBtnTextDark}>Print DC</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.chipBtn, styles.chipOutline]}
                     onPress={() => openInvoice(row)}
                     disabled={invoiceLoadingId === row._id}
                   >
@@ -885,7 +925,14 @@ export default function WarehouseCompletedDCScreen({ navigation }: any) {
               </TouchableOpacity>
             </View>
             <ScrollView style={styles.modalBody} keyboardShouldPersistTaps="handled">
-              <LabeledInput label="Transport *" value={editForm.transport} onChangeText={(v) => setEditForm((p) => ({ ...p, transport: v }))} />
+              <View style={styles.fieldWrap}>
+                <WebLabel>Transport *</WebLabel>
+                <TransportNameField
+                  label={null}
+                  value={editForm.transport}
+                  onChange={(v) => setEditForm((p) => ({ ...p, transport: v }))}
+                />
+              </View>
               <LabeledInput label="LR No *" value={editForm.lrNo} onChangeText={(v) => setEditForm((p) => ({ ...p, lrNo: v }))} />
               <LabeledInput
                 label="Boxes *"
@@ -936,6 +983,13 @@ export default function WarehouseCompletedDCScreen({ navigation }: any) {
           </View>
         </View>
       </Modal>
+
+      <DcPrintOptionsModal
+        visible={!!printRow}
+        onClose={() => setPrintRow(null)}
+        onPrint={printChallan}
+        busy={printBusy}
+      />
 
       {/* Invoice modal */}
       <Modal visible={invoiceVisible} animationType="slide" transparent>
