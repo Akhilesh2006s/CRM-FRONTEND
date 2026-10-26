@@ -709,6 +709,15 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
     ? [...sections.slice(0, ticketsAt), ticketSection, ...sections.slice(ticketsAt)]
     : [...sections, ticketSection];
   if (!role || NON_EMPLOYEE_ROLES.has(role)) return sections;
+  const advanceLinks: NavLink[] = [
+    { label: 'Request Advance', screen: 'AdvanceRequest' },
+    { label: 'Advance Status', screen: 'AdvanceStatus' },
+    { label: 'Advance History', screen: 'AdvanceHistory' },
+  ];
+  const advanceKeys = ['advance.request.page.view', 'advance.status.page.view', 'advance.history.page.view'];
+  const permittedAdvanceLinks = advanceLinks.filter((_, index) => user?.isSuperAdmin || role === 'Super Admin'
+    || user?.rbacEnabled === false || user?.permissions?.includes(advanceKeys[index]));
+  if (permittedAdvanceLinks.length) sections.push({ title: 'Advance', icon: '💳', items: permittedAdvanceLinks });
 
   // Every employee login can raise its own expenses.
   if (!hasScreen(sections, 'ExpenseCreate')) {

@@ -15,6 +15,9 @@ export type RouteEntry = {
 };
 
 export const ROUTE_REGISTRY: RouteEntry[] = [
+  { webPath: '/dashboard/advance/request', mobileScreen: 'AdvanceRequest', module: 'Advance', status: 'done' },
+  { webPath: '/dashboard/advance/status', mobileScreen: 'AdvanceStatus', module: 'Advance', status: 'done' },
+  { webPath: '/dashboard/advance/history', mobileScreen: 'AdvanceHistory', module: 'Advance', status: 'done' },
   { webPath: '/dashboard', mobileScreen: 'MainTabs', module: 'Core', status: 'done' },
   { webPath: '/auth/login', mobileScreen: 'Login', module: 'Auth', status: 'done' },
 

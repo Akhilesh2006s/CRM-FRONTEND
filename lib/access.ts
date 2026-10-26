@@ -184,6 +184,10 @@ export function canAccessPath(
   if (options?.loading) return true
   if (!user) return false
   if (isSuperAdmin(user)) return true
+  if (pathname === '/dashboard/advance' || pathname.startsWith('/dashboard/advance/')) {
+    const key = permissionForPath(pathname) || 'advance.status.page.view'
+    return !['Vendor', 'Partner', 'Franchise'].includes(user.role) && hasPermission(user, key)
+  }
   // HR accounts are granted the employee approval-status screen by role. Keep
   // this working even when an older auth payload uses roleName or has not yet
   // received the refreshed RBAC permission catalog.

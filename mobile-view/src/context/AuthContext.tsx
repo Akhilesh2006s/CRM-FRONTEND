@@ -3,6 +3,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiService } from '../services/api';
 
 interface User {
+  permissions?: string[];
+  isSuperAdmin?: boolean;
+  rbacEnabled?: boolean;
   _id: string;
   name: string;
   email: string;
@@ -53,6 +56,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const id = parsed?._id || parsed?.id;
         if (id) {
           setUser({ ...parsed, _id: id });
+          // Refresh the server permission catalog for existing mobile sessions.
+          try {
+            const me = await apiService.get('/auth/me');
+            const refreshed = { ...parsed, ...me, _id: me._id || id };
+            await AsyncStorage.setItem('userData', JSON.stringify(refreshed));
+            setUser(refreshed);
+          } catch { /* Keep the cached session available when offline. */ }
         }
       }
     } catch (error) {

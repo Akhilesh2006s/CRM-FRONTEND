@@ -1,4 +1,7 @@
 export type RootStackParamList = {
+  AdvanceRequest: undefined;
+  AdvanceStatus: undefined;
+  AdvanceHistory: undefined;
   Login: undefined;
   FirstTimeAttendance: undefined;
   Dashboard: undefined;

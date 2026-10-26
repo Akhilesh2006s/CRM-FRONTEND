@@ -508,6 +508,7 @@ const NAV: NavItem[] = [
 ]
 
 const RBAC_MODULE_ICONS: Record<string, typeof LayoutDashboard> = {
+  advance: CreditCard,
   dashboard: LayoutDashboard,
   clients: Truck,
   leads: TrendingUp,
@@ -1423,6 +1424,17 @@ export function Sidebar() {
 
   // Leave Management is on every employee dashboard.
   finalNav = ensureLeaveManagementNav(finalNav, user?.role || permUser?.role)
+  if (!finalNav.some((item) => item.label === 'Advance')) {
+    const children = [
+      { label: 'Request Advance', href: '/dashboard/advance/request', icon: PlusCircle },
+      { label: 'Advance Status', href: '/dashboard/advance/status', icon: Clock },
+      { label: 'Advance History', href: '/dashboard/advance/history', icon: History },
+    ].filter((item) => canAccessHref(permUser, item.href))
+    if (children.length) {
+      const index = finalNav.findIndex((item) => item.label === 'Expenses')
+      finalNav.splice(index >= 0 ? index + 1 : Math.max(0, finalNav.length - 1), 0, { label: 'Advance', icon: CreditCard, children })
+    }
+  }
   finalNav = ensureEmployeeVerificationNav(finalNav, user?.role || permUser?.role)
 
   finalNav = ensureExpenseApprovalNav(

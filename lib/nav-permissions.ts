@@ -72,6 +72,9 @@ export const HREF_PERMISSION_MAP: Record<string, string> = {
   '/dashboard/payments/approved-payments': 'payments.approved.page.view',
   '/dashboard/payments/hold-payments': 'payments.hold.page.view',
   '/dashboard/expenses/pending': 'expenses.pending.page.view',
+  '/dashboard/advance/request': 'advance.request.page.view',
+  '/dashboard/advance/status': 'advance.status.page.view',
+  '/dashboard/advance/history': 'advance.history.page.view',
   '/dashboard/expenses/finance-pending': 'expenses.finance_pending.page.view',
   '/dashboard/expenses/create': 'expenses.create.page.view',
   '/dashboard/expenses/my': 'expenses.my.page.view',
@@ -143,6 +146,7 @@ export function permissionForPath(pathname: string): string | null {
 }
 
 export const MODULE_LABELS: Record<string, string> = {
+  advance: 'Advance',
   dashboard: 'Dashboard',
   clients: 'Clients',
   leads: 'Leads',

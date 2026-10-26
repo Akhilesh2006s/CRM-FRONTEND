@@ -3,6 +3,9 @@
  */
 
 export type CrmUser = {
+  permissions?: string[];
+  isSuperAdmin?: boolean;
+  rbacEnabled?: boolean;
   role?: string;
   roles?: string[];
 };

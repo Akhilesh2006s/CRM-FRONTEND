@@ -4,6 +4,7 @@ import type { Ionicons } from '@expo/vector-icons';
 export type IonName = ComponentProps<typeof Ionicons>['name'];
 
 export const SECTION_ICONS: Record<string, IonName> = {
+  Advance: 'cash-outline',
   Leads: 'people-outline',
   'Clients & DC': 'business-outline',
   Clients: 'business-outline',
@@ -26,6 +27,9 @@ export const SECTION_ICONS: Record<string, IonName> = {
 
 /** Per stack screen — premium Ionicons + brand accent */
 export const SCREEN_ICONS: Record<string, { name: IonName; color: string }> = {
+  AdvanceRequest: { name: 'cash-outline', color: '#2563EB' },
+  AdvanceStatus: { name: 'time-outline', color: '#D97706' },
+  AdvanceHistory: { name: 'receipt-outline', color: '#059669' },
   LeadsList: { name: 'list-outline', color: '#2563EB' },
   LeadAdd: { name: 'person-add-outline', color: '#16A34A' },
   LeadAddNewSchool: { name: 'school-outline', color: '#2563EB' },

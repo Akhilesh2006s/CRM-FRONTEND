@@ -28,6 +28,7 @@ export const RBAC_MODULE_ORDER = [
   'returns',
   'payments',
   'expenses',
+  'advance',
   'reports',
   'products',
   'vendor',
@@ -42,6 +43,13 @@ export const RBAC_MODULE_ORDER = [
  * All RBAC pages grouped by module. Keep in sync with backend/constants/permissionsCatalog.js PAGE_ENTRIES.
  */
 export const RBAC_NAV_MODULES: RbacNavModule[] = [
+  {
+    module: 'advance', label: 'Advance', pages: [
+      { label: 'Request Advance', href: '/dashboard/advance/request' },
+      { label: 'Advance Status', href: '/dashboard/advance/status' },
+      { label: 'Advance History', href: '/dashboard/advance/history' },
+    ],
+  },
   {
     module: 'dashboard',
     label: MODULE_LABELS.dashboard,
