@@ -6,7 +6,7 @@ import ScreenShell from '../../ui/ScreenShell';
 import { WebButton, WebInput, WebLabel, WebSelect } from '../../ui/WebPrimitives';
 import { useAuth } from '../../context/AuthContext';
 import { apiService } from '../../services/api';
-import { Advance, AdvancePerson, AdvanceHistory, advanceDate, advanceMoney, advanceApprovalLabel, advanceRequestApprovalDescription } from '../../lib/advance';
+import { Advance, AdvancePerson, AdvanceHistory, advanceDate, advanceMoney, advanceApprovalLabel, advanceRequestApprovalDescription, advanceCurrentAmount, advanceAmountLabel } from '../../lib/advance';
 
 const message = (error: any) => error?.response?.data?.message || error?.message || 'Unable to load advances.';
 const day = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -46,7 +46,7 @@ export function AdvanceRequestScreen({ navigation }: any) {
 
 function RequestCard({ advance, onPress }: { advance: Advance; onPress: () => void }) {
   return <TouchableOpacity style={styles.card} onPress={onPress} accessibilityRole="button">
-    <Text style={styles.heading}>{advance.employeeId?.name || 'Employee'} · {advanceMoney(advance.amount)}</Text>
+    <Text style={styles.heading}>{advance.employeeId?.name || 'Employee'} · {advanceAmountLabel(advance)}</Text>
     <Text>{advance.advanceType}</Text><Text style={styles.muted}>{advanceDate(advance.date)}</Text><Text numberOfLines={2}>{advance.reason}</Text>
     <Text style={advance.status === 'Rejected' ? styles.negative : advance.status === 'Approved' ? styles.positive : styles.pending}>{advance.status}{advance.status === 'Pending' ? ` · Pending with ${advance.pendingWith.join(', ')}` : ''}</Text>
     <Text style={styles.muted}>{advance.canDecide ? 'Review request →' : 'View details →'}</Text>
@@ -62,6 +62,10 @@ function RequestDetails({ advance, onClose, onUpdated }: { advance: Advance; onC
   const [search, setSearch] = useState('');
   const [ids, setIds] = useState(advance.approvals.filter((a) => a.stage === 'tagged').map((a) => a.approverId?._id || '').filter(Boolean));
   const [remarks, setRemarks] = useState('');
+  const [amount, setAmount] = useState(String(advanceCurrentAmount(advance)));
+  const amountValue = Number(amount);
+  const amountValid = /^\d+(\.\d{1,2})?$/.test(amount.trim()) && amountValue > 0;
+  const amountChanged = amountValid && Math.abs(amountValue - advanceCurrentAmount(advance)) > 0.001;
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const saved = advance.approvals.filter((a) => a.stage === 'tagged').map((a) => a.approverId?._id || '').filter(Boolean);
@@ -74,21 +78,25 @@ function RequestDetails({ advance, onClose, onUpdated }: { advance: Advance; onC
   }, [advance.canTagApprovers]);
   const mutate = async (path: string, payload: object) => {
     setBusy(true); setError('');
-    try { onUpdated(await apiService.put(`/advances/${advance._id}/${path}`, { ...payload, version: advance.__v })); setRemarks(''); }
+    try {
+      const updated: Advance = await apiService.put(`/advances/${advance._id}/${path}`, { ...payload, version: advance.__v });
+      onUpdated(updated); setRemarks(''); setAmount(String(advanceCurrentAmount(updated)));
+    }
     catch (err) { setError(message(err)); }
     finally { setBusy(false); }
   };
   return <Modal visible animationType="slide" onRequestClose={() => { if (!busy) onClose(); }}>
     <ScrollView contentContainerStyle={styles.modal}>
       <WebButton title="Close" variant="outline" onPress={onClose} disabled={busy} />
-      <Text style={styles.heading}>{advance.employeeId?.name} · {advanceMoney(advance.amount)}</Text>
+      <Text style={styles.heading}>{advance.employeeId?.name} · {advanceAmountLabel(advance)}</Text>
+      <Text>Requested: {advanceMoney(advance.amount)}{advance.approvedAmount != null ? ` · ${advance.status === 'Approved' ? 'Approved' : 'Approved so far'}: ${advanceMoney(advance.approvedAmount)}` : ''}</Text>
       <Text>{advance.advanceType} · {advanceDate(advance.date)}</Text>
       <Text style={styles.heading}>{advance.status}{advance.status === 'Pending' ? ` with ${advance.pendingWith.join(', ')}` : ''}</Text>
       <Text>Reason: {advance.reason}</Text><Text>Schedule: {advance.scheduleDetails || '—'}</Text><Text>Remark: {advance.remark}</Text>
       {advance.advanceType === types[1] && <Text style={styles.muted}>Incentive: excluded from expense deductions and balance adjustments.</Text>}
       <Text style={styles.heading}>Approval History</Text>
       {advance.approvals.map((a, i) => <View key={i} style={styles.card}><Text>{advanceApprovalLabel(a)} · {advance.status === 'Rejected' && a.status === 'Pending' ? 'Not required — request rejected' : a.status}</Text>
-        {a.decidedBy && <Text style={styles.muted}>{a.decidedBy.name} {a.decidedAt ? `· ${advanceDate(a.decidedAt)}` : ''}</Text>}{!!a.remarks && <Text>{a.remarks}</Text>}</View>)}
+        {a.decidedBy && <Text style={styles.muted}>{a.decidedBy.name} {a.decidedAt ? `· ${advanceDate(a.decidedAt)}` : ''}{a.status === 'Approved' && a.amount != null ? ` · Approved ${advanceMoney(a.amount)}` : ''}</Text>}{!!a.remarks && <Text>{a.remarks}</Text>}</View>)}
       <ErrorText error={error} />
       {advance.canTagApprovers && canReview && <View style={styles.card}><Text style={styles.heading}>Tag Employees for Approval</Text><Text style={styles.muted}>Optional. Every tagged employee must approve before Finance. Save before approving.</Text>
         <WebInput placeholder="Search employees…" value={search} onChangeText={setSearch} />
@@ -97,8 +105,17 @@ function RequestDetails({ advance, onClose, onUpdated }: { advance: Advance; onC
           <Text>{ids.includes(p._id) ? '☑' : '☐'} {p.name} · {p.role}</Text></TouchableOpacity>)}</ScrollView>
         <WebButton title={`Save Approvers (${ids.length})`} variant="outline" disabled={busy || !ready || !dirty} onPress={() => mutate('approvers', { approverIds: ids })} />
       </View>}
-      {advance.canDecide && canReview && <View style={styles.card}><WebLabel>Approval Remarks / Rejection Reason</WebLabel><WebInput multiline maxLength={2000} value={remarks} onChangeText={setRemarks} placeholder="Required when rejecting" />
-        <WebButton title="Approve" disabled={busy || dirty} onPress={() => mutate('decision', { decision: 'Approved', remarks })} />
+      {advance.canDecide && canReview && <View style={styles.card}>
+        {advance.canEditAmount && <View>
+          <WebLabel>Approved Amount (₹)</WebLabel>
+          <WebInput keyboardType="decimal-pad" value={amount} onChangeText={setAmount} editable={!busy} />
+          <Text style={styles.muted}>Requested {advanceMoney(advance.amount)}{advance.approvedAmount != null && Math.abs(advance.approvedAmount - advance.amount) > 0.001 ? ` · previous approver set ${advanceMoney(advance.approvedAmount)}` : ''}. Change it if needed; a remark is then required.</Text>
+          {!amountValid && <Text style={styles.negative}>Enter an amount greater than 0 with at most two decimals.</Text>}
+        </View>}
+        <WebLabel>{amountChanged ? 'Remark (required: amount changed)' : 'Approval Remarks / Rejection Reason'}</WebLabel>
+        <WebInput multiline maxLength={2000} value={remarks} onChangeText={setRemarks} placeholder={amountChanged ? 'Why the amount was changed' : 'Optional when approving; required when rejecting'} />
+        <WebButton title={amountChanged ? `Approve ${advanceMoney(amountValue)}` : 'Approve'} disabled={busy || dirty || (!!advance.canEditAmount && (!amountValid || (amountChanged && !remarks.trim())))}
+          onPress={() => mutate('decision', { decision: 'Approved', remarks, ...(advance.canEditAmount ? { amount: amount.trim() } : {}) })} />
         <WebButton title="Reject" variant="destructive" disabled={busy || dirty || !remarks.trim()} onPress={() => mutate('decision', { decision: 'Rejected', remarks })} />
       </View>}
     </ScrollView>

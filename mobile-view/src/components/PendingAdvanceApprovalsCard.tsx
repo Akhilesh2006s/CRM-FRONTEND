@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { apiService } from '../services/api';
 import { navigateRoot } from '../navigation/navigationRef';
-import { Advance, advanceMoney } from '../lib/advance';
+import { Advance, advanceCurrentAmount, advanceMoney } from '../lib/advance';
 
 const NON_EMPLOYEE_ROLES = ['Vendor', 'Partner', 'Franchise'];
 
@@ -25,14 +25,14 @@ export default function PendingAdvanceApprovalsCard() {
   }, [allowed]));
 
   if (!allowed || waiting.length === 0) return null;
-  const total = waiting.reduce((sum, row) => sum + row.amount, 0);
+  const total = waiting.reduce((sum, row) => sum + advanceCurrentAmount(row), 0);
   return (
     <View style={styles.card}>
       <Text style={styles.title}>
         {waiting.length} advance request{waiting.length === 1 ? ' is' : 's are'} waiting for your approval
       </Text>
       <Text style={styles.body}>
-        {waiting.slice(0, 3).map((row) => `${row.employeeId?.name || 'Employee'} (${advanceMoney(row.amount)})`).join(', ')}
+        {waiting.slice(0, 3).map((row) => `${row.employeeId?.name || 'Employee'} (${advanceMoney(advanceCurrentAmount(row))})`).join(', ')}
         {waiting.length > 3 ? ` and ${waiting.length - 3} more` : ''} · Total {advanceMoney(total)}
       </Text>
       <TouchableOpacity style={styles.button} onPress={() => navigateRoot('AdvanceApprovals')}>

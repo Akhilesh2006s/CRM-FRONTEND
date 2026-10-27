@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { apiRequest } from '@/lib/api'
-import { Advance, advanceDate, advanceMoney } from '@/lib/advance'
+import { Advance, advanceAmountLabel, advanceDate } from '@/lib/advance'
 import { AdvanceDetails, AdvanceStatusBadge } from '@/components/advances/AdvanceDetails'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -54,7 +54,7 @@ export default function AdvanceApprovalsPage() {
       <tbody>{loading ? <tr><td colSpan={6} className="p-8 text-center text-neutral-500">Loading requests…</td></tr> : visible.length === 0 ? <tr><td colSpan={6} className="p-8 text-center text-neutral-500">No advance requests here.</td></tr> : visible.map((row) => <tr key={row._id} className={`border-b last:border-0 ${row.canDecide ? 'bg-amber-50/50' : ''}`}>
         <td className="p-4">{row.employeeId?.name || 'Employee'}<div className="text-xs text-neutral-500">{row.employeeId?.empCode}</div></td>
         <td className="max-w-sm p-4"><div className="font-medium">{row.advanceType}</div><p className="mt-1 line-clamp-2 break-words text-neutral-500">{row.reason}</p></td>
-        <td className="whitespace-nowrap p-4">{advanceDate(row.date)}</td><td className="whitespace-nowrap p-4 font-medium">{advanceMoney(row.amount)}</td>
+        <td className="whitespace-nowrap p-4">{advanceDate(row.date)}</td><td className="whitespace-nowrap p-4 font-medium">{advanceAmountLabel(row)}</td>
         <td className="p-4"><AdvanceStatusBadge advance={row} />{row.canDecide && <p className="mt-1 text-xs font-medium text-amber-700">Awaiting your approval</p>}</td>
         <td className="p-4"><Button variant={row.canDecide ? 'default' : 'outline'} onClick={() => setSelected(row)}>{row.canDecide ? 'Review' : 'Details'}</Button></td>
       </tr>)}</tbody>

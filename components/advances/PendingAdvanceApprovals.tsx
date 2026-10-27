@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { apiRequest } from '@/lib/api'
-import { Advance, advanceMoney } from '@/lib/advance'
+import { Advance, advanceCurrentAmount, advanceMoney } from '@/lib/advance'
 import { usePermissions } from '@/components/permissions/PermissionsProvider'
 
 /** Dashboard homes where approvers land after login. */
@@ -28,14 +28,14 @@ export function PendingAdvanceApprovals() {
   }, [show])
 
   if (!show || waiting.length === 0) return null
-  const total = waiting.reduce((sum, row) => sum + row.amount, 0)
+  const total = waiting.reduce((sum, row) => sum + advanceCurrentAmount(row), 0)
   return <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
     <div>
       <p className="font-semibold text-amber-900">
         {waiting.length} advance request{waiting.length === 1 ? ' is' : 's are'} waiting for your approval
       </p>
       <p className="text-sm text-amber-800">
-        {waiting.slice(0, 3).map((row) => `${row.employeeId?.name || 'Employee'} (${advanceMoney(row.amount)})`).join(', ')}
+        {waiting.slice(0, 3).map((row) => `${row.employeeId?.name || 'Employee'} (${advanceMoney(advanceCurrentAmount(row))})`).join(', ')}
         {waiting.length > 3 ? ` and ${waiting.length - 3} more` : ''} · Total {advanceMoney(total)}
       </p>
     </div>

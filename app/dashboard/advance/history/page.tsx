@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiRequest } from '@/lib/api'
-import { AdvanceHistory, AdvancePerson, Advance, advanceMoney, advanceDate } from '@/lib/advance'
+import { AdvanceHistory, AdvancePerson, Advance, advanceMoney, advanceDate, advanceAmountLabel } from '@/lib/advance'
 import { usePermissions } from '@/components/permissions/PermissionsProvider'
 import { AdvanceDetails, AdvanceStatusBadge } from '@/components/advances/AdvanceDetails'
 import { Card } from '@/components/ui/card'
@@ -65,7 +65,7 @@ export default function AdvanceHistoryPage() {
         </tr>)}</tbody></table></Card>
       <h3 className="text-lg font-medium">All Advance Requests</h3>
       <Card className="divide-y">{history.requests.length === 0 ? <p className="p-6 text-center text-sm text-neutral-500">No advance requests yet.</p> : history.requests.map((request) => <div key={request._id} className="flex flex-wrap items-center justify-between gap-4 p-4 text-sm">
-        <div><p className="font-medium">{request.advanceType} · {advanceMoney(request.amount)}</p><p className="text-neutral-500">{advanceDate(request.date)}</p></div><AdvanceStatusBadge advance={request} /><Button variant="outline" onClick={() => setSelected(request)}>Details</Button>
+        <div><p className="font-medium">{request.advanceType} · {advanceAmountLabel(request)}</p><p className="text-neutral-500">{advanceDate(request.date)}</p></div><AdvanceStatusBadge advance={request} /><Button variant="outline" onClick={() => setSelected(request)}>Details</Button>
       </div>)}</Card>
     </>}
     {selected && <AdvanceDetails key={selected._id} advance={selected} onClose={() => setSelected(null)} onUpdated={(updated) => { setSelected(updated); setRefresh((n) => n + 1) }} />}
