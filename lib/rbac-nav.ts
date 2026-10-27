@@ -48,6 +48,7 @@ export const RBAC_NAV_MODULES: RbacNavModule[] = [
       { label: 'Request Advance', href: '/dashboard/advance/request' },
       { label: 'Advance Status', href: '/dashboard/advance/status' },
       { label: 'Advance History', href: '/dashboard/advance/history' },
+      { label: 'Advance Approvals', href: '/dashboard/advance/approvals' },
     ],
   },
   {

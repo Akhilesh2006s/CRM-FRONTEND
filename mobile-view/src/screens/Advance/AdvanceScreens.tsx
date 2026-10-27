@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform, Modal, ScrollView } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useFocusEffect, useRoute } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebButton, WebInput, WebLabel, WebSelect } from '../../ui/WebPrimitives';
 import { useAuth } from '../../context/AuthContext';
@@ -55,7 +55,8 @@ function RequestCard({ advance, onPress }: { advance: Advance; onPress: () => vo
 
 function RequestDetails({ advance, onClose, onUpdated }: { advance: Advance; onClose: () => void; onUpdated: (advance: Advance) => void }) {
   const { user } = useAuth();
-  const canReview = user?.isSuperAdmin || user?.role === 'Super Admin' || user?.rbacEnabled === false || user?.permissions?.includes('advance.status.page.view');
+  const canReview = user?.isSuperAdmin || user?.role === 'Super Admin' || user?.rbacEnabled === false
+    || user?.permissions?.includes('advance.status.page.view') || user?.permissions?.includes('advance.approvals.page.view');
   const [people, setPeople] = useState<AdvancePerson[]>([]);
   const [ready, setReady] = useState(false);
   const [search, setSearch] = useState('');
@@ -104,31 +105,65 @@ function RequestDetails({ advance, onClose, onUpdated }: { advance: Advance; onC
   </Modal>;
 }
 
+/** The employee's own requests. Requests they approve for others are on Advance Approvals. */
 export function AdvanceStatusScreen() {
-  const { user } = useAuth();
-  // The dashboard "waiting for your approval" card opens this with { scope: 'review' }.
-  const reviewOnly = (useRoute().params as { scope?: string } | undefined)?.scope === 'review';
   const [rows, setRows] = useState<Advance[]>([]);
   const [selected, setSelected] = useState<Advance | null>(null);
-  const [status, setStatus] = useState(reviewOnly ? 'Pending' : 'all');
-  const [scope, setScope] = useState(reviewOnly ? 'review' : 'all');
+  const [status, setStatus] = useState('all');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const load = useCallback(async () => {
     setLoading(true); setError('');
-    try { setRows(await apiService.get('/advances')); }
+    try { setRows(await apiService.get('/advances?mine=true')); }
     catch (err) { setError(message(err)); }
     finally { setLoading(false); }
   }, []);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
-  const visible = rows.filter((r) => (status === 'all' || status === r.status) && (scope === 'all' || (scope === 'mine' ? r.employeeId?._id === user?._id : r.canDecide)) && `${r.reason} ${r.employeeId?.name || ''} ${r.advanceType}`.toLowerCase().includes(search.toLowerCase()));
+  const visible = rows.filter((r) => (status === 'all' || status === r.status) && `${r.reason} ${r.advanceType}`.toLowerCase().includes(search.toLowerCase()));
   return <ScreenShell title="Advance Status" refreshing={loading} onRefresh={load}>
     <ErrorText error={error} />
-    <WebInput placeholder="Search employee, type, or reason…" value={search} onChangeText={setSearch} />
+    <WebInput placeholder="Search type or reason…" value={search} onChangeText={setSearch} />
     <WebSelect label="Status" value={status} onValueChange={setStatus} items={['all', 'Pending', 'Approved', 'Rejected'].map((value) => ({ value, label: value === 'all' ? 'All statuses' : value }))} />
-    <WebSelect label="Requests" value={scope} onValueChange={setScope} items={[{ value: 'all', label: 'All visible requests' }, { value: 'mine', label: 'My requests' }, { value: 'review', label: 'Awaiting my approval' }]} />
     {loading ? <Text>Loading requests…</Text> : !visible.length ? <Text style={styles.muted}>No advance requests found.</Text> : visible.map((r) => <RequestCard key={r._id} advance={r} onPress={() => setSelected(r)} />)}
+    {selected && <RequestDetails key={selected._id} advance={selected} onClose={() => setSelected(null)} onUpdated={(r) => { setSelected(r); setRows((old) => old.map((a) => a._id === r._id ? r : a)); }} />}
+  </ScreenShell>;
+}
+
+type ApprovalTab = 'all' | 'Pending' | 'Rejected';
+const APPROVAL_TABS: [ApprovalTab, string][] = [['all', 'All'], ['Pending', 'Pending'], ['Rejected', 'Rejected']];
+
+/** Other employees' advance requests this user reviews (Admin, Super Admin, Finance, Zonal Manager, Product Head). */
+export function AdvanceApprovalsScreen() {
+  const [rows, setRows] = useState<Advance[]>([]);
+  const [selected, setSelected] = useState<Advance | null>(null);
+  const [tab, setTab] = useState<ApprovalTab>('Pending');
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    setLoading(true); setError('');
+    try { setRows(await apiService.get('/advances/approvals')); }
+    catch (err) { setError(message(err)); }
+    finally { setLoading(false); }
+  }, []);
+  useFocusEffect(useCallback(() => { void load(); }, [load]));
+  const count = (t: ApprovalTab) => rows.filter((r) => t === 'all' || r.status === t).length;
+  const awaitingMe = rows.filter((r) => r.canDecide).length;
+  // Requests waiting on this user come first in every tab.
+  const visible = rows
+    .filter((r) => (tab === 'all' || r.status === tab) && `${r.reason} ${r.employeeId?.name || ''} ${r.employeeId?.empCode || ''} ${r.advanceType}`.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => Number(b.canDecide) - Number(a.canDecide));
+  return <ScreenShell title="Advance Approvals" refreshing={loading} onRefresh={load}>
+    <ErrorText error={error} />
+    <Text style={styles.muted}>Advance requests from other employees that you review. Your own requests are under Advance Status.{awaitingMe ? ` ${awaitingMe} waiting for your approval.` : ''}</Text>
+    <View style={styles.tabRow}>
+      {APPROVAL_TABS.map(([key, label]) => <TouchableOpacity key={key} style={[styles.tab, tab === key && styles.tabOn]} onPress={() => setTab(key)} accessibilityRole="tab" accessibilityState={{ selected: tab === key }}>
+        <Text style={[styles.tabText, tab === key && styles.tabTextOn]}>{label} ({count(key)})</Text>
+      </TouchableOpacity>)}
+    </View>
+    <WebInput placeholder="Search employee, type, or reason…" value={search} onChangeText={setSearch} />
+    {loading ? <Text>Loading requests…</Text> : !visible.length ? <Text style={styles.muted}>No advance requests here.</Text> : visible.map((r) => <RequestCard key={r._id} advance={r} onPress={() => setSelected(r)} />)}
     {selected && <RequestDetails key={selected._id} advance={selected} onClose={() => setSelected(null)} onUpdated={(r) => { setSelected(r); setRows((old) => old.map((a) => a._id === r._id ? r : a)); }} />}
   </ScreenShell>;
 }
@@ -192,4 +227,9 @@ const styles = StyleSheet.create({
   textarea: { minHeight: 80, textAlignVertical: 'top' },
   modal: { padding: 22, paddingTop: 55, paddingBottom: 45, gap: 14 },
   person: { paddingVertical: 10 },
+  tabRow: { flexDirection: 'row', gap: 6, marginVertical: 8 },
+  tab: { flex: 1, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#D4D4D4', backgroundColor: '#FFFFFF', alignItems: 'center' },
+  tabOn: { backgroundColor: '#171717', borderColor: '#171717' },
+  tabText: { fontSize: 13, color: '#404040', fontWeight: '500' },
+  tabTextOn: { color: '#FFFFFF', fontWeight: '600' },
 });

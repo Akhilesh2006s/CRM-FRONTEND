@@ -20,7 +20,7 @@ export function AdvanceStatusBadge({ advance }: { advance: Advance }) {
 
 export function AdvanceDetails({ advance, onClose, onUpdated }: { advance: Advance; onClose: () => void; onUpdated: (advance: Advance) => void }) {
   const { hasPermission } = usePermissions()
-  const canReview = hasPermission('advance.status.page.view')
+  const canReview = hasPermission('advance.status.page.view') || hasPermission('advance.approvals.page.view')
   const [people, setPeople] = useState<AdvancePerson[]>([])
   const [ids, setIds] = useState<string[]>(advance.approvals.filter((a) => a.stage === 'tagged').map((a) => a.approverId?._id || '').filter(Boolean))
   const [search, setSearch] = useState('')

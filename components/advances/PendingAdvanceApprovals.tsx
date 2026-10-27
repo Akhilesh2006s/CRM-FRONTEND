@@ -16,12 +16,12 @@ export function PendingAdvanceApprovals() {
   const { user, permissionsReady, hasPermission } = usePermissions()
   const [waiting, setWaiting] = useState<Advance[]>([])
   const show = DASHBOARD_HOMES.has(pathname || '') && permissionsReady && !!user
-    && !['Vendor', 'Partner', 'Franchise'].includes(user.role || '') && hasPermission('advance.status.page.view')
+    && !['Vendor', 'Partner', 'Franchise'].includes(user.role || '') && hasPermission('advance.approvals.page.view')
 
   useEffect(() => {
     if (!show) return
     let active = true
-    apiRequest<Advance[]>('/advances?status=Pending')
+    apiRequest<Advance[]>('/advances/approvals?status=Pending')
       .then((rows) => { if (active) setWaiting(rows.filter((row) => row.canDecide)) })
       .catch(() => { if (active) setWaiting([]) })
     return () => { active = false }
@@ -39,7 +39,7 @@ export function PendingAdvanceApprovals() {
         {waiting.length > 3 ? ` and ${waiting.length - 3} more` : ''} · Total {advanceMoney(total)}
       </p>
     </div>
-    <Link href="/dashboard/advance/status?scope=review" className="rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700">
+    <Link href="/dashboard/advance/approvals" className="rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700">
       Review advances
     </Link>
   </div>

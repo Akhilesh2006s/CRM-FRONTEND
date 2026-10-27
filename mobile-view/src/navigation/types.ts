@@ -1,7 +1,8 @@
 export type RootStackParamList = {
   AdvanceRequest: undefined;
-  AdvanceStatus: { scope?: 'review' } | undefined;
+  AdvanceStatus: undefined;
   AdvanceHistory: undefined;
+  AdvanceApprovals: undefined;
   Login: undefined;
   FirstTimeAttendance: undefined;
   Dashboard: undefined;

@@ -8,17 +8,17 @@ import { Advance, advanceMoney } from '../lib/advance';
 
 const NON_EMPLOYEE_ROLES = ['Vendor', 'Partner', 'Franchise'];
 
-/** Dashboard card: "N advance requests are waiting for your approval" → Advance Status (Awaiting my approval). */
+/** Dashboard card: "N advance requests are waiting for your approval" → Advance Approvals. */
 export default function PendingAdvanceApprovalsCard() {
   const { user } = useAuth();
   const [waiting, setWaiting] = useState<Advance[]>([]);
   const allowed = !!user && !NON_EMPLOYEE_ROLES.includes(user.role || '') && (user.isSuperAdmin
-    || user.role === 'Super Admin' || !!user.permissions?.includes('advance.status.page.view'));
+    || user.role === 'Super Admin' || !!user.permissions?.includes('advance.approvals.page.view'));
 
   useFocusEffect(useCallback(() => {
     if (!allowed) return undefined;
     let active = true;
-    apiService.get('/advances?status=Pending')
+    apiService.get('/advances/approvals?status=Pending')
       .then((rows: Advance[]) => { if (active) setWaiting(rows.filter((row) => row.canDecide)); })
       .catch(() => { if (active) setWaiting([]); });
     return () => { active = false; };
@@ -35,7 +35,7 @@ export default function PendingAdvanceApprovalsCard() {
         {waiting.slice(0, 3).map((row) => `${row.employeeId?.name || 'Employee'} (${advanceMoney(row.amount)})`).join(', ')}
         {waiting.length > 3 ? ` and ${waiting.length - 3} more` : ''} · Total {advanceMoney(total)}
       </Text>
-      <TouchableOpacity style={styles.button} onPress={() => navigateRoot('AdvanceStatus', { scope: 'review' })}>
+      <TouchableOpacity style={styles.button} onPress={() => navigateRoot('AdvanceApprovals')}>
         <Text style={styles.buttonText}>Review advances</Text>
       </TouchableOpacity>
     </View>

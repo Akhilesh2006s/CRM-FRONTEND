@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { usePermissions } from '@/components/permissions/PermissionsProvider'
 import { canAccessHref } from '@/lib/access'
 
-const pages = [['request', 'Request Advance'], ['status', 'Advance Status'], ['history', 'Advance History']]
+const pages = [['request', 'Request Advance'], ['status', 'Advance Status'], ['history', 'Advance History'], ['approvals', 'Advance Approvals']]
 
 export default function AdvanceLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()

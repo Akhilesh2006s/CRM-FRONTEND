@@ -713,8 +713,9 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
     { label: 'Request Advance', screen: 'AdvanceRequest' },
     { label: 'Advance Status', screen: 'AdvanceStatus' },
     { label: 'Advance History', screen: 'AdvanceHistory' },
+    { label: 'Advance Approvals', screen: 'AdvanceApprovals' },
   ];
-  const advanceKeys = ['advance.request.page.view', 'advance.status.page.view', 'advance.history.page.view'];
+  const advanceKeys = ['advance.request.page.view', 'advance.status.page.view', 'advance.history.page.view', 'advance.approvals.page.view'];
   const permittedAdvanceLinks = advanceLinks.filter((_, index) => user?.isSuperAdmin || role === 'Super Admin'
     || user?.rbacEnabled === false || user?.permissions?.includes(advanceKeys[index]));
   if (permittedAdvanceLinks.length) sections.push({ title: 'Advance', icon: '💳', items: permittedAdvanceLinks });

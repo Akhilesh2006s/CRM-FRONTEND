@@ -1429,6 +1429,7 @@ export function Sidebar() {
       { label: 'Request Advance', href: '/dashboard/advance/request', icon: PlusCircle },
       { label: 'Advance Status', href: '/dashboard/advance/status', icon: Clock },
       { label: 'Advance History', href: '/dashboard/advance/history', icon: History },
+      { label: 'Advance Approvals', href: '/dashboard/advance/approvals', icon: CheckCircle2 },
     ].filter((item) => canAccessHref(permUser, item.href))
     if (children.length) {
       const index = finalNav.findIndex((item) => item.label === 'Expenses')

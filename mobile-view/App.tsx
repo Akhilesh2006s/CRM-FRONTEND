@@ -23,7 +23,7 @@ import DCCompletedScreen from './src/screens/DC/DCCompletedScreen';
 import PaymentListScreen from './src/screens/Payments/PaymentListScreen';
 import ExpenseListScreen from './src/screens/Expenses/ExpenseListScreen';
 import ExpenseCreateScreen from './src/screens/Expenses/ExpenseCreateScreen';
-import { AdvanceRequestScreen, AdvanceStatusScreen, AdvanceHistoryScreen } from './src/screens/Advance/AdvanceScreens';
+import { AdvanceRequestScreen, AdvanceStatusScreen, AdvanceHistoryScreen, AdvanceApprovalsScreen } from './src/screens/Advance/AdvanceScreens';
 import ExpenseEditScreen from './src/screens/Expenses/ExpenseEditScreen';
 import ExpensePendingScreen from './src/screens/Expenses/ExpensePendingScreen';
 import ExpenseFinancePendingScreen from './src/screens/Expenses/ExpenseFinancePendingScreen';
@@ -373,6 +373,7 @@ function AuthenticatedStack() {
         <Stack.Screen name="AdvanceRequest" component={AdvanceRequestScreen} />
         <Stack.Screen name="AdvanceStatus" component={AdvanceStatusScreen} />
         <Stack.Screen name="AdvanceHistory" component={AdvanceHistoryScreen} />
+        <Stack.Screen name="AdvanceApprovals" component={AdvanceApprovalsScreen} />
         <Stack.Screen name="ExpenseList" component={ExpenseListScreen} />
         <Stack.Screen name="ExpenseCreate" component={ExpenseCreateScreen} />
         <Stack.Screen name="ExpenseEdit" component={ExpenseEditScreen} />
