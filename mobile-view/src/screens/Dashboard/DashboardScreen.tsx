@@ -11,6 +11,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import AttendanceCard from '../../components/AttendanceCard';
 import TripCard from '../../components/TripCard';
+import PendingAdvanceApprovalsCard from '../../components/PendingAdvanceApprovalsCard';
 import { Ionicons } from '@expo/vector-icons';
 import StatCard from '../../components/dashboard/StatCard';
 import SimpleBarChart from '../../components/dashboard/SimpleBarChart';
@@ -233,6 +234,7 @@ export default function DashboardScreen({ navigation }: { navigation?: any }) {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           showsVerticalScrollIndicator={false}
         >
+          <PendingAdvanceApprovalsCard />
           {showAttendance ? (
             <View style={styles.block}>
               <AttendanceCard />

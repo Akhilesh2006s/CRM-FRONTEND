@@ -1,6 +1,6 @@
 export type RootStackParamList = {
   AdvanceRequest: undefined;
-  AdvanceStatus: undefined;
+  AdvanceStatus: { scope?: 'review' } | undefined;
   AdvanceHistory: undefined;
   Login: undefined;
   FirstTimeAttendance: undefined;

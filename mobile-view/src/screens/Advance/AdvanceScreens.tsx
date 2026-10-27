@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform, Modal, ScrollView } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useRoute } from '@react-navigation/native';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebButton, WebInput, WebLabel, WebSelect } from '../../ui/WebPrimitives';
 import { useAuth } from '../../context/AuthContext';
@@ -106,10 +106,12 @@ function RequestDetails({ advance, onClose, onUpdated }: { advance: Advance; onC
 
 export function AdvanceStatusScreen() {
   const { user } = useAuth();
+  // The dashboard "waiting for your approval" card opens this with { scope: 'review' }.
+  const reviewOnly = (useRoute().params as { scope?: string } | undefined)?.scope === 'review';
   const [rows, setRows] = useState<Advance[]>([]);
   const [selected, setSelected] = useState<Advance | null>(null);
-  const [status, setStatus] = useState('all');
-  const [scope, setScope] = useState('all');
+  const [status, setStatus] = useState(reviewOnly ? 'Pending' : 'all');
+  const [scope, setScope] = useState(reviewOnly ? 'review' : 'all');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');

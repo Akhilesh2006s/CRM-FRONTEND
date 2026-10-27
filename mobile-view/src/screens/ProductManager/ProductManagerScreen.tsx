@@ -4,6 +4,7 @@ import { apiService } from '../../services/api';
 import { colors } from '../../theme/colors';
 import ScreenShell from '../../ui/ScreenShell';
 import { useAuth } from '../../context/AuthContext';
+import PendingAdvanceApprovalsCard from '../../components/PendingAdvanceApprovalsCard';
 
 type Dashboard = {
   manager: { name: string };
@@ -56,6 +57,7 @@ export default function ProductManagerScreen({ embedded, managerId }: { embedded
     <Text style={styles.error}>{error}</Text>
   ) : !data ? null : (
     <ScrollView contentContainerStyle={styles.content}>
+      <PendingAdvanceApprovalsCard />
       <Text style={styles.title}>{data.manager?.name || 'Product Manager'}</Text>
       <Text style={styles.meta}>
         {(data.products || []).map((item) => item.name).join(', ') || 'No products assigned yet'}

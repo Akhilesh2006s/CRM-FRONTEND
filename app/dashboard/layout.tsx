@@ -8,6 +8,7 @@ import { RequireAuth } from "@/components/require-auth"
 import { SidebarProvider } from "@/contexts/SidebarContext"
 import { PermissionsProvider } from "@/components/permissions/PermissionsProvider"
 import { RouteGuard } from "@/components/permissions/RouteGuard"
+import { PendingAdvanceApprovals } from "@/components/advances/PendingAdvanceApprovals"
 
 function MainContent({ children }: { children: React.ReactNode }) {
   return (
@@ -17,7 +18,10 @@ function MainContent({ children }: { children: React.ReactNode }) {
     >
       <RequireAuth>
         <RouteGuard>
-          <div className="w-full min-w-0">{children}</div>
+          <div className="w-full min-w-0">
+            <PendingAdvanceApprovals />
+            {children}
+          </div>
         </RouteGuard>
       </RequireAuth>
     </main>

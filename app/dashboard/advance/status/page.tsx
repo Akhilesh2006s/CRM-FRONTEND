@@ -25,6 +25,11 @@ export default function AdvanceStatusPage() {
     finally { setLoading(false) }
   }, [])
   useEffect(() => { void load() }, [load])
+  // The dashboard "waiting for your approval" banner links here with ?scope=review.
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get('scope')
+    if (requested === 'review') { setScope('review'); setStatus('Pending') }
+  }, [])
   const visible = rows.filter((row) => (status === 'all' || row.status === status)
     && (scope === 'all' || (scope === 'mine' ? row.employeeId?._id === user?._id : row.canDecide))
     && `${row.employeeId?.name || ''} ${row.reason} ${row.advanceType}`.toLowerCase().includes(search.toLowerCase()))
