@@ -127,16 +127,18 @@ export function WebSelect({
           onValueChange={(v) => onValueChange(v == null ? '' : String(v))}
           enabled={!disabled}
           mode={Platform.OS === 'android' ? 'dropdown' : undefined}
-          style={{ width: '100%', height: pickerHeight }}
+          // Explicit colours: on a phone in dark mode Android otherwise draws the picked value
+          // white on this white box, and the options list dark.
+          style={{ width: '100%', height: pickerHeight, color: colors.textPrimary }}
           dropdownIconColor={colors.textSecondary}
           {...(Platform.OS === 'ios' ? { itemStyle: { height: pickerHeight, fontSize: 15 } } : {})}
         >
           {/* Keep placeholder only when nothing selected — empty + selected items cause large Android gaps */}
           {!value ? (
-            <Picker.Item label={placeholder || 'Select…'} value="" color={colors.textSecondary} />
+            <Picker.Item label={placeholder || 'Select…'} value="" color={colors.textSecondary} style={{ backgroundColor: '#FFFFFF' }} />
           ) : null}
           {safeItems.map((i) => (
-            <Picker.Item key={String(i.value)} label={String(i.label)} value={String(i.value)} />
+            <Picker.Item key={String(i.value)} label={String(i.label)} value={String(i.value)} color={colors.textPrimary} style={{ backgroundColor: '#FFFFFF' }} />
           ))}
         </Picker>
       </View>
