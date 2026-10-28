@@ -75,15 +75,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (mobile: string, password: string) => {
     try {
       console.log('Attempting login with mobile:', mobile);
-      let deviceId = await AsyncStorage.getItem('deviceId');
-      if (!deviceId) {
-        deviceId = `dev-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-        await AsyncStorage.setItem('deviceId', deviceId);
-      }
+      // Use the same credential-only login payload as the web app.
       const response = await apiService.post('/auth/login', {
         mobile,
         password,
-        deviceId,
       });
       const { token, ...userData } = response;
 
@@ -107,7 +102,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (error.response?.status === 403) {
-        throw new Error(error.response?.data?.message || 'Device not authorized. Contact admin to reset device.');
+        throw new Error(error.response?.data?.message || 'This account is not permitted to log in.');
       }
 
       if (error.response?.status === 401) {

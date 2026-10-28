@@ -6,19 +6,34 @@ export interface LocationData {
   longitude: number;
 }
 
-export const getCurrentLocation = async (): Promise<LocationData> => {
+export class LocationPermissionError extends Error {
+  constructor() {
+    super('Location permission is off. Allow location access for this app in your phone settings, then try again.');
+    this.name = 'LocationPermissionError';
+  }
+}
+
+export const getCurrentLocation = async (
+  { requestPermission = true }: { requestPermission?: boolean } = {},
+): Promise<LocationData> => {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
   try {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    
-    if (status !== 'granted') {
-      throw new Error('Location permission not granted');
+    let permission = await Location.getForegroundPermissionsAsync();
+    if (permission.status !== 'granted' && requestPermission && permission.canAskAgain) {
+      permission = await Location.requestForegroundPermissionsAsync();
+    }
+
+    if (permission.status !== 'granted') {
+      throw new LocationPermissionError();
     }
 
     // A GPS fix can stall indoors on some Android phones and never resolve, so give up after
     // 20 seconds and fall back to the phone's last known position.
     const location = await Promise.race([
       Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), 20000)),
+      new Promise<null>((resolve) => {
+        timeoutId = setTimeout(() => resolve(null), 20000);
+      }),
     ]) ?? await Location.getLastKnownPositionAsync();
 
     if (!location) {
@@ -30,8 +45,12 @@ export const getCurrentLocation = async (): Promise<LocationData> => {
       longitude: location.coords.longitude,
     };
   } catch (error) {
-    console.error('Error getting location:', error);
+    if (!(error instanceof LocationPermissionError)) {
+      console.error('Error getting location:', error);
+    }
     throw error;
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
   }
 };
 
