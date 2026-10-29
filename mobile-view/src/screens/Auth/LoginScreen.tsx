@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   Image,
   Modal,
   Alert,
+  ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,6 +26,9 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { login } = useAuth();
+  const scrollRef = useRef<ScrollView>(null);
+  // Keep the field being typed in above the keyboard.
+  const revealFields = () => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 250);
 
   const [forgotOpen, setForgotOpen] = useState(false);
   const [forgotStep, setForgotStep] = useState<'request' | 'reset'>('request');
@@ -104,18 +108,22 @@ export default function LoginScreen() {
     <View style={styles.container}>
       <View style={styles.overlay}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardView}
         >
-          <View style={styles.content}>
+          <ScrollView
+            ref={scrollRef}
+            contentContainerStyle={styles.content}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
             <View style={styles.logoContainer}>
               <Image
                 source={require('../../../assets/logo-login.png')}
                 style={styles.logoImage}
                 resizeMode="contain"
               />
-              <Text style={styles.title}>AMENITYFORGE</Text>
-              <Text style={styles.subtitle}>Building Digital Excellence</Text>
+              <Text style={styles.title}>Viswam Edutech</Text>
             </View>
 
             <View style={styles.card}>
@@ -143,6 +151,7 @@ export default function LoginScreen() {
                     keyboardType="phone-pad"
                     autoCapitalize="none"
                     autoComplete="username"
+                    onFocus={revealFields}
                     onSubmitEditing={handleLogin}
                   />
                 </View>
@@ -160,6 +169,7 @@ export default function LoginScreen() {
                     onChangeText={setPassword}
                     secureTextEntry
                     autoCapitalize="none"
+                    onFocus={revealFields}
                     onSubmitEditing={handleLogin}
                   />
                 </View>
@@ -199,7 +209,7 @@ export default function LoginScreen() {
                 </Pressable>
               </View>
             </View>
-          </View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </View>
 
@@ -282,7 +292,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'center',
     padding: 24,
   },

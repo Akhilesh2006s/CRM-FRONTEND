@@ -1,7 +1,7 @@
 /** @type {import('expo/config').ExpoConfig} */
 module.exports = ({ config }) => ({
   ...config,
-  name: 'AmenityForge',
+  name: 'Viswam Edutech',
   slug: 'crm-mobile-app',
   version: '1.0.0',
   orientation: 'portrait',
@@ -10,7 +10,7 @@ module.exports = ({ config }) => ({
   splash: {
     image: './assets/splash-icon.png',
     resizeMode: 'contain',
-    backgroundColor: '#000000',
+    backgroundColor: '#FFFFFF',
   },
   ios: {
     supportsTablet: true,
@@ -20,7 +20,7 @@ module.exports = ({ config }) => ({
   android: {
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
-      backgroundColor: '#000000',
+      backgroundColor: '#FFFFFF',
     },
     package: 'com.crm.forge.mobile',
     permissions: [
