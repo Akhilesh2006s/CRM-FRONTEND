@@ -25,6 +25,7 @@ import {
   type LeadProductStatus,
 } from '../../lib/crm/leadProductRules';
 
+import { ymdToDmy } from '../../utils/dateFormat';
 const SCHOOL_TYPE_OPTIONS = [
   { label: 'New', value: 'New' },
   { label: 'Existing', value: 'Existing' },
@@ -886,7 +887,7 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
               onPress={() => setShowFollowUpDatePicker(true)}
             >
               <Text style={[styles.dateText, !form.follow_up_date && styles.datePlaceholder]}>
-                {form.follow_up_date || 'Tap to pick date'}
+                {ymdToDmy(form.follow_up_date) || 'Tap to pick date'}
               </Text>
               <Text style={styles.calendarIcon}>📅</Text>
             </TouchableOpacity>

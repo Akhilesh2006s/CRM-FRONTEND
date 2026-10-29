@@ -185,14 +185,7 @@ export default function ApprovedPaymentsPage() {
                   <TableCell className="truncate max-w-[200px]">{r.location || '-'}</TableCell>
                   <TableCell className="whitespace-nowrap">
                     {r.paymentDate
-                      ? new Date(r.paymentDate).toLocaleString('en-GB', {
-                          year: 'numeric',
-                          month: '2-digit',
-                          day: '2-digit',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          second: '2-digit',
-                        })
+                      ? new Date(r.paymentDate).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })
                       : '-'}
                   </TableCell>
                   <TableCell className="whitespace-nowrap">{r.amount?.toFixed(2) || '0.00'}</TableCell>
@@ -202,14 +195,7 @@ export default function ApprovedPaymentsPage() {
                   <TableCell className="whitespace-nowrap">{r.financialYear || '-'}</TableCell>
                   <TableCell className="whitespace-nowrap">
                     {r.approvedAt
-                      ? new Date(r.approvedAt).toLocaleString('en-GB', {
-                          year: 'numeric',
-                          month: '2-digit',
-                          day: '2-digit',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          second: '2-digit',
-                        })
+                      ? new Date(r.approvedAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })
                       : '-'}
                   </TableCell>
                   <TableCell className="whitespace-nowrap">{r.approvedBy?.name || '-'}</TableCell>

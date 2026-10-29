@@ -116,7 +116,7 @@ export default function ReportsClosedLeadsPage() {
     if (!dateString) return '-'
     try {
       const date = new Date(dateString)
-      return date.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
     } catch {
       return '-'
     }
@@ -126,13 +126,7 @@ export default function ReportsClosedLeadsPage() {
     if (!dateString) return '-'
     try {
       const date = new Date(dateString)
-      return date.toLocaleString('en-IN', { 
-        day: '2-digit', 
-        month: '2-digit', 
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      })
+      return date.toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })
     } catch {
       return '-'
     }
@@ -219,7 +213,7 @@ export default function ReportsClosedLeadsPage() {
         return leadDate === date
       }).length
       return {
-        date: new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
+        date: new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }),
         leads: count
       }
     })

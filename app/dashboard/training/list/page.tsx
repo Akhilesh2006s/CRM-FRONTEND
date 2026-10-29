@@ -194,7 +194,7 @@ export default function TrainingsListPage() {
                   <td className="py-2 px-3">{t.town || '-'}</td>
                   <td className="py-2 px-3">{t.subject}</td>
                   <td className="py-2 px-3">{t.trainerId?.name || '-'}</td>
-                  <td className="py-2 px-3 text-center">{new Date(t.trainingDate).toLocaleDateString()}</td>
+                  <td className="py-2 px-3 text-center">{new Date(t.trainingDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
                   <td className="py-2 px-3">
                     <span className={`inline-flex px-2 py-1 rounded-full text-xs ${
                       t.status === 'Completed' ? 'bg-green-100 text-green-700' :

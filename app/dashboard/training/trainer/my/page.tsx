@@ -260,7 +260,7 @@ export default function TrainerMyTrainingsPage() {
                       <td className="py-3 px-4 border">{training.subject}</td>
                       <td className="py-3 px-4 border">{training.term || '-'}</td>
                       <td className="py-3 px-4 border">
-                        {format(new Date(training.trainingDate), 'dd-MMM-yyyy')}
+                        {format(new Date(training.trainingDate), 'dd/MM/yyyy')}
                       </td>
                       <td className="py-3 px-4 border">{training.trainingLevel || '-'}</td>
                       <td className="py-3 px-4 border">
@@ -332,7 +332,7 @@ export default function TrainerMyTrainingsPage() {
                     <td className="py-3 px-4 border">{service.subject}</td>
                     <td className="py-3 px-4 border">{service.term || '-'}</td>
                     <td className="py-3 px-4 border">
-                      {format(new Date(service.serviceDate), 'dd-MMM-yyyy')}
+                      {format(new Date(service.serviceDate), 'dd/MM/yyyy')}
                     </td>
                     <td className="py-3 px-4 border">
                       {service.schoolName}

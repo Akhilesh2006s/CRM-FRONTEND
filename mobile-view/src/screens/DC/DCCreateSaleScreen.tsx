@@ -14,6 +14,7 @@ import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 
+import { ymdToDmy } from '../../utils/dateFormat';
 const SCHOOL_TYPES = ['New', 'Existing'].map((t) => ({
   label: t,
   value: t,
@@ -111,7 +112,7 @@ function DateField({
       <Text style={styles.label}>{label}</Text>
       <TouchableOpacity style={styles.dateTouchable} onPress={() => setShowPicker(true)} activeOpacity={0.7}>
         <Text style={[styles.dateText, !value && styles.placeholderText]}>
-          {value || 'Tap to pick date'}
+          {ymdToDmy(value) || 'Tap to pick date'}
         </Text>
         <Text>📅</Text>
       </TouchableOpacity>

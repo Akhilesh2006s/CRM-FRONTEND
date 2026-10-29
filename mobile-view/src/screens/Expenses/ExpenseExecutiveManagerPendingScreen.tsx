@@ -40,14 +40,7 @@ const formatDateTime = (d?: string) => {
   if (!d) return '-';
   const date = new Date(d);
   if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleString('en-IN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
+  return date.toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
 };
 
 const getPendingMonth = (e: Expense) =>
@@ -155,7 +148,7 @@ export default function ExpenseExecutiveManagerPendingScreen({ navigation, route
                 <Text style={styles.cardTitle}>
                   {i + 1}. {getEmployee(exp)?.name || '-'}
                 </Text>
-                <Text style={styles.meta}>{exp.date ? new Date(exp.date).toLocaleDateString('en-IN') : '-'}</Text>
+                <Text style={styles.meta}>{exp.date ? new Date(exp.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}</Text>
               </View>
               <Text style={styles.meta}>Type: {getExpenseType(exp.category)}</Text>
               <View style={styles.rowBetween}>

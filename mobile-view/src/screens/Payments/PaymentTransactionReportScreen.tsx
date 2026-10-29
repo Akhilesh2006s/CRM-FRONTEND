@@ -6,6 +6,7 @@ import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 
+import DateField from '../../ui/DateField';
 export default function PaymentTransactionReportScreen({ navigation }: any) {
   const [payments, setPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,7 +49,7 @@ export default function PaymentTransactionReportScreen({ navigation }: any) {
   const formatDate = (dateString?: string) => {
     if (!dateString) return '-';
     try {
-      return new Date(dateString).toLocaleDateString('en-IN');
+      return new Date(dateString).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
     } catch {
       return '-';
     }
@@ -69,8 +70,8 @@ export default function PaymentTransactionReportScreen({ navigation }: any) {
       onRefresh={onRefresh}
     >
 <View style={styles.filterContainer}>
-        <WebInput style={styles.filterInput} value={filters.startDate} onChangeText={(text: string) => setFilters((f) => ({ ...f, startDate: text }))} placeholder="Start Date (YYYY-MM-DD)" />
-        <WebInput style={styles.filterInput} value={filters.endDate} onChangeText={(text: string) => setFilters((f) => ({ ...f, endDate: text }))} placeholder="End Date (YYYY-MM-DD)" />
+        <DateField placeholder="Start date" value={filters.startDate} onChange={(text: string) => setFilters((f) => ({ ...f, startDate: text }))} style={styles.filterInput} />
+        <DateField placeholder="End date" value={filters.endDate} onChange={(text: string) => setFilters((f) => ({ ...f, endDate: text }))} style={styles.filterInput} />
         <View style={styles.filterTabs}>
           <TouchableOpacity style={[styles.filterTab, filters.status === 'all' && styles.filterTabActive]} onPress={() => setFilters((f) => ({ ...f, status: 'all' }))}>
             <Text style={[styles.filterTabText, filters.status === 'all' && styles.filterTabTextActive]}>All</Text>

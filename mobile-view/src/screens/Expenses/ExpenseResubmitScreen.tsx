@@ -14,6 +14,7 @@ import { colors } from '../../theme/colors';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, DataTable } from '../../ui/WebPrimitives';
 import { navigateRoot } from '../../navigation/navigationRef';
+import DateField from '../../ui/DateField';
 
 export default function ExpenseResubmitScreen({ route }: any) {
   const { id } = route.params;
@@ -67,8 +68,8 @@ export default function ExpenseResubmitScreen({ route }: any) {
       <WebInput style={styles.input} value={category} onChangeText={setCategory} />
       <Text style={styles.label}>Amount</Text>
       <WebInput style={styles.input} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" />
-      <Text style={styles.label}>Date (YYYY-MM-DD)</Text>
-      <WebInput style={styles.input} value={date} onChangeText={setDate} />
+      <Text style={styles.label}>Date</Text>
+      <DateField placeholder="Date" value={date} onChange={setDate} />
       <Text style={styles.label}>Remarks</Text>
       <WebInput style={[styles.input, styles.area]} value={employeeRemarks} onChangeText={setEmployeeRemarks} multiline />
       <TouchableOpacity style={styles.btn} onPress={submit} disabled={submitting}>

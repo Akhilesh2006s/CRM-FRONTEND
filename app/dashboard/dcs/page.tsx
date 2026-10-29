@@ -292,7 +292,7 @@ export default function VendorDCsPage() {
                 filteredDCs.map((dc) => (
                   <TableRow key={dc._id}>
                     <TableCell>
-                      {dc.dcDate ? new Date(dc.dcDate).toLocaleDateString() : '-'}
+                      {dc.dcDate ? new Date(dc.dcDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">

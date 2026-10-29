@@ -35,6 +35,7 @@ import {
 import { consolidateStockRows } from '../../components/dc/warehouseStockList';
 import { TransportNameField, transportToLabel } from '../../components/dc/TransportFields';
 
+import { ymdToDmy } from '../../utils/dateFormat';
 /** Specimen and related-item lines describe themselves (product set, item name); never copy a stock
  * item's series / deliverable / level onto them. */
 const keepsOwnIdentity = (row: { itemType?: unknown; specs?: unknown }) =>
@@ -171,7 +172,7 @@ function DateField({
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
       <TouchableOpacity style={styles.dateTouchable} onPress={() => setShow(true)} activeOpacity={0.7}>
-        <Text style={[styles.dateText, !value && styles.placeholder]}>{value || 'Tap to pick date'}</Text>
+        <Text style={[styles.dateText, !value && styles.placeholder]}>{ymdToDmy(value) || 'Tap to pick date'}</Text>
         <Text style={styles.calendarIcon}>📅</Text>
       </TouchableOpacity>
       {show && Platform.OS === 'android' ? (

@@ -23,6 +23,7 @@ import {
   firstLevelApprovedBy,
 } from '../../lib/expenseApproval';
 
+import DateField from '../../ui/DateField';
 type Expense = ApprovalExpense & {
   _id: string;
   expItemId?: string;
@@ -79,7 +80,7 @@ function formatExpDate(dateString?: string) {
   if (!dateString) return '-';
   const date = new Date(dateString);
   if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {
@@ -233,17 +234,9 @@ export default function ReportsExpensesScreen() {
             ]}
           />
           <WebLabel>From Date</WebLabel>
-          <WebInput
-            value={filters.fromDate}
-            onChangeText={(v) => setFilters((f) => ({ ...f, fromDate: v }))}
-            placeholder="YYYY-MM-DD"
-          />
+          <DateField placeholder="From Date" value={filters.fromDate} onChange={(v) => setFilters((f) => ({ ...f, fromDate: v }))} />
           <WebLabel>To Date</WebLabel>
-          <WebInput
-            value={filters.toDate}
-            onChangeText={(v) => setFilters((f) => ({ ...f, toDate: v }))}
-            placeholder="YYYY-MM-DD"
-          />
+          <DateField placeholder="To Date" value={filters.toDate} onChange={(v) => setFilters((f) => ({ ...f, toDate: v }))} />
           <WebButton title="Search" onPress={onSearch} />
         </View>
 

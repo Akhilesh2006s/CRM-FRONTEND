@@ -8,6 +8,7 @@ import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 
+import DateField from '../../ui/DateField';
 /** Same list and order as web app/dashboard/payments/add-payment/page.tsx */
 const PAYMENT_MODES = ['Cash', 'UPI', 'NEFT/RTGS', 'Cheque', 'Bank Transfer', 'Credit Card', 'Debit Card', 'Online Payment', 'Other'];
 const FINANCIAL_YEARS = ['2024-25', '2025-26', '2026-27'];
@@ -180,7 +181,7 @@ export default function PaymentAddScreen({ navigation }: any) {
     if ((mode === 'NEFT/RTGS' || mode === 'Bank Transfer' || mode === 'Online Payment') && !d.transactionId.trim())
       return fail('Please enter Transaction ID');
     if (mode === 'Cheque' && (!d.chequeNumber.trim() || !d.chequeDate.trim())) return fail('Please enter Cheque Number and Cheque Date');
-    if (mode === 'Cheque' && Number.isNaN(new Date(d.chequeDate).getTime())) return fail('Cheque Date must be YYYY-MM-DD');
+    if (mode === 'Cheque' && Number.isNaN(new Date(d.chequeDate).getTime())) return fail('Pick a valid Cheque Date');
     if ((mode === 'Credit Card' || mode === 'Debit Card') && !d.cardLast4.trim()) return fail('Please enter Card Last 4 Digits');
     if ((mode === 'Credit Card' || mode === 'Debit Card') && !/^\d{4}$/.test(d.cardLast4.trim()))
       return fail('Card Last 4 Digits must be exactly 4 digits');
@@ -323,7 +324,7 @@ export default function PaymentAddScreen({ navigation }: any) {
         {mode === 'Cheque' && (
           <>
             <FormField label="Cheque Number *" value={details.chequeNumber} onChangeText={(t: string) => setDetail('chequeNumber', t)} placeholder="Enter Cheque Number" />
-            <FormField label="Cheque Date *" value={details.chequeDate} onChangeText={(t: string) => setDetail('chequeDate', t)} placeholder="YYYY-MM-DD" />
+            <DateField placeholder="Cheque Date *" value={details.chequeDate} onChange={(t: string) => setDetail('chequeDate', t)} />
             <FormField label="Bank Name" value={details.bankName} onChangeText={(t: string) => setDetail('bankName', t)} placeholder="Enter Bank Name" />
             <FormField label="Deposited Bank" value={details.depositedBank} onChangeText={(t: string) => setDetail('depositedBank', t)} placeholder="Bank where the cheque was deposited" />
             <FormField label="Deposited Bank Branch" value={details.depositedBankBranch} onChangeText={(t: string) => setDetail('depositedBankBranch', t)} placeholder="Branch of the deposited bank" />

@@ -24,6 +24,7 @@ import { useAuth } from '../../context/AuthContext';
 import { showAlert } from '../../utils/showAlert';
 import { getRoleFlags } from '../../utils/roles';
 
+import DateField from '../../ui/DateField';
 type EmployeeDetail = {
   _id: string;
   name: string;
@@ -394,21 +395,11 @@ export default function ExecutiveManagerDashboardScreen({ navigation, route }: a
         <View style={styles.filters}>
           <View style={styles.filterCol}>
             <Text style={styles.filterLabel}>From Date</Text>
-            <WebInput
-              value={fromDate}
-              onChangeText={setFromDate}
-              placeholder="YYYY-MM-DD"
-              {...(Platform.OS === 'web' ? ({ type: 'date' } as any) : {})}
-            />
+            <DateField placeholder="From Date" value={fromDate} onChange={setFromDate} />
           </View>
           <View style={styles.filterCol}>
             <Text style={styles.filterLabel}>To Date</Text>
-            <WebInput
-              value={toDate}
-              onChangeText={setToDate}
-              placeholder="YYYY-MM-DD"
-              {...(Platform.OS === 'web' ? ({ type: 'date' } as any) : {})}
-            />
+            <DateField placeholder="To Date" value={toDate} onChange={setToDate} />
           </View>
         </View>
         <View style={styles.filterActions}>

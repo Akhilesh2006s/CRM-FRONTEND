@@ -130,11 +130,11 @@ export default function DCTermWiseScreen({ navigation }: any) {
           filtered.map((dc, idx) => {
             const orderId = getOrderId(dc);
             const createdDate = dc.createdAt
-              ? new Date(dc.createdAt).toLocaleDateString('en-IN')
+              ? new Date(dc.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
               : '-';
             const turnedDate =
               typeof dc.dcOrderId === 'object' && dc.dcOrderId?.createdAt
-                ? new Date(dc.dcOrderId.createdAt).toLocaleDateString('en-IN')
+                ? new Date(dc.dcOrderId.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
                 : createdDate;
 
             return (

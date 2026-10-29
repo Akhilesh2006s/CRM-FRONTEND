@@ -31,6 +31,7 @@ import { DcPrintOptionsModal } from '../../components/dc/DcPrintOptionsModal';
 import { TransportNameField } from '../../components/dc/TransportFields';
 import { loadDcForChallan, printDcChallan, type DcPrintOptions } from '../../lib/dcChallan';
 
+import PickDateField from '../../ui/DateField';
 /** Native only — react-native-webview throws on Expo web. */
 let NativeWebView: any = null;
 if (Platform.OS !== 'web') {
@@ -178,7 +179,7 @@ function buildPdfUrl(raw: string | undefined): string | null {
 function formatDate(dateString?: string) {
   if (!dateString) return '-';
   try {
-    return new Date(dateString).toLocaleDateString('en-IN');
+    return new Date(dateString).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
   } catch {
     return '-';
   }
@@ -776,7 +777,7 @@ export default function WarehouseCompletedDCScreen({ navigation }: any) {
               boxSizing: 'border-box',
             },
           })
-        : <WebInput value={value} onChangeText={onChangeText} placeholder="YYYY-MM-DD" />}
+        : <PickDateField placeholder="Select date" value={value} onChange={onChangeText} />}
     </View>
   );
 
@@ -1102,12 +1103,7 @@ export default function WarehouseCompletedDCScreen({ navigation }: any) {
                 onValueChange={setSrWarehouse}
                 items={srWarehouses.map((w) => ({ label: w, value: w }))}
               />
-              <LabeledInput
-                label="Return Date * (YYYY-MM-DD)"
-                value={srReturnDate}
-                onChangeText={setSrReturnDate}
-                placeholder="YYYY-MM-DD"
-              />
+              <PickDateField placeholder="Return Date *" value={srReturnDate} onChange={setSrReturnDate} />
               <WebSelect
                 label="Return Type *"
                 value={srReturnType}

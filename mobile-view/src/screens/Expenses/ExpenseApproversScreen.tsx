@@ -280,7 +280,7 @@ export default function ExpenseApproversScreen() {
               <Text style={styles.tagTarget}>{targetLabel(tag)}</Text>
               <Text style={styles.tagMeta}>First-level approver: {personLabel(tag.approverId)}</Text>
               <Text style={styles.tagMeta}>
-                Assigned by {tag.createdBy?.name || '-'} on {new Date(tag.createdAt).toLocaleDateString('en-GB')}
+                Assigned by {tag.createdBy?.name || '-'} on {new Date(tag.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
               </Text>
             </View>
             <TouchableOpacity onPress={() => handleRemove(tag)} hitSlop={10} accessibilityLabel={`Remove approver tag for ${targetLabel(tag)}`}>

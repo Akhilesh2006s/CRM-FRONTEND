@@ -150,7 +150,7 @@ export default function LeavesReportPage() {
   }
 
   const approvalDate = (l: Leave) =>
-    l.approvedAt ? new Date(l.approvedAt).toLocaleDateString() : '—'
+    l.approvedAt ? new Date(l.approvedAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'
 
   return (
     <div className="space-y-6">
@@ -297,10 +297,10 @@ export default function LeavesReportPage() {
                     </td>
                     <td className="py-2 px-3">{leaveTypeLabel(l.leaveType)}</td>
                     <td className="py-2 px-3 text-center">
-                      {new Date(l.startDate).toLocaleDateString()}
+                      {new Date(l.startDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                     </td>
                     <td className="py-2 px-3 text-center">
-                      {new Date(l.endDate).toLocaleDateString()}
+                      {new Date(l.endDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                     </td>
                     <td className="py-2 px-3">{approvedByName(l)}</td>
                     <td className="py-2 px-3 text-center">{approvalDate(l)}</td>

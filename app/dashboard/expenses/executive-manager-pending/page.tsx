@@ -124,15 +124,7 @@ function ExecutiveManagerExpenses() {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
-    return date.toLocaleString('en-IN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    }).replace(/(\d+)\/(\d+)\/(\d+),/, '$3-$2-$1').replace(', ', ' ')
+    return date.toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).replace(/(\d+)\/(\d+)\/(\d+),/, '$3-$2-$1').replace(', ', ' ')
   }
 
   const getExpenseType = (category: string) => {
@@ -235,7 +227,7 @@ function ExecutiveManagerExpenses() {
                     <TableRow key={expense._id} className={index % 2 === 0 ? 'bg-white' : 'bg-neutral-50/50'}>
                       <TableCell>{index + 1}</TableCell>
                       <TableCell className="font-medium">{getEmployee(expense)?.name || '-'}</TableCell>
-                      <TableCell>{expense.date ? new Date(expense.date).toLocaleDateString('en-IN') : '-'}</TableCell>
+                      <TableCell>{expense.date ? new Date(expense.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}</TableCell>
                       <TableCell>{getExpenseType(expense.category)}</TableCell>
                       <TableCell className="text-right">{Number(expense.employeeAmount ?? expense.amount).toFixed(2)}</TableCell>
                       <TableCell className="text-right font-medium">

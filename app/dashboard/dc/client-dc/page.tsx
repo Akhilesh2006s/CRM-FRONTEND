@@ -3239,7 +3239,7 @@ export default function ClientDCPage() {
             )}
             {dateFrom && (
               <div className="px-3 py-1.5 bg-orange-100 text-orange-700 rounded-full text-sm font-medium flex items-center gap-2">
-                From: {new Date(dateFrom).toLocaleDateString()}
+                From: {new Date(dateFrom).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                 <button onClick={() => setDateFrom('')} className="hover:text-orange-900">
                   <X className="w-3 h-3" />
                 </button>
@@ -3247,7 +3247,7 @@ export default function ClientDCPage() {
             )}
             {dateTo && (
               <div className="px-3 py-1.5 bg-orange-100 text-orange-700 rounded-full text-sm font-medium flex items-center gap-2">
-                To: {new Date(dateTo).toLocaleDateString()}
+                To: {new Date(dateTo).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                 <button onClick={() => setDateTo('')} className="hover:text-orange-900">
                   <X className="w-3 h-3" />
                 </button>
@@ -3365,11 +3365,11 @@ export default function ClientDCPage() {
                       String(d.status || '').toLowerCase() === 'completed' ||
                       workflow.stage === 'delivery_confirmation' ||
                       workflow.stage === 'billing'
-                    const createdDate = d.createdAt ? new Date(d.createdAt).toLocaleDateString() : '-'
+                    const createdDate = d.createdAt ? new Date(d.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'
                     // Client turned date: use dcOrderId.createdAt for converted leads, otherwise use createdAt
                     const turnedDate = (typeof d.dcOrderId === 'object' && d.dcOrderId?.createdAt)
-                      ? new Date(d.dcOrderId.createdAt).toLocaleDateString()
-                      : (d.createdAt ? new Date(d.createdAt).toLocaleDateString() : '-')
+                      ? new Date(d.dcOrderId.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                      : (d.createdAt ? new Date(d.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-')
                     // Prefer school_code, fallback to dc_code for older records
                     const schoolCode = (typeof d.dcOrderId === 'object')
                       ? (d.dcOrderId?.school_code || d.dcOrderId?.dc_code || '-')
@@ -3411,7 +3411,7 @@ export default function ClientDCPage() {
                             {d.lrNo && <span className="text-neutral-600">LR: {d.lrNo}</span>}
                             {d.lrDate && (
                               <span className="text-neutral-500">
-                                {new Date(d.lrDate).toLocaleDateString()}
+                                {new Date(d.lrDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                               </span>
                             )}
                             {!d.lrNo && <span className="text-amber-600">LR pending</span>}

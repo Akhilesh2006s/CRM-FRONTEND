@@ -192,7 +192,7 @@ export default function PaymentDetailPage() {
                   </div>
                   <div>
                     <label className="text-sm text-neutral-500">Cheque Date</label>
-                    <Input value={data.chqDate ? new Date(data.chqDate).toLocaleDateString('en-IN') : '-'} readOnly className="bg-neutral-50" />
+                    <Input value={data.chqDate ? new Date(data.chqDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'} readOnly className="bg-neutral-50" />
                   </div>
                   <div>
                     <label className="text-sm text-neutral-500">Cheque Bank</label>

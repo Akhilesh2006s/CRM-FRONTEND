@@ -88,7 +88,7 @@ export function SentToSeniorList({ refreshKey = 0 }: { refreshKey?: number }) {
                 Code: {row.school_code || row.dc_code || '-'} · Zone: {row.zone || '-'} · BDE: {bde}
               </Text>
               <Text style={styles.meta}>
-                Updated: {row.updatedAt ? new Date(row.updatedAt).toLocaleDateString('en-IN') : '-'}
+                Updated: {row.updatedAt ? new Date(row.updatedAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}
               </Text>
             </View>
           );

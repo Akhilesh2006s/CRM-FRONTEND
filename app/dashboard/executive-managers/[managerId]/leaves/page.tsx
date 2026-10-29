@@ -283,8 +283,8 @@ export default function ExecutiveManagerLeavesPage() {
                   {myLeaves.map((leave) => (
                     <TableRow key={leave._id}>
                       <TableCell>{leaveTypeLabel(leave.leaveType)}</TableCell>
-                      <TableCell>{new Date(leave.startDate).toLocaleDateString()}</TableCell>
-                      <TableCell>{new Date(leave.endDate).toLocaleDateString()}</TableCell>
+                      <TableCell>{new Date(leave.startDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</TableCell>
+                      <TableCell>{new Date(leave.endDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</TableCell>
                       <TableCell>{leave.days}</TableCell>
                       <TableCell className="max-w-xs truncate">{leave.reason}</TableCell>
                       <TableCell className="align-top">
@@ -402,8 +402,8 @@ export default function ExecutiveManagerLeavesPage() {
                       </div>
                     </TableCell>
                     <TableCell>{leaveTypeLabel(leave.leaveType)}</TableCell>
-                    <TableCell>{new Date(leave.startDate).toLocaleDateString()}</TableCell>
-                    <TableCell>{new Date(leave.endDate).toLocaleDateString()}</TableCell>
+                    <TableCell>{new Date(leave.startDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</TableCell>
+                    <TableCell>{new Date(leave.endDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</TableCell>
                     <TableCell>{leave.days}</TableCell>
                     <TableCell className="max-w-xs truncate">{leave.reason}</TableCell>
                     <TableCell>{leave.employeeId?.assignedCity || '-'}</TableCell>
@@ -440,7 +440,7 @@ export default function ExecutiveManagerLeavesPage() {
                             <p>By: {leave.approvedBy.name}</p>
                           )}
                           {leave.approvedAt && (
-                            <p>{new Date(leave.approvedAt).toLocaleDateString()}</p>
+                            <p>{new Date(leave.approvedAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</p>
                           )}
                           {leave.rejectionReason && (
                             <p className="text-red-600 mt-1">Reason: {leave.rejectionReason}</p>

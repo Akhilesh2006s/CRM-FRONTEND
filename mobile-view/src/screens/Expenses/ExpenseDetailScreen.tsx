@@ -39,7 +39,7 @@ export default function ExpenseDetailScreen({ route }: any) {
         ['Category', expense.category],
         ['Claimed amount', money(expense.employeeAmount ?? expense.amount)],
         ['Status', expenseStatusText(expense)],
-        ['Date', expense.date ? new Date(expense.date).toLocaleDateString('en-IN') : '—'],
+        ['Date', expense.date ? new Date(expense.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'],
         ['Employee remarks', expense.employeeRemarks || '—'],
         ['First-level amount', money(firstAmount)],
         ['First-level remarks', expense.managerRemarks || '—'],
@@ -67,7 +67,7 @@ export default function ExpenseDetailScreen({ route }: any) {
             rows={history.map((h) => [
               h.step,
               h.by?.name ? `${h.by.name}${h.by.role ? ` (${h.by.role})` : ''}` : '—',
-              h.at ? new Date(h.at).toLocaleString('en-IN') : '—',
+              h.at ? new Date(h.at).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : '—',
               money(h.amount),
               h.remarks || '—',
             ])}

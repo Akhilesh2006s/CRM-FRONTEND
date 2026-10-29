@@ -157,7 +157,7 @@ export function TicketsInbox({ view }: { view: TicketsView }) {
                         {ticketStatusLabel(item.status)}
                       </span>
                     </td>
-                    <td className="py-2 px-3">{new Date(item.createdAt).toLocaleDateString()}</td>
+                    <td className="py-2 px-3">{new Date(item.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
                     <td className="py-2 px-3 text-right">
                       {item.status === 'Open' ? (
                         <Button

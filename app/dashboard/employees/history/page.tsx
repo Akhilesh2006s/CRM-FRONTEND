@@ -108,7 +108,7 @@ export default function EmployeeHistoryPage() {
                   <td className="py-2 px-3">{row.email || '—'}</td>
                   <td className="py-2 px-3">{row.yearlySalary ?? '—'}</td>
                   <td className="py-2 px-3">{row.monthlyTakeHome ?? '—'}</td>
-                  <td className="py-2 px-3">{row.archivedAt ? new Date(row.archivedAt).toLocaleString() : '—'}</td>
+                  <td className="py-2 px-3">{row.archivedAt ? new Date(row.archivedAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : '—'}</td>
                   <td className="py-2 px-3">
                     <Button size="sm" variant="outline" disabled={loadingDetail} onClick={() => void showDetails(row._id)}>
                       View complete details
@@ -126,7 +126,7 @@ export default function EmployeeHistoryPage() {
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-xl font-semibold">{selected.previousName || 'Employee'} — Complete details</h2>
-                <p className="text-sm text-neutral-500">Archived {selected.archivedAt ? new Date(selected.archivedAt).toLocaleString() : '—'}</p>
+                <p className="text-sm text-neutral-500">Archived {selected.archivedAt ? new Date(selected.archivedAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : '—'}</p>
               </div>
               <Button variant="outline" onClick={() => setSelected(null)}>Close</Button>
             </div>

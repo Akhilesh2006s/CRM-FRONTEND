@@ -10,6 +10,7 @@ import { SentToSeniorList } from '../../components/dc/SentToSeniorList';
 import { uniqueProductNames } from '../../lib/crm/productNames';
 import { resolveClosedSalesProductLines } from '../../components/dc/closedSalesLines';
 
+import DateField from '../../ui/DateField';
 type Product = { product_name?: string; product?: string; quantity?: number; strength?: number };
 type DcOrder = {
   _id: string; school_name?: string; school_code?: string; school_type?: string; contact_mobile?: string;
@@ -39,7 +40,7 @@ const isTerm2SplitEntry = (item: DcOrder) => {
 const formatDate = (value?: string) => {
   if (!value) return '-';
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' });
+  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
 };
 const poUrl = (raw?: string) => {
   if (!raw?.trim()) return null;
@@ -113,8 +114,8 @@ export default function DCClosedScreen({ navigation }: any) {
         <View style={styles.filterCard}>
           <WebInput placeholder="By School Name" value={filters.school} onChangeText={(school) => setFilters((f) => ({ ...f, school }))} />
           <WebInput placeholder="By Contact Mobile No" value={filters.mobile} keyboardType="phone-pad" onChangeText={(mobile) => setFilters((f) => ({ ...f, mobile }))} />
-          <WebInput placeholder="From date (YYYY-MM-DD)" value={filters.from} onChangeText={(from) => setFilters((f) => ({ ...f, from }))} />
-          <WebInput placeholder="To date (YYYY-MM-DD)" value={filters.to} onChangeText={(to) => setFilters((f) => ({ ...f, to }))} />
+          <DateField placeholder="From date" value={filters.from} onChange={(from) => setFilters((f) => ({ ...f, from }))} />
+          <DateField placeholder="To date" value={filters.to} onChange={(to) => setFilters((f) => ({ ...f, to }))} />
           <WebSelect value={filters.zone} onValueChange={(zone) => setFilters((f) => ({ ...f, zone }))} items={zoneOptions} />
           <WebSelect value={filters.executive} onValueChange={(executive) => setFilters((f) => ({ ...f, executive }))} items={executiveOptions} />
           <WebInput placeholder="By Town" value={filters.town} onChangeText={(town) => setFilters((f) => ({ ...f, town }))} />

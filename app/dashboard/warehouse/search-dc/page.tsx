@@ -266,11 +266,7 @@ export default function SearchDCPage() {
   const formatDate = (dateString?: string) => {
     if (!dateString) return '-'
     try {
-      return new Date(dateString).toLocaleDateString('en-IN', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      })
+      return new Date(dateString).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
     } catch {
       return '-'
     }

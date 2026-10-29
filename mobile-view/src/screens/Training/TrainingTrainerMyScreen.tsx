@@ -88,7 +88,7 @@ export default function TrainingTrainerMyScreen({ navigation }: any) {
               <Text style={styles.cardTitle}>{item.schoolName || item.school_name || '-'}</Text>
               <Text style={styles.cardSubtitle}>{item.subject || item.subject || '-'}</Text>
               <Text style={styles.cardDate}>
-                {item[dateKey] ? new Date(item[dateKey]).toLocaleDateString('en-IN') : '-'}
+                {item[dateKey] ? new Date(item[dateKey]).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}
               </Text>
             </View>
           ))

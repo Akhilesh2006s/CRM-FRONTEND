@@ -16,6 +16,7 @@ import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, DataTable } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 
+import DateField from '../../ui/DateField';
 export default function ExpenseListScreen({ navigation, route }: any) {
   const { user } = useAuth();
   const showMyExpenses = route?.params?.myExpenses || false;
@@ -156,7 +157,7 @@ export default function ExpenseListScreen({ navigation, route }: any) {
                 </View>
                 <Text style={styles.cardSubtitle}>{expense.description || 'N/A'}</Text>
                 <Text style={styles.cardSubtitle}>
-                  Date: {expense.date ? new Date(expense.date).toLocaleDateString() : 'N/A'}
+                  Date: {expense.date ? new Date(expense.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'N/A'}
                 </Text>
                 {expense.remarks && (
                   <Text style={styles.cardSubtitle}>Remarks: {expense.remarks}</Text>
@@ -190,12 +191,7 @@ export default function ExpenseListScreen({ navigation, route }: any) {
             )}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Date *</Text>
-              <WebInput
-                style={styles.input}
-                placeholder="YYYY-MM-DD"
-                value={date}
-                onChangeText={setDate}
-              />
+              <DateField placeholder="Date *" value={date} onChange={setDate} />
             </View>
 
             <View style={styles.inputGroup}>

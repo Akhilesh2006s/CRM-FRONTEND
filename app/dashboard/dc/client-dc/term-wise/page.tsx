@@ -943,10 +943,10 @@ export default function TermWiseDCPage() {
                 }
                 
                 const status = d.status || 'created'
-                const createdDate = d.createdAt ? new Date(d.createdAt).toLocaleDateString() : '-'
+                const createdDate = d.createdAt ? new Date(d.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'
                 const turnedDate = (typeof d.dcOrderId === 'object' && d.dcOrderId?.createdAt)
-                  ? new Date(d.dcOrderId.createdAt).toLocaleDateString()
-                  : (d.createdAt ? new Date(d.createdAt).toLocaleDateString() : '-')
+                  ? new Date(d.dcOrderId.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                  : (d.createdAt ? new Date(d.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-')
                 const schoolCode = (typeof d.dcOrderId === 'object' && d.dcOrderId?.school_code) 
                   ? d.dcOrderId.school_code 
                   : '-'
@@ -1098,7 +1098,7 @@ export default function TermWiseDCPage() {
                   {invoiceData.dcDate && (
                     <div>
                       <span className="text-neutral-600">DC Date:</span>
-                      <span className="ml-2 font-medium">{new Date(invoiceData.dcDate).toLocaleDateString()}</span>
+                      <span className="ml-2 font-medium">{new Date(invoiceData.dcDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
                     </div>
                   )}
                 </div>

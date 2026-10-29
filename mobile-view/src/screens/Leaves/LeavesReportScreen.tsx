@@ -8,6 +8,7 @@ import { apiService } from '../../services/api';
 import { leaveTypeLabel } from '../../lib/leaveTypes';
 import { slotLabel } from '../../lib/leaveApproval';
 
+import DateField from '../../ui/DateField';
 type LeaveStatus = 'all' | 'Pending' | 'Approved' | 'Rejected';
 
 export default function LeavesReportScreen({ navigation }: any) {
@@ -76,7 +77,7 @@ export default function LeavesReportScreen({ navigation }: any) {
     const parts = (leave.approvals || []).map((a: any) => `${a.label || slotLabel(a.slot)}: ${a.status}`);
     return parts.length ? parts.join(', ') : '—';
   };
-  const formatDate = (date?: string) => date ? new Date(date).toLocaleDateString('en-IN') : '—';
+  const formatDate = (date?: string) => date ? new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
   const refresh = () => { setRefreshing(true); loadData(); };
 
   return (
@@ -106,7 +107,7 @@ export default function LeavesReportScreen({ navigation }: any) {
             </View>
             <View style={styles.dateField}>
               <Text style={styles.label}>On Leave Date</Text>
-              <WebInput style={styles.dateInput} value={onLeaveDate} onChangeText={setOnLeaveDate} placeholder="YYYY-MM-DD" keyboardType="numbers-and-punctuation" />
+              <DateField placeholder="On Leave Date" value={onLeaveDate} onChange={setOnLeaveDate} />
             </View>
             <TouchableOpacity style={styles.refreshButton} onPress={loadData} disabled={loading}>
               <Text style={styles.refreshButtonText}>{loading ? 'Refreshing…' : 'Refresh'}</Text>

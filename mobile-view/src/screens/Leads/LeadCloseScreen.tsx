@@ -48,6 +48,7 @@ import {
 } from '../../lib/crm/dcRowCategory';
 import { renewalLinesToSections } from '../../lib/crm/renewalCloseSections';
 
+import { ymdToDmy } from '../../utils/dateFormat';
 /** Same as the web Close Lead page: e.g. 2026 → "2026-2027". */
 const getCurrentAcademicYear = () => {
   const currentYear = new Date().getFullYear();
@@ -677,7 +678,7 @@ export default function LeadCloseScreen({ route }: any) {
         ) : (
           <TouchableOpacity style={styles.dateTouchable} onPress={() => setShowDeliveryDatePicker(true)} activeOpacity={0.7}>
             <Text style={[styles.dateText, !form.delivery_date && styles.datePlaceholder]}>
-              {form.delivery_date || 'Tap to pick date'}
+              {ymdToDmy(form.delivery_date) || 'Tap to pick date'}
             </Text>
             <Text style={styles.dateIcon}>📅</Text>
           </TouchableOpacity>

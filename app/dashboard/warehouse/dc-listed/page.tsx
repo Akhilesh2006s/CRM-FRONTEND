@@ -400,8 +400,8 @@ export default function DCListedPage() {
                     </TableCell>
                   )}
                   <TableCell className="whitespace-nowrap">
-                    {r.listedAt ? new Date(r.listedAt).toLocaleDateString() : 
-                     r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '-'}
+                    {r.listedAt ? new Date(r.listedAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 
+                     r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}
                   </TableCell>
                   <TableCell className="truncate max-w-[160px]">
                     {r.dcOrderId?.school_name || r.customerName || r.saleId?.customerName || '-'}

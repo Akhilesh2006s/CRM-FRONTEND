@@ -75,15 +75,7 @@ function actionBadgeClass(action?: string) {
 
 function formatWhen(dateStr?: string) {
   if (!dateStr) return '—'
-  return new Date(dateStr).toLocaleString('en-IN', {
-    timeZone: 'Asia/Kolkata',
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  })
+  return new Date(dateStr).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' })
 }
 
 function splitSummary(summary?: string) {

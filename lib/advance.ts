@@ -49,7 +49,7 @@ export function advanceAmountLabel(advance: Pick<Advance, 'amount' | 'approvedAm
   const current = advanceCurrentAmount(advance)
   return Math.abs(current - advance.amount) > 0.001 ? `${advanceMoney(advance.amount)} → ${advanceMoney(current)}` : advanceMoney(advance.amount)
 }
-export const advanceDate = (value: string) => new Date(value).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })
+export const advanceDate = (value: string) => new Date(value).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' })
 export function advanceApprovalLabel(approval: AdvanceApproval): string {
   const label = { zonal_manager: 'Zonal Manager', product_head: 'Product Head', admin: 'Admin', finance: 'Finance Manager', super_admin: 'Super Admin', tagged: approval.approverId?.name || 'Tagged employee' }[approval.stage]
   return ['zonal_manager', 'product_head'].includes(approval.stage) && approval.approverId?.name ? `${label} (${approval.approverId.name})` : label

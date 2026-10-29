@@ -133,7 +133,7 @@ export default function HoldDCPage() {
                       Move to DC@Warehouse
                     </Button>
                   </TableCell>
-                  <TableCell className="whitespace-nowrap">{r.dcDate ? new Date(r.dcDate).toLocaleDateString() : '-'}</TableCell>
+                  <TableCell className="whitespace-nowrap">{r.dcDate ? new Date(r.dcDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}</TableCell>
                   <TableCell className="whitespace-nowrap">{r.dcFinYear || '-'}</TableCell>
                   <TableCell className="whitespace-nowrap">{r.schoolType || '-'}</TableCell>
                   <TableCell className="whitespace-nowrap">{r.schoolName || '-'}</TableCell>

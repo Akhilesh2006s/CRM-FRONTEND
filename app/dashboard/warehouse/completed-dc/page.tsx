@@ -1170,7 +1170,7 @@ export default function CompletedDCPage() {
         const row = [
           (idx + 1).toString(),
           r.dcNo || '',
-          r.dcDate ? new Date(r.dcDate).toLocaleDateString() : '',
+          r.dcDate ? new Date(r.dcDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '',
           r.dcCategory || 'Term 2',
           r.dcFinYear || '',
           `"${(r.schoolName || '').replace(/"/g, '""')}"`, // Escape quotes in CSV
@@ -1178,9 +1178,9 @@ export default function CompletedDCPage() {
           r.schoolType || '',
           r.zone || '',
           r.executive || '',
-          r.completedDate ? new Date(r.completedDate).toLocaleDateString() : '',
+          r.completedDate ? new Date(r.completedDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '',
           r.lrNo || '',
-          r.lrDate ? new Date(r.lrDate).toLocaleDateString() : '',
+          r.lrDate ? new Date(r.lrDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '',
           r.lrCost || '',
           `"${(r.remarks || '').replace(/"/g, '""')}"`, // Escape quotes in CSV
           r.deliveryStatus || ''
@@ -1313,7 +1313,7 @@ export default function CompletedDCPage() {
                 >
                   <TableCell>{idx + 1}</TableCell>
                   <TableCell className="whitespace-nowrap">{r.dcNo}</TableCell>
-                  <TableCell className="whitespace-nowrap">{r.dcDate ? new Date(r.dcDate).toLocaleDateString() : '-'}</TableCell>
+                  <TableCell className="whitespace-nowrap">{r.dcDate ? new Date(r.dcDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}</TableCell>
                   <TableCell className="whitespace-nowrap">{r.dcCategory || 'Term 2'}</TableCell>
                   <TableCell className="whitespace-nowrap">{r.dcFinYear || '-'}</TableCell>
                   <TableCell className="truncate max-w-[220px]">{r.schoolName || '-'}</TableCell>
@@ -1321,9 +1321,9 @@ export default function CompletedDCPage() {
                   <TableCell className="whitespace-nowrap">{r.schoolType || '-'}</TableCell>
                   <TableCell className="whitespace-nowrap">{r.zone || '-'}</TableCell>
                   <TableCell className="whitespace-nowrap">{r.executive || '-'}</TableCell>
-                  <TableCell className="whitespace-nowrap">{r.completedDate ? new Date(r.completedDate).toLocaleDateString() : '-'}</TableCell>
+                  <TableCell className="whitespace-nowrap">{r.completedDate ? new Date(r.completedDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}</TableCell>
                   <TableCell className="whitespace-nowrap">{r.lrNo || '-'}</TableCell>
-                  <TableCell className="whitespace-nowrap">{r.lrDate ? new Date(r.lrDate).toLocaleDateString() : '-'}</TableCell>
+                  <TableCell className="whitespace-nowrap">{r.lrDate ? new Date(r.lrDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}</TableCell>
                   <TableCell className="whitespace-nowrap">{r.lrCost || '-'}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">

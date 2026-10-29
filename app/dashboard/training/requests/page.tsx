@@ -155,7 +155,7 @@ export default function TrainingRequestsReviewPage() {
                       {item.zone ? <div className="text-xs text-neutral-500">{item.zone}</div> : null}
                     </td>
                     <td className="py-2 px-3">{item.subject}</td>
-                    <td className="py-2 px-3">{new Date(item.preferredDate).toLocaleDateString()}</td>
+                    <td className="py-2 px-3">{new Date(item.preferredDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
                     <td className="py-2 px-3 text-neutral-600">
                       {item.status === 'Rejected' ? item.rejectionReason || '—' : item.remarks || '—'}
                     </td>

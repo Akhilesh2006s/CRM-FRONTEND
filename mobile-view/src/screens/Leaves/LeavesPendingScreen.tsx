@@ -32,7 +32,7 @@ function formatEmployeeCode(value?: string | null, fallback = '—') {
 const formatDate = (d?: string) => {
   if (!d) return '-';
   const date = new Date(d);
-  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleDateString('en-IN');
+  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 };
 
 export default function LeavesPendingScreen() {

@@ -53,7 +53,7 @@ export function printReturnSlip(ret: ReturnSlipData, opts: { showReceived?: bool
     ['School', ret.customerName],
     ['School Code', ret.schoolCode],
     ['BDE', ret.executiveName],
-    ['Return Date', ret.returnDate ? new Date(ret.returnDate).toLocaleDateString('en-IN') : ''],
+    ['Return Date', ret.returnDate ? new Date(ret.returnDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''],
   ]
   for (let i = 0; i < Math.max(left.length, right.length); i++) {
     for (const [col, pair] of [[14, left[i]], [pageWidth / 2 + 4, right[i]]] as const) {

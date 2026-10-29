@@ -118,9 +118,9 @@ export default function EmployeeReturnsPage() {
                   <td className="py-2 pr-2">{r.lrNumber || '-'}</td>
                   <td className="py-2 pr-2">{r.finYear || '-'}</td>
                   <td className="py-2 pr-2">{r.leadId?.school_name || '-'}</td>
-                  <td className="py-2 pr-2">{new Date(r.returnDate).toLocaleDateString()}</td>
+                  <td className="py-2 pr-2">{new Date(r.returnDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
                   <td className="py-2 pr-2">{r.remarks || '-'}</td>
-                  <td className="py-2 pr-2">{new Date(r.createdAt).toLocaleString()}</td>
+                  <td className="py-2 pr-2">{new Date(r.createdAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}</td>
                 </tr>
               ))}
               {(!Array.isArray(myReturns) || myReturns.length === 0) && (<tr><td className="py-3 text-muted-foreground" colSpan={7}>No returns yet</td></tr>)}

@@ -244,7 +244,7 @@ export default function EmployeeDCPage() {
                       </td>
                       <td className="py-2 px-3 text-xs">{request.purpose}</td>
                       <td className="py-2 px-3 text-center text-xs">
-                        {new Date(request.createdAt).toLocaleDateString()}
+                        {new Date(request.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                       </td>
                       <td className="py-2 px-3">
                         {isBde ? (
@@ -390,8 +390,8 @@ export default function EmployeeDCPage() {
                       <td className="py-2 px-3">
                         {k.products?.length ? k.products.map((p) => `${p.product} × ${p.quantity}`).join(', ') : '-'}
                       </td>
-                      <td className="py-2 px-3 text-center">{k.distribution_date ? new Date(k.distribution_date).toLocaleDateString() : '-'}</td>
-                      <td className="py-2 px-3 text-center">{k.expected_return_date ? new Date(k.expected_return_date).toLocaleDateString() : '-'}</td>
+                      <td className="py-2 px-3 text-center">{k.distribution_date ? new Date(k.distribution_date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}</td>
+                      <td className="py-2 px-3 text-center">{k.expected_return_date ? new Date(k.expected_return_date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}</td>
                       <td className="py-2 px-3 text-center capitalize">{k.status}</td>
                       <td className="py-2 px-3 text-center">
                         {isBde ? (

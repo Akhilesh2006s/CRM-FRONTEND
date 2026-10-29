@@ -830,7 +830,7 @@ export default function ClientEditPOScreen({ navigation, route }: any) {
               </Text>
             </View>
             {poChange.requestedAt && (
-              <Text style={styles.metaText}>Requested at {new Date(poChange.requestedAt).toLocaleString()}</Text>
+              <Text style={styles.metaText}>Requested at {new Date(poChange.requestedAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}</Text>
             )}
             {(poChange.status === 'APPROVED' || poChange.status === 'REJECTED') && (poChange.managerRemarks || poChange.rejectionReason) && (
               <View style={styles.managerRemarksBox}>

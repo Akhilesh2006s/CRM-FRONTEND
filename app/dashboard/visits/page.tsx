@@ -120,7 +120,7 @@ const OUTCOME_STYLES: Record<string, string> = {
 const fmtDate = (value?: string) => {
   if (!value) return '—'
   const d = new Date(value)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
 function operationsSummary(ops?: Visit['operations']) {

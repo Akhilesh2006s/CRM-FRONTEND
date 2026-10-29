@@ -126,7 +126,7 @@ export function buildDcChallanPdf(fullDC: any, transit: DcTransit, options: DcPr
   pdf.setTextColor(0, 0, 0)
   pdf.setFontSize(10)
   const dcNo = fullDC?.dc_code || fullDC?.dcNo || String(fullDC?._id || '').slice(-6)
-  const dcDate = fullDC?.dcDate ? new Date(fullDC.dcDate).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB')
+  const dcDate = fullDC?.dcDate ? new Date(fullDC.dcDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
   const leftLines: string[] = [`DC No: ${dcNo}`, `DC Date: ${dcDate}`]
   if (show('school')) {
     const code = order.school_code ? ` (${order.school_code})` : ''
@@ -144,7 +144,7 @@ export function buildDcChallanPdf(fullDC: any, transit: DcTransit, options: DcPr
     rightLines.push(`Transport Area: ${transit.transportArea || ''}`)
     rightLines.push(`LR No: ${transit.lrNo || ''}`)
     rightLines.push(`#Boxes: ${transit.boxes || ''}`)
-    rightLines.push(`LR Date: ${transit.lrDate ? new Date(transit.lrDate).toLocaleDateString('en-GB') : ''}`)
+    rightLines.push(`LR Date: ${transit.lrDate ? new Date(transit.lrDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''}`)
     if (transit.remarks) rightLines.push(`Remarks: ${transit.remarks}`)
   }
   if (show('transportTo') && (order.transport_to_name || order.transport_to)) {

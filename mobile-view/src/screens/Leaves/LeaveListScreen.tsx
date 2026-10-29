@@ -17,6 +17,7 @@ import { WebInput, WebButton, DataTable } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 import { LEAVE_TYPE_OPTIONS, leaveTypeLabel } from '../../lib/leaveTypes';
 
+import DateField from '../../ui/DateField';
 export default function LeaveListScreen({ navigation }: any) {
   const { user } = useAuth();
   const [leaves, setLeaves] = useState<any[]>([]);
@@ -156,10 +157,10 @@ export default function LeaveListScreen({ navigation }: any) {
                   </Text>
                 </View>
                 <Text style={styles.cardSubtitle}>
-                  From: {leave.startDate ? new Date(leave.startDate).toLocaleDateString() : 'N/A'}
+                  From: {leave.startDate ? new Date(leave.startDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'N/A'}
                 </Text>
                 <Text style={styles.cardSubtitle}>
-                  To: {leave.endDate ? new Date(leave.endDate).toLocaleDateString() : 'N/A'}
+                  To: {leave.endDate ? new Date(leave.endDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'N/A'}
                 </Text>
                 {leave.reason && (
                   <Text style={styles.cardSubtitle}>Reason: {leave.reason}</Text>
@@ -215,22 +216,12 @@ export default function LeaveListScreen({ navigation }: any) {
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Start Date *</Text>
-              <WebInput
-                style={styles.input}
-                placeholder="YYYY-MM-DD"
-                value={startDate}
-                onChangeText={setStartDate}
-              />
+              <DateField placeholder="Start Date *" value={startDate} onChange={setStartDate} />
             </View>
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>End Date *</Text>
-              <WebInput
-                style={styles.input}
-                placeholder="YYYY-MM-DD"
-                value={endDate}
-                onChangeText={setEndDate}
-              />
+              <DateField placeholder="End Date *" value={endDate} onChange={setEndDate} />
             </View>
 
             <View style={styles.inputGroup}>

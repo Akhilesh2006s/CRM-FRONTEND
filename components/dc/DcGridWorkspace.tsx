@@ -313,7 +313,7 @@ export default function DcGridWorkspace({ initialDcId, initialAction }: { initia
         <Card className="space-y-4 p-4 md:p-6"><h2 className="font-semibold">Sub DC History</h2>
           {!main.grid?.adjustments?.length && <p className="text-sm text-neutral-500">No adjustments yet. Sub DC actions are available from Main DC creation.</p>}
           {main.grid?.adjustments?.map((a) => <div key={a.reference} className="space-y-2 rounded-lg border p-4"><div className="flex flex-wrap justify-between gap-2 text-sm"><span className="break-all font-semibold">{a.editType} · {a.reference}</span><span>{a.status}</span></div>
-            <p className="text-xs text-neutral-500">Main DC: {main.dc_code || main._id} · {new Date(a.createdAt).toLocaleString()} · {a.createdByName || '—'}</p>
+            <p className="text-xs text-neutral-500">Main DC: {main.dc_code || main._id} · {new Date(a.createdAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })} · {a.createdByName || '—'}</p>
             {a.changes.map((change) => <p key={change.lineId} className="text-sm">{change.before.product}, Class {change.before.class}: {a.editType === 'Exchange' ? `${change.before.productCategory || change.before.level} → ${change.after.productCategory || change.after.level}` : `${change.before.quantity} → ${change.after.quantity} (${change.quantityDifference > 0 ? '+' : ''}${change.quantityDifference})`}</p>)}
             {a.remarks && <p className="text-sm text-neutral-600">{a.remarks}</p>}</div>)}
         </Card>

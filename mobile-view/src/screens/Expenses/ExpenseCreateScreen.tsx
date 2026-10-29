@@ -11,6 +11,7 @@ import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 import { appendFileToFormData, MAX_BILL_BYTES, type PickedFile } from '../../lib/expenseFiles';
 
+import { ymdToDmy } from '../../utils/dateFormat';
 /** Per-km rates for Bike / Car come from GET /expenses/policy (defaults ₹2.80 / ₹8) — web lib/expenseTravelRates.ts */
 type TravelPerKmRates = { bikeRatePerKm?: number; carRatePerKm?: number };
 
@@ -263,7 +264,7 @@ export default function ExpenseCreateScreen({ navigation }: any) {
         style={[styles.dateTouchable, field !== 'date' && errStyle(field as FieldKey)]}
         onPress={() => setDatePicker(field)}
       >
-        <Text style={[styles.dateText, !form[field] && styles.datePlaceholder]}>{form[field] || 'Tap to pick date'}</Text>
+        <Text style={[styles.dateText, !form[field] && styles.datePlaceholder]}>{ymdToDmy(form[field]) || 'Tap to pick date'}</Text>
         <Text>📅</Text>
       </TouchableOpacity>
       {field !== 'date' ? errorText(field as FieldKey) : null}

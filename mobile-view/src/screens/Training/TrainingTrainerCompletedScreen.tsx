@@ -18,6 +18,7 @@ import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
 import { apiService, getApiUrl } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 
+import DateField from '../../ui/DateField';
 type CompletedItem = {
   _id: string;
   schoolName?: string;
@@ -80,11 +81,7 @@ function formatDate(dateString?: string) {
   try {
     const d = new Date(dateString);
     if (Number.isNaN(d.getTime())) return '-';
-    return d.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    }).replace(/ /g, '-');
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/ /g, '-');
   } catch {
     return '-';
   }
@@ -314,16 +311,8 @@ export default function TrainingTrainerCompletedScreen({ navigation }: any) {
             value={draftFilters.schoolName}
             onChangeText={(v) => setDraftFilters((f) => ({ ...f, schoolName: v }))}
           />
-          <WebInput
-            placeholder="From Date (YYYY-MM-DD)"
-            value={draftFilters.fromDate}
-            onChangeText={(v) => setDraftFilters((f) => ({ ...f, fromDate: v }))}
-          />
-          <WebInput
-            placeholder="To Date (YYYY-MM-DD)"
-            value={draftFilters.toDate}
-            onChangeText={(v) => setDraftFilters((f) => ({ ...f, toDate: v }))}
-          />
+          <DateField placeholder="From date" value={draftFilters.fromDate} onChange={(v) => setDraftFilters((f) => ({ ...f, fromDate: v }))} />
+          <DateField placeholder="To date" value={draftFilters.toDate} onChange={(v) => setDraftFilters((f) => ({ ...f, toDate: v }))} />
           <View style={styles.filterActions}>
             <View style={styles.searchWrap}>
               <WebButton title="Search" onPress={onSearch} />

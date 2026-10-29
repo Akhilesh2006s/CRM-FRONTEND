@@ -84,8 +84,8 @@ export default function PaymentApprovalDetail({ kind, navigation, route }: { kin
 
   const d = data || {};
   const sc = statusColors(d.status);
-  const fmt = (v?: string) => (v ? new Date(v).toLocaleDateString('en-IN') : '-');
-  const fmtTs = (v?: string) => (v ? new Date(v).toLocaleString() : '');
+  const fmt = (v?: string) => (v ? new Date(v).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-');
+  const fmtTs = (v?: string) => (v ? new Date(v).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : '');
   const prevAdmin = d.adminRemarks || d.rejectionReason;
   const statusOptions =
     kind === 'cheque'

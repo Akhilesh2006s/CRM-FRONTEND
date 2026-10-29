@@ -147,6 +147,11 @@ const LEAVE_APPROVER_ROLES = new Set([
 ])
 /** Coordinators view all leaves and attendance, read-only. */
 const LEAVE_VIEWER_ROLES = new Set(['Coordinator', 'Senior Coordinator'])
+/** Roles with a Team Attendance view (mobile-view navConfig TEAM_ATTENDANCE_ROLES matches). */
+export const TEAM_ATTENDANCE_ROLES = new Set([
+  'Admin', 'Super Admin', 'HR Manager', 'HR Executive', 'Manager', 'Executive Manager',
+  'Coordinator', 'Senior Coordinator', 'Regional Manager', 'Regional Head', 'National Head',
+])
 
 const matchesRoute = (pathname: string, route: string) =>
   pathname === route || pathname.startsWith(`${route}/`)
@@ -210,6 +215,11 @@ export function canAccessPath(
   // Every employee sees and records their own attendance.
   if (pathname === '/dashboard/attendance' || pathname.startsWith('/dashboard/attendance/')) {
     return !['vendor', 'partner', 'franchise'].includes(role)
+  }
+  // Team Attendance: HR / Admin (everyone), Product Manager (their trainers), Zonal Manager
+  // (their BDEs), Coordinators (their zones) and senior heads. The API scopes the rows.
+  if (matchesRoute(pathname, '/dashboard/employees/attendance') && TEAM_ATTENDANCE_ROLES.has(user.role)) {
+    return true
   }
   // BDE operational pages are core role capabilities. Keep them available even
   // when a legacy BDE account has stale/missing RBAC permission keys.

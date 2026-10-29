@@ -26,7 +26,7 @@ function when(value?: string) {
   if (!value) return '—'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return '—'
-  return date.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+  return date.toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })
 }
 
 /** Today's date in India as yyyy-mm-dd. */
@@ -79,7 +79,7 @@ export default function AttendanceRosterPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Attendance</h1>
-        <p className="text-sm text-neutral-600 mt-1">HR, Admin and Coordinators see every employee (Coordinators view only). A head sees the people under them. Employees check in from the app with a live selfie.</p>
+        <p className="text-sm text-neutral-600 mt-1">Super Admin, Admin and HR see every employee. A Product Manager sees their trainers, a Zonal Manager their BDEs, and a Coordinator the BDEs, trainers and Zonal Managers in their zones. Your own check-ins are under Attendance.</p>
       </div>
       <div className="flex flex-wrap items-end gap-3">
         <div>

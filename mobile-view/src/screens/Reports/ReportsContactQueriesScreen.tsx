@@ -17,6 +17,7 @@ import { apiService } from '../../services/api';
 import { exportContactQueriesReport } from '../../utils/exportContactQueriesReport';
 import { fetchContactEnquiries } from '../../utils/fetchContactEnquiries';
 
+import DateField from '../../ui/DateField';
 type ContactQuery = {
   _id: string;
   school_code?: string;
@@ -36,7 +37,7 @@ function formatEnquiryDate(dateStr?: string) {
   if (!dateStr) return '-';
   const date = new Date(dateStr);
   if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 function extractContactName(query: ContactQuery) {
@@ -230,19 +231,9 @@ export default function ReportsContactQueriesScreen() {
             keyboardType="phone-pad"
           />
           <WebLabel>Enquiry From</WebLabel>
-          <WebInput
-            placeholder="YYYY-MM-DD"
-            value={enquiryFrom}
-            onChangeText={setEnquiryFrom}
-            {...(Platform.OS === 'web' ? ({ type: 'date' } as any) : {})}
-          />
+          <DateField placeholder="Enquiry From" value={enquiryFrom} onChange={setEnquiryFrom} />
           <WebLabel>Enquiry To</WebLabel>
-          <WebInput
-            placeholder="YYYY-MM-DD"
-            value={enquiryTo}
-            onChangeText={setEnquiryTo}
-            {...(Platform.OS === 'web' ? ({ type: 'date' } as any) : {})}
-          />
+          <DateField placeholder="Enquiry To" value={enquiryTo} onChange={setEnquiryTo} />
           <WebButton title="Search" onPress={applyFilters} />
         </View>
 

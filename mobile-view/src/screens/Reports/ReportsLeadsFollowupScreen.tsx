@@ -18,6 +18,7 @@ import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives
 import { apiService } from '../../services/api';
 import { exportLeadsReport } from '../../utils/exportLeadsReport';
 
+import DateField from '../../ui/DateField';
 type Lead = {
   _id: string;
   school_name?: string;
@@ -84,15 +85,7 @@ function getAssignedTo(lead: Lead) {
 
 function formatDate(dateStr?: string) {
   if (!dateStr) return '-';
-  return new Date(dateStr).toLocaleString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: true,
-  });
+  return new Date(dateStr).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
 }
 
 function isFollowUpOverdue(dateStr?: string) {
@@ -300,11 +293,11 @@ export default function ReportsLeadsFollowupScreen() {
             items={[{ label: 'All Zones', value: '' }, ...zones.map((z) => ({ label: z, value: z }))]}
           />
           <WebLabel>To Date</WebLabel>
-          <WebInput value={toDate} onChangeText={setToDate} placeholder="YYYY-MM-DD" />
+          <DateField placeholder="To Date" value={toDate} onChange={setToDate} />
           <WebLabel>By School Name</WebLabel>
           <WebInput value={schoolName} onChangeText={setSchoolName} placeholder="Enter school name" />
           <WebLabel>From Date</WebLabel>
-          <WebInput value={fromDate} onChangeText={setFromDate} placeholder="YYYY-MM-DD" />
+          <DateField placeholder="From Date" value={fromDate} onChange={setFromDate} />
           <WebSelect
             label="Select Priority"
             value={priority}

@@ -16,6 +16,7 @@ import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives
 import { apiService } from '../../services/api';
 import { exportEmployeeTrackingReport } from '../../utils/exportEmployeeTrackingReport';
 
+import DateField from '../../ui/DateField';
 type TrackingData = {
   _id: string;
   employeeId?: string;
@@ -66,15 +67,7 @@ function formatActivityTimestamp(dateStr?: string) {
   if (!dateStr) return '-';
   const date = new Date(dateStr);
   if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  });
+  return date.toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
 }
 
 function isSameCalendarDay(a: Date, b: Date) {
@@ -271,19 +264,9 @@ export default function ReportsEmployeeTrackScreen() {
             items={[{ label: 'All Zones', value: '' }, ...zones.map((z) => ({ label: z, value: z }))]}
           />
           <WebLabel>Started</WebLabel>
-          <WebInput
-            placeholder="YYYY-MM-DD"
-            value={startedDate}
-            onChangeText={setStartedDate}
-            {...(Platform.OS === 'web' ? ({ type: 'date' } as any) : {})}
-          />
+          <DateField placeholder="Started" value={startedDate} onChange={setStartedDate} />
           <WebLabel>Last Used</WebLabel>
-          <WebInput
-            placeholder="YYYY-MM-DD"
-            value={lastUsedDate}
-            onChangeText={setLastUsedDate}
-            {...(Platform.OS === 'web' ? ({ type: 'date' } as any) : {})}
-          />
+          <DateField placeholder="Last Used" value={lastUsedDate} onChange={setLastUsedDate} />
           <WebButton title="Search" onPress={applyFilters} />
         </View>
 

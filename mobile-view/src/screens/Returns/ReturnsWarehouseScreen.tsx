@@ -15,6 +15,7 @@ import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebLabel } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 
+import DateField from '../../ui/DateField';
 type WarehouseReturn = {
   _id: string;
   returnNumber: number;
@@ -112,7 +113,7 @@ export default function ReturnsWarehouseScreen() {
   const formatDate = (dateString?: string) => {
     if (!dateString) return '-';
     try {
-      return new Date(dateString).toLocaleDateString();
+      return new Date(dateString).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
     } catch {
       return '-';
     }
@@ -121,7 +122,7 @@ export default function ReturnsWarehouseScreen() {
   const formatDateTime = (dateString?: string) => {
     if (!dateString) return '-';
     try {
-      return new Date(dateString).toLocaleString();
+      return new Date(dateString).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
     } catch {
       return '-';
     }
@@ -144,11 +145,7 @@ export default function ReturnsWarehouseScreen() {
         <View style={styles.formCard}>
           <Text style={styles.formTitle}>Submit New Return</Text>
           <WebLabel>Return Date *</WebLabel>
-          <WebInput
-            placeholder="YYYY-MM-DD"
-            value={form.returnDate}
-            onChangeText={(text) => setForm({ ...form, returnDate: text })}
-          />
+          <DateField placeholder="Return Date *" value={form.returnDate} onChange={(text) => setForm({ ...form, returnDate: text })} />
           <WebLabel>LR No (optional)</WebLabel>
           <WebInput
             placeholder="e.g. C062455"

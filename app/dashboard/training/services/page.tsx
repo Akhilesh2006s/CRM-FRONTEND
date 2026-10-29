@@ -187,7 +187,7 @@ export default function ServicesListPage() {
                   <td className="py-2 px-3">{s.subject}</td>
                   <td className="py-2 px-3">{s.trainerId?.name || '-'}</td>
                   <td className="py-2 px-3">{s.term || '-'}</td>
-                  <td className="py-2 px-3 text-center">{new Date(s.serviceDate).toLocaleDateString()}</td>
+                  <td className="py-2 px-3 text-center">{new Date(s.serviceDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
                   <td className="py-2 px-3">{s.remarks || '-'}</td>
                   <td className="py-2 px-3">
                     <span className={`inline-flex px-2 py-1 rounded-full text-xs ${

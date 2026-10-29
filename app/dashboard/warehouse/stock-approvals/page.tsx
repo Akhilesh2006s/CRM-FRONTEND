@@ -222,7 +222,7 @@ export default function PendingStockApprovalsPage() {
               <p><span className="text-neutral-500">Status:</span> {STATUS_LABEL[selected.status]}</p>
               <p><span className="text-neutral-500">Quantity:</span> {selected.quantity} {selected.unit || 'pcs'}</p>
               <p><span className="text-neutral-500">Batch / Lot:</span> {selected.batchLot || '-'}</p>
-              <p><span className="text-neutral-500">Date:</span> {selected.stockDate ? new Date(selected.stockDate).toLocaleDateString() : '-'}</p>
+              <p><span className="text-neutral-500">Date:</span> {selected.stockDate ? new Date(selected.stockDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}</p>
               <p><span className="text-neutral-500">Supplier:</span> {selected.supplier || '-'}</p>
               <p><span className="text-neutral-500">Location:</span> {selected.location || '-'}</p>
               <p><span className="text-neutral-500">Category / Level / Specs:</span> {[selected.category, selected.level, selected.specs, selected.subject].filter(Boolean).join(' · ') || '-'}</p>

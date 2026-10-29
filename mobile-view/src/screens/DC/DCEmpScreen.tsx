@@ -18,6 +18,7 @@ import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useDcCatalog } from '../../hooks/useDcCatalog';
 
+import DateField from '../../ui/DateField';
 type KitProduct = { product: string; quantity: string };
 
 /** BDEs request samples and see their own requests / kits; reviewers accept, reject and issue kits (web dc/emp). */
@@ -169,7 +170,7 @@ export default function DCEmpScreen({ navigation }: any) {
   const formatDate = (dateString?: string) => {
     if (!dateString) return '-';
     try {
-      return new Date(dateString).toLocaleDateString('en-IN');
+      return new Date(dateString).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
     } catch {
       return '-';
     }
@@ -311,21 +312,11 @@ export default function DCEmpScreen({ navigation }: any) {
                 </View>
                 <View style={styles.formGroup}>
                   <Text style={styles.label}>Distribution Date *</Text>
-                  <WebInput
-                    style={styles.input}
-                    placeholder="YYYY-MM-DD"
-                    value={form.distribution_date}
-                    onChangeText={(text) => setForm({ ...form, distribution_date: text })}
-                  />
+                  <DateField placeholder="Distribution Date *" value={form.distribution_date} onChange={(text) => setForm({ ...form, distribution_date: text })} />
                 </View>
                 <View style={styles.formGroup}>
                   <Text style={styles.label}>Expected Return</Text>
-                  <WebInput
-                    style={styles.input}
-                    placeholder="YYYY-MM-DD"
-                    value={form.expected_return_date}
-                    onChangeText={(text) => setForm({ ...form, expected_return_date: text })}
-                  />
+                  <DateField placeholder="Expected Return" value={form.expected_return_date} onChange={(text) => setForm({ ...form, expected_return_date: text })} />
                 </View>
                 <View style={styles.formGroup}>
                   <Text style={styles.label}>Kit products</Text>

@@ -20,6 +20,7 @@ import MessageBanner from '../../components/MessageBanner';
 import { useAuth } from '../../context/AuthContext';
 import { LEAD_PRODUCT_STATUSES, validateLeadStyleProducts } from '../../lib/crm/leadProductRules';
 
+import { ymdToDmy } from '../../utils/dateFormat';
 const SCHOOL_TYPE_OPTIONS = [
   { label: 'New', value: 'New' },
   { label: 'Existing', value: 'Existing' },
@@ -823,7 +824,7 @@ export default function LeadEditScreen({ navigation, route }: any) {
             onPress={() => setShowFollowUpDatePicker(true)}
           >
             <Text style={[styles.dateText, !form.follow_up_date && styles.datePlaceholder]}>
-              {form.follow_up_date || 'Tap to pick date'}
+              {ymdToDmy(form.follow_up_date) || 'Tap to pick date'}
             </Text>
             <Text>📅</Text>
           </TouchableOpacity>

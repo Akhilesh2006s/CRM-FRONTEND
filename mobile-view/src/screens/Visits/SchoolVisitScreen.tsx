@@ -16,6 +16,7 @@ import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 
+import DateField from '../../ui/DateField';
 type Visit = {
   _id: string;
   schoolName?: string;
@@ -281,7 +282,7 @@ export default function SchoolVisitScreen({ navigation, route }: any) {
   const formatDate = (value?: string) => {
     if (!value) return '—';
     try {
-      return new Date(value).toLocaleDateString('en-IN');
+      return new Date(value).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
     } catch {
       return '—';
     }
@@ -400,12 +401,7 @@ export default function SchoolVisitScreen({ navigation, route }: any) {
                   placeholder="Yes or No"
                 />
                 {form.programsStarted === 'Yes' ? (
-                  <WebInput
-                    style={styles.input}
-                    value={form.programsStartedDate}
-                    onChangeText={(t) => setForm((f) => ({ ...f, programsStartedDate: t }))}
-                    placeholder="Programs started date (YYYY-MM-DD) *"
-                  />
+                  <DateField placeholder="Programs started date  *" value={form.programsStartedDate} onChange={(t) => setForm((f) => ({ ...f, programsStartedDate: t }))} style={styles.input} />
                 ) : null}
                 <WebLabel>Pages completed (program wise) *</WebLabel>
                 {form.pagesCompleted.map((row, idx) => (
@@ -473,19 +469,9 @@ export default function SchoolVisitScreen({ navigation, route }: any) {
               numberOfLines={3}
             />
 
-            <WebInput
-              style={styles.input}
-              value={form.nextVisitDate}
-              onChangeText={(t) => setForm((f) => ({ ...f, nextVisitDate: t }))}
-              placeholder="Next visit date (YYYY-MM-DD)"
-            />
+            <DateField placeholder="Next visit date" value={form.nextVisitDate} onChange={(t) => setForm((f) => ({ ...f, nextVisitDate: t }))} style={styles.input} />
 
-            <WebInput
-              style={styles.input}
-              value={form.trainingDate}
-              onChangeText={(t) => setForm((f) => ({ ...f, trainingDate: t }))}
-              placeholder="Training date (YYYY-MM-DD)"
-            />
+            <DateField placeholder="Training date" value={form.trainingDate} onChange={(t) => setForm((f) => ({ ...f, trainingDate: t }))} style={styles.input} />
 
             <View style={styles.gpsRow}>
               <TouchableOpacity

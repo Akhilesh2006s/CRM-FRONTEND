@@ -40,7 +40,7 @@ function formatValue(value: unknown, type?: ReportColumn['type']) {
   if (type === 'date' || type === 'datetime') {
     const date = new Date(String(value))
     if (!Number.isNaN(date.getTime())) {
-      return date.toLocaleString('en-IN', type === 'date' ? { dateStyle: 'medium' } : { dateStyle: 'medium', timeStyle: 'short' })
+      return date.toLocaleString('en-GB', type === 'date' ? { day: '2-digit', month: '2-digit', year: 'numeric' } : { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })
     }
   }
   return String(value)
@@ -171,7 +171,7 @@ export default function OperationalReportsPage() {
       <Card className="overflow-hidden border border-neutral-200">
         <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3">
           <span className="text-sm font-medium text-neutral-900">{loading ? 'Loading…' : `${payload?.rows.length || 0} rows`}</span>
-          {payload?.generatedAt && <span className="text-xs text-neutral-500">Generated {new Date(payload.generatedAt).toLocaleString('en-IN')}</span>}
+          {payload?.generatedAt && <span className="text-xs text-neutral-500">Generated {new Date(payload.generatedAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}</span>}
         </div>
         <div className="max-h-[65vh] overflow-auto">
           <Table>

@@ -72,10 +72,10 @@ export default function EmployeeApprovedLeavesPage() {
                 <tr key={l._id} className="border-b last:border-0">
                   <td className="py-2 px-3">{leaveTypeLabel(l.leaveType)}</td>
                   <td className="py-2 px-3 text-center">
-                    {new Date(l.startDate).toLocaleDateString()}
+                    {new Date(l.startDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                   </td>
                   <td className="py-2 px-3 text-center">
-                    {new Date(l.endDate).toLocaleDateString()}
+                    {new Date(l.endDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                   </td>
                   <td className="py-2 px-3">{l.reason || '-'}</td>
                   <td className="py-2 px-3 align-top">

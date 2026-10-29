@@ -38,6 +38,7 @@ import {
   transportDetailsFromOrder,
 } from '../../components/dc/TransportDetailsSection';
 
+import { ymdToDmy } from '../../utils/dateFormat';
 const CLASSES = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
 const DC_CATEGORIES = ['Term 1', 'Term 2', 'Term 3', 'Full Year'];
 const TERMS = ['Term 1', 'Term 2', 'Both'];
@@ -163,7 +164,7 @@ function DateField({
     <View style={styles.fieldContainer}>
       <Text style={styles.label}>{label}</Text>
       <TouchableOpacity style={styles.dateTouchable} onPress={() => setShowPicker(true)} activeOpacity={0.7}>
-        <Text style={[styles.dateText, !value && styles.placeholderText]}>{value || 'Tap to pick date'}</Text>
+        <Text style={[styles.dateText, !value && styles.placeholderText]}>{ymdToDmy(value) || 'Tap to pick date'}</Text>
         <Text style={styles.calendarIcon}>📅</Text>
       </TouchableOpacity>
       {showPicker && Platform.OS === 'android' ? (

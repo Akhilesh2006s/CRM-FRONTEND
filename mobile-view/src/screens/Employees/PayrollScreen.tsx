@@ -340,7 +340,7 @@ export default function PayrollScreen() {
       {data?.status === 'finalized' ? (
         <View style={[styles.notice, styles.noticeGreen]}>
           <Text style={styles.noticeGreenText}>
-            Finalized{data.finalizedAt ? ` on ${new Date(data.finalizedAt).toLocaleDateString('en-IN')}` : ''}. Pay slips were issued;
+            Finalized{data.finalizedAt ? ` on ${new Date(data.finalizedAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}` : ''}. Pay slips were issued;
             employees see them under Pay Slips.
           </Text>
         </View>

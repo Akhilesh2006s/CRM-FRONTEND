@@ -109,12 +109,12 @@ export default function WarehouseReturnsPage() {
               {filteredList.map((r) => (
                 <tr key={r._id} className="border-b">
                   <td className="py-2 pr-2">{r.returnNumber}</td>
-                  <td className="py-2 pr-2">{new Date(r.returnDate).toLocaleDateString()}</td>
+                  <td className="py-2 pr-2">{new Date(r.returnDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
                   <td className="py-2 pr-2">{r.lrNumber || '-'}</td>
                   <td className="py-2 pr-2">{r.finYear || '-'}</td>
                   <td className="py-2 pr-2">{r.createdBy?.name || '-'}</td>
                   <td className="py-2 pr-2 max-w-[360px] truncate" title={r.remarks || ''}>{r.remarks || '-'}</td>
-                  <td className="py-2 pr-2">{new Date(r.createdAt).toLocaleString()}</td>
+                  <td className="py-2 pr-2">{new Date(r.createdAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}</td>
                   <td className="py-2 pr-2">
                     <Button
                       size="sm"

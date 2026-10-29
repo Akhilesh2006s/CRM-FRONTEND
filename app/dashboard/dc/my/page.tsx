@@ -388,7 +388,7 @@ export default function MyDCPage() {
                   <div className="text-sm text-neutral-600 space-y-1">
                     <p><span className="font-medium">Phone:</span> {d.customerPhone || d.dcOrderId?.contact_mobile || '-'}</p>
                     <p><span className="font-medium">Product:</span> {d.product || d.saleId?.product || (d.dcOrderId?.products && Array.isArray(d.dcOrderId.products) ? uniqueProductNames(d.dcOrderId.products).join(', ') : '-')}</p>
-                    <p><span className="font-medium">Created:</span> {d.createdAt ? new Date(d.createdAt).toLocaleDateString() : '-'}</p>
+                    <p><span className="font-medium">Created:</span> {d.createdAt ? new Date(d.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}</p>
                   </div>
                 </div>
                 

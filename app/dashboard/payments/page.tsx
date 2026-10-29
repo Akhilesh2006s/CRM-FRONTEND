@@ -324,7 +324,7 @@ export default function PaymentsPage() {
                       <td className="py-2 px-3">{p.paymentMethod || '-'}</td>
                       <td className="py-2 px-3">{getStatusBadge(p.status)}</td>
                       <td className="py-2 px-3">
-                        {p.paymentDate ? new Date(p.paymentDate).toLocaleDateString() : '-'}
+                        {p.paymentDate ? new Date(p.paymentDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}
                       </td>
                       <td className="py-2 px-3">{p.createdBy?.name || '-'}</td>
                       {isAdmin && (
@@ -474,7 +474,7 @@ export default function PaymentsPage() {
                     <span className="text-neutral-600">Payment Date:</span>
                     <span className="ml-2 font-medium">
                       {selectedPaymentForInvoice.paymentDate 
-                        ? new Date(selectedPaymentForInvoice.paymentDate).toLocaleDateString()
+                        ? new Date(selectedPaymentForInvoice.paymentDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
                         : '-'}
                     </span>
                   </div>

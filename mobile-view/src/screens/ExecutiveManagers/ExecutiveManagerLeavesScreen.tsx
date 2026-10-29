@@ -11,6 +11,7 @@ import type { LeaveApprovalFields } from '../../lib/leaveApproval';
 import LeaveApprovalStatus from '../../components/leaves/LeaveApprovalStatus';
 import LeaveDecisionActions from '../../components/leaves/LeaveDecisionActions';
 
+import DateField from '../../ui/DateField';
 type LeaveEmployee = { _id: string; name: string; email?: string; assignedCity?: string };
 
 type Leave = LeaveApprovalFields & {
@@ -31,7 +32,7 @@ type Tab = 'team' | 'mine';
 const formatDate = (d?: string) => {
   if (!d) return '-';
   const date = new Date(d);
-  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleDateString('en-IN');
+  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 };
 
 const isIsoDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v.trim());
@@ -180,12 +181,12 @@ export default function ExecutiveManagerLeavesScreen({ navigation, route }: any)
             />
             <View style={styles.dateRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.label}>From (YYYY-MM-DD)</Text>
-                <WebInput value={fromDate} onChangeText={setFromDate} placeholder="YYYY-MM-DD" />
+                <Text style={styles.label}>From</Text>
+                <DateField placeholder="From" value={fromDate} onChange={setFromDate} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.label}>To (YYYY-MM-DD)</Text>
-                <WebInput value={toDate} onChangeText={setToDate} placeholder="YYYY-MM-DD" />
+                <Text style={styles.label}>To</Text>
+                <DateField placeholder="To" value={toDate} onChange={setToDate} />
               </View>
             </View>
             <WebButton title="Apply" variant="outline" onPress={loadLeaves} />

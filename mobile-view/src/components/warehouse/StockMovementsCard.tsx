@@ -41,7 +41,7 @@ const FILTERS: Array<{ value: '' | MovementType; label: string }> = [
 function fmtWhen(at: string) {
   const d = new Date(at);
   if (Number.isNaN(d.getTime())) return '-';
-  return d.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
 }
 
 export default function StockMovementsCard({ refreshKey = 0 }: { refreshKey?: number }) {

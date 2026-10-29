@@ -157,7 +157,7 @@ export default function MySamplesPage() {
                     ))}
                   </ul>
                   <p className="text-xs text-neutral-500 mt-2">
-                    Submitted: {new Date(request.createdAt).toLocaleString()}
+                    Submitted: {new Date(request.createdAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
                   </p>
                   <Button
                     type="button"

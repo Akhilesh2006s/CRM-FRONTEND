@@ -16,6 +16,7 @@ import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, DataTable } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 
+import DateField from '../../ui/DateField';
 export default function PaymentListScreen({ navigation }: any) {
   const { user } = useAuth();
   const [payments, setPayments] = useState<any[]>([]);
@@ -138,7 +139,7 @@ export default function PaymentListScreen({ navigation }: any) {
                 <Text style={styles.cardSubtitle}>School Code: {payment.schoolCode || 'N/A'}</Text>
                 <Text style={styles.cardSubtitle}>Method: {payment.paymentMethod || 'N/A'}</Text>
                 <Text style={styles.cardSubtitle}>
-                  Date: {payment.paymentDate ? new Date(payment.paymentDate).toLocaleDateString() : 'N/A'}
+                  Date: {payment.paymentDate ? new Date(payment.paymentDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'N/A'}
                 </Text>
                 <Text style={[styles.status, { color: payment.status === 'Approved' ? '#28a745' : '#ffc107' }]}>
                   {payment.status || 'Pending'}
@@ -236,12 +237,7 @@ export default function PaymentListScreen({ navigation }: any) {
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Payment Date</Text>
-              <WebInput
-                style={styles.input}
-                placeholder="YYYY-MM-DD"
-                value={paymentDate}
-                onChangeText={setPaymentDate}
-              />
+              <DateField placeholder="Payment Date" value={paymentDate} onChange={setPaymentDate} />
             </View>
 
             <View style={styles.inputGroup}>

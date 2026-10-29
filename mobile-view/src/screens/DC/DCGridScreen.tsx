@@ -810,7 +810,7 @@ export default function DCGridScreen({ navigation, route }: any) {
                       <Text style={styles.meta}>{a.status}</Text>
                     </View>
                     <Text style={styles.small}>
-                      Main DC: {main.dc_code || main._id} · {new Date(a.createdAt).toLocaleString()} · {a.createdByName || '—'}
+                      Main DC: {main.dc_code || main._id} · {new Date(a.createdAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })} · {a.createdByName || '—'}
                     </Text>
                     {(a.changes || []).map((change) => (
                       <Text key={change.lineId} style={styles.body}>

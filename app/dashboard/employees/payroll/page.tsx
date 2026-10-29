@@ -238,7 +238,7 @@ export default function PayrollPage() {
 
       {data?.status === 'finalized' && (
         <p className="rounded-md bg-green-50 border border-green-200 px-3 py-2 text-sm text-green-800">
-          Finalized{data.finalizedAt ? ` on ${new Date(data.finalizedAt).toLocaleDateString('en-IN')}` : ''}. Pay slips were issued; employees see them under Pay Slips.
+          Finalized{data.finalizedAt ? ` on ${new Date(data.finalizedAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}` : ''}. Pay slips were issued; employees see them under Pay Slips.
         </p>
       )}
       {data && data.missingCtc.length > 0 && (

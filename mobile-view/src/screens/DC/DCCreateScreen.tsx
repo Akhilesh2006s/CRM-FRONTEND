@@ -41,6 +41,7 @@ import { isTermWiseDcRecord, resolveClosedSalesProductLines } from '../../compon
 import { CLOSE_LEAD_DESTINATION } from '../../lib/crm/closeLeadTermRouting';
 import { resolveExistingProductTerm } from '../../lib/crm/productTerm';
 
+import { ymdToDmy } from '../../utils/dateFormat';
 type ProductRow = {
   id: string;
   itemType?: string;
@@ -164,7 +165,7 @@ function DateField({
     <View style={styles.fieldContainer}>
       <Text style={styles.label}>{label}</Text>
       <TouchableOpacity style={styles.dateTouchable} onPress={() => setShowPicker(true)} activeOpacity={0.7}>
-        <Text style={[styles.dateText, !value && styles.placeholderText]}>{value || 'Tap to pick date'}</Text>
+        <Text style={[styles.dateText, !value && styles.placeholderText]}>{ymdToDmy(value) || 'Tap to pick date'}</Text>
         <Text style={styles.calendarIcon}>📅</Text>
       </TouchableOpacity>
       {showPicker && Platform.OS === 'android' ? (

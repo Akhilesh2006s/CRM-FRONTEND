@@ -948,7 +948,7 @@ export default function WarehouseDcAtWarehouse() {
                   <TableCell className="whitespace-nowrap">{idx + 1}</TableCell>
                   <TableCell className="whitespace-nowrap">DC-{r._id.slice(-6)}</TableCell>
                   <TableCell className="whitespace-nowrap">
-                    {r.managerRequestedAt ? new Date(r.managerRequestedAt).toLocaleDateString() : '-'}
+                    {r.managerRequestedAt ? new Date(r.managerRequestedAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}
                   </TableCell>
                   <TableCell className="truncate max-w-[160px]">{r.customerName || r.saleId?.customerName || '-'}</TableCell>
                   <TableCell className="whitespace-nowrap">{r.customerPhone || '-'}</TableCell>

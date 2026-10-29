@@ -333,7 +333,7 @@ export default function AllCreatedDCsPage() {
               {items.map((d) => (
                 <tr key={d._id} className={chainRowClass(d, 'border-b last:border-0 hover:bg-gray-50')}>
                   <td className="py-2 px-3 whitespace-nowrap">
-                    {d.createdAt ? new Date(d.createdAt).toLocaleDateString() : '—'}
+                    {d.createdAt ? new Date(d.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'}
                   </td>
                   <td className="py-2 px-3 font-mono text-xs whitespace-nowrap">
                     {d.dc_code || d.dcOrderId?.dc_code || d._id?.slice(-8) || '—'}
@@ -397,7 +397,7 @@ export default function AllCreatedDCsPage() {
               </p>
               <p>
                 <span className="text-neutral-500">Created On:</span>{' '}
-                {selectedDC.createdAt ? new Date(selectedDC.createdAt).toLocaleString() : '—'}
+                {selectedDC.createdAt ? new Date(selectedDC.createdAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : '—'}
               </p>
               <p>
                 <span className="text-neutral-500">Created By:</span> {personName(selectedDC.createdBy)}

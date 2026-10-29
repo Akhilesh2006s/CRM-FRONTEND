@@ -540,11 +540,7 @@ export default function RenewalLeadsPage() {
   const formatDate = (dateString?: string) => {
     if (!dateString) return '-'
     try {
-      return new Date(dateString).toLocaleDateString('en-IN', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-      })
+      return new Date(dateString).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
     } catch {
       return '-'
     }
@@ -553,13 +549,7 @@ export default function RenewalLeadsPage() {
   const formatDateTime = (dateString?: string) => {
     if (!dateString) return '-'
     try {
-      return new Date(dateString).toLocaleString('en-IN', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
+      return new Date(dateString).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })
     } catch {
       return '-'
     }

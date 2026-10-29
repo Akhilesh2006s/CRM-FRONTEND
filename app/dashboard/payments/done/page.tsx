@@ -327,11 +327,7 @@ export default function PaymentsDonePage() {
                   <TableRow key={payment._id}>
                     <TableCell>
                       {payment.paymentDate
-                        ? new Date(payment.paymentDate).toLocaleDateString('en-IN', {
-                            day: '2-digit',
-                            month: 'short',
-                            year: 'numeric',
-                          })
+                        ? new Date(payment.paymentDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
                         : '-'}
                     </TableCell>
                     <TableCell className="font-medium">{payment.customerName || '-'}</TableCell>

@@ -10,6 +10,7 @@ import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import EmployeeTaggingPicker, { supportsEmployeeTagging } from '../../components/EmployeeTaggingPicker';
 
+import DateField from '../../ui/DateField';
 /** User types, same values / labels as web app/dashboard/employees/new/page.tsx */
 const ROLE_OPTIONS: { value: string; label: string }[] = [
   { value: 'Executive', label: 'BDE' },
@@ -272,10 +273,10 @@ export default function EmployeeNewScreen({ navigation }: any) {
       }
     }
     if (!form.dateOfBirth) return fail('Date of birth is required');
-    if (!isIsoDate(form.dateOfBirth)) return fail('Date of birth must be in YYYY-MM-DD format');
+    if (!isIsoDate(form.dateOfBirth)) return fail('Pick a valid date of birth');
     if (form.dateOfBirth > todayDate()) return fail('Date of birth cannot be a future date');
     if (!form.dateOfJoining) return fail('Date of joining is required');
-    if (!isIsoDate(form.dateOfJoining)) return fail('Date of joining must be in YYYY-MM-DD format');
+    if (!isIsoDate(form.dateOfJoining)) return fail('Pick a valid date of joining');
     if (form.dateOfJoining > todayDate()) return fail('Date of joining cannot be a future date');
     const ctc = Number(form.yearlySalary);
     if (!(ctc > 0)) return fail('CTC (per year) is required');
@@ -410,8 +411,8 @@ export default function EmployeeNewScreen({ navigation }: any) {
         <FormField label="Email Id *" value={form.email} onChangeText={(t: string) => setForm((f) => ({ ...f, email: t }))} placeholder="Email" keyboardType="email-address" />
         <FormField label="Company contact number *" value={form.phone} onChangeText={(v: string) => setForm((f) => ({ ...f, phone: sanitizeDigits(v) }))} placeholder="10 to 15 digits" keyboardType="phone-pad" maxLength={15} />
         <FormField label="Personal mobile *" value={form.mobile} onChangeText={(v: string) => setForm((f) => ({ ...f, mobile: sanitizeDigits(v) }))} placeholder="10 to 15 digits" keyboardType="phone-pad" maxLength={15} />
-        <FormField label="Date of birth * (YYYY-MM-DD)" value={form.dateOfBirth} onChangeText={(t: string) => setForm((f) => ({ ...f, dateOfBirth: t.trim() }))} placeholder="YYYY-MM-DD" keyboardType="numbers-and-punctuation" maxLength={10} />
-        <FormField label="Date of joining * (YYYY-MM-DD)" value={form.dateOfJoining} onChangeText={(t: string) => setForm((f) => ({ ...f, dateOfJoining: t.trim() }))} placeholder="YYYY-MM-DD" keyboardType="numbers-and-punctuation" maxLength={10} />
+        <DateField placeholder="Date of birth *" value={form.dateOfBirth} onChange={(t: string) => setForm((f) => ({ ...f, dateOfBirth: t.trim() }))} />
+        <DateField placeholder="Date of joining *" value={form.dateOfJoining} onChange={(t: string) => setForm((f) => ({ ...f, dateOfJoining: t.trim() }))} />
         <FormField label="CTC (₹ per year) *" value={form.yearlySalary} onChangeText={(t: string) => setForm((f) => ({ ...f, yearlySalary: t.replace(/[^\d.]/g, '') }))} placeholder="e.g. 300000" keyboardType="decimal-pad" />
         {Number(form.yearlySalary) > 0 ? (
           <Text style={styles.lookupText}>₹{Math.round(Number(form.yearlySalary) / 12).toLocaleString('en-IN')} per month</Text>

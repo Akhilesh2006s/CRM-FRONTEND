@@ -60,8 +60,8 @@ function formatValue(value: unknown, type?: ReportColumn['type']) {
     const date = new Date(String(value));
     if (!Number.isNaN(date.getTime())) {
       return date.toLocaleString(
-        'en-IN',
-        type === 'date' ? { dateStyle: 'medium' } : { dateStyle: 'medium', timeStyle: 'short' }
+        'en-GB',
+        type === 'date' ? { day: '2-digit', month: '2-digit', year: 'numeric' } : { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }
       );
     }
   }
@@ -396,7 +396,7 @@ export default function ReportsOperationalScreen() {
       <View style={styles.rowsHeader}>
         <Text style={styles.rowsCount}>{loading ? 'Loading…' : `${rows.length} rows`}</Text>
         {payload?.generatedAt ? (
-          <Text style={styles.generated}>Generated {new Date(payload.generatedAt).toLocaleString('en-IN')}</Text>
+          <Text style={styles.generated}>Generated {new Date(payload.generatedAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}</Text>
         ) : null}
       </View>
 

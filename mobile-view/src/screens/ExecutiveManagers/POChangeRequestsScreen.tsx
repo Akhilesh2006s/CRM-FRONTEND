@@ -70,7 +70,7 @@ export default function POChangeRequestsScreen({ navigation }: any) {
         ) : (
           list.map((order) => {
             const req = order.poChangeRequest;
-            const requestedAt = req?.requestedAt ? new Date(req.requestedAt).toLocaleString() : '-';
+            const requestedAt = req?.requestedAt ? new Date(req.requestedAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : '-';
             const executiveName = req?.requestedBy?.name || req?.requestedBy?.email || 'Executive';
             return (
               <TouchableOpacity

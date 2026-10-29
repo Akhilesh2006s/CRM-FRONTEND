@@ -214,7 +214,7 @@ export default function PaymentDetailPage() {
               <div>
                 <label className="text-sm text-neutral-500">Approved By</label>
                 <Input 
-                  value={`${data.approvedBy.name || ''} ${data.approvedAt ? new Date(data.approvedAt).toLocaleString() : ''}`} 
+                  value={`${data.approvedBy.name || ''} ${data.approvedAt ? new Date(data.approvedAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : ''}`} 
                   readOnly 
                   className="bg-neutral-50" 
                 />
@@ -224,7 +224,7 @@ export default function PaymentDetailPage() {
               <div>
                 <label className="text-sm text-neutral-500">Held By</label>
                 <Input 
-                  value={`${data.heldBy.name || ''} ${data.heldAt ? new Date(data.heldAt).toLocaleString() : ''}`} 
+                  value={`${data.heldBy.name || ''} ${data.heldAt ? new Date(data.heldAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : ''}`} 
                   readOnly 
                   className="bg-neutral-50" 
                 />
@@ -234,7 +234,7 @@ export default function PaymentDetailPage() {
               <div>
                 <label className="text-sm text-neutral-500">Rejected By</label>
                 <Input 
-                  value={`${data.rejectedBy.name || ''} ${data.rejectedAt ? new Date(data.rejectedAt).toLocaleString() : ''}`} 
+                  value={`${data.rejectedBy.name || ''} ${data.rejectedAt ? new Date(data.rejectedAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : ''}`} 
                   readOnly 
                   className="bg-neutral-50" 
                 />

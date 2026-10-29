@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { usePermissions } from '@/components/permissions/PermissionsProvider'
-import { canAccessHref } from '@/lib/access'
+import { canAccessHref, TEAM_ATTENDANCE_ROLES } from '@/lib/access'
 import {
   buildRbacSidebarNav,
   rbacCatalogHrefs,
@@ -152,7 +152,15 @@ function ensureAttendanceNav(nav: NavItem[], role: string | undefined): NavItem[
     item.href === roster && item.label === 'Attendance' ? { ...item, label: 'Team Attendance' } : item
   const relabel = (items: NavItem[]): NavItem[] =>
     items.map((item) => ({ ...teamLabel(item), ...(item.children ? { children: item.children.map(teamLabel) } : {}) }))
-  const next = relabel(nav)
+  let next = relabel(nav)
+  const hasRoster = (items: NavItem[] | undefined): boolean =>
+    (items || []).some((item) => item.href === roster || hasRoster(item.children))
+  // Viewers of other employees' attendance get Team Attendance as well as their own.
+  if (TEAM_ATTENDANCE_ROLES.has(String(role || '')) && !hasRoster(next)) {
+    const at = next.findIndex((entry) => entry.label === 'Settings' || entry.label === 'Sign out')
+    const team: NavItem = { label: 'Team Attendance', icon: Clock, href: roster }
+    next = at < 0 ? [...next, team] : [...next.slice(0, at), team, ...next.slice(at)]
+  }
   if (has(next)) return next
   const item: NavItem = { label: 'Attendance', icon: Clock, href: own }
   const rosterIndex = next.findIndex((entry) => entry.href === roster)

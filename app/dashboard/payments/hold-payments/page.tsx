@@ -177,14 +177,7 @@ export default function HoldPaymentsPage() {
                   <TableCell className="truncate max-w-[260px]">{r.location || '-'}</TableCell>
                   <TableCell className="whitespace-nowrap">
                     {r.paymentDate
-                      ? new Date(r.paymentDate).toLocaleString('en-GB', {
-                          year: 'numeric',
-                          month: '2-digit',
-                          day: '2-digit',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          second: '2-digit',
-                        })
+                      ? new Date(r.paymentDate).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })
                       : '-'}
                   </TableCell>
                   <TableCell className="whitespace-nowrap">{r.amount?.toFixed(2) || '0.00'}</TableCell>

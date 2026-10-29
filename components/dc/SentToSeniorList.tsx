@@ -95,7 +95,7 @@ export function SentToSeniorList({ refreshKey = 0 }: { refreshKey?: number }) {
                     {typeof row.assigned_to === 'object' && row.assigned_to ? row.assigned_to.name || '-' : '-'}
                   </td>
                   <td className="py-2 pr-3 text-slate-700">
-                    {row.updatedAt ? new Date(row.updatedAt).toLocaleDateString('en-IN') : '-'}
+                    {row.updatedAt ? new Date(row.updatedAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}
                   </td>
                   <td className="py-2">
                     <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${stageLabel(row).className}`}>

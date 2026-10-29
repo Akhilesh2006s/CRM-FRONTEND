@@ -369,7 +369,7 @@ export default function TrainerCompletedPage() {
                       <td className="py-3 px-4 border">{training.zone || '-'}</td>
                       <td className="py-3 px-4 border">{training.trainerId?.name || '-'}</td>
                       <td className="py-3 px-4 border">
-                        {format(new Date(training.trainingDate), 'dd-MMM-yyyy')}
+                        {format(new Date(training.trainingDate), 'dd/MM/yyyy')}
                       </td>
                       <td className="py-3 px-4 border">
                         <span className="px-2 py-1 rounded text-xs bg-green-100 text-green-700">
@@ -378,7 +378,7 @@ export default function TrainerCompletedPage() {
                       </td>
                       <td className="py-3 px-4 border">
                         {training.completionDate
-                          ? format(new Date(training.completionDate), 'dd-MMM-yyyy')
+                          ? format(new Date(training.completionDate), 'dd/MM/yyyy')
                           : '-'}
                       </td>
                       <td className="py-3 px-4 border">
@@ -440,7 +440,7 @@ export default function TrainerCompletedPage() {
                     <td className="py-3 px-4 border">{service.zone || '-'}</td>
                     <td className="py-3 px-4 border">{service.trainerId?.name || '-'}</td>
                     <td className="py-3 px-4 border">
-                      {format(new Date(service.serviceDate), 'dd-MMM-yyyy')}
+                      {format(new Date(service.serviceDate), 'dd/MM/yyyy')}
                     </td>
                     <td className="py-3 px-4 border">
                       <span className="px-2 py-1 rounded text-xs bg-green-100 text-green-700">
@@ -449,7 +449,7 @@ export default function TrainerCompletedPage() {
                     </td>
                     <td className="py-3 px-4 border">
                       {service.completionDate
-                        ? format(new Date(service.completionDate), 'dd-MMM-yyyy')
+                        ? format(new Date(service.completionDate), 'dd/MM/yyyy')
                         : '-'}
                     </td>
                     <td className="py-3 px-4 border">

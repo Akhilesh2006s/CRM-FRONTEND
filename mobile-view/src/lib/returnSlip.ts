@@ -66,7 +66,7 @@ export function buildReturnSlipHtml(ret: ReturnSlipData, opts: ReturnSlipOptions
     ['School', ret.customerName],
     ['School Code', ret.schoolCode],
     ['BDE', ret.executiveName],
-    ['Return Date', ret.returnDate ? new Date(ret.returnDate).toLocaleDateString('en-IN') : ''],
+    ['Return Date', ret.returnDate ? new Date(ret.returnDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''],
   ];
   const headerRows = left
     .map(

@@ -1527,8 +1527,8 @@ export default function ClosedSalesPage() {
               {filteredItems.map((d) => (
                 <tr key={d._id} className={chainRowClass(d, 'border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors')}>
                   <td className="py-3 px-4 text-slate-700">
-                    {d.created_at ? new Date(d.created_at).toLocaleString() : 
-                     d.createdAt ? new Date(d.createdAt).toLocaleString() : '-'}
+                    {d.created_at ? new Date(d.created_at).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : 
+                     d.createdAt ? new Date(d.createdAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : '-'}
                   </td>
                   <td className="py-3 px-4 text-slate-700">{d.school_type || '-'}</td>
                   <td className="py-3 px-4 text-slate-700">{d.zone || '-'}</td>

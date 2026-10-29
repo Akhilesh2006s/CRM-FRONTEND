@@ -32,7 +32,7 @@ type Product = { _id: string; productName: string };
 function formatDate(value?: string) {
   if (!value) return '-';
   try {
-    return new Date(value).toLocaleDateString('en-US');
+    return new Date(value).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
   } catch {
     return '-';
   }

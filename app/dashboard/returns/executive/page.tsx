@@ -1466,7 +1466,7 @@ export default function ExecutiveStockReturnsPage() {
                 </div>
                 <div>
                   <Label>Return Date</Label>
-                  <Input value={selectedReturn.returnDate ? new Date(selectedReturn.returnDate).toLocaleDateString() : '-'} readOnly className="bg-neutral-50" />
+                  <Input value={selectedReturn.returnDate ? new Date(selectedReturn.returnDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'} readOnly className="bg-neutral-50" />
                 </div>
                 <div>
                   <Label>Total Quantity</Label>
@@ -1533,11 +1533,11 @@ export default function ExecutiveStockReturnsPage() {
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <Label>Created At</Label>
-                  <Input value={new Date(selectedReturn.createdAt).toLocaleString()} readOnly className="bg-neutral-50" />
+                  <Input value={new Date(selectedReturn.createdAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })} readOnly className="bg-neutral-50" />
                 </div>
                 <div>
                   <Label>Updated At</Label>
-                  <Input value={new Date(selectedReturn.updatedAt).toLocaleString()} readOnly className="bg-neutral-50" />
+                  <Input value={new Date(selectedReturn.updatedAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })} readOnly className="bg-neutral-50" />
                 </div>
               </div>
             </div>

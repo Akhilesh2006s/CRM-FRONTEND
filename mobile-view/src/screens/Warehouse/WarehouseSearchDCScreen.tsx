@@ -15,6 +15,7 @@ import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebSelect } from '../../ui/WebPrimitives';
 import { useAuth } from '../../context/AuthContext';
 
+import DateField from '../../ui/DateField';
 const DC_STATUSES = [
   'created',
   'po_submitted',
@@ -35,11 +36,7 @@ function toSelectItems(options: string[]) {
 function formatDate(dateString?: string) {
   if (!dateString) return '-';
   try {
-    return new Date(dateString).toLocaleDateString('en-IN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    });
+    return new Date(dateString).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
   } catch {
     return '-';
   }
@@ -214,12 +211,7 @@ export default function WarehouseSearchDCScreen({ navigation }: any) {
 
           <View style={styles.fieldContainer}>
             <Text style={styles.label}>Date</Text>
-            <WebInput
-              style={styles.input}
-              placeholder="YYYY-MM-DD"
-              value={selectedDate}
-              onChangeText={setSelectedDate}
-            />
+            <DateField placeholder="Date" value={selectedDate} onChange={setSelectedDate} />
           </View>
 
           <WebSelect

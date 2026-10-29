@@ -31,6 +31,7 @@ import {
   type LeadProductInterestedRow,
 } from '../../lib/crm/leadProductsInterested';
 
+import { ymdToDmy } from '../../utils/dateFormat';
 const DEAL_PRODUCT_STATUS_ORDER = ['Hot', 'Warm', 'Visit Again', 'Yet to Visit', 'Not Interested'] as const;
 const SCHOOL_LEAD_STATUSES = new Set(['Hot', 'Warm', 'Cold']);
 const ALL_FOLLOWUP_STATUSES = ['Hot', 'Warm', 'Visit Again', 'Yet to Visit', 'Not Interested'] as const;
@@ -128,11 +129,7 @@ function formatDateOnly(dateString?: string) {
   try {
     const d = new Date(dateString);
     if (isNaN(d.getTime())) return '—';
-    return d.toLocaleDateString('en-IN', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
   } catch {
     return '—';
   }
@@ -699,13 +696,7 @@ export default function LeadFollowupScreen({ navigation }: any) {
   const formatDateTime = (dateString?: string) => {
     if (!dateString) return '—';
     try {
-      return new Date(dateString).toLocaleString('en-IN', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
+      return new Date(dateString).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
     } catch {
       return '—';
     }
@@ -1008,7 +999,7 @@ export default function LeadFollowupScreen({ navigation }: any) {
                             !updateForm.follow_up_date && styles.datePlaceholder,
                           ]}
                         >
-                          {updateForm.follow_up_date || 'Tap to pick date'}
+                          {ymdToDmy(updateForm.follow_up_date) || 'Tap to pick date'}
                         </Text>
                         <Text>📅</Text>
                       </TouchableOpacity>

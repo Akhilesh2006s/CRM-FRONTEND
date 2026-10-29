@@ -7,6 +7,7 @@ import { WebButton, WebInput, WebLabel, WebSelect } from '../../ui/WebPrimitives
 import { apiService } from '../../services/api';
 import { downloadDcReport } from '../../utils/downloadDcReport';
 
+import DateField from '../../ui/DateField';
 interface DcItem {
   _id: string;
   customerName?: string; customerPhone?: string; customerAddress?: string; product?: string;
@@ -19,7 +20,7 @@ interface DcItem {
 const statuses = ['all', 'created', 'po_submitted', 'sent_to_manager', 'pending_dc', 'warehouse_processing', 'completed', 'hold'];
 const dateRanges = ['all', 'today', 'week', 'month'];
 const displayStatus = (status?: string) => !status ? 'Pending' : status.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
-const formatDate = (value?: string) => value ? new Date(value).toLocaleDateString('en-IN') : '—';
+const formatDate = (value?: string) => value ? new Date(value).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
 const number = (value?: number) => Number(value || 0).toLocaleString('en-IN');
 
 function Detail({ label, value, emphasis }: { label: string; value: React.ReactNode; emphasis?: boolean }) {
@@ -97,8 +98,8 @@ export default function ReportsDCScreen() {
         <WebLabel>Search DCs</WebLabel><WebInput value={search} onChangeText={setSearch} placeholder="School, contact, code, product, or LR No" />
         <WebLabel>Status</WebLabel><WebSelect value={statusFilter} onValueChange={setStatusFilter} items={statuses.map((status) => ({ label: status === 'all' ? 'All Status' : displayStatus(status), value: status }))} />
         <WebLabel>Time</WebLabel><WebSelect value={dateFilter} onValueChange={setDateFilter} items={dateRanges.map((range) => ({ label: range === 'all' ? 'All Time' : range === 'week' ? 'Last 7 Days' : range === 'month' ? 'Last 30 Days' : 'Today', value: range }))} />
-        <WebLabel>DC From</WebLabel><WebInput value={fromDate} onChangeText={setFromDate} placeholder="YYYY-MM-DD" {...(Platform.OS === 'web' ? ({ type: 'date' } as any) : {})} />
-        <WebLabel>DC To</WebLabel><WebInput value={toDate} onChangeText={setToDate} placeholder="YYYY-MM-DD" {...(Platform.OS === 'web' ? ({ type: 'date' } as any) : {})} />
+        <WebLabel>DC From</WebLabel><DateField placeholder="DC From" value={fromDate} onChange={setFromDate} />
+        <WebLabel>DC To</WebLabel><DateField placeholder="DC To" value={toDate} onChange={setToDate} />
         <WebButton title="Search" onPress={loadDc} loading={loading} />
       </View>
       <Text style={styles.sectionTitle}>Delivery Challans ({filtered.length})</Text>

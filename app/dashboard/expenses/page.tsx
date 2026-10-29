@@ -57,7 +57,7 @@ export default function ExpensesPage() {
             </div>
             <div className="text-2xl font-bold text-rose-600 mt-4">${e.amount?.toFixed?.(2) ?? e.amount}</div>
             <div className="text-sm text-neutral-600 mt-1">Category: {e.category ?? '-'}</div>
-            <div className="text-xs text-neutral-500 mt-2">Date: {new Date(e.date).toLocaleDateString()}</div>
+            <div className="text-xs text-neutral-500 mt-2">Date: {new Date(e.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</div>
           </Card>
         ))}
         {!loading && expenses.length === 0 && (

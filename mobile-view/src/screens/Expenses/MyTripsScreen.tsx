@@ -9,7 +9,7 @@ import { claimTrip, type TripSummary } from '../../services/trip';
 
 const rupees = (n: number) => `₹${(Number(n) || 0).toFixed(2)}`;
 const when = (v?: string) =>
-  v ? new Date(v).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+  v ? new Date(v).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
 
 /** GPS-tracked Bike / Car trips: distance, amount, and claiming them as travel expenses. */
 export default function MyTripsScreen() {

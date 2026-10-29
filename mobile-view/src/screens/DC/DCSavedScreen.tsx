@@ -137,7 +137,7 @@ function productsSummary(item: DcOrder, linked?: LinkedDC | null): string {
 function formatDateTime(dateString?: string) {
   if (!dateString) return '-';
   try {
-    return new Date(dateString).toLocaleString('en-IN');
+    return new Date(dateString).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
   } catch {
     return '-';
   }

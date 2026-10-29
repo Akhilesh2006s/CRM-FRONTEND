@@ -298,7 +298,7 @@ export default function ContactQueriesPage() {
             query.subject || '',
             query.description || '',
             query.status || '',
-            query.enquiry_date ? new Date(query.enquiry_date).toLocaleString('en-IN') : '',
+            query.enquiry_date ? new Date(query.enquiry_date).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : '',
           ].map(csvCell).join(',')
         ),
       ]
@@ -317,23 +317,12 @@ export default function ContactQueriesPage() {
 
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return '-'
-    return new Date(dateStr).toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    })
+    return new Date(dateStr).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
   }
 
   const formatDateTime = (dateStr?: string) => {
     if (!dateStr) return '-'
-    return new Date(dateStr).toLocaleString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    })
+    return new Date(dateStr).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })
   }
 
   const kpis = useMemo(() => {

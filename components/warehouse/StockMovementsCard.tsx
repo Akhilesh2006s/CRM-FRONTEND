@@ -89,7 +89,7 @@ export function StockMovementsCard() {
                 const detail = [m.series, m.subject, m.level].filter(Boolean).join(' · ')
                 return (
                   <tr key={m._id} className="border-b last:border-0">
-                    <td className="py-2 pr-3 whitespace-nowrap">{new Date(m.at).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
+                    <td className="py-2 pr-3 whitespace-nowrap">{new Date(m.at).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}</td>
                     <td className="py-2 pr-3">
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${meta.className}`}>{meta.label}</span>
                     </td>

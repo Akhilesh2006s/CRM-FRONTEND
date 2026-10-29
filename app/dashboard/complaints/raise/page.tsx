@@ -152,7 +152,7 @@ export default function RaiseComplaintPage() {
                     </td>
                     <td className="py-2 px-3">{item.schoolName || '—'}</td>
                     <td className="py-2 px-3">{ticketStatusLabel(item.status)}</td>
-                    <td className="py-2 px-3">{new Date(item.createdAt).toLocaleDateString()}</td>
+                    <td className="py-2 px-3">{new Date(item.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
                   </tr>
                 ))
               )}

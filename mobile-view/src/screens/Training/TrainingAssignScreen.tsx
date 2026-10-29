@@ -20,6 +20,8 @@ import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 
+import { ymdToDmy } from '../../utils/dateFormat';
+import PickDateField from '../../ui/DateField';
 type School = {
   _id: string;
   school_code?: string;
@@ -138,7 +140,7 @@ function DateField({
     <View style={styles.fieldBlock}>
       <WebLabel>{label}</WebLabel>
       <TouchableOpacity style={styles.dateTouchable} onPress={() => setShowPicker(true)} activeOpacity={0.7}>
-        <Text style={[styles.dateText, !value && styles.datePlaceholder]}>{value || 'Tap to pick date'}</Text>
+        <Text style={[styles.dateText, !value && styles.datePlaceholder]}>{ymdToDmy(value) || 'Tap to pick date'}</Text>
       </TouchableOpacity>
       {showPicker && Platform.OS === 'android' ? (
         <DateTimePicker
@@ -466,11 +468,7 @@ export default function TrainingAssignScreen({ navigation }: any) {
         return db > da ? b : a;
       });
       const d = new Date(latest.completionDate || latest.trainingDate || latest.serviceDate || '');
-      const dateStr = d.toLocaleDateString('en-IN', {
-          day: 'numeric',
-          month: 'short',
-          year: 'numeric',
-      });
+      const dateStr = d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
       const extra = [latest.subject, latest.term].filter(Boolean).join(' · ');
       setLastScheduleLabel(extra ? `${dateStr} (${extra})` : dateStr);
     } catch {
@@ -635,16 +633,8 @@ export default function TrainingAssignScreen({ navigation }: any) {
             value={draftFilters.town}
             onChangeText={(v) => setDraftFilters((f) => ({ ...f, town: v }))}
           />
-          <WebInput
-            placeholder="From Date (YYYY-MM-DD)"
-            value={draftFilters.fromDate}
-            onChangeText={(v) => setDraftFilters((f) => ({ ...f, fromDate: v }))}
-          />
-          <WebInput
-            placeholder="To Date (YYYY-MM-DD)"
-            value={draftFilters.toDate}
-            onChangeText={(v) => setDraftFilters((f) => ({ ...f, toDate: v }))}
-          />
+          <PickDateField placeholder="From date" value={draftFilters.fromDate} onChange={(v) => setDraftFilters((f) => ({ ...f, fromDate: v }))} />
+          <PickDateField placeholder="To date" value={draftFilters.toDate} onChange={(v) => setDraftFilters((f) => ({ ...f, toDate: v }))} />
           <WebSelect
             placeholder="All Executives"
             value={draftFilters.executive}

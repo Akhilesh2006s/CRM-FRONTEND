@@ -321,7 +321,7 @@ export default function ExpenseApproversPage() {
                     <TableCell className="font-medium">{targetLabel(tag)}</TableCell>
                     <TableCell>{personLabel(tag.approverId)}</TableCell>
                     <TableCell>{tag.createdBy?.name || '-'}</TableCell>
-                    <TableCell>{new Date(tag.createdAt).toLocaleDateString('en-GB')}</TableCell>
+                    <TableCell>{new Date(tag.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</TableCell>
                     <TableCell>
                       <button
                         onClick={() => handleRemove(tag)}

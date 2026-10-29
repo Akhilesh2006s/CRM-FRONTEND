@@ -8,6 +8,7 @@ import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 import { fmtDate, inr, nameOf } from './paymentHelpers';
 
+import DateField from '../../ui/DateField';
 /** Mode lists as in web approval-pending-cash / approval-pending-cheques pages. */
 const CASH_MODES = ['Cash', 'Bank Transfer', 'Credit Card', 'Debit Card', 'Online Payment', 'Other'];
 const CHEQUE_MODES = [...CASH_MODES, 'Cheque'];
@@ -82,8 +83,8 @@ export default function PaymentApprovalList({ kind, navigation }: { kind: 'cash'
               items={modes.map((m) => ({ label: m, value: m }))}
               placeholder="Select Payment Mode"
             />
-            <WebInput value={filters.fromDate} onChangeText={(t) => setF('fromDate', t)} placeholder="From Date (YYYY-MM-DD)" />
-            <WebInput value={filters.toDate} onChangeText={(t) => setF('toDate', t)} placeholder="To Date (YYYY-MM-DD)" />
+            <DateField placeholder="From date" value={filters.fromDate} onChange={(t) => setF('fromDate', t)} />
+            <DateField placeholder="To date" value={filters.toDate} onChange={(t) => setF('toDate', t)} />
             <WebInput value={filters.executive} onChangeText={(t) => setF('executive', t)} placeholder="BDE" />
             <WebInput value={filters.zone} onChangeText={(t) => setF('zone', t)} placeholder="Zone" />
           </>

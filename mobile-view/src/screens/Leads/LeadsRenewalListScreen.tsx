@@ -906,7 +906,7 @@ export default function LeadsRenewalListScreen() {
                 {lead.follow_up_date ? (
                   <Text style={[styles.metaLine, followUpPast ? styles.overdue : null]}>
                     <Text style={styles.detailLabel}>Follow up: </Text>
-                    {new Date(lead.follow_up_date).toLocaleString()}
+                    {new Date(lead.follow_up_date).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
                   </Text>
                 ) : null}
                 <View style={styles.priorityRow}>
@@ -976,7 +976,7 @@ export default function LeadsRenewalListScreen() {
             <Text style={styles.hint}>Log renewal interaction for this lead</Text>
             <TouchableOpacity onPress={() => setShowDatePicker(true)}>
               <Text style={styles.dateBtn}>
-                Follow-up date *: {followUpDate.toLocaleDateString()}
+                Follow-up date *: {followUpDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
               </Text>
             </TouchableOpacity>
             {showDatePicker ? (
@@ -1074,7 +1074,7 @@ export default function LeadsRenewalListScreen() {
             {history.map((h, i) => (
               <View key={i} style={styles.historyItem}>
                 <Text style={styles.historyDate}>
-                  {h.updatedAt ? new Date(h.updatedAt).toLocaleString() : '—'}
+                  {h.updatedAt ? new Date(h.updatedAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : '—'}
                 </Text>
                 {h.priority ? <Text>Priority: {h.priority}</Text> : null}
                 {h.recommendations ? (
@@ -1086,7 +1086,7 @@ export default function LeadsRenewalListScreen() {
                 {h.remarks ? <Text style={{ marginTop: 4 }}>{h.remarks}</Text> : null}
                 {h.follow_up_date ? (
                   <Text style={styles.hint}>
-                    Next: {new Date(h.follow_up_date).toLocaleDateString()}
+                    Next: {new Date(h.follow_up_date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                   </Text>
                 ) : null}
                 {Array.isArray(h.productsInterested) && h.productsInterested.length > 0

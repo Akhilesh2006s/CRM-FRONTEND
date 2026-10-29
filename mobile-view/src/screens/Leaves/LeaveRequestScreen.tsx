@@ -246,7 +246,7 @@ function DateField({
       <TouchableOpacity style={styles.dateTouchable} onPress={onPress}>
         <Text style={[styles.dateText, !value && styles.datePlaceholder]}>
           {value
-            ? new Date(value + 'T00:00:00').toLocaleDateString('en-IN')
+            ? new Date(value + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
             : 'Tap to pick date'}
         </Text>
         <Text>📅</Text>

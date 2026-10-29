@@ -65,8 +65,8 @@ export default function PendingLeavesPage() {
                 <td className="py-2 px-3">{formatEmployeeCode(typeof l.employeeId === 'string' ? undefined : l.employeeId?.empCode, '-')}</td>
                 <td className="py-2 px-3">{typeof l.employeeId === 'string' ? l.employeeId : l.employeeId?.name}</td>
                 <td className="py-2 px-3">{l.reason || '-'}</td>
-                <td className="py-2 px-3 text-center">{new Date(l.startDate).toLocaleDateString()}</td>
-                <td className="py-2 px-3 text-center">{new Date(l.endDate).toLocaleDateString()}</td>
+                <td className="py-2 px-3 text-center">{new Date(l.startDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
+                <td className="py-2 px-3 text-center">{new Date(l.endDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
                 <td className="py-2 px-3 text-center">{l.days}</td>
                 <td className="py-2 px-3 text-center">{l.status}</td>
               </tr>

@@ -10,7 +10,7 @@ export type ContractFields = {
 };
 
 const fmt = (value: string | Date) =>
-  new Date(value).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  new Date(value).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
 /** Whole days from today to the contract end (negative once it has ended). */
 export function contractDaysLeft(end: string | Date): number {

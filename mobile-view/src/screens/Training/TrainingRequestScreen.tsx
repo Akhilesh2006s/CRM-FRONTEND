@@ -8,6 +8,7 @@ import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 
+import { ymdToDmy } from '../../utils/dateFormat';
 /** Same subject list as web /dashboard/training/request (validated by the API). */
 const SUBJECTS = [
   'Abacus',
@@ -71,7 +72,7 @@ function parseYmd(value?: string) {
 function fmtDate(value?: string) {
   if (!value) return '—';
   const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString();
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 function statusColors(status?: string) {
@@ -124,7 +125,7 @@ function DateField({
     <View style={styles.fieldBlock}>
       <WebLabel>{label}</WebLabel>
       <TouchableOpacity style={styles.dateTouchable} onPress={() => setShow(true)} activeOpacity={0.7}>
-        <Text style={[styles.dateText, !value && styles.datePlaceholder]}>{value || 'Tap to pick date'}</Text>
+        <Text style={[styles.dateText, !value && styles.datePlaceholder]}>{ymdToDmy(value) || 'Tap to pick date'}</Text>
       </TouchableOpacity>
       {show && Platform.OS === 'android' ? (
         <DateTimePicker

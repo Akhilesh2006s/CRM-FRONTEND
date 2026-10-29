@@ -512,8 +512,8 @@ export default function DCReportPage() {
                     <td className="py-3 pr-4">{getStatusBadge(dc.status)}</td>
                     <td className="py-3 pr-4 whitespace-nowrap">
                       {dc.dcDate 
-                        ? new Date(dc.dcDate).toLocaleDateString('en-IN')
-                        : (dc.createdAt ? new Date(dc.createdAt).toLocaleDateString('en-IN') : '-')
+                        ? new Date(dc.dcDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                        : (dc.createdAt ? new Date(dc.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-')
                       }
                     </td>
                     <td className="py-3 pr-4 truncate">{dc.lrNo || '-'}</td>

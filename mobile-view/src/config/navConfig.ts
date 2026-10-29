@@ -598,7 +598,7 @@ function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
 
 const NON_EMPLOYEE_ROLES = new Set(['Vendor', 'Partner', 'Franchise']);
 const TEAM_ATTENDANCE_ROLES = new Set([
-  'Admin', 'Super Admin', 'HR Manager', 'HR Executive', 'Executive Manager', 'Coordinator',
+  'Admin', 'Super Admin', 'HR Manager', 'HR Executive', 'Manager', 'Executive Manager', 'Coordinator',
   'Senior Coordinator', 'Regional Manager', 'Regional Head', 'National Head',
 ]);
 

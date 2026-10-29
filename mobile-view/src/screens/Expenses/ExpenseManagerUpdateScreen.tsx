@@ -8,6 +8,7 @@ import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { showAlert } from '../../utils/showAlert';
 import { ExpenseBillButton } from '../../components/expenses/ExpenseBillViewer';
+import DateField from '../../ui/DateField';
 import {
   type ApprovalExpense,
   type ExpensePerson,
@@ -140,6 +141,7 @@ export default function ExpenseManagerUpdateScreen({ navigation, route }: any) {
   const itemError = (e: Expense): string | null => {
     const form = forms[e._id];
     if (!form) return 'missing form';
+    if (form.decision === 'reject' && !form.remarks.trim()) return 'remarks are required to reject';
     if (form.decision === 'approve') {
       const n = parsedAmount(e);
       if (n === null || Number.isNaN(n) || n < 0) return 'enter a valid approval amount';
@@ -221,12 +223,12 @@ export default function ExpenseManagerUpdateScreen({ navigation, route }: any) {
       <View style={styles.filterCard}>
         <View style={styles.filterRow}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.filterLabel}>From (YYYY-MM-DD)</Text>
-            <WebInput value={fromDate} onChangeText={setFromDate} placeholder="2026-01-01" />
+            <Text style={styles.filterLabel}>From</Text>
+            <DateField placeholder="From date" value={fromDate} onChange={setFromDate} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.filterLabel}>To (YYYY-MM-DD)</Text>
-            <WebInput value={toDate} onChangeText={setToDate} placeholder="2026-01-31" />
+            <Text style={styles.filterLabel}>To</Text>
+            <DateField placeholder="To date" value={toDate} onChange={setToDate} />
           </View>
         </View>
         <WebButton title="Search" onPress={loadExpenses} />
@@ -239,7 +241,7 @@ export default function ExpenseManagerUpdateScreen({ navigation, route }: any) {
           {employee?.role ? <Text style={styles.muted}> · {employee.role}</Text> : null}
         </Text>
         <Text style={styles.hint}>
-          Approving needs an approved amount (first level) or the final amount (Finance); remarks are required only when you change the amount. Either
+          Approving needs an approved amount (first level) or the final amount (Finance); remarks are required to reject or to change the amount. Either
           level can reject an item.
         </Text>
       </View>
@@ -320,7 +322,7 @@ export default function ExpenseManagerUpdateScreen({ navigation, route }: any) {
               <WebInput
                 value={form?.remarks || ''}
                 onChangeText={(t) => setForm(exp._id, { remarks: t })}
-                placeholder="Remarks (required if you change the amount)"
+                placeholder={form?.decision === 'reject' ? 'Remarks (required to reject)' : 'Remarks (required if you change the amount)'}
                 multiline
                 style={styles.remarks}
               />

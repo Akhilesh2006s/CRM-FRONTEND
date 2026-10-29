@@ -25,6 +25,7 @@ import { useAuth } from '../../context/AuthContext';
 import { findMatchingOrderProduct } from '../../lib/crm/clientDcProductRows';
 import { printReturnSlip } from '../../lib/returnSlip';
 
+import PickDateField from '../../ui/DateField';
 /** Same lists as web app/dashboard/returns/executive/page.tsx */
 const RETURN_TYPES = ['Damaged', 'Expired', 'Wrong Print', 'Excess', 'Wrong item', 'Replacement'];
 const RETURN_REASONS = ['Damaged', 'Expired', 'Wrong Print', 'Excess', 'Wrong item', 'Replacement', 'Customer request', 'Quality issue', 'Other'];
@@ -213,7 +214,7 @@ function DateField({
           },
         })
       ) : (
-        <WebInput value={value} onChangeText={changeDate} placeholder="YYYY-MM-DD" />
+        <PickDateField placeholder="Select date" value={value} onChange={changeDate} />
       )}
     </View>
   );
@@ -237,7 +238,7 @@ function FutureCalendarField({ label, value, onChange }: { label: string; value:
   const firstDay = month.getDay();
   const changeMonth = (offset: number) => setMonth((current) => new Date(current.getFullYear(), current.getMonth() + offset, 1));
   const isCurrentMonth = month.getFullYear() === new Date().getFullYear() && month.getMonth() === new Date().getMonth();
-  const display = value ? new Date(`${value}T00:00:00`).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Select return date';
+  const display = value ? new Date(`${value}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'Select return date';
 
   return <View style={{ marginBottom: 12 }}>
     <Text style={formStyles.label}>{label} *</Text>
@@ -271,7 +272,7 @@ const NEXT_ACTION_BY_STATUS: Record<string, string> = {
 function formatDate(d: string | Date | undefined) {
   if (!d) return '—';
   try {
-    return new Date(d).toLocaleDateString('en-US');
+    return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
   } catch {
     return '—';
   }
@@ -280,7 +281,7 @@ function formatDate(d: string | Date | undefined) {
 function formatDateTime(d: string | Date | undefined) {
   if (!d) return '—';
   try {
-    return new Date(d).toLocaleString('en-US');
+    return new Date(d).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
   } catch {
     return '—';
   }

@@ -38,7 +38,7 @@ function when(value?: string) {
   if (!value) return '—';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
 }
 
 /** Team attendance roster — web app/dashboard/employees/attendance/page.tsx (GET /attendance/roster). */
@@ -84,7 +84,7 @@ export default function AttendanceRosterScreen() {
   return (
     <ScreenShell
       title="Team Attendance"
-      subtitle="HR, Admin and Coordinators see every employee. A head sees the people under them."
+      subtitle="Admin and HR see everyone; Product Managers their trainers; Zonal Managers their BDEs; Coordinators their zones."
       loading={loading && !refreshing}
       refreshing={refreshing}
       onRefresh={() => {

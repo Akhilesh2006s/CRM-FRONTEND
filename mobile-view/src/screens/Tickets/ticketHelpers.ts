@@ -39,5 +39,5 @@ export function personDesignation(value?: TicketPerson | string | null) {
 export function fmtTicketDate(v?: string) {
   if (!v) return '—';
   const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-IN');
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }

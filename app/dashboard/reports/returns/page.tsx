@@ -17,19 +17,12 @@ type ReturnRow = ExecReturn | WarehouseReturn
 
 function formatDateIn(dateStr?: string) {
   if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+  return new Date(dateStr).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
 function formatDateTimeIn(dateStr?: string) {
   if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  })
+  return new Date(dateStr).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })
 }
 
 function remarksText(row: ReturnRow) {

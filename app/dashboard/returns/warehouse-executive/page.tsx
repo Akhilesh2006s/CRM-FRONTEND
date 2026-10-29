@@ -430,7 +430,7 @@ export default function WarehouseExecutiveStockReturnsPage() {
                   <div>
                     <Label>Return Date</Label>
                     <Input 
-                      value={selectedReturn.returnDate ? new Date(selectedReturn.returnDate).toLocaleDateString() : '-'} 
+                      value={selectedReturn.returnDate ? new Date(selectedReturn.returnDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'} 
                       readOnly 
                       className="bg-neutral-50" 
                     />

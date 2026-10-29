@@ -124,7 +124,7 @@ export default function VendorStocksPage() {
                         <TableCell className="text-right">{item.reservedQuantity}</TableCell>
                         <TableCell className="text-neutral-600">
                           {item.lastUpdated
-                            ? new Date(item.lastUpdated).toLocaleString()
+                            ? new Date(item.lastUpdated).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })
                             : '-'}
                         </TableCell>
                         <TableCell>

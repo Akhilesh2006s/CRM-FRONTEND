@@ -104,7 +104,7 @@ export default function VendorDetailPage() {
           <div>
             <Label className="text-xs font-medium text-neutral-500">Created Date</Label>
             <p className="text-base mt-1">
-              {vendor.createdAt ? new Date(vendor.createdAt).toLocaleDateString() : '-'}
+              {vendor.createdAt ? new Date(vendor.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}
             </p>
           </div>
         </div>

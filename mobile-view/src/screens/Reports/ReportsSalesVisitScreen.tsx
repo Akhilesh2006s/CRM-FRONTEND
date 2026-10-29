@@ -16,6 +16,7 @@ import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives
 import { apiService } from '../../services/api';
 import { exportSalesVisitReport } from '../../utils/exportSalesVisitReport';
 
+import DateField from '../../ui/DateField';
 type Visit = {
   _id: string;
   schoolName?: string;
@@ -77,7 +78,7 @@ function formatVisitDate(dateStr?: string) {
   if (!dateStr) return '-';
   const date = new Date(dateStr);
   if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 function getSchoolKey(visit: Visit) {
@@ -256,12 +257,7 @@ export default function ReportsSalesVisitScreen() {
             ]}
           />
           <WebLabel>Visit Date</WebLabel>
-          <WebInput
-            placeholder="YYYY-MM-DD"
-            value={visitDate}
-            onChangeText={setVisitDate}
-            {...(Platform.OS === 'web' ? ({ type: 'date' } as any) : {})}
-          />
+          <DateField placeholder="Visit Date" value={visitDate} onChange={setVisitDate} />
           <WebLabel>By School Name / Code</WebLabel>
           <WebInput
             placeholder="Search by School Name / Code"

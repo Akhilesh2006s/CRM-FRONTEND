@@ -643,7 +643,7 @@ export default function StockReturnFromCompletedDcDialog({
                     <li key={item._id}>
                       {item.returnId || `#${item.returnNumber}`} — {item.status} —{' '}
                       {item.returnDate
-                        ? new Date(item.returnDate).toLocaleDateString()
+                        ? new Date(item.returnDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
                         : '-'}
                     </li>
                   ))}

@@ -5,7 +5,10 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import Link from 'next/link'
 import { apiRequest } from '@/lib/api'
+import { TEAM_ATTENDANCE_ROLES } from '@/lib/access'
+import { usePermissions } from '@/components/permissions/PermissionsProvider'
 import { toast } from 'sonner'
 
 type AttendanceRow = {
@@ -29,7 +32,7 @@ function when(value?: string) {
   if (!value) return '—'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return '—'
-  return date.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+  return date.toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })
 }
 
 /** Shrink a camera photo to a small JPEG data URL (the API stores it as the check-in photo). */
@@ -69,6 +72,7 @@ function currentPosition(): Promise<{ latitude: number; longitude: number }> {
 }
 
 export default function MyAttendancePage() {
+  const { user } = usePermissions()
   const [rows, setRows] = useState<AttendanceRow[]>([])
   const [active, setActive] = useState<AttendanceRow | null>(null)
   const [loading, setLoading] = useState(true)
@@ -153,7 +157,12 @@ export default function MyAttendancePage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Attendance</h1>
-        <p className="text-sm text-neutral-600 mt-1">Check in when you start work and check out when you finish.</p>
+        <p className="text-sm text-neutral-600 mt-1">Check in when you start work and check out when you finish. Your check-in history is below.</p>
+        {user && TEAM_ATTENDANCE_ROLES.has(user.role) && (
+          <Link href="/dashboard/employees/attendance" className="mt-2 inline-block text-sm font-medium text-sky-700 underline">
+            View your team&apos;s attendance →
+          </Link>
+        )}
       </div>
 
       {!loading && (

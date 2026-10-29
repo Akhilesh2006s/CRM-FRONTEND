@@ -219,7 +219,7 @@ export default function PartnersPage() {
                       </Badge>
                     </td>
                     <td className="py-3 px-4 text-sm text-neutral-600">
-                      {partner.createdAt ? new Date(partner.createdAt).toLocaleDateString() : '-'}
+                      {partner.createdAt ? new Date(partner.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">

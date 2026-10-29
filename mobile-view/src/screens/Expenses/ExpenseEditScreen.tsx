@@ -6,6 +6,7 @@ import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 
+import DateField from '../../ui/DateField';
 export default function ExpenseEditScreen({ navigation, route }: any) {
   const { id } = route.params;
   const [form, setForm] = useState({
@@ -92,7 +93,7 @@ export default function ExpenseEditScreen({ navigation, route }: any) {
           keyboardType="decimal-pad"
         />
         <FormField label="Category *" value={form.category} onChangeText={(text: string) => setForm((f) => ({ ...f, category: text }))} />
-        <FormField label="Date *" value={form.date} onChangeText={(text: string) => setForm((f) => ({ ...f, date: text }))} placeholder="YYYY-MM-DD" />
+        <DateField placeholder="Date *" value={form.date} onChange={(text: string) => setForm((f) => ({ ...f, date: text }))} />
         <FormField
           label="Pending Month"
           value={form.pendingMonth}

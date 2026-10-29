@@ -13,6 +13,7 @@ import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives
 import { apiService } from '../../services/api';
 import { downloadApiFile } from '../../utils/downloadChangeLogsReport';
 
+import DateField from '../../ui/DateField';
 type ChangeLog = {
   _id: string;
   entityType?: string;
@@ -36,15 +37,7 @@ function formatWhen(dateStr?: string) {
   if (!dateStr) return '-';
   const date = new Date(dateStr);
   if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleString('en-IN', {
-    timeZone: 'Asia/Kolkata',
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
+  return date.toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' });
 }
 
 function splitSummary(summary?: string) {
@@ -227,9 +220,9 @@ export default function ReportsChangeLogsScreen() {
             ]}
           />
           <WebLabel>From</WebLabel>
-          <WebInput value={fromDate} onChangeText={setFromDate} placeholder="YYYY-MM-DD" />
+          <DateField placeholder="From" value={fromDate} onChange={setFromDate} />
           <WebLabel>To</WebLabel>
-          <WebInput value={toDate} onChangeText={setToDate} placeholder="YYYY-MM-DD" />
+          <DateField placeholder="To" value={toDate} onChange={setToDate} />
           <WebLabel>Search</WebLabel>
           <WebInput value={search} onChangeText={setSearch} placeholder="Search summary or user..." />
           <WebButton title="Search" onPress={loadLogs} />

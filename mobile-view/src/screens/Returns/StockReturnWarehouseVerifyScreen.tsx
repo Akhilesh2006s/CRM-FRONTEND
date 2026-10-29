@@ -16,6 +16,7 @@ import { apiService } from '../../services/api';
 import { phoneDigitsError, sanitizePhoneDigits } from '../../utils/phone';
 import { printReturnSlip } from '../../lib/returnSlip';
 
+import DateField from '../../ui/DateField';
 /** Same list as web app/dashboard/returns/warehouse-executive/page.tsx ("Marked by students": written in, counted but not sellable). */
 const CONDITION_OPTIONS = ['Sellable', 'Marked by students', 'Wrong Print', 'Damaged', 'Expired', 'Missing', 'Short received'];
 
@@ -482,23 +483,9 @@ export default function StockReturnWarehouseVerifyScreen({ navigation, route }: 
           ) : null}
 
           <WebLabel>Return Date</WebLabel>
-          <WebInput
-            value={returnDate}
-            onChangeText={setReturnDate}
-            placeholder="YYYY-MM-DD"
-            {...(Platform.OS === 'web' ? ({ type: 'date' } as any) : {})}
-            editable={!readOnly}
-            style={readOnly ? styles.readonly : undefined}
-          />
+          <DateField placeholder="Return Date" value={returnDate} onChange={setReturnDate} />
           <WebLabel>LR Date</WebLabel>
-          <WebInput
-            value={lrDate}
-            onChangeText={setLrDate}
-            placeholder="YYYY-MM-DD"
-            {...(Platform.OS === 'web' ? ({ type: 'date' } as any) : {})}
-            editable={!readOnly}
-            style={readOnly ? styles.readonly : undefined}
-          />
+          <DateField placeholder="LR Date" value={lrDate} onChange={setLrDate} />
           <WebLabel>LR No *</WebLabel>
           <WebInput
             value={lrNumber}

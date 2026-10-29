@@ -56,7 +56,7 @@ function decisionText(a: LeaveApproval) {
     return assigned ? `Pending — ${assigned}` : 'Pending'
   }
   const by = personName(a.decidedBy)
-  const when = a.decidedAt ? new Date(a.decidedAt).toLocaleDateString() : ''
+  const when = a.decidedAt ? new Date(a.decidedAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''
   return [a.status, by && `by ${by}`, when && `on ${when}`].filter(Boolean).join(' ')
 }
 

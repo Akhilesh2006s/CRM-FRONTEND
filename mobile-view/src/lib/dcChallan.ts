@@ -125,7 +125,7 @@ const esc = (v: unknown) =>
 const ddmmyyyy = (v?: string) => {
   if (!v) return '';
   const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-GB');
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 };
 
 /** Delivery Challan HTML with only the chosen columns and header blocks (same content as the web PDF). */
@@ -137,7 +137,7 @@ export function buildDcChallanHtml(fullDC: any, transit: DcTransit, options: DcP
   const totalQty = lines.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
 
   const dcNo = fullDC?.dc_code || fullDC?.dcNo || String(fullDC?._id || '').slice(-6);
-  const dcDate = ddmmyyyy(fullDC?.dcDate) || new Date().toLocaleDateString('en-GB');
+  const dcDate = ddmmyyyy(fullDC?.dcDate) || new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const leftLines: string[] = [`DC No: ${dcNo}`, `DC Date: ${dcDate}`];
   if (show('school')) {
     const code = order.school_code ? ` (${order.school_code})` : '';

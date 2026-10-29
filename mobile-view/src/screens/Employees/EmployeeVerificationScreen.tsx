@@ -72,7 +72,7 @@ function formatEmployeeCode(value?: string | null) {
   return `VESPL${/^\d+$/.test(withoutPrefix) ? withoutPrefix.padStart(4, '0') : withoutPrefix}`;
 }
 
-const formatDate = (d?: string) => (d ? new Date(d).toLocaleDateString('en-IN') : '—');
+const formatDate = (d?: string) => (d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—');
 
 /** Web: app/dashboard/employees/verification/page.tsx */
 export default function EmployeeVerificationScreen() {
@@ -311,7 +311,7 @@ export default function EmployeeVerificationScreen() {
                     {a.status === 'rejected' && typeof a.userId === 'object' && a.userId?.name ? (
                       <Text style={styles.meta}>
                         Rejected by {a.userId.name}
-                        {a.at ? ` on ${new Date(a.at).toLocaleString()}` : ''}
+                        {a.at ? ` on ${new Date(a.at).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}` : ''}
                       </Text>
                     ) : null}
                     {actionable ? (

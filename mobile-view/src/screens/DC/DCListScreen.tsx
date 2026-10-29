@@ -67,7 +67,7 @@ export default function DCListScreen({ navigation, route }: any) {
 
   const renderDCItem = ({ item }: { item: DCItem }) => {
     const code = item.dcOrderId?.dc_code || item._id?.slice(-8) || '—';
-    const dateStr = item.createdAt ? new Date(item.createdAt).toLocaleDateString() : '—';
+    const dateStr = item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
 
     if (isExecutiveMyDC) {
       return (

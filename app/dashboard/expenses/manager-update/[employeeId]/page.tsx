@@ -159,6 +159,7 @@ export default function ManagerExpenseUpdatePage() {
   const itemError = (expense: Expense): string | null => {
     const form = forms[expense._id]
     if (!form) return 'missing form'
+    if (form.decision === 'reject' && !form.remarks.trim()) return 'remarks are required to reject'
     if (form.decision === 'approve') {
       const n = parsedAmount(expense)
       if (n === null || Number.isNaN(n) || n < 0) return 'enter a valid approval amount'
@@ -219,11 +220,7 @@ export default function ManagerExpenseUpdatePage() {
     if (!dateString) return '-'
     const date = new Date(dateString)
     if (Number.isNaN(date.getTime())) return '-'
-    return date.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    })
+    return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
   }
 
   const getExpenseType = (category: string) => {
@@ -350,7 +347,7 @@ export default function ManagerExpenseUpdatePage() {
           </div>
         </div>
         <p className="text-xs text-neutral-500 mt-3">
-          Approving needs an approved amount (first level) or the final amount (Finance). Remarks are required only when you change the amount.
+          Approving needs an approved amount (first level) or the final amount (Finance). Remarks are required to reject an item or change its amount; they are optional when you approve the amount as it is.
           Either level can reject an item.
         </p>
       </Card>
@@ -480,7 +477,7 @@ export default function ManagerExpenseUpdatePage() {
                           <Textarea
                             value={form?.remarks || ''}
                             onChange={(e) => setForm(expense._id, { remarks: e.target.value })}
-                            placeholder={edited ? 'Remarks (required: amount changed)' : 'Remarks (optional)'}
+                            placeholder={rejecting ? 'Remarks (required to reject)' : edited ? 'Remarks (required: amount changed)' : 'Remarks (optional)'}
                             className="min-h-[60px] resize-none bg-white text-sm"
                             rows={2}
                           />

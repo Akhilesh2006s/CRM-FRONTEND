@@ -7,6 +7,7 @@ import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 import { inr, paymentRemarks, statusColors } from './paymentHelpers';
 
+import DateField from '../../ui/DateField';
 /** Same mode list as web hold-payments filter. */
 const PAYMENT_MODES = ['Cash', 'Cheque', 'Online Payment'];
 
@@ -25,7 +26,7 @@ function fmtDateTime(v?: string) {
   if (!v) return '-';
   const d = new Date(v);
   if (Number.isNaN(d.getTime())) return '-';
-  return d.toLocaleString('en-GB', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
 }
 
 export default function PaymentHoldScreen() {
@@ -79,8 +80,8 @@ export default function PaymentHoldScreen() {
             <WebInput placeholder="By School Code" value={filters.schoolCode} onChangeText={(t) => setF('schoolCode', t)} />
             <WebInput placeholder="By School Name" value={filters.schoolName} onChangeText={(t) => setF('schoolName', t)} />
             <WebInput placeholder="By Mobile No" value={filters.mobileNo} onChangeText={(t) => setF('mobileNo', t)} keyboardType="phone-pad" />
-            <WebInput placeholder="From Date (YYYY-MM-DD)" value={filters.fromDate} onChangeText={(t) => setF('fromDate', t)} />
-            <WebInput placeholder="To Date (YYYY-MM-DD)" value={filters.toDate} onChangeText={(t) => setF('toDate', t)} />
+            <DateField placeholder="From date" value={filters.fromDate} onChange={(t) => setF('fromDate', t)} />
+            <DateField placeholder="To date" value={filters.toDate} onChange={(t) => setF('toDate', t)} />
             <WebSelect
               value={filters.paymentMode}
               onValueChange={(v) => setF('paymentMode', v)}

@@ -16,6 +16,7 @@ import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives
 import { apiService } from '../../services/api';
 import { downloadTrainingServiceReport } from '../../utils/downloadTrainingServiceReport';
 
+import DateField from '../../ui/DateField';
 type Stats = {
   total: number;
   byStatus: { Scheduled: number; Completed: number; Cancelled: number };
@@ -188,9 +189,9 @@ export default function ReportsTrainingServiceScreen() {
 
         <View style={styles.filterCard}>
           <WebLabel>From Date</WebLabel>
-          <WebInput value={fromDate} onChangeText={setFromDate} placeholder="YYYY-MM-DD" />
+          <DateField placeholder="From Date" value={fromDate} onChange={setFromDate} />
           <WebLabel>To Date</WebLabel>
-          <WebInput value={toDate} onChangeText={setToDate} placeholder="YYYY-MM-DD" />
+          <DateField placeholder="To Date" value={toDate} onChange={setToDate} />
           <WebLabel>Zone</WebLabel>
           <WebSelect
             placeholder="All Zones"

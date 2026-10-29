@@ -150,7 +150,7 @@ export default function DcInvoiceViewDialog({
                   <div>
                     <span className="text-neutral-600">DC Date:</span>
                     <span className="ml-2 font-medium">
-                      {new Date(invoiceData.dcDate).toLocaleDateString()}
+                      {new Date(invoiceData.dcDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                     </span>
                   </div>
                 )}

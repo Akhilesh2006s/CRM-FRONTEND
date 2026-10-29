@@ -238,8 +238,8 @@ export default function EmployeeVerificationPage() {
               <div><p className="font-medium">Official company number</p><p className="text-neutral-700">{emp.phone || '—'}</p></div>
               <div><p className="font-medium">Personal mobile</p><p className="text-neutral-700">{emp.mobile || '—'}</p></div>
               <div><p className="font-medium">Department / Designation</p><p className="text-neutral-700">{[emp.department, emp.designation].filter(Boolean).join(' · ') || '—'}</p></div>
-              <div><p className="font-medium">Joining date</p><p className="text-neutral-700">{emp.dateOfJoining ? new Date(emp.dateOfJoining).toLocaleDateString() : '—'}</p></div>
-              <div><p className="font-medium">Date of birth</p><p className="text-neutral-700">{emp.dateOfBirth ? new Date(emp.dateOfBirth).toLocaleDateString() : '—'}</p></div>
+              <div><p className="font-medium">Joining date</p><p className="text-neutral-700">{emp.dateOfJoining ? new Date(emp.dateOfJoining).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'}</p></div>
+              <div><p className="font-medium">Date of birth</p><p className="text-neutral-700">{emp.dateOfBirth ? new Date(emp.dateOfBirth).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'}</p></div>
               <div><p className="font-medium">Assigned Zonal Manager</p><p className="text-neutral-700">{typeof emp.executiveManagerId === 'object' ? emp.executiveManagerId?.name || '—' : '—'}</p></div>
               <div><p className="font-medium">Assigned Product Head</p><p className="text-neutral-700">{typeof emp.verticalManagerId === 'object' ? emp.verticalManagerId?.name || '—' : '—'}</p></div>
               <div>
@@ -356,7 +356,7 @@ export default function EmployeeVerificationPage() {
                     {a.status === 'rejected' && typeof a.userId === 'object' && a.userId?.name ? (
                       <p className="mt-1 text-xs text-neutral-500">
                         Rejected by {a.userId.name}
-                        {a.at ? ` on ${new Date(a.at).toLocaleString()}` : ''}
+                        {a.at ? ` on ${new Date(a.at).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}` : ''}
                       </p>
                     ) : null}
                   </div>
