@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Modal,
   Platform,
+  Alert,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { colors } from '../../theme/colors';
@@ -148,10 +149,17 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
       if (isSuperAdmin) return;
       if (!user?._id) return;
       try {
+        // Zone and cluster come from the employee profile, as on the web.
         const userProfile = await apiService.get('/auth/me');
         const employeeZone = userProfile.assignedCity || userProfile.zone || '';
-        if (employeeZone) {
-          setForm((f) => (f.zone ? f : { ...f, zone: employeeZone }));
+        const employeeCluster = userProfile.cluster || '';
+        if (employeeZone || employeeCluster) {
+          setForm((f) => ({
+            ...f,
+            zone: f.zone || employeeZone,
+            cluster: f.cluster || employeeCluster,
+            cluster_code: f.cluster_code || employeeCluster,
+          }));
         }
       } catch (err) {
         console.error('Failed to load user zone:', err);
@@ -159,6 +167,38 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
     };
     loadUserZone();
   }, [user?._id]);
+
+  // Clusters of the selected zone, for the Cluster dropdown (same as the web).
+  const [clustersForZone, setClustersForZone] = useState<string[]>([]);
+  useEffect(() => {
+    let active = true;
+    const loadClusters = async () => {
+      if (!form.zone) {
+        setClustersForZone([]);
+        return;
+      }
+      try {
+        const zones = await apiService.get('/zones');
+        const match = (Array.isArray(zones) ? zones : []).find((z: any) => z?.name === form.zone);
+        if (!match?._id) {
+          if (active) setClustersForZone([]);
+          return;
+        }
+        const clusters = await apiService.get(`/zones/${match._id}/clusters`);
+        if (active) {
+          setClustersForZone(
+            (Array.isArray(clusters) ? clusters : []).map((c: any) => String(c?.name || '')).filter(Boolean),
+          );
+        }
+      } catch {
+        if (active) setClustersForZone([]);
+      }
+    };
+    loadClusters();
+    return () => {
+      active = false;
+    };
+  }, [form.zone]);
 
   useEffect(() => {
     const loadProducts = async () => {
@@ -454,9 +494,11 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
       };
 
       await apiService.post('/dc-orders/create', payload);
-      setSuccessMessage('New school lead created successfully.');
       setErrorMessage(null);
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
+      // Same as the web: go to Follow-up Leads, where the new lead is listed.
+      Alert.alert('Lead created', 'New school lead created successfully.');
+      if (typeof navigation.replace === 'function') navigation.replace('LeadFollowup');
+      else navigation.navigate('LeadFollowup');
     } catch (error: any) {
       const raw = error?.message || 'Failed to create lead';
       setErrorMessage(
@@ -508,6 +550,7 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
                 assigned_to: v,
                 zone: bde?.zone || f.zone,
                 cluster: bde?.cluster || f.cluster,
+                cluster_code: bde?.cluster || f.cluster_code,
               }));
             }}
             items={bdeOptions.map((b) => ({ label: b.name, value: b._id }))}
@@ -678,12 +721,22 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
           onChangeText={(text) => setForm((f) => ({ ...f, mandal: text }))}
           placeholder="Enter mandal"
         />
-        <FormField
-          label="Cluster *"
-          value={form.cluster}
-          onChangeText={(text) => setForm((f) => ({ ...f, cluster: text }))}
-          placeholder="Enter cluster"
-        />
+        {clustersForZone.length > 0 ? (
+          <WebSelect
+            label="Cluster *"
+            value={form.cluster}
+            onValueChange={(v) => setForm((f) => ({ ...f, cluster: v, cluster_code: v }))}
+            items={[...new Set([...(form.cluster ? [form.cluster] : []), ...clustersForZone])].map((c) => ({ label: c, value: c }))}
+            placeholder="Select cluster"
+          />
+        ) : (
+          <FormField
+            label="Cluster *"
+            value={form.cluster}
+            onChangeText={(text) => setForm((f) => ({ ...f, cluster: text, cluster_code: text }))}
+            placeholder="Enter cluster"
+          />
+        )}
         <FormField
           label="Latitude"
           value={form.latitude}

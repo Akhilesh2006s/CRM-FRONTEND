@@ -164,6 +164,29 @@ function leadTown(lead: any): string {
   return String(lead?.area || lead?.city || lead?.location || firstPart || lead?.pincode || '').trim();
 }
 
+/** Products as a table: Product, Chance %, Status — one row each. */
+function ProductStatusTable({ rows }: { rows: { name: string; chance?: string | number; status?: string; detail?: string }[] }) {
+  return (
+    <View style={styles.pTable}>
+      <View style={[styles.pRow, styles.pHead]}>
+        <Text style={[styles.pCellName, styles.pHeadText]}>Product</Text>
+        <Text style={[styles.pCellPct, styles.pHeadText]}>Chance %</Text>
+        <Text style={[styles.pCellStatus, styles.pHeadText]}>Status</Text>
+      </View>
+      {rows.map((r, i) => (
+        <View key={`${r.name}-${i}`} style={[styles.pRow, i === rows.length - 1 && styles.pRowLast]}>
+          <View style={styles.pCellName}>
+            <Text style={styles.pName}>{r.name}</Text>
+            {r.detail ? <Text style={styles.pDetail}>{r.detail}</Text> : null}
+          </View>
+          <Text style={styles.pCellPct}>{Number(r.chance) > 0 ? `${r.chance}%` : '—'}</Text>
+          <Text style={[styles.pCellStatus, styles.pStatus]}>{r.status || '—'}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export default function LeadFollowupScreen({ navigation }: any) {
   const { user } = useAuth();
   const seesAllFollowups =
@@ -184,6 +207,8 @@ export default function LeadFollowupScreen({ navigation }: any) {
   const [showFollowUpDatePicker, setShowFollowUpDatePicker] = useState(false);
   const [selectedLead, setSelectedLead] = useState<any>(null);
   const [historyLead, setHistoryLead] = useState<any>(null);
+  /** History entries (by index) whose product table is expanded. */
+  const [openHistoryProducts, setOpenHistoryProducts] = useState<Set<number>>(() => new Set());
   /** Lead ids whose product list is expanded (collapsed by default). */
   const [expandedLeads, setExpandedLeads] = useState<Set<string>>(() => new Set());
   const toggleProducts = (id: string) =>
@@ -611,6 +636,7 @@ export default function LeadFollowupScreen({ navigation }: any) {
   };
 
   const openHistoryModal = async (lead: any) => {
+    setOpenHistoryProducts(new Set());
     setHistoryLead(lead);
     setShowHistoryModal(true);
     setHistory([]);
@@ -877,21 +903,19 @@ export default function LeadFollowupScreen({ navigation }: any) {
                         {productRows.map((p) => p.product_name).join(', ')}
                       </Text>
                     ) : (
-                      productRows.map((p, pi) => (
-                        <View key={`${p.product_name}-${pi}`} style={styles.productLine}>
-                          <Text style={styles.productLineName}>{p.product_name}</Text>
-                          <Text style={styles.productLineMeta}>
-                            {[
-                              p.status,
-                              p.strength > 0 ? `Str ${p.strength}` : null,
-                              p.chance ? `${p.chance}%` : null,
-                              p.classes.length > 1 ? `Classes ${p.classes.join(', ')}` : null,
-                            ]
-                              .filter(Boolean)
-                              .join(' · ')}
-                          </Text>
-                        </View>
-                      ))
+                      <ProductStatusTable
+                        rows={productRows.map((p) => ({
+                          name: p.product_name,
+                          chance: p.chance,
+                          status: p.status,
+                          detail: [
+                            p.strength > 0 ? `Str ${p.strength}` : null,
+                            p.classes.length > 1 ? `Classes ${p.classes.join(', ')}` : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' · '),
+                        }))}
+                      />
                     )}
                   </View>
 
@@ -1252,21 +1276,40 @@ export default function LeadFollowupScreen({ navigation }: any) {
                     ) : null}
                     {Array.isArray(item.productsInterested) &&
                     item.productsInterested.length > 0 ? (
-                      <Text style={styles.historyProducts}>
-                        Products:{' '}
-                        {item.productsInterested
-                          .map((p: any) => {
-                            const name = p.product_name || '';
-                            if (!name) return '';
-                            const bits = [name];
-                            if (p.status) bits.push(p.status);
-                            if (p.term) bits.push(p.term);
-                            if (Number(p.chance) > 0) bits.push(`${p.chance}%`);
-                            return bits.join(' · ');
-                          })
-                          .filter(Boolean)
-                          .join(', ')}
-                      </Text>
+                      <View style={{ marginTop: 6 }}>
+                        <View style={styles.productsHeader}>
+                          <Text style={styles.historyProducts}>
+                            Products ({item.productsInterested.filter((p: any) => p?.product_name).length})
+                          </Text>
+                          <TouchableOpacity
+                            accessibilityRole="button"
+                            onPress={() =>
+                              setOpenHistoryProducts((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(idx)) next.delete(idx);
+                                else next.add(idx);
+                                return next;
+                              })
+                            }
+                          >
+                            <Text style={styles.productsToggle}>
+                              {openHistoryProducts.has(idx) ? 'Hide ▲' : 'Show ▼'}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                        {openHistoryProducts.has(idx) ? (
+                          <ProductStatusTable
+                            rows={item.productsInterested
+                              .filter((p: any) => p?.product_name)
+                              .map((p: any) => ({
+                                name: p.product_name,
+                                chance: p.chance ?? p.renewal_pct,
+                                status: p.status,
+                                detail: p.term || '',
+                              }))}
+                          />
+                        ) : null}
+                      </View>
                     ) : null}
                   </View>
                 ))
@@ -1366,6 +1409,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 6,
   },
+  pTable: { borderWidth: 1, borderColor: colors.border, borderRadius: 10, overflow: 'hidden', marginTop: 4 },
+  pRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.backgroundLight,
+  },
+  pRowLast: { borderBottomWidth: 0 },
+  pHead: { backgroundColor: colors.background },
+  pHeadText: { ...typography.body.small, color: colors.textSecondary, fontWeight: '700' },
+  pCellName: { flex: 2, paddingRight: 6 },
+  pCellPct: { flex: 1, textAlign: 'center', ...typography.body.small, color: colors.textPrimary },
+  pCellStatus: { flex: 1.3, textAlign: 'right', ...typography.body.small },
+  pName: { ...typography.body.medium, color: colors.textPrimary, fontWeight: '600' },
+  pDetail: { ...typography.body.small, color: colors.textSecondary, marginTop: 2 },
+  pStatus: { color: colors.textPrimary, fontWeight: '600' },
   productsToggle: { ...typography.body.small, color: colors.primary, fontWeight: '700', paddingHorizontal: 4 },
   closeLeadTop: {
     backgroundColor: colors.success,
