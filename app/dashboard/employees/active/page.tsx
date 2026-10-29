@@ -77,6 +77,7 @@ const availableRoles = [
   'Executive',
   'Trainer',
   'Finance Manager',
+  'Finance Executive',
   'HR Manager',
   'HR Executive',
   'Coordinator',

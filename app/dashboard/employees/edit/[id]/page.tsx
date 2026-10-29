@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { PayrollDetailsFields, emptyPayrollDetails, payrollDetailsFromEmployee, payrollDetailsPayload, type PayrollDetails } from '@/components/employees/PayrollDetailsFields'
+import { BankDetailsFields, bankDetailsError, bankDetailsFromEmployee, bankDetailsPayload, emptyBankDetails, type BankDetails } from '@/components/employees/BankDetailsFields'
 import { useRouter, useParams } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -38,6 +39,7 @@ const ONBOARDING_ITEMS = [
 
 export default function EditEmployeePage() {
   const [payrollDetails, setPayrollDetails] = useState<PayrollDetails>(emptyPayrollDetails())
+  const [bankDetails, setBankDetails] = useState<BankDetails>(emptyBankDetails())
   const [ctc, setCtc] = useState('')
   const router = useRouter()
   const params = useParams()
@@ -140,6 +142,7 @@ export default function EditEmployeePage() {
           taggedEmployeeIds: (emp.taggedEmployeeIds || []).map((x: any) => String(x._id || x)),
         })
         setPayrollDetails(payrollDetailsFromEmployee(emp))
+        setBankDetails(bankDetailsFromEmployee(emp))
         setCtc(emp.yearlySalary ? String(emp.yearlySalary) : '')
         setTagOptions(Array.isArray(employees) ? employees.filter((e) => e._id !== id) : [])
         if (emp.dateOfJoining) {
@@ -315,6 +318,13 @@ export default function EditEmployeePage() {
           : [],
       }
       Object.assign(payload, payrollDetailsPayload(payrollDetails))
+      const bankError = bankDetailsError(bankDetails)
+      if (bankError) {
+        setError(bankError)
+        setSubmitting(false)
+        return
+      }
+      Object.assign(payload, bankDetailsPayload(bankDetails))
       if (ctc.trim() !== '') {
         if (!(Number(ctc) > 0)) {
           setError('CTC (per year) must be greater than 0')
@@ -530,7 +540,7 @@ export default function EditEmployeePage() {
             })}>
               <SelectTrigger className="bg-white text-neutral-900"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {['Executive', 'Trainer', 'Finance Manager', 'HR Manager', 'HR Executive', 'Coordinator', 'Senior Coordinator', 'Manager', 'Executive Manager', 'Regional Manager', 'Regional Head', 'National Head', 'Warehouse Executive', 'Warehouse Manager', 'Office Team', 'Admin', 'Super Admin'].map((r) => (
+                {['Executive', 'Trainer', 'Finance Manager', 'Finance Executive', 'HR Manager', 'HR Executive', 'Coordinator', 'Senior Coordinator', 'Manager', 'Executive Manager', 'Regional Manager', 'Regional Head', 'National Head', 'Warehouse Executive', 'Warehouse Manager', 'Office Team', 'Admin', 'Super Admin'].map((r) => (
                   <SelectItem key={r} value={r}>{displayRoleName(r)}</SelectItem>
                 ))}
               </SelectContent>
@@ -542,6 +552,7 @@ export default function EditEmployeePage() {
             {Number(ctc) > 0 && <p className="text-xs text-neutral-500 mt-1">₹{Math.round(Number(ctc) / 12).toLocaleString('en-IN')} per month</p>}
           </div>
           <PayrollDetailsFields value={payrollDetails} onChange={setPayrollDetails} />
+          <BankDetailsFields value={bankDetails} onChange={setBankDetails} />
           {form.role === 'Office Team' && (
             <div>
               <Label>Designation *</Label>

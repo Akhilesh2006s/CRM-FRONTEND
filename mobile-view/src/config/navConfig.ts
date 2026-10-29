@@ -36,6 +36,12 @@ const I = {
   finance: '🏦',
 };
 
+const BANK_PAYOUT_LINKS: NavLink[] = [
+  { label: 'Approved Expenses & Advances', screen: 'FinancePayouts', icon: '📄' },
+  { label: 'Generate Bank Sheet', screen: 'FinanceBankSheet', icon: '🏦' },
+  { label: 'Bank Credit Status', screen: 'FinanceCreditStatus', icon: '✅' },
+];
+
 function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
   const flags = getRoleFlags(user);
   const {
@@ -401,6 +407,23 @@ function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
           { label: 'Payments', screen: 'PaymentList' },
         ],
       },
+      { title: 'Bank Payouts', icon: I.finance, items: BANK_PAYOUT_LINKS },
+    ];
+  }
+
+  // Finance Executive: pays out what the Finance Manager approved. Expenses, Advance,
+  // Attendance and Tickets are added below for every employee.
+  if (role === 'Finance Executive') {
+    return [
+      { title: 'Bank Payouts', icon: I.finance, items: BANK_PAYOUT_LINKS },
+      {
+        title: 'Leave Management',
+        icon: I.leaves,
+        items: [
+          { label: 'Leave Request', screen: 'LeaveRequest' },
+          { label: 'My Leaves', screen: 'LeavesApproved' },
+        ],
+      },
     ];
   }
 
@@ -638,6 +661,7 @@ const WEB_PORTED_LINKS: { section: string; link: NavLink; allowed: (role: string
     allowed: (r, sa) => sa || r === 'Admin' || r === 'Finance Manager' || COORDINATOR_ROLES.has(r),
   },
   { section: 'Settings', link: { label: 'Roles & Permissions', screen: 'SettingsRoles', icon: '🔐' }, allowed: (_r, sa) => sa },
+  ...BANK_PAYOUT_LINKS.map((link) => ({ section: 'Bank Payouts', link, allowed: (r: string, sa: boolean) => sa || r === 'Admin' })),
   { section: 'Expenses', link: { label: 'My Trips (GPS km)', screen: 'MyTrips', icon: '🛵' }, allowed: () => true },
 ];
 

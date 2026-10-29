@@ -29,6 +29,7 @@ export const RBAC_MODULE_ORDER = [
   'payments',
   'expenses',
   'advance',
+  'finance',
   'reports',
   'products',
   'vendor',
@@ -184,6 +185,13 @@ export const RBAC_NAV_MODULES: RbacNavModule[] = [
       { label: 'Advance Status', href: '/dashboard/advance/status' },
       { label: 'Advance History', href: '/dashboard/advance/history' },
       { label: 'Advance Approvals', href: '/dashboard/advance/approvals' },
+    ],
+  },
+  {
+    module: 'finance', label: 'Bank Payouts', pages: [
+      { label: 'Approved Expenses & Advances', href: '/dashboard/finance/payouts' },
+      { label: 'Generate Bank Sheet', href: '/dashboard/finance/bank-sheet' },
+      { label: 'Bank Credit Status', href: '/dashboard/finance/credit-status' },
     ],
   },
   {

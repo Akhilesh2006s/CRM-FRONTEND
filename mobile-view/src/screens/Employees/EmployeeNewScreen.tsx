@@ -11,11 +11,13 @@ import { useAuth } from '../../context/AuthContext';
 import EmployeeTaggingPicker, { supportsEmployeeTagging } from '../../components/EmployeeTaggingPicker';
 
 import DateField from '../../ui/DateField';
+import { bankDetailsError, bankDetailsPayload, emptyBankDetails } from '../../utils/bankDetails';
 /** User types, same values / labels as web app/dashboard/employees/new/page.tsx */
 const ROLE_OPTIONS: { value: string; label: string }[] = [
   { value: 'Executive', label: 'BDE' },
   { value: 'Trainer', label: 'Trainer' },
   { value: 'Finance Manager', label: 'Finance Manager' },
+  { value: 'Finance Executive', label: 'Finance Executive' },
   { value: 'HR Manager', label: 'HR Manager' },
   { value: 'HR Executive', label: 'HR Executive' },
   { value: 'Coordinator', label: 'Coordinator' },
@@ -89,6 +91,7 @@ export default function EmployeeNewScreen({ navigation }: any) {
     dateOfJoining: '',
     yearlySalary: '',
     monthlyTakeHome: '',
+    ...emptyBankDetails(),
     hasEmployeeRelationship: null as boolean | null,
     employeeRelationshipDetails: { fullName: '', relationship: '', department: '', designation: '' },
     references: [
@@ -282,6 +285,8 @@ export default function EmployeeNewScreen({ navigation }: any) {
     if (!(ctc > 0)) return fail('CTC (per year) is required');
     const takeHome = form.monthlyTakeHome.trim() === '' ? 0 : Number(form.monthlyTakeHome);
     if (!Number.isFinite(takeHome) || takeHome < 0) return fail('Monthly take-home must be a valid amount');
+    const bankError = bankDetailsError(form);
+    if (bankError) return fail(bankError);
     if (!form.passportPhotoUrl.trim()) return fail('Passport size photo PDF is required');
     if (form.role === 'Office Team' && !form.designation.trim()) return fail('Enter the designation');
 
@@ -332,6 +337,7 @@ export default function EmployeeNewScreen({ navigation }: any) {
         name: `${form.firstName} ${form.lastName}`.trim() || form.firstName || 'Executive',
         yearlySalary: ctc,
         monthlyTakeHome: takeHome,
+        ...bankDetailsPayload(form),
         password: form.password.trim() || undefined,
         empCode: form.empCode.trim() || undefined,
       };
@@ -457,6 +463,12 @@ export default function EmployeeNewScreen({ navigation }: any) {
           </>
         ) : null}
 
+        <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Bank Details</Text>
+        <FormField label="Account holder name" value={form.bankAccountHolderName} onChangeText={(t: string) => setForm((f) => ({ ...f, bankAccountHolderName: t }))} placeholder="As in the bank account" />
+        <FormField label="Bank account number" value={form.bankAccountNumber} onChangeText={(t: string) => setForm((f) => ({ ...f, bankAccountNumber: t.replace(/\D/g, '') }))} placeholder="6 to 20 digits" keyboardType="number-pad" maxLength={20} />
+        <FormField label="IFSC" value={form.bankIfsc} onChangeText={(t: string) => setForm((f) => ({ ...f, bankIfsc: t.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() }))} placeholder="e.g. SBIN0001234" maxLength={11} />
+        <FormField label="Bank name" value={form.bankName} onChangeText={(t: string) => setForm((f) => ({ ...f, bankName: t }))} placeholder="e.g. State Bank of India" />
+        <FormField label="Branch" value={form.bankBranch} onChangeText={(t: string) => setForm((f) => ({ ...f, bankBranch: t }))} placeholder="Branch name" />
         <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Address & KYC</Text>
         <View style={styles.textAreaContainer}>
           <Text style={styles.label}>Permanent address *</Text>

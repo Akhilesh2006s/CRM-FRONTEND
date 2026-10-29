@@ -6,9 +6,10 @@ import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebSelect } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 import { phoneDigitsError, sanitizePhoneDigits } from '../../utils/phone';
+import { bankDetailsError, bankDetailsFromEmployee, bankDetailsPayload, emptyBankDetails } from '../../utils/bankDetails';
 
 const roles = [
-  'Executive', 'Trainer', 'Finance Manager', 'HR Manager', 'HR Executive', 'Coordinator', 'Senior Coordinator',
+  'Executive', 'Trainer', 'Finance Manager', 'Finance Executive', 'HR Manager', 'HR Executive', 'Coordinator', 'Senior Coordinator',
   'Manager', 'Executive Manager', 'Regional Manager', 'Regional Head', 'National Head', 'Warehouse Executive', 'Warehouse Manager', 'Admin', 'Super Admin',
 ];
 
@@ -22,6 +23,7 @@ export default function EmployeeEditScreen({ navigation, route }: any) {
     role: 'Executive',
     department: '',
     cluster: '',
+    ...emptyBankDetails(),
   });
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -41,6 +43,7 @@ export default function EmployeeEditScreen({ navigation, route }: any) {
           role: emp.role || 'Executive',
           department: emp.department || '',
           cluster: emp.cluster || '',
+          ...bankDetailsFromEmployee(emp),
         });
       } catch (e: any) {
         setErrorMessage(e.message || 'Failed to load employee');
@@ -65,6 +68,11 @@ export default function EmployeeEditScreen({ navigation, route }: any) {
       setErrorMessage('Cluster is required for Executive role');
       return;
     }
+    const bankError = bankDetailsError(form);
+    if (bankError) {
+      setErrorMessage(bankError);
+      return;
+    }
     setSubmitting(true);
     try {
       const payload: any = {
@@ -75,6 +83,7 @@ export default function EmployeeEditScreen({ navigation, route }: any) {
         role: form.role,
         department: form.department || undefined,
         cluster: form.cluster || undefined,
+        ...bankDetailsPayload(form),
       };
       if (form.role !== 'Executive') delete payload.cluster;
       await apiService.put(`/employees/${id}`, payload);
@@ -105,6 +114,12 @@ export default function EmployeeEditScreen({ navigation, route }: any) {
         <WebSelect label="Role *" value={form.role} onValueChange={(role) => setForm((f) => ({ ...f, role }))} items={roles.map((role) => ({ label: role, value: role }))} />
         <FormField label="Department" value={form.department} onChangeText={(t: string) => setForm((f) => ({ ...f, department: t }))} />
         <FormField label="Cluster" value={form.cluster} onChangeText={(t: string) => setForm((f) => ({ ...f, cluster: t }))} />
+        <Text style={styles.sectionTitle}>Bank details (expenses and advances are paid here)</Text>
+        <FormField label="Account holder name" value={form.bankAccountHolderName} onChangeText={(t: string) => setForm((f) => ({ ...f, bankAccountHolderName: t }))} placeholder="As in the bank account" />
+        <FormField label="Bank account number" value={form.bankAccountNumber} onChangeText={(t: string) => setForm((f) => ({ ...f, bankAccountNumber: t.replace(/\D/g, '') }))} placeholder="6 to 20 digits" keyboardType="number-pad" maxLength={20} />
+        <FormField label="IFSC" value={form.bankIfsc} onChangeText={(t: string) => setForm((f) => ({ ...f, bankIfsc: t.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() }))} placeholder="e.g. SBIN0001234" maxLength={11} />
+        <FormField label="Bank name" value={form.bankName} onChangeText={(t: string) => setForm((f) => ({ ...f, bankName: t }))} placeholder="e.g. State Bank of India" />
+        <FormField label="Branch" value={form.bankBranch} onChangeText={(t: string) => setForm((f) => ({ ...f, bankBranch: t }))} placeholder="Branch name" />
         <TouchableOpacity style={[styles.submitButton, submitting && styles.submitDisabled]} onPress={handleSubmit} disabled={submitting}>
           {submitting ? <ActivityIndicator color={colors.textLight} /> : <Text style={styles.submitText}>Save Changes</Text>}
         </TouchableOpacity>
@@ -130,6 +145,7 @@ const styles = StyleSheet.create({
   contentContainer: { padding: 20, paddingBottom: 40 },
   fieldContainer: { marginBottom: 16 },
   label: { ...typography.label.medium, color: colors.textPrimary, marginBottom: 8 },
+  sectionTitle: { ...typography.label.medium, color: colors.textPrimary, fontWeight: '700', marginTop: 8, marginBottom: 8 },
   input: { backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 14, color: colors.textPrimary },
   submitButton: { marginTop: 16, backgroundColor: colors.primary, padding: 16, borderRadius: 12, alignItems: 'center' },
   submitDisabled: { opacity: 0.6 },

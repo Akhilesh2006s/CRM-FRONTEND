@@ -25,6 +25,7 @@ import {
   Boxes,
   RefreshCw,
   CreditCard,
+  Landmark,
   Calculator,
   BarChart3,
   Settings,
@@ -517,6 +518,7 @@ const NAV: NavItem[] = [
 
 const RBAC_MODULE_ICONS: Record<string, typeof LayoutDashboard> = {
   advance: CreditCard,
+  finance: Landmark,
   dashboard: LayoutDashboard,
   clients: Truck,
   leads: TrendingUp,

@@ -118,6 +118,9 @@ export type RootStackParamList = {
   RaiseTicket: undefined;
   DCGrid: { dcId?: string; action?: 'new' | 'sub' } | undefined;
   EmployeesPayroll: undefined;
+  FinancePayouts: undefined;
+  FinanceBankSheet: undefined;
+  FinanceCreditStatus: undefined;
   EmployeesSalary: undefined;
   EmployeesHistory: undefined;
   EmployeesMoveSchools: undefined;

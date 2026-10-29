@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { PayrollDetailsFields, emptyPayrollDetails, payrollDetailsFromEmployee, payrollDetailsPayload, type PayrollDetails } from '@/components/employees/PayrollDetailsFields'
+import { BankDetailsFields, bankDetailsError, bankDetailsPayload, emptyBankDetails, type BankDetails } from '@/components/employees/BankDetailsFields'
 import { useRouter } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -45,6 +46,7 @@ const roleRequiresZones = (role: string) =>
 
 export default function NewEmployeePage() {
   const [payrollDetails, setPayrollDetails] = useState<PayrollDetails>(emptyPayrollDetails())
+  const [bankDetails, setBankDetails] = useState<BankDetails>(emptyBankDetails())
   const router = useRouter()
   const [form, setForm] = useState({
     firstName: '',
@@ -508,6 +510,12 @@ export default function NewEmployeePage() {
         setSubmitting(false)
         return
       }
+      const bankError = bankDetailsError(bankDetails)
+      if (bankError) {
+        setError(bankError)
+        setSubmitting(false)
+        return
+      }
       const ctc = Number(form.yearlySalary)
       if (!(ctc > 0)) {
         setError('CTC (per year) is required')
@@ -644,6 +652,7 @@ export default function NewEmployeePage() {
         address1: temporaryAddress,
         yearlySalary: Number(form.yearlySalary),
         ...payrollDetailsPayload(payrollDetails),
+        ...bankDetailsPayload(bankDetails),
         monthlyTakeHome: form.monthlyTakeHome.trim() === '' ? 0 : Number(form.monthlyTakeHome),
         references: form.references.map((r) => {
           const m = validateStrictIndianMobile(r.mobile)
@@ -833,6 +842,7 @@ export default function NewEmployeePage() {
             />
           </div>
           <PayrollDetailsFields value={payrollDetails} onChange={setPayrollDetails} />
+          <BankDetailsFields value={bankDetails} onChange={setBankDetails} />
           <div>
             <Label>Contact No (Company) *</Label>
             <Input
@@ -1454,6 +1464,7 @@ export default function NewEmployeePage() {
                 <SelectItem value="Executive">BDE</SelectItem>
                 <SelectItem value="Trainer">Trainer</SelectItem>
                 <SelectItem value="Finance Manager">Finance Manager</SelectItem>
+                <SelectItem value="Finance Executive">Finance Executive</SelectItem>
                 <SelectItem value="HR Manager">HR Manager</SelectItem>
                 <SelectItem value="HR Executive">HR Executive</SelectItem>
                 <SelectItem value="Coordinator">Coordinator</SelectItem>

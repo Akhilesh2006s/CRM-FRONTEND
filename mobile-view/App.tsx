@@ -166,6 +166,7 @@ import RaiseTicketScreen from './src/screens/Tickets/RaiseTicketScreen';
 import ViewTicketsScreen from './src/screens/Tickets/ViewTicketsScreen';
 import DCGridScreen from './src/screens/DC/DCGridScreen';
 import PayrollScreen from './src/screens/Employees/PayrollScreen';
+import FinancePayoutsScreen from './src/screens/Finance/FinancePayoutsScreen';
 import SalaryScreen from './src/screens/Employees/SalaryScreen';
 import EmployeeHistoryScreen from './src/screens/Employees/EmployeeHistoryScreen';
 import MoveSchoolsScreen from './src/screens/Employees/MoveSchoolsScreen';
@@ -462,6 +463,9 @@ function AuthenticatedStack() {
         <Stack.Screen name="ViewTickets" component={ViewTicketsScreen} />
         <Stack.Screen name="DCGrid" component={DCGridScreen} />
         <Stack.Screen name="EmployeesPayroll" component={PayrollScreen} />
+        <Stack.Screen name="FinancePayouts" component={FinancePayoutsScreen} />
+        <Stack.Screen name="FinanceBankSheet" component={FinancePayoutsScreen} />
+        <Stack.Screen name="FinanceCreditStatus" component={FinancePayoutsScreen} />
         <Stack.Screen name="EmployeesSalary" component={SalaryScreen} />
         <Stack.Screen name="EmployeesHistory" component={EmployeeHistoryScreen} />
         <Stack.Screen name="EmployeesMoveSchools" component={MoveSchoolsScreen} />
