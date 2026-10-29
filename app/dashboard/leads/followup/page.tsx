@@ -244,6 +244,14 @@ export default function FollowupLeadsPage() {
   // View History Modal
   const [historyModalOpen, setHistoryModalOpen] = useState(false)
   const [historyLead, setHistoryLead] = useState<Lead | null>(null)
+  /** Lead ids whose product list is expanded (collapsed by default). */
+  const [expandedLeads, setExpandedLeads] = useState<Set<string>>(() => new Set())
+  const toggleProducts = (id: string) => setExpandedLeads((prev) => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    return next
+  })
   const [history, setHistory] = useState<any[]>([])
 
   useEffect(() => {
@@ -476,14 +484,13 @@ export default function FollowupLeadsPage() {
     const stored = (item.priority || '').trim()
     const schoolStatus = (lead?.lead_status || '').trim()
 
-    if (SCHOOL_LEAD_STATUSES.has(stored)) return stored
-    if (SCHOOL_LEAD_STATUSES.has(schoolStatus)) return schoolStatus
-
+    // Product statuses picked in that follow-up win over the school status (which defaults to Cold).
     const rows = Array.isArray(item.productsInterested) ? item.productsInterested : []
     const fromProducts = deriveLeadPriorityFromDealProducts(rows)
     if (fromProducts && rows.length > 0) return fromProducts
 
     if (stored) return stored
+    if (SCHOOL_LEAD_STATUSES.has(schoolStatus)) return schoolStatus
 
     const legacy = (lead?.priority || '').trim()
     if (legacy) return legacy
@@ -1077,12 +1084,26 @@ export default function FollowupLeadsPage() {
                     {(() => {
                       const interested = groupInterestedRowsForDisplay(leadProductsToInterestedRows(lead))
                       if (interested.length === 0) return null
+                      const open = expandedLeads.has(lead._id)
                       return (
                         <div className="rounded-lg border border-violet-100 bg-violet-50/40 p-3">
-                          <p className="text-xs font-semibold text-violet-900 uppercase tracking-wide mb-2">
-                            Products interested
-                          </p>
-                          <ul className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-xs font-semibold text-violet-900 uppercase tracking-wide">
+                              Products interested ({interested.length})
+                            </p>
+                            <button
+                              type="button"
+                              aria-expanded={open}
+                              className="text-xs font-semibold text-violet-700 hover:underline"
+                              onClick={() => toggleProducts(lead._id)}
+                            >
+                              {open ? 'Hide' : 'Show'}
+                            </button>
+                          </div>
+                          {!open ? (
+                            <p className="mt-1 truncate text-sm text-neutral-600">{interested.map((row) => row.product_name).join(', ')}</p>
+                          ) : (
+                          <ul className="mt-2 space-y-1.5">
                             {interested.map((row, pi) => (
                               <li
                                 key={`${row.product_name}-${pi}`}
@@ -1104,6 +1125,7 @@ export default function FollowupLeadsPage() {
                               </li>
                             ))}
                           </ul>
+                          )}
                         </div>
                       )
                     })()}

@@ -19,7 +19,7 @@ import { lookupPincode } from '@/lib/pincode'
 import { sanitizePhoneInput, validateIndianMobile } from '@/lib/phone'
 import { normalizeIntegerInput } from '@/lib/numericInput'
 import { toFollowUpDatePayload } from '@/lib/followUpDate'
-import { isBeforeToday } from '@/lib/todayDate'
+import { isBeforeToday, todayDateString } from '@/lib/todayDate'
 import { geocodeSchoolLocation } from '@/lib/geocode'
 import { LEAD_PRODUCT_STATUSES, validateLeadStyleProducts, type LeadProductStatus } from '@/lib/leadProductRules'
 
@@ -974,6 +974,7 @@ export default function NewSchoolPage() {
               type="date"
               className="bg-white text-neutral-900" 
               name="follow_up_date" 
+              min={todayDateString()}
               value={form.follow_up_date || ''} 
               onChange={(e) => {
                 const dateValue = e.target.value

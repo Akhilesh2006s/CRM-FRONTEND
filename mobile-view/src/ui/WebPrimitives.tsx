@@ -129,7 +129,9 @@ export function WebSelect({
           mode={Platform.OS === 'android' ? 'dropdown' : undefined}
           // Explicit colours: on a phone in dark mode Android otherwise draws the picked value
           // white on this white box, and the options list dark.
-          style={{ width: '100%', height: pickerHeight, color: colors.textPrimary }}
+          // No fixed height on Android: the native spinner clips the picked value when the phone's
+          // font size is larger than default (e.g. "Sick Leave" cut off on the leave form).
+          style={{ width: '100%', color: colors.textPrimary, ...(Platform.OS === 'android' ? {} : { height: pickerHeight }) }}
           dropdownIconColor={colors.textSecondary}
           {...(Platform.OS === 'ios' ? { itemStyle: { height: pickerHeight, fontSize: 15 } } : {})}
         >
@@ -216,9 +218,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.backgroundLight,
     overflow: 'hidden',
     justifyContent: 'center',
-    height: 48,
+    minHeight: 48,
   },
-  pickerBoxCompact: { height: 34, minHeight: 34 },
+  pickerBoxCompact: { minHeight: 34 },
   pickerBoxDisabled: { opacity: 0.6, backgroundColor: colors.backgroundMuted },
   table: {
     backgroundColor: colors.backgroundLight,

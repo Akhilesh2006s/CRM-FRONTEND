@@ -62,10 +62,26 @@ export default function MyDCPage() {
     strength: number
     total: number
     level: string
+    klass: string
+    productCategory: string
+    specs: string
   }>>([])
+  // PO for the Add Products dialog: products cannot be sent for verification without one.
+  const [productPoUrl, setProductPoUrl] = useState('')
   
-  const { productNames: availableProducts } = useProducts()
-  const availableLevels = ['L1', 'L2', 'L3', 'L4', 'L5']
+  const {
+    productNames: availableProducts,
+    products: catalogProducts,
+    getProductLevels,
+    getProductClasses,
+    getProductSpecs,
+  } = useProducts()
+  const productCategories = (name: string): string[] => {
+    const product = catalogProducts.find((p) => p.productName.trim().toLowerCase() === name.trim().toLowerCase())
+    return product?.hasCategory !== false && Array.isArray(product?.categories)
+      ? product!.categories!.map((c) => String(c).trim()).filter(Boolean)
+      : []
+  }
 
   const load = async () => {
     setLoading(true)
@@ -112,6 +128,7 @@ export default function MyDCPage() {
 
   const openAddProductsDialog = async (dc: DC) => {
     setSelectedDCForProducts(dc)
+    setProductPoUrl(dc.poPhotoUrl || '')
     
     // Load existing product details from DC if available
     try {
@@ -125,7 +142,10 @@ export default function MyDCPage() {
           price: p.price || 0,
           strength: p.strength || 0,
           total: (p.price || 0) * (p.strength || 0),
-          level: p.level || 'L2',
+          level: p.level || '',
+          klass: String(p.class || ''),
+          productCategory: String(p.productCategory || ''),
+          specs: String(p.specs || ''),
         })))
       } else {
         // Initialize with all products unchecked
@@ -136,7 +156,10 @@ export default function MyDCPage() {
           price: 0,
           strength: 0,
           total: 0,
-          level: 'L2',
+          level: '',
+          klass: '',
+          productCategory: '',
+          specs: '',
         })))
       }
     } catch (e) {
@@ -148,7 +171,10 @@ export default function MyDCPage() {
         price: 0,
         strength: 0,
         total: 0,
-        level: 'L2',
+        level: '',
+        klass: '',
+        productCategory: '',
+        specs: '',
       })))
     }
     
@@ -164,7 +190,11 @@ export default function MyDCPage() {
     }))
   }
 
-  const handleProductFieldChange = (productId: string, field: 'price' | 'strength' | 'level', value: string | number) => {
+  const handleProductFieldChange = (
+    productId: string,
+    field: 'price' | 'strength' | 'level' | 'klass' | 'productCategory' | 'specs',
+    value: string | number,
+  ) => {
     setProductRows(productRows.map(row => {
       if (row.id === productId) {
         const updated = { ...row, [field]: value }
@@ -188,10 +218,25 @@ export default function MyDCPage() {
       return
     }
 
-    // Validate that all checked products have price and strength
-    const invalidProducts = checkedProducts.filter(p => !p.price || !p.strength)
-    if (invalidProducts.length > 0) {
-      alert('Please fill in Price and Strength for all selected products')
+    // Every selected product needs the same details as Close Lead: class, category / specs / level
+    // where the product has them, price and strength.
+    const missing: string[] = []
+    for (const p of checkedProducts) {
+      const need: string[] = []
+      if (!p.klass) need.push('Class')
+      if (productCategories(p.product).length > 0 && !p.productCategory) need.push('Category')
+      if (getProductSpecs(p.product).length > 0 && !p.specs) need.push('Specs')
+      if (getProductLevels(p.product).length > 0 && !p.level) need.push('Level')
+      if (!p.price) need.push('Price')
+      if (!p.strength) need.push('Strength')
+      if (need.length) missing.push(`${p.product}: ${need.join(', ')}`)
+    }
+    if (missing.length > 0) {
+      alert(`Please fill in all required fields:\n${missing.join('\n')}`)
+      return
+    }
+    if (!productPoUrl) {
+      alert('Please upload the PO before adding products.')
       return
     }
 
@@ -201,14 +246,16 @@ export default function MyDCPage() {
       // Include all fields that employees might have entered
       const productDetails = checkedProducts.map(row => ({
         product: row.product,
-        class: '1', // Default class if not provided
-        category: 'New Students', // Default category if not provided
+        class: row.klass,
+        category: 'New Students',
+        productCategory: row.productCategory || undefined,
+        specs: row.specs || undefined,
         productName: '', // Product name can be empty initially
         quantity: row.strength || row.quantity || 0, // Using strength as quantity
         strength: row.strength || 0,
         price: Number(row.price) || 0, // Ensure it's a number
         total: Number(row.total) || (Number(row.price) || 0) * (Number(row.strength) || 0), // Calculate if missing
-        level: row.level || 'L2',
+        level: row.level || undefined,
       }))
       
       console.log('Saving productDetails from employee:', productDetails)
@@ -218,6 +265,7 @@ export default function MyDCPage() {
         method: 'PUT',
         body: JSON.stringify({
           productDetails,
+          poPhotoUrl: productPoUrl,
           requestedQuantity: checkedProducts.reduce((sum, p) => sum + p.strength, 0),
           status: 'sent_to_manager', // This will make it appear in closed sales for admin/coordinator verification
         }),
@@ -482,7 +530,44 @@ export default function MyDCPage() {
                   {row.checked && (
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 ml-6">
                       <div>
-                        <Label className="text-xs">Price</Label>
+                        <Label className="text-xs">Class *</Label>
+                        <Select value={row.klass} onValueChange={(v) => handleProductFieldChange(row.id, 'klass', v)}>
+                          <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
+                          <SelectContent>
+                            {getProductClasses(row.product).map((c) => (
+                              <SelectItem key={c} value={c}>{c}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {productCategories(row.product).length > 0 && (
+                        <div>
+                          <Label className="text-xs">Category *</Label>
+                          <Select value={row.productCategory} onValueChange={(v) => handleProductFieldChange(row.id, 'productCategory', v)}>
+                            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
+                            <SelectContent>
+                              {productCategories(row.product).map((c) => (
+                                <SelectItem key={c} value={c}>{c}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                      {getProductSpecs(row.product).length > 0 && (
+                        <div>
+                          <Label className="text-xs">Specs *</Label>
+                          <Select value={row.specs} onValueChange={(v) => handleProductFieldChange(row.id, 'specs', v)}>
+                            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
+                            <SelectContent>
+                              {getProductSpecs(row.product).map((c) => (
+                                <SelectItem key={c} value={c}>{c}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                      <div>
+                        <Label className="text-xs">Price *</Label>
                         <Input
                           type="number"
                           value={row.price || ''}
@@ -493,7 +578,7 @@ export default function MyDCPage() {
                         />
                       </div>
                       <div>
-                        <Label className="text-xs">Strength</Label>
+                        <Label className="text-xs">Strength *</Label>
                         <Input
                           type="number"
                           value={row.strength || ''}
@@ -512,31 +597,49 @@ export default function MyDCPage() {
                           className="h-8 text-xs bg-neutral-50"
                         />
                       </div>
-                      <div>
-                        <Label className="text-xs">Level</Label>
-                        <Select
-                          value={row.level}
-                          onValueChange={(v) => handleProductFieldChange(row.id, 'level', v)}
-                        >
-                          <SelectTrigger className="h-8 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {availableLevels.map(level => (
-                              <SelectItem key={level} value={level}>{level}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      {getProductLevels(row.product).length > 0 && (
+                        <div>
+                          <Label className="text-xs">Level *</Label>
+                          <Select
+                            value={row.level}
+                            onValueChange={(v) => handleProductFieldChange(row.id, 'level', v)}
+                          >
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue placeholder="Select" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {getProductLevels(row.product).map(level => (
+                                <SelectItem key={level} value={level}>{level}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
               ))}
             </div>
+            <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/50 p-4">
+              <Label>Purchase Order (PO) *</Label>
+              <p className="text-xs text-neutral-600">Upload the school&apos;s PO. Products are sent for verification only with a PO.</p>
+              <Input
+                type="file"
+                accept="image/*,application/pdf"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (!file) return
+                  const reader = new FileReader()
+                  reader.onloadend = () => setProductPoUrl(reader.result as string)
+                  reader.readAsDataURL(file)
+                }}
+              />
+              {productPoUrl && <p className="text-xs font-medium text-green-700">PO attached.</p>}
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setProductDialogOpen(false)}>Cancel</Button>
-            <Button onClick={saveProducts} disabled={submitting}>
+            <Button onClick={saveProducts} disabled={submitting || !productPoUrl}>
               {submitting ? 'Saving...' : 'Add Products'}
             </Button>
           </DialogFooter>

@@ -983,6 +983,7 @@ export default function LeadsRenewalListScreen() {
               <DateTimePicker
                 value={followUpDate}
                 mode="date"
+                minimumDate={new Date(new Date().setHours(0, 0, 0, 0))}
                 display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                 onChange={(_, d) => {
                   setShowDatePicker(Platform.OS === 'ios');

@@ -1,5 +1,6 @@
 'use client'
 
+import { todayDateString } from '@/lib/todayDate'
 import { useState, useEffect, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { apiRequest } from '@/lib/api'
@@ -1038,7 +1039,7 @@ export default function EditLeadPage() {
           </div>
           <div>
             <Label>Follow-up date</Label>
-            <Input className="bg-white text-neutral-900" type="date" name="follow_up_date" value={form.follow_up_date} onChange={onChange} />
+            <Input className="bg-white text-neutral-900" type="date" name="follow_up_date" min={todayDateString()} value={form.follow_up_date} onChange={onChange} />
           </div>
           {error && <div className="md:col-span-2 text-red-600 text-sm">{error}</div>}
           <div className="md:col-span-2">

@@ -296,7 +296,8 @@ function DatePickerModal({
           display={Platform.OS === 'ios' ? 'spinner' : 'calendar'}
           onChange={(_, d) => {
             if (d) {
-              const picked = d.toISOString().split('T')[0];
+              // Local calendar day: toISOString() turns today (midnight IST) into yesterday, so today was rejected.
+              const picked = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
               if (!isBeforeToday(picked)) onChange(picked);
             }
             if (Platform.OS === 'android') onClose();

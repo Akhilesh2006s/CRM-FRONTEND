@@ -13,7 +13,8 @@ export type Advance = {
   _id: string
   __v: number
   employeeId: AdvancePerson
-  advanceType: 'Employee Request' | 'Special Advance (Incentives)'
+  /** 'Employee Request' is the former name of Travel Advance (older requests). */
+  advanceType: 'Travel Advance' | 'Salary Advance' | 'Special Advance (Incentives)' | 'Employee Request'
   /** Amount the employee requested. */
   amount: number
   /** Amount as last set by an approver; absent until the first approval. */
@@ -53,7 +54,15 @@ export function advanceApprovalLabel(approval: AdvanceApproval): string {
   const label = { zonal_manager: 'Zonal Manager', product_head: 'Product Head', admin: 'Admin', finance: 'Finance Manager', super_admin: 'Super Admin', tagged: approval.approverId?.name || 'Tagged employee' }[approval.stage]
   return ['zonal_manager', 'product_head'].includes(approval.stage) && approval.approverId?.name ? `${label} (${approval.approverId.name})` : label
 }
-export function advanceRequestApprovalDescription(role?: string): string {
+/** Advance types an employee can request. */
+export const ADVANCE_TYPES = ['Travel Advance', 'Salary Advance', 'Special Advance (Incentives)'] as const
+export const INCENTIVE_ADVANCE = 'Special Advance (Incentives)'
+/** Approval route shown under the type: Travel follows the designation; Salary and Incentives go Admin → Finance. */
+export function advanceRequestApprovalDescription(role?: string, advanceType: string = 'Travel Advance'): string {
+  const incentiveNote = advanceType === INCENTIVE_ADVANCE ? ' Incentives are excluded from expense deductions and balance adjustments.' : ''
+  if (advanceType === 'Salary Advance' || advanceType === INCENTIVE_ADVANCE) {
+    return `Requires Admin approval, followed by the Finance Manager.${incentiveNote}`
+  }
   if (['Executive', 'Sales BDE', 'Employee', 'BDE'].includes(role || '')) return 'Requires approval from your assigned Zonal Manager, followed by the Finance Manager.'
   if (role === 'Trainer') return 'Requires approval from your assigned Product Head, followed by the Finance Manager.'
   return 'Requires Admin approval, approval from any employees tagged by Admin, and final Finance Manager approval.'

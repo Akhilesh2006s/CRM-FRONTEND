@@ -718,7 +718,6 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
   const advanceKeys = ['advance.request.page.view', 'advance.status.page.view', 'advance.history.page.view', 'advance.approvals.page.view'];
   const permittedAdvanceLinks = advanceLinks.filter((_, index) => user?.isSuperAdmin || role === 'Super Admin'
     || user?.rbacEnabled === false || user?.permissions?.includes(advanceKeys[index]));
-  if (permittedAdvanceLinks.length) sections.push({ title: 'Advance', icon: '💳', items: permittedAdvanceLinks });
 
   // Every employee login can raise its own expenses.
   if (!hasScreen(sections, 'ExpenseCreate')) {
@@ -737,6 +736,14 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
       const settingsAt = sections.findIndex((section) => section.title === 'Settings');
       sections = settingsAt >= 0 ? [...sections.slice(0, settingsAt), expenses, ...sections.slice(settingsAt)] : [...sections, expenses];
     }
+  }
+  // Advance sits right after Expenses (every employee has both).
+  if (permittedAdvanceLinks.length) {
+    const advanceSection: NavSection = { title: 'Advance', icon: '💳', items: permittedAdvanceLinks };
+    const expensesAt = sections.findIndex((section) => section.items.some((item) => item.screen === 'ExpenseCreate'));
+    sections = expensesAt >= 0
+      ? [...sections.slice(0, expensesAt + 1), advanceSection, ...sections.slice(expensesAt + 1)]
+      : [...sections, advanceSection];
   }
 
   const extra: NavLink[] = [];

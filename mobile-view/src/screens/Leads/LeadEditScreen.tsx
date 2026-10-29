@@ -844,14 +844,17 @@ export default function LeadEditScreen({ navigation, route }: any) {
                 </TouchableOpacity>
               </View>
               <DateTimePicker
-                value={form.follow_up_date ? new Date(form.follow_up_date) : new Date()}
+                value={form.follow_up_date ? new Date(`${form.follow_up_date}T12:00:00`) : new Date()}
                 mode="date"
                 display={Platform.OS === 'ios' ? 'spinner' : 'calendar'}
+                minimumDate={new Date(new Date().setHours(0, 0, 0, 0))}
                 onChange={(_, d) => {
                   if (d) {
+                    // Local calendar day (toISOString would shift to the previous day in IST).
+                    const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
                     setForm((f) => ({
                       ...f,
-                      follow_up_date: d.toISOString().split('T')[0],
+                      follow_up_date: ymd,
                     }));
                   }
                   if (Platform.OS === 'android') setShowFollowUpDatePicker(false);

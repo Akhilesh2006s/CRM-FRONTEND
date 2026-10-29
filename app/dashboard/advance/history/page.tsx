@@ -48,7 +48,7 @@ export default function AdvanceHistoryPage() {
         {people.map((p) => <option key={p._id} value={p._id}>{p.name}{p.empCode ? ` (${p.empCode})` : ''}</option>)}
       </select>}<Button variant="outline" onClick={() => setRefresh((n) => n + 1)}>Refresh</Button></div>
     </div>
-    <p className="text-sm text-neutral-500">All-time balance = approved Employee Request advances − final approved expenses. Incentives are tracked separately. Updates automatically after expense approval.</p>
+    <p className="text-sm text-neutral-500">All-time balance = approved Travel and Salary advances − final approved expenses. Incentives are tracked separately. Updates automatically after expense approval.</p>
     {error && <p role="alert" className="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>}
     {!history ? <p className="py-8 text-neutral-500">{error ? 'History is unavailable. Use Refresh to try again.' : 'Loading history…'}</p> : <>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

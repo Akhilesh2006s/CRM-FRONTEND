@@ -6,11 +6,11 @@ import ScreenShell from '../../ui/ScreenShell';
 import { WebButton, WebInput, WebLabel, WebSelect } from '../../ui/WebPrimitives';
 import { useAuth } from '../../context/AuthContext';
 import { apiService } from '../../services/api';
-import { Advance, AdvancePerson, AdvanceHistory, advanceDate, advanceMoney, advanceApprovalLabel, advanceRequestApprovalDescription, advanceCurrentAmount, advanceAmountLabel } from '../../lib/advance';
+import { Advance, AdvancePerson, AdvanceHistory, ADVANCE_TYPES, advanceDate, advanceMoney, advanceApprovalLabel, advanceRequestApprovalDescription, advanceCurrentAmount, advanceAmountLabel } from '../../lib/advance';
 
 const message = (error: any) => error?.response?.data?.message || error?.message || 'Unable to load advances.';
 const day = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-const types = ['Employee Request', 'Special Advance (Incentives)'];
+const types: string[] = [...ADVANCE_TYPES];
 const ErrorText = ({ error }: { error: string }) => error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null;
 
 export function AdvanceRequestScreen({ navigation }: any) {
@@ -31,8 +31,8 @@ export function AdvanceRequestScreen({ navigation }: any) {
   return <ScreenShell title="Request Advance">
     <View style={styles.card}>
       <ErrorText error={error} />
-      <WebSelect label="Advance Type" value={form.advanceType} items={types.map((value) => ({ label: value, value }))} onValueChange={(v) => update('advanceType', v)} />
-      <Text style={styles.muted}>{form.advanceType === types[0] ? advanceRequestApprovalDescription(user?.role) : 'Super Admin approval only. Incentives are excluded from expense deductions and balance adjustments.'}</Text>
+      <WebSelect label="Advance Type" value={form.advanceType} items={types.map((value, i) => ({ label: `${i + 1}. ${value}`, value }))} onValueChange={(v) => update('advanceType', v)} />
+      <Text style={styles.muted}>{advanceRequestApprovalDescription(user?.role, form.advanceType)}</Text>
       <WebLabel>Advance Amount (₹) *</WebLabel><WebInput accessibilityLabel="Advance amount" keyboardType="decimal-pad" value={form.amount} onChangeText={(v) => update('amount', v)} />
       <WebLabel>Date *</WebLabel>
       {Platform.OS === 'web' ? React.createElement('input', { type: 'date', 'aria-label': 'Advance date', value: form.date, onChange: (e: any) => update('date', e.target.value), style: { padding: 12, border: '1px solid #ddd', borderRadius: 8 } })

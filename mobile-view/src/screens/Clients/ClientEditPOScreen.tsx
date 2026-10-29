@@ -170,6 +170,9 @@ function EditPOTableCell({
   );
 }
 
+/** DcOrder statuses once DC has been requested (same set the backend treats as Closed Sales). */
+const DC_FLOW_ORDER_STATUSES = new Set(['dc_requested', 'dc_accepted', 'dc_approved', 'dc_sent_to_senior', 'in_transit', 'completed']);
+
 export default function ClientEditPOScreen({ navigation, route }: any) {
   const orderId = route?.params?.orderId as string | undefined;
   const paramDcId = route?.params?.dcId as string | undefined;
@@ -763,8 +766,9 @@ export default function ClientEditPOScreen({ navigation, route }: any) {
 
   if (!order) return null;
 
-  // IN DC Flow = DC already requested (status !== 'saved'). PO change not allowed; show message only.
-  const isInDcFlow = order.status != null && order.status !== 'saved';
+  // IN DC Flow = DC already requested. PO change not allowed; show message only.
+  // A client turned from a lead is 'pending' (or 'saved') until Request DC, so it can still be edited.
+  const isInDcFlow = DC_FLOW_ORDER_STATUSES.has(String(order.status || ''));
   if (isInDcFlow) {
     return (
     <ScreenShell

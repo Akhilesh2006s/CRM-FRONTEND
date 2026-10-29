@@ -691,7 +691,7 @@ export default function LeadCloseScreen({ route }: any) {
             display="calendar"
             onChange={(_, selectedDate) => {
               setShowDeliveryDatePicker(false);
-              if (selectedDate) setForm((f) => ({ ...f, delivery_date: selectedDate.toISOString().split('T')[0] }));
+              if (selectedDate) setForm((f) => ({ ...f, delivery_date: `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}` }));
             }}
           />
         ) : (
@@ -709,7 +709,7 @@ export default function LeadCloseScreen({ route }: any) {
                 mode="date"
                 display="spinner"
                 onChange={(_, selectedDate) => {
-                  if (selectedDate) setForm((f) => ({ ...f, delivery_date: selectedDate.toISOString().split('T')[0] }));
+                  if (selectedDate) setForm((f) => ({ ...f, delivery_date: `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}` }));
                 }}
                 style={{ height: 200 }}
               />

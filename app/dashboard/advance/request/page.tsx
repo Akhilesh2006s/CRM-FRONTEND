@@ -11,12 +11,12 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
 import { usePermissions } from '@/components/permissions/PermissionsProvider'
-import { advanceRequestApprovalDescription } from '@/lib/advance'
+import { ADVANCE_TYPES, advanceRequestApprovalDescription } from '@/lib/advance'
 
 export default function RequestAdvancePage() {
   const { user } = usePermissions()
   const router = useRouter()
-  const [form, setForm] = useState({ advanceType: 'Employee Request', amount: '', reason: '', scheduleDetails: '', date: todayDateString(), remark: '' })
+  const [form, setForm] = useState({ advanceType: ADVANCE_TYPES[0] as string, amount: '', reason: '', scheduleDetails: '', date: todayDateString(), remark: '' })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const update = (key: keyof typeof form, value: string) => setForm((old) => ({ ...old, [key]: value }))
@@ -39,11 +39,9 @@ export default function RequestAdvancePage() {
       {error && <p role="alert" className="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>}
       <div className="space-y-2"><Label htmlFor="advanceType">Advance Type *</Label>
         <select id="advanceType" className="h-10 w-full rounded-md border bg-white px-3 text-sm" value={form.advanceType} onChange={(e) => update('advanceType', e.target.value)}>
-          <option>Employee Request</option><option>Special Advance (Incentives)</option>
+          {ADVANCE_TYPES.map((type, i) => <option key={type} value={type}>{i + 1}. {type}</option>)}
         </select>
-        <p className="text-sm text-neutral-500">{form.advanceType === 'Employee Request'
-          ? advanceRequestApprovalDescription(user?.role)
-          : 'Requires Super Admin approval only. Incentives are excluded from expense deductions and balance adjustments.'}</p>
+        <p className="text-sm text-neutral-500">{advanceRequestApprovalDescription(user?.role, form.advanceType)}</p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2"><Label htmlFor="amount">Advance Amount (₹) *</Label><Input id="amount" type="number" min="0.01" max="999999999.99" step="0.01" required value={form.amount} onChange={(e) => update('amount', e.target.value)} /></div>

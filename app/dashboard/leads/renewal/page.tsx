@@ -1,5 +1,6 @@
 'use client'
 
+import { todayDateString } from '@/lib/todayDate'
 import { useCallback, useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { apiRequest } from '@/lib/api'
@@ -1271,6 +1272,7 @@ export default function RenewalLeadsPage() {
               <Input
                 type="date"
                 className="bg-white text-neutral-900"
+                min={todayDateString()}
                 value={updateForm.follow_up_date}
                 onChange={(e) => setUpdateForm({ ...updateForm, follow_up_date: e.target.value })}
               />

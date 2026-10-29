@@ -814,6 +814,7 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
             React.createElement('input', {
               type: 'date',
               value: form.follow_up_date || '',
+              min: toLocalYmd(new Date()),
               onChange: (e: any) => setFollowUpDate(e.target.value || ''),
               style: {
                 width: '100%',
@@ -844,6 +845,7 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
             value={parseLocalYmd(form.follow_up_date)}
             mode="date"
             display="default"
+            minimumDate={new Date(new Date().setHours(0, 0, 0, 0))}
             onChange={(event, d) => {
               setShowFollowUpDatePicker(false);
               if (event.type === 'set' && d) setFollowUpDate(toLocalYmd(d));
@@ -869,6 +871,7 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
                 value={parseLocalYmd(form.follow_up_date)}
                 mode="date"
                 display="spinner"
+                minimumDate={new Date(new Date().setHours(0, 0, 0, 0))}
                 onChange={(_, d) => {
                   if (d) setFollowUpDate(toLocalYmd(d));
                 }}

@@ -184,6 +184,15 @@ export default function LeadFollowupScreen({ navigation }: any) {
   const [showFollowUpDatePicker, setShowFollowUpDatePicker] = useState(false);
   const [selectedLead, setSelectedLead] = useState<any>(null);
   const [historyLead, setHistoryLead] = useState<any>(null);
+  /** Lead ids whose product list is expanded (collapsed by default). */
+  const [expandedLeads, setExpandedLeads] = useState<Set<string>>(() => new Set());
+  const toggleProducts = (id: string) =>
+    setExpandedLeads((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const [history, setHistory] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [updating, setUpdating] = useState(false);
@@ -766,6 +775,7 @@ export default function LeadFollowupScreen({ navigation }: any) {
           leads.map((lead) => {
             const isOverdue = isFollowUpDateOverdue(lead.follow_up_date);
             const productRows = groupInterestedRowsForDisplay(leadProductsToInterestedRows(lead));
+            const productsOpen = expandedLeads.has(String(lead._id));
 
             return (
               <View key={lead._id} style={[styles.card, lead.isChain && styles.cardChain]}>
@@ -801,6 +811,22 @@ export default function LeadFollowupScreen({ navigation }: any) {
                         </View>
                       ) : null}
                     </View>
+                    <TouchableOpacity
+                      style={styles.closeLeadTop}
+                      accessibilityRole="button"
+                      onPress={() => {
+                        const id = lead?._id ? String(lead._id) : '';
+                        if (!id) {
+                          setErrorMessage('This lead has no id, so it cannot be closed.');
+                          return;
+                        }
+                        if (!navigateRoot('LeadClose', { id })) {
+                          navigation.navigate('LeadClose', { id });
+                        }
+                      }}
+                    >
+                      <Text style={styles.actionButtonText}>Close Lead</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
 
@@ -831,9 +857,25 @@ export default function LeadFollowupScreen({ navigation }: any) {
                   </View>
 
                   <View style={styles.productsBlock}>
-                    <Text style={styles.productsLabel}>Products interested</Text>
+                    <View style={styles.productsHeader}>
+                      <Text style={[styles.productsLabel, { marginBottom: 0 }]}>
+                        Products interested ({productRows.length})
+                      </Text>
+                      {productRows.length > 0 ? (
+                        <TouchableOpacity
+                          accessibilityRole="button"
+                          onPress={() => toggleProducts(String(lead._id))}
+                        >
+                          <Text style={styles.productsToggle}>{productsOpen ? 'Hide' : 'Show'}</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
                     {productRows.length === 0 ? (
                       <Text style={styles.productsEmpty}>—</Text>
+                    ) : !productsOpen ? (
+                      <Text style={styles.productsEmpty} numberOfLines={2}>
+                        {productRows.map((p) => p.product_name).join(', ')}
+                      </Text>
                     ) : (
                       productRows.map((p, pi) => (
                         <View key={`${p.product_name}-${pi}`} style={styles.productLine}>
@@ -881,21 +923,6 @@ export default function LeadFollowupScreen({ navigation }: any) {
                     onPress={() => openHistoryModal(lead)}
                   >
                     <Text style={styles.actionButtonText}>View History</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.closeButton]}
-                    onPress={() => {
-                      const id = lead?._id ? String(lead._id) : '';
-                      if (!id) {
-                        setErrorMessage('This lead has no id, so it cannot be closed.');
-                        return;
-                      }
-                      if (!navigateRoot('LeadClose', { id })) {
-                        navigation.navigate('LeadClose', { id });
-                      }
-                    }}
-                  >
-                    <Text style={styles.actionButtonText}>Close Lead</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -1209,7 +1236,11 @@ export default function LeadFollowupScreen({ navigation }: any) {
                   <View key={idx} style={styles.historyCard}>
                     <Text style={styles.historyDate}>{formatDateTime(item.updatedAt)}</Text>
                     <Text style={styles.historyMeta}>
-                      Status: {item.priority || displayLeadDealPriority(historyLead || {})}
+                      Status:{' '}
+                      {(Array.isArray(item.productsInterested) &&
+                        deriveLeadPriorityFromDealProducts(item.productsInterested)) ||
+                        item.priority ||
+                        displayLeadDealPriority(historyLead || {})}
                     </Text>
                     {item.follow_up_date ? (
                       <Text style={styles.historyMeta}>
@@ -1228,6 +1259,7 @@ export default function LeadFollowupScreen({ navigation }: any) {
                             const name = p.product_name || '';
                             if (!name) return '';
                             const bits = [name];
+                            if (p.status) bits.push(p.status);
                             if (p.term) bits.push(p.term);
                             if (Number(p.chance) > 0) bits.push(`${p.chance}%`);
                             return bits.join(' · ');
@@ -1328,6 +1360,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   productsEmpty: { ...typography.body.medium, color: colors.textSecondary },
+  productsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  productsToggle: { ...typography.body.small, color: colors.primary, fontWeight: '700', paddingHorizontal: 4 },
+  closeLeadTop: {
+    backgroundColor: colors.success,
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
   productLine: {
     borderWidth: 1,
     borderColor: colors.border,

@@ -44,14 +44,6 @@ export const RBAC_MODULE_ORDER = [
  */
 export const RBAC_NAV_MODULES: RbacNavModule[] = [
   {
-    module: 'advance', label: 'Advance', pages: [
-      { label: 'Request Advance', href: '/dashboard/advance/request' },
-      { label: 'Advance Status', href: '/dashboard/advance/status' },
-      { label: 'Advance History', href: '/dashboard/advance/history' },
-      { label: 'Advance Approvals', href: '/dashboard/advance/approvals' },
-    ],
-  },
-  {
     module: 'dashboard',
     label: MODULE_LABELS.dashboard,
     pages: [{ label: 'Dashboard', href: '/dashboard' }],
@@ -184,6 +176,14 @@ export const RBAC_NAV_MODULES: RbacNavModule[] = [
       { label: 'Create Expenses', href: '/dashboard/expenses/create' },
       { label: 'Pending Expenses', href: '/dashboard/expenses/my?view=pending' },
       { label: 'Completed Expenses', href: '/dashboard/expenses/my?view=completed' },
+    ],
+  },
+  {
+    module: 'advance', label: 'Advance', pages: [
+      { label: 'Request Advance', href: '/dashboard/advance/request' },
+      { label: 'Advance Status', href: '/dashboard/advance/status' },
+      { label: 'Advance History', href: '/dashboard/advance/history' },
+      { label: 'Advance Approvals', href: '/dashboard/advance/approvals' },
     ],
   },
   {
