@@ -22,14 +22,14 @@ const caveat = Caveat({
 })
 
 export const metadata: Metadata = {
-  title: "C-FORGIA CRM — Amenity Forge",
+  title: "Viswam Edutech CRM",
   description:
-    "C-FORGIA is a modern, AI‑powered CRM by Amenity Forge. Track leads, deals, and analytics in one fast, beautiful dashboard.",
+    "Viswam Edutech CRM: leads, schools, DCs, expenses, attendance and reports in one place.",
   generator: "v0.app",
   icons: {
-    icon: "/logo.png",
-    shortcut: "/logo.png",
-    apple: "/logo.png",
+    icon: "/viswam-logo.png",
+    shortcut: "/viswam-logo.png",
+    apple: "/viswam-logo.png",
   },
 }
 
