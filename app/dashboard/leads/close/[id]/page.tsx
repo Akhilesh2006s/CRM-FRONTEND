@@ -60,6 +60,12 @@ const getCurrentAcademicYear = () => {
   return `${currentYear}-${currentYear + 1}`
 }
 
+/** Today as YYYY-MM-DD (local time): the earliest Delivery Date allowed. */
+function todayYmd() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 export default function CloseLeadPage() {
   const router = useRouter()
   const params = useParams()
@@ -717,6 +723,12 @@ export default function CloseLeadPage() {
       toast.error(message)
       return
     }
+    if (form.delivery_date < todayYmd()) {
+      const message = 'Delivery date cannot be in the past.'
+      setError(message)
+      toast.error(message)
+      return
+    }
 
     if (!poPhotoUrl || poPhotoUrl.trim() === '') {
       const message =
@@ -911,8 +923,13 @@ export default function CloseLeadPage() {
             <Label className="text-sm font-semibold text-neutral-700">Delivery Date *</Label>
             <Input
               type="date"
+              min={todayYmd()}
               value={form.delivery_date}
-              onChange={(e) => setForm({ ...form, delivery_date: e.target.value })}
+              onChange={(e) => {
+                const next = e.target.value
+                if (next && next < todayYmd()) return
+                setForm({ ...form, delivery_date: next })
+              }}
               className="mt-1"
               required
             />

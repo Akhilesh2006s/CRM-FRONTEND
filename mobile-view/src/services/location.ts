@@ -54,6 +54,33 @@ export const getCurrentLocation = async (
   }
 };
 
+/**
+ * Pincode (and town) for a GPS point: the phone's own address lookup first, then the server
+ * (some phones return no postal code). Returns '' for pincode when neither knows it.
+ */
+export const getPincodeFromLocation = async (loc: LocationData): Promise<{ pincode: string; town: string }> => {
+  let pincode = '';
+  let town = '';
+  try {
+    const [place] = await Location.reverseGeocodeAsync(loc);
+    const code = String(place?.postalCode || '').replace(/\D/g, '');
+    if (code.length === 6) pincode = code;
+    town = place?.city || place?.subregion || place?.district || '';
+  } catch {
+    // fall through to the server lookup
+  }
+  if (!pincode) {
+    try {
+      const res: any = await apiService.get(`/location/pincode-from-coords?lat=${loc.latitude}&lng=${loc.longitude}`);
+      if (res?.pincode) pincode = String(res.pincode);
+      if (!town && res?.town) town = String(res.town);
+    } catch {
+      // caller shows "could not detect"
+    }
+  }
+  return { pincode, town };
+};
+
 export const getTownFromPincode = async (pincode: string): Promise<{ town: string; district?: string; state?: string }> => {
   try {
     if (!pincode || pincode.length !== 6) {

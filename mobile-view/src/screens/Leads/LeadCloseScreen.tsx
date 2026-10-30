@@ -60,6 +60,18 @@ type SplitPreview = {
   term2: { productName: string; strength: number }[];
 };
 
+/** Today as YYYY-MM-DD (local time): the earliest Delivery Date allowed. */
+function todayYmd() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function startOfToday() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 export default function LeadCloseScreen({ route }: any) {
   const leadId = route?.params?.id ? String(route.params.id) : '';
   const { user } = useAuth();
@@ -486,6 +498,10 @@ export default function LeadCloseScreen({ route }: any) {
       setError('Delivery date is required. Pick a date in the Delivery Date field above.');
       return;
     }
+    if (form.delivery_date < todayYmd()) {
+      setError('Delivery date cannot be in the past.');
+      return;
+    }
     if (!poPhotoUrl || poPhotoUrl.trim() === '') {
       setError('PO document is required. Upload a PDF in the PO Document section above, then try again.');
       return;
@@ -664,7 +680,12 @@ export default function LeadCloseScreen({ route }: any) {
           React.createElement('input', {
             type: 'date',
             value: form.delivery_date || '',
-            onChange: (e: any) => setForm((f) => ({ ...f, delivery_date: e.target.value })),
+            min: todayYmd(),
+            onChange: (e: any) => {
+              const next = e.target.value;
+              if (next && next < todayYmd()) return;
+              setForm((f) => ({ ...f, delivery_date: next }));
+            },
             style: {
               width: '100%',
               padding: 10,
@@ -690,6 +711,7 @@ export default function LeadCloseScreen({ route }: any) {
             value={form.delivery_date ? new Date(form.delivery_date) : new Date()}
             mode="date"
             display="calendar"
+            minimumDate={startOfToday()}
             onChange={(_, selectedDate) => {
               setShowDeliveryDatePicker(false);
               if (selectedDate) setForm((f) => ({ ...f, delivery_date: `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}` }));
@@ -709,6 +731,7 @@ export default function LeadCloseScreen({ route }: any) {
                 value={form.delivery_date ? new Date(form.delivery_date) : new Date()}
                 mode="date"
                 display="spinner"
+                minimumDate={startOfToday()}
                 onChange={(_, selectedDate) => {
                   if (selectedDate) setForm((f) => ({ ...f, delivery_date: `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}` }));
                 }}

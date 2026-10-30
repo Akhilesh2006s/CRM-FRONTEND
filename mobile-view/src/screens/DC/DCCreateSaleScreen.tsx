@@ -197,6 +197,8 @@ export default function DCCreateSaleScreen({ navigation }: any) {
   });
   const [products, setProducts] = useState<SaleProduct[]>([]);
   const [employees, setEmployees] = useState<{ _id: string; name: string }[]>([]);
+  const [zones, setZones] = useState<{ _id: string; name: string }[]>([]);
+  const [clusters, setClusters] = useState<string[]>([]);
   const [areas, setAreas] = useState<{ name: string; district?: string; block?: string; branchType?: string }[]>([]);
   const [loadingEmployees, setLoadingEmployees] = useState(true);
   const [loadingPincode, setLoadingPincode] = useState(false);
@@ -334,6 +336,41 @@ export default function DCCreateSaleScreen({ navigation }: any) {
     })();
   }, []);
 
+  // Zone / Cluster pick lists, as on the web Create Sale.
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await apiService.get('/zones');
+        const list = Array.isArray(data) ? data : data?.data || [];
+        setZones(
+          list
+            .map((z: any) => ({ _id: String(z._id || ''), name: String(z.name || '') }))
+            .filter((z: { name: string }) => z.name),
+        );
+      } catch {
+        setZones([]);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    const zoneName = form.zone.trim().toLowerCase();
+    const match = zones.find((z) => z.name.toLowerCase() === zoneName);
+    if (!zoneName || !match) {
+      setClusters([]);
+      return;
+    }
+    (async () => {
+      try {
+        const data = await apiService.get(`/zones/${match._id}/clusters`);
+        const list = Array.isArray(data) ? data : data?.data || [];
+        setClusters(list.map((c: any) => String(c.name || '')).filter(Boolean));
+      } catch {
+        setClusters([]);
+      }
+    })();
+  }, [form.zone, zones]);
+
   const updateProduct = (index: number, patch: Partial<SaleProduct>) => {
     setProducts((prev) => prev.map((p, i) => (i === index ? { ...p, ...patch } : p)));
   };
@@ -375,10 +412,14 @@ export default function DCCreateSaleScreen({ navigation }: any) {
       return;
     }
     if (!form.assigned_to) {
-      setError('Please assign the deal to an executive. DC will not be created without assignment.');
+      setError('Please assign the deal to a BDE. DC will not be created without assignment.');
       return;
     }
-    if (form.follow_up_date) {
+    if (!form.follow_up_date) {
+      setError('Follow-up Date is required.');
+      return;
+    }
+    {
       const selected = parseYmd(form.follow_up_date);
       selected.setHours(0, 0, 0, 0);
       if (selected < startOfToday()) {
@@ -417,9 +458,7 @@ export default function DCCreateSaleScreen({ navigation }: any) {
 
     setSubmitting(true);
     try {
-      const followUp = form.follow_up_date
-        ? new Date(form.follow_up_date + 'T00:00:00Z').toISOString()
-        : undefined;
+      const followUp = new Date(form.follow_up_date + 'T00:00:00Z').toISOString();
       await apiService.post('/dc-orders/create', {
         school_name: form.school_name.trim(),
         school_type: form.school_type || undefined,
@@ -634,15 +673,39 @@ export default function DCCreateSaleScreen({ navigation }: any) {
       )}
 
       <WebSelect
-        label="Lead Status"
+        label="Deal Status"
         value={form.lead_status}
         onValueChange={(v) => setField('lead_status', v)}
         items={DEAL_STATUS_OPTIONS}
       />
-      <Text style={styles.label}>Zone *</Text>
-      <WebInput placeholder="Zone" value={form.zone} onChangeText={(v) => setField('zone', v)} />
-      <Text style={styles.label}>Cluster *</Text>
-      <WebInput placeholder="Cluster" value={form.cluster} onChangeText={(v) => setField('cluster', v)} />
+      {zones.length > 0 ? (
+        <WebSelect
+          label="Zone *"
+          value={form.zone}
+          onValueChange={(v) => setForm((f) => ({ ...f, zone: v, cluster: '' }))}
+          items={zones.map((z) => ({ label: z.name, value: z.name }))}
+          placeholder="Select zone"
+        />
+      ) : (
+        <>
+          <Text style={styles.label}>Zone *</Text>
+          <WebInput placeholder="Zone" value={form.zone} onChangeText={(v) => setField('zone', v)} />
+        </>
+      )}
+      {clusters.length > 0 ? (
+        <WebSelect
+          label="Cluster *"
+          value={form.cluster}
+          onValueChange={(v) => setField('cluster', v)}
+          items={clusters.map((c) => ({ label: c, value: c }))}
+          placeholder="Select cluster"
+        />
+      ) : (
+        <>
+          <Text style={styles.label}>Cluster *</Text>
+          <WebInput placeholder="Cluster in this zone" value={form.cluster} onChangeText={(v) => setField('cluster', v)} />
+        </>
+      )}
       <Text style={styles.label}>No. of Branches *</Text>
       <WebInput
         placeholder="No. of Branches"
@@ -658,7 +721,7 @@ export default function DCCreateSaleScreen({ navigation }: any) {
         keyboardType="number-pad"
       />
       <WebSelect
-        label="Assign to (Executive) *"
+        label="Assign to (BDE) *"
         value={form.assigned_to}
         onValueChange={(v) => setField('assigned_to', v)}
         items={employees.map((e) => ({ label: e.name, value: e._id }))}
@@ -667,7 +730,7 @@ export default function DCCreateSaleScreen({ navigation }: any) {
             ? 'Loading employees...'
             : employees.length === 0
               ? 'No employees found'
-              : 'Select executive *'
+              : 'Select BDE'
         }
       />
       {employees.length === 0 && !loadingEmployees ? (
@@ -681,7 +744,7 @@ export default function DCCreateSaleScreen({ navigation }: any) {
         keyboardType="number-pad"
       />
       <DateField
-        label="Follow-up date"
+        label="Follow-up date *"
         value={form.follow_up_date}
         onChange={(v) => setField('follow_up_date', v)}
         showPicker={showFollowUpPicker}

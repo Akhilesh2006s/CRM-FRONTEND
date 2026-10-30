@@ -11,11 +11,10 @@ import {
   Image,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import * as Location from 'expo-location';
 import { useAuth } from '../../context/AuthContext';
 import LogoutButton from '../../components/LogoutButton';
 import { apiService } from '../../services/api';
-import { getCurrentLocation, getTownFromPincode } from '../../services/location';
+import { getCurrentLocation, getPincodeFromLocation, getTownFromPincode } from '../../services/location';
 
 const ATTENDANCE_REASONS = [
   { label: 'Employee', value: 'employee' },
@@ -49,14 +48,19 @@ export default function DailySelfieCheckInScreen({ onDone }: { onDone: () => voi
     try {
       const loc = await getCurrentLocation();
       setLocation(loc);
-      try {
-        const [place] = await Location.reverseGeocodeAsync(loc);
-        if (place?.postalCode) setPincode((p) => p || String(place.postalCode));
-        const name = place?.city || place?.subregion || place?.district || '';
-        if (name) setTown((t) => t || name);
-      } catch {
-        // Address lookup is optional; the employee can type pincode / town.
+      // Pincode always comes from the GPS location; it cannot be typed or changed.
+      const found = await getPincodeFromLocation(loc);
+      setPincode(found.pincode);
+      let name = found.town;
+      if (found.pincode) {
+        try {
+          const result = await getTownFromPincode(found.pincode);
+          if (result?.town) name = result.town;
+        } catch {
+          // keep the town from the location lookup
+        }
       }
+      if (name) setTown((t) => t || name);
     } catch (error: any) {
       Alert.alert('Location needed', error?.message || 'Turn on location and try again.');
     } finally {
@@ -81,23 +85,10 @@ export default function DailySelfieCheckInScreen({ onDone }: { onDone: () => voi
     }
   };
 
-  const onPincode = async (text: string) => {
-    const digits = text.replace(/\D/g, '').slice(0, 6);
-    setPincode(digits);
-    if (digits.length === 6) {
-      try {
-        const result = await getTownFromPincode(digits);
-        if (result?.town) setTown(result.town);
-      } catch {
-        // Town can be typed.
-      }
-    }
-  };
-
   const submit = async () => {
     if (!photo) return Alert.alert('Selfie needed', 'Take a selfie to check in.');
     if (!location) return Alert.alert('Location needed', 'Capture your location to check in.');
-    if (pincode.length !== 6) return Alert.alert('Pincode needed', 'Enter a valid 6-digit pincode.');
+    if (pincode.length !== 6) return Alert.alert('Pincode not detected', 'Could not find the pincode for your location. Tap Refresh to try again.');
     if (!town.trim()) return Alert.alert('Town needed', 'Enter your town.');
     setSubmitting(true);
     try {
@@ -172,7 +163,13 @@ export default function DailySelfieCheckInScreen({ onDone }: { onDone: () => voi
       </View>
 
       <Text style={styles.label}>Pincode *</Text>
-      <TextInput style={styles.input} value={pincode} onChangeText={onPincode} keyboardType="number-pad" placeholder="6-digit pincode" />
+      <TextInput
+        style={[styles.input, styles.inputLocked]}
+        value={pincode}
+        editable={false}
+        placeholder={locating ? 'Detecting from your location…' : 'Not detected. Tap Refresh above'}
+      />
+      <Text style={styles.muted}>Filled automatically from your location.</Text>
       <Text style={styles.label}>Town *</Text>
       <TextInput style={styles.input} value={town} onChangeText={setTown} placeholder="Town" />
 
@@ -212,6 +209,7 @@ const styles = StyleSheet.create({
   label: { fontSize: 14, fontWeight: '600', color: '#262626', marginTop: 16, marginBottom: 6 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#D4D4D4', borderRadius: 8, padding: 12, fontSize: 15 },
+  inputLocked: { backgroundColor: '#F1F5F9', color: '#334155' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: '#D4D4D4', backgroundColor: '#fff' },
   chipOn: { backgroundColor: '#2563EB', borderColor: '#2563EB' },

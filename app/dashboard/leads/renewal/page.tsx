@@ -11,6 +11,17 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { getCurrentUser } from '@/lib/auth'
+import {
+  followUpLineError,
+  followUpLineFromLead,
+  followUpLinePayload,
+  followUpStatusOptions,
+  isDroppedStatus,
+  isPricedStatus,
+  newCrossSaleFollowUpLine,
+  withFollowUpStatus,
+  type RenewalFollowUpLine,
+} from '@/lib/renewalFollowUp'
 import { useProducts } from '@/hooks/useProducts'
 import { toast } from 'sonner'
 import { sanitizePhoneInput, validatePhoneDigits } from '@/lib/phone'
@@ -74,13 +85,6 @@ type Lead = {
   }> | string
 }
 
-type ProductInterested = {
-  product_name: string
-  term: string
-  strength: number | ''
-  renewal_pct: number | ''
-  isFromPreviousDc: boolean
-}
 
 /** What the BDE expects for each product this year. */
 type RenewalOption = 'renewed' | 'not_renewed' | 'cross_sale'
@@ -197,7 +201,7 @@ export default function RenewalLeadsPage() {
     status: '',
     remarks: '',
     recommendations: '',
-    productsInterested: [] as ProductInterested[],
+    productsInterested: [] as RenewalFollowUpLine[],
   })
   const [updating, setUpdating] = useState(false)
 
@@ -584,26 +588,7 @@ export default function RenewalLeadsPage() {
       status: lead.priority || 'Hot',
       remarks: '',
       recommendations: lead.recommendations || '',
-      productsInterested: (() => {
-        if (Array.isArray(lead.products) && lead.products.length > 0) {
-          return lead.products.map((p: any) => {
-            const pct = p.renewal_pct ?? p.chance
-            const strengthRaw = p.strength ?? p.quantity
-            return {
-              product_name: p.product_name || p.product || '',
-              term: p.term || 'Term 1',
-              strength:
-                strengthRaw != null && strengthRaw !== '' && Number.isFinite(Number(strengthRaw))
-                  ? Number(strengthRaw)
-                  : '',
-              renewal_pct:
-                pct != null && pct !== '' && Number.isFinite(Number(pct)) ? Number(pct) : '',
-              isFromPreviousDc: Boolean(p.is_from_previous_dc),
-            }
-          })
-        }
-        return []
-      })(),
+      productsInterested: Array.isArray(lead.products) ? lead.products.map(followUpLineFromLead) : [],
     })
     setUpdateModalOpen(true)
   }
@@ -636,22 +621,12 @@ export default function RenewalLeadsPage() {
     }
     const productRows = updateForm.productsInterested.filter((p) => p.product_name?.trim())
     if (productRows.length === 0) {
-      toast.error('Add at least one product with Strength and Chance %')
+      toast.error('Add at least one product')
       return
     }
-    const invalidRows = productRows.some((p) => {
-      const strength = Number(p.strength)
-      const pct = Number(p.renewal_pct)
-      return (
-        !Number.isFinite(strength) ||
-        strength <= 0 ||
-        !Number.isFinite(pct) ||
-        pct < 1 ||
-        pct > 100
-      )
-    })
-    if (invalidRows) {
-      toast.error('Each product must have Strength > 0 and Chance % between 1 and 100')
+    const lineError = productRows.map(followUpLineError).find(Boolean)
+    if (lineError) {
+      toast.error(lineError)
       return
     }
     setUpdating(true)
@@ -662,23 +637,13 @@ export default function RenewalLeadsPage() {
         remarks: updateForm.remarks,
         recommendations: updateForm.recommendations,
       }
-      const validProducts = productRows.map((p) => ({
-        product_name: p.product_name.trim(),
-        term: p.term || 'Term 1',
-        strength: Number(p.strength),
-        renewal_pct: Number(p.renewal_pct),
-        chance: Number(p.renewal_pct),
-        is_from_previous_dc: p.isFromPreviousDc,
-        quantity: Number(p.strength),
-        unit_price: 0,
-      }))
-      payload.productsInterested = validProducts
+      payload.productsInterested = productRows.map(followUpLinePayload)
 
       await apiRequest(`/leads/${selectedLead._id}`, {
         method: 'PUT',
         body: JSON.stringify(payload),
       })
-      toast.success('Renewal saved')
+      toast.success('Follow-up saved')
       closeUpdateModal()
       await loadLeads()
     } catch (err: any) {
@@ -726,13 +691,7 @@ export default function RenewalLeadsPage() {
       ...prev,
       productsInterested: [
         ...prev.productsInterested,
-        {
-          product_name: '',
-          term: 'Term 1',
-          strength: '',
-          renewal_pct: 100,
-          isFromPreviousDc: false,
-        },
+        newCrossSaleFollowUpLine(),
       ],
     }))
   }
@@ -744,11 +703,18 @@ export default function RenewalLeadsPage() {
     }))
   }
 
-  const updateInterestedProduct = (index: number, field: keyof ProductInterested, value: string | number) => {
+  const updateInterestedProduct = (index: number, patch: Partial<RenewalFollowUpLine>) => {
+    setUpdateForm((prev) => ({
+      ...prev,
+      productsInterested: prev.productsInterested.map((item, i) => (i === index ? { ...item, ...patch } : item)),
+    }))
+  }
+
+  const setInterestedProductStatus = (index: number, status: string) => {
     setUpdateForm((prev) => ({
       ...prev,
       productsInterested: prev.productsInterested.map((item, i) =>
-        i === index ? { ...item, [field]: value } : item
+        i === index ? withFollowUpStatus(item, status) : item
       ),
     }))
   }
@@ -1231,7 +1197,7 @@ export default function RenewalLeadsPage() {
                       className="bg-purple-50 text-purple-700 border-purple-200"
                       onClick={() => openUpdateModal(lead)}
                     >
-                      Create Renewal
+                      Create Follow-up
                     </Button>
                     <Button
                       variant="outline"
@@ -1251,10 +1217,10 @@ export default function RenewalLeadsPage() {
       </Card>
 
       <Dialog open={updateModalOpen} onOpenChange={setUpdateModalOpen}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
+        <DialogContent className="sm:max-w-[820px] max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
           <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
-            <DialogTitle>Create renewal</DialogTitle>
-            <DialogDescription>Log renewal interaction for this lead</DialogDescription>
+            <DialogTitle>Create Follow-up</DialogTitle>
+            <DialogDescription>Log the renewal follow-up for this school</DialogDescription>
           </DialogHeader>
           <div className="flex-1 min-h-0 overflow-y-auto px-6 py-2 space-y-4">
             <div>
@@ -1288,107 +1254,156 @@ export default function RenewalLeadsPage() {
                 </Button>
               </div>
               <p className="text-xs text-neutral-500 mb-2">
-                Enter Strength and Chance % (1–100) for each product. New lines default Chance % to 100%.
+                Mark each of last year&apos;s products Renewed or Not Renewed (or Hot / Warm / Visit Again while
+                still discussing). Renewed needs Strength and Price; Hot and Warm also need Chance %; Not Renewed
+                needs the reason. Products added here are Cross-Sale.
               </p>
               <div className="border rounded-md bg-white overflow-hidden">
                 {updateForm.productsInterested.length === 0 ? (
                   <p className="text-xs text-neutral-500 p-3">No products on this lead yet.</p>
                 ) : (
                   <>
-                    <div className="sticky top-0 z-10 grid grid-cols-[minmax(100px,1fr)_88px_72px_72px_36px] gap-2 text-xs font-semibold text-neutral-600 px-3 py-2 border-b border-neutral-200 bg-white">
+                    <div className="sticky top-0 z-10 hidden md:grid grid-cols-[minmax(110px,1fr)_130px_88px_72px_80px_72px_36px] gap-2 text-xs font-semibold text-neutral-600 px-3 py-2 border-b border-neutral-200 bg-white">
                       <span>Product</span>
+                      <span>Status</span>
                       <span>Term</span>
                       <span className="text-center">Strength</span>
+                      <span className="text-center">Price (₹)</span>
                       <span className="text-center">Chance %</span>
                       <span />
                     </div>
                     <div
-                      className="max-h-[min(50vh,22rem)] overflow-y-auto overscroll-contain p-3 space-y-2"
+                      className="max-h-[min(50vh,24rem)] overflow-y-auto overscroll-contain p-3 space-y-3"
                       role="region"
                       aria-label="Products list"
                     >
-                      {updateForm.productsInterested.map((product, index) => (
-                        <div
-                          key={index}
-                          className="grid grid-cols-[minmax(100px,1fr)_88px_72px_72px_36px] gap-2 items-center"
-                        >
-                          {product.isFromPreviousDc ? (
-                            <span className="text-sm font-medium min-w-0 truncate">
-                              {product.product_name}
-                              <span className="ml-1 text-xs font-normal text-emerald-700">(prior DC)</span>
-                            </span>
-                          ) : (
-                            <Select
-                              value={product.product_name || undefined}
-                              onValueChange={(v) => updateInterestedProduct(index, 'product_name', v)}
-                            >
-                              <SelectTrigger className="h-9 min-w-0">
-                                <SelectValue placeholder="Product" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {availableProductNames.map((name) => (
-                                  <SelectItem key={name} value={name}>
-                                    {name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          )}
-                          <Select
-                            value={product.term}
-                            onValueChange={(v) => updateInterestedProduct(index, 'term', v)}
-                          >
-                            <SelectTrigger className="h-9">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="Term 1">Term 1</SelectItem>
-                              <SelectItem value="Term 2">Term 2</SelectItem>
-                              <SelectItem value="Both">Both</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <Input
-                            type="number"
-                            min={1}
-                            className="h-9 text-center"
-                            placeholder="—"
-                            value={product.strength === '' ? '' : product.strength}
-                            onChange={(e) => {
-                              const v = e.target.value
-                              updateInterestedProduct(
-                                index,
-                                'strength',
-                                v === '' ? '' : Number(v) || ''
-                              )
-                            }}
-                          />
-                          <Input
-                            type="number"
-                            min={1}
-                            max={100}
-                            className="h-9 text-center"
-                            placeholder="Chance %"
-                            value={product.renewal_pct === '' ? '' : product.renewal_pct}
-                            onChange={(e) => {
-                              const v = e.target.value
-                              updateInterestedProduct(
-                                index,
-                                'renewal_pct',
-                                v === '' ? '' : Number(v) || ''
-                              )
-                            }}
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-9 w-9"
-                            onClick={() => removeInterestedProduct(index)}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))}
+                      {updateForm.productsInterested.map((product, index) => {
+                        const priced = isPricedStatus(product.status)
+                        return (
+                          <div key={index} className="space-y-1">
+                            <div className="grid grid-cols-2 md:grid-cols-[minmax(110px,1fr)_130px_88px_72px_80px_72px_36px] gap-2 items-center">
+                              {product.isFromPreviousDc ? (
+                                <span className="text-sm font-medium min-w-0 truncate col-span-2 md:col-span-1">
+                                  {product.product_name}
+                                  <span className="ml-1 text-xs font-normal text-emerald-700">(Renewal)</span>
+                                </span>
+                              ) : (
+                                <Select
+                                  value={product.product_name || undefined}
+                                  onValueChange={(v) => updateInterestedProduct(index, { product_name: v })}
+                                >
+                                  <SelectTrigger className="h-9 min-w-0 col-span-2 md:col-span-1">
+                                    <SelectValue placeholder="Product (Cross-Sale)" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {availableProductNames.map((name) => (
+                                      <SelectItem key={name} value={name}>
+                                        {name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              )}
+                              <Select
+                                value={product.status || undefined}
+                                onValueChange={(v) => setInterestedProductStatus(index, v)}
+                              >
+                                <SelectTrigger
+                                  className={`h-9 ${
+                                    product.status === 'Renewed'
+                                      ? 'border-emerald-500 text-emerald-800'
+                                      : product.status === 'Not Renewed'
+                                        ? 'border-red-400 text-red-700'
+                                        : ''
+                                  }`}
+                                  aria-label="Status"
+                                >
+                                  <SelectValue placeholder="Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {followUpStatusOptions(product).map((status) => (
+                                    <SelectItem key={status} value={status}>
+                                      {status}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Select
+                                value={product.term}
+                                onValueChange={(v) => updateInterestedProduct(index, { term: v })}
+                              >
+                                <SelectTrigger className="h-9" aria-label="Term">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="Term 1">Term 1</SelectItem>
+                                  <SelectItem value="Term 2">Term 2</SelectItem>
+                                  <SelectItem value="Both">Both</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <Input
+                                type="number"
+                                min={1}
+                                className="h-9 text-center"
+                                placeholder="Strength"
+                                aria-label="Strength"
+                                disabled={!priced}
+                                value={product.strength}
+                                onChange={(e) =>
+                                  updateInterestedProduct(index, { strength: Number(e.target.value) || '' })
+                                }
+                              />
+                              <Input
+                                type="number"
+                                min={1}
+                                className="h-9 text-center"
+                                placeholder="Price"
+                                aria-label="Price"
+                                disabled={!priced}
+                                value={product.unit_price}
+                                onChange={(e) =>
+                                  updateInterestedProduct(index, { unit_price: Number(e.target.value) || '' })
+                                }
+                              />
+                              <Input
+                                type="number"
+                                min={1}
+                                max={100}
+                                className="h-9 text-center"
+                                placeholder="Chance %"
+                                aria-label="Chance %"
+                                disabled={!priced || product.status === 'Renewed'}
+                                value={product.chance}
+                                onChange={(e) =>
+                                  updateInterestedProduct(index, {
+                                    chance: Math.min(100, Number(e.target.value) || 0) || '',
+                                  })
+                                }
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-9 w-9"
+                                aria-label="Remove product"
+                                onClick={() => removeInterestedProduct(index)}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            {isDroppedStatus(product.status) && (
+                              <Input
+                                className="h-9"
+                                placeholder={
+                                  product.status === 'Not Renewed' ? 'Reason not renewed *' : 'Reason not interested *'
+                                }
+                                value={product.reason}
+                                onChange={(e) => updateInterestedProduct(index, { reason: e.target.value })}
+                              />
+                            )}
+                          </div>
+                        )
+                      })}
                     </div>
                   </>
                 )}
@@ -1425,7 +1440,7 @@ export default function RenewalLeadsPage() {
               Cancel
             </Button>
             <Button onClick={handleUpdateLead} disabled={updating}>
-              {updating ? 'Creating…' : 'Create renewal'}
+              {updating ? 'Saving…' : 'Create Follow-up'}
             </Button>
           </DialogFooter>
         </DialogContent>

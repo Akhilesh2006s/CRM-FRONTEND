@@ -22,24 +22,23 @@ import {
   validateSchoolName,
 } from '@/lib/saleFormValidation'
 import { normalizeIntegerInput } from '@/lib/numericInput'
-import {
-  LEAD_PRODUCT_STATUSES,
-  validateLeadStyleProducts,
-  type LeadProductStatus,
-} from '@/lib/leadProductRules'
 
 /** Create Sale School Type options (Super Admin / Coordinator). */
 const CREATE_SALE_SCHOOL_TYPES = ['New', 'Existing'] as const
 type CreateSaleSchoolType = (typeof CREATE_SALE_SCHOOL_TYPES)[number]
 
-type ProductSelection = {
+/** Same product fields as the app's Create Sale: tick a product, then Price, Quantity, Strength. */
+type SaleProduct = {
   name: string
   checked: boolean
-  status: LeadProductStatus
+  price: string
+  quantity: string
   strength: string
-  unit_price: string
-  chance: string
-  not_interested_reason: string
+}
+
+function todayYmd() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 function normalizeCreateSaleSchoolType(value: unknown): CreateSaleSchoolType | '' {
@@ -53,7 +52,7 @@ export default function CreateDealPage() {
   const router = useRouter()
   const currentUser = getCurrentUser()
   const tenantId = currentUser?._id || ''
-  const { productNames: availableProducts } = useProducts()
+  const { productNames: availableProducts, loading: loadingProducts } = useProducts()
   const isSuperAdmin =
     currentUser?.role === 'Super Admin' || Boolean((currentUser as any)?.isSuperAdmin)
   
@@ -77,6 +76,7 @@ export default function CreateDealPage() {
     cluster: '',
     branches: '',
     strength: '',
+    average_fee: '',
     remarks: '',
     follow_up_date: '',
     assigned_to: '',
@@ -95,78 +95,21 @@ export default function CreateDealPage() {
     products?: string
   }>({})
 
-  // Super Admin Create Sale: product checklist (reuse CRM product master)
-  const [products, setProducts] = useState<ProductSelection[]>([])
+  // Product checklist from the CRM product master (same as the app)
+  const [products, setProducts] = useState<SaleProduct[]>([])
   useEffect(() => {
-    if (!isSuperAdmin) return
     if (availableProducts.length > 0 && products.length === 0) {
       setProducts(
-        availableProducts.map((p) => ({
-          name: p,
-          checked: true,
-          status: '' as const,
-          strength: '',
-          unit_price: '',
-          chance: '',
-          not_interested_reason: '',
-        }))
+        availableProducts.map((p) => ({ name: p, checked: false, price: '', quantity: '1', strength: '' }))
       )
     }
-  }, [availableProducts, isSuperAdmin, products.length])
+  }, [availableProducts, products.length])
 
-  const handleProductStatusChange = (index: number, status: LeadProductStatus) => {
-    const updated = [...products]
-    updated[index].status = status
-    if (status === 'Not Interested') {
-      updated[index].strength = ''
-      updated[index].unit_price = ''
-      updated[index].chance = '0'
-    } else if (status !== 'Hot' && status !== 'Warm') {
-      updated[index].strength = ''
-      updated[index].unit_price = ''
-      updated[index].chance = ''
-      updated[index].not_interested_reason = ''
-    } else {
-      if (updated[index].chance === '0') updated[index].chance = ''
-      updated[index].not_interested_reason = ''
-    }
-    setProducts(updated)
-    setFieldErrors((prev) => {
-      if (!prev.products) return prev
-      const next = { ...prev }
-      delete next.products
-      return next
-    })
+  const updateProduct = (index: number, patch: Partial<SaleProduct>) => {
+    setProducts((prev) => prev.map((p, i) => (i === index ? { ...p, ...patch } : p)))
+    clearFieldError('products')
   }
 
-  const handleProductStrengthChange = (index: number, raw: string) => {
-    const updated = [...products]
-    updated[index].strength = normalizeIntegerInput(raw)
-    setProducts(updated)
-  }
-
-  const handleProductUnitPriceChange = (index: number, raw: string) => {
-    let value = String(raw || '').replace(/[^\d.]/g, '')
-    const parts = value.split('.')
-    if (parts.length > 2) value = `${parts[0]}.${parts.slice(1).join('')}`
-    if (value.startsWith('.')) value = `0${value}`
-    const updated = [...products]
-    updated[index].unit_price = value
-    setProducts(updated)
-  }
-
-  const handleProductChanceChange = (index: number, raw: string) => {
-    const updated = [...products]
-    updated[index].chance = normalizeIntegerInput(raw, 100)
-    setProducts(updated)
-  }
-
-  const handleNotInterestedReasonChange = (index: number, reason: string) => {
-    const updated = [...products]
-    updated[index].not_interested_reason = reason
-    setProducts(updated)
-  }
-  
   const [zones, setZones] = useState<{ _id: string; name: string }[]>([])
   const [clusters, setClusters] = useState<string[]>([])
   const [employees, setEmployees] = useState<{ _id: string; name: string }[]>([])
@@ -378,37 +321,19 @@ export default function CreateDealPage() {
 
       if (!form.follow_up_date || !String(form.follow_up_date).trim()) {
         nextFieldErrors.follow_up_date = 'Follow-up Date is required.'
+      } else if (form.follow_up_date < todayYmd()) {
+        nextFieldErrors.follow_up_date = 'Follow-up date cannot be in the past'
       }
 
-      const selectedProducts = isSuperAdmin
-        ? products.map((p) => {
-            const strengthNum = Number(p.strength) || 0
-            const chanceNum =
-              p.status === 'Not Interested'
-                ? 0
-                : p.status === 'Hot' || p.status === 'Warm'
-                  ? Number(p.chance) || 0
-                  : 0
-            const unitPriceNum =
-              p.status === 'Hot' || p.status === 'Warm' ? Number(p.unit_price) || 0 : 0
-            return {
-              product_name: p.name,
-              quantity: strengthNum > 0 ? strengthNum : 1,
-              unit_price: unitPriceNum,
-              strength: strengthNum,
-              status: p.status,
-              chance: chanceNum,
-              term: 'Term 1',
-              not_interested_reason:
-                p.status === 'Not Interested' ? p.not_interested_reason.trim() : '',
-            }
-          })
-        : []
-
-      if (isSuperAdmin) {
-        const productError = validateLeadStyleProducts(products)
-        if (productError) nextFieldErrors.products = productError
-      }
+      const selectedProducts = products
+        .filter((p) => p.checked)
+        .map((p) => ({
+          product_name: p.name,
+          quantity: Math.max(1, Number(p.quantity) || 1),
+          unit_price: Number(p.price) || 0,
+          strength: Number(p.strength) || 0,
+        }))
+      if (selectedProducts.length === 0) nextFieldErrors.products = 'Please select at least one product.'
 
       setFieldErrors(nextFieldErrors)
       if (Object.keys(nextFieldErrors).length > 0) {
@@ -442,6 +367,9 @@ export default function CreateDealPage() {
       }
       if (!form.branches || !String(form.branches).trim()) {
         throw new Error('No. of Branches is required')
+      }
+      if (!String(form.average_fee).trim() || Number(form.average_fee) <= 0) {
+        throw new Error('Average School Fee is required')
       }
       if (!form.strength || !String(form.strength).trim()) {
         throw new Error('School Strength is required')
@@ -477,6 +405,7 @@ export default function CreateDealPage() {
         status: form.lead_status || 'pending',
         branches: Number(form.branches),
         strength: Number(form.strength),
+        average_fee: Number(form.average_fee),
         remarks: form.remarks.trim(),
         email: form.email.trim(),
         products: selectedProducts,
@@ -701,116 +630,72 @@ export default function CreateDealPage() {
             <Textarea className="bg-white text-neutral-900" name="address" value={form.address} onChange={onChange} required />
           </div>
 
-          {isSuperAdmin && (
-            <div className="md:col-span-2 space-y-2">
-              <Label>Products * (all required — cannot deselect)</Label>
-              <div
-                className={`p-4 bg-white rounded border ${
-                  fieldErrors.products ? 'border-red-500' : 'border-neutral-200'
-                }`}
-              >
-                {products.length === 0 ? (
-                  <p className="text-sm text-neutral-500">Loading products...</p>
-                ) : (
-                  <>
-                    <div className="hidden md:grid md:grid-cols-[minmax(120px,1fr)_130px_80px_88px_80px] gap-2 px-2 pb-2 border-b border-neutral-200 text-xs font-semibold text-neutral-600">
-                      <span>Product</span>
-                      <span>Status</span>
-                      <span className="text-center">Strength</span>
-                      <span className="text-center">Unit Price</span>
-                      <span className="text-center">Chance %</span>
+          <div className="md:col-span-2 space-y-2">
+            <Label>Products *</Label>
+            <p className="text-xs text-neutral-500">Check products to enter Price, Quantity, and Strength.</p>
+            <div
+              className={`p-4 bg-white rounded border space-y-2 ${
+                fieldErrors.products ? 'border-red-500' : 'border-neutral-200'
+              }`}
+            >
+              {loadingProducts ? (
+                <p className="text-sm text-neutral-500">Loading products...</p>
+              ) : products.length === 0 ? (
+                <p className="text-sm text-neutral-500">No products found. Add products in Settings first.</p>
+              ) : (
+                products.map((product, index) => (
+                  <div key={product.name} className="rounded border border-neutral-200 p-2">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id={`create-sale-product-${index}`}
+                        checked={product.checked}
+                        onCheckedChange={(v) => updateProduct(index, { checked: v === true })}
+                        className="size-5 shrink-0 border-2 border-neutral-600 bg-white data-[state=checked]:border-emerald-600 data-[state=checked]:bg-emerald-600 data-[state=checked]:text-white"
+                      />
+                      <Label htmlFor={`create-sale-product-${index}`} className="font-medium text-neutral-900 cursor-pointer">
+                        {product.name}
+                      </Label>
                     </div>
-                    <div className="space-y-2">
-                      {products.map((product, index) => {
-                        const isHotOrWarm = product.status === 'Hot' || product.status === 'Warm'
-                        return (
-                          <div
-                            key={product.name}
-                            className="grid grid-cols-1 md:grid-cols-[minmax(120px,1fr)_130px_80px_88px_80px] gap-2 items-center p-2 rounded hover:bg-neutral-50"
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <Checkbox
-                                id={`create-sale-product-${index}`}
-                                checked
-                                disabled
-                                className="size-5 shrink-0 border-2 border-neutral-500 bg-white data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 data-[state=checked]:text-white shadow-sm opacity-100"
-                              />
-                              <Label htmlFor={`create-sale-product-${index}`} className="font-medium text-neutral-900 leading-tight">
-                                {product.name}
-                              </Label>
-                            </div>
-                            <Select
-                              value={product.status || undefined}
-                              onValueChange={(value) => handleProductStatusChange(index, value as LeadProductStatus)}
-                            >
-                              <SelectTrigger className="h-9 text-xs bg-white text-neutral-900 border-neutral-300">
-                                <SelectValue placeholder="Select" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {LEAD_PRODUCT_STATUSES.map((status) => (
-                                  <SelectItem key={status} value={status}>{status}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <Input
-                              type="text"
-                              inputMode="numeric"
-                              disabled={!isHotOrWarm}
-                              className="h-9 text-xs bg-white text-neutral-900 border-neutral-300 text-center"
-                              placeholder="—"
-                              value={product.strength}
-                              onChange={(e) => handleProductStrengthChange(index, e.target.value)}
-                            />
-                            <Input
-                              type="text"
-                              inputMode="decimal"
-                              disabled={!isHotOrWarm}
-                              className="h-9 text-xs bg-white text-neutral-900 border-neutral-300 text-center"
-                              placeholder="₹"
-                              value={product.unit_price}
-                              onChange={(e) => handleProductUnitPriceChange(index, e.target.value)}
-                            />
-                            <div className="flex items-center gap-1">
-                              <Input
-                                type="text"
-                                inputMode="numeric"
-                                disabled={!isHotOrWarm}
-                                className="h-9 text-xs bg-white text-neutral-900 border-neutral-300 text-center flex-1"
-                                placeholder="—"
-                                value={product.status === 'Not Interested' ? '0' : product.chance}
-                                onChange={(e) => handleProductChanceChange(index, e.target.value)}
-                              />
-                              <span className="text-xs text-neutral-500 shrink-0">%</span>
-                            </div>
-                            {product.status === 'Not Interested' && (
-                              <div className="md:col-span-5">
-                                <Label className="text-xs text-neutral-600">
-                                  Reason not interested * ({product.name})
-                                </Label>
-                                <Input
-                                  className="mt-1 h-9 text-xs bg-white text-neutral-900 border-neutral-300"
-                                  placeholder="Why is the school not interested?"
-                                  value={product.not_interested_reason}
-                                  onChange={(e) => handleNotInterestedReasonChange(index, e.target.value)}
-                                />
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </>
-                )}
-              </div>
-              <p className="text-xs text-neutral-500 mt-2">
-                Choose a status for each product. Strength, Unit Price, and Chance % are required only for Hot and Warm.
-                Hot is 80% to 100%. Warm is 20% or more. Not Interested is 0% and needs a reason.
-              </p>
-              {fieldErrors.products && (
-                <p className="text-xs text-red-600 mt-1">{fieldErrors.products}</p>
+                    {product.checked && (
+                      <div className="mt-2 grid grid-cols-3 gap-2">
+                        <div>
+                          <Label className="text-xs text-neutral-600">Price (₹)</Label>
+                          <Input
+                            inputMode="decimal"
+                            className="h-9 bg-white text-neutral-900"
+                            placeholder="0"
+                            value={product.price}
+                            onChange={(e) => updateProduct(index, { price: e.target.value.replace(/[^\d.]/g, '') })}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs text-neutral-600">Quantity</Label>
+                          <Input
+                            inputMode="numeric"
+                            className="h-9 bg-white text-neutral-900"
+                            placeholder="1"
+                            value={product.quantity}
+                            onChange={(e) => updateProduct(index, { quantity: normalizeIntegerInput(e.target.value) })}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs text-neutral-600">Strength</Label>
+                          <Input
+                            inputMode="numeric"
+                            className="h-9 bg-white text-neutral-900"
+                            placeholder="0"
+                            value={product.strength}
+                            onChange={(e) => updateProduct(index, { strength: normalizeIntegerInput(e.target.value) })}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))
               )}
             </div>
-          )}
+            {fieldErrors.products && <p className="text-xs text-red-600 mt-1">{fieldErrors.products}</p>}
+          </div>
 
           <div>
             <Label>Deal Status</Label>
@@ -870,10 +755,14 @@ export default function CreateDealPage() {
             <Input className="bg-white text-neutral-900" type="number" name="branches" value={form.branches} onChange={onChange} required />
           </div>
           <div>
+            <Label>Average School Fee *</Label>
+            <Input className="bg-white text-neutral-900" type="number" min={1} name="average_fee" placeholder="Average School Fee" value={form.average_fee} onChange={onChange} required />
+          </div>
+          <div>
             <Label>Assign to (BDE) *</Label>
             <Select value={form.assigned_to} onValueChange={(v) => setForm((f) => ({ ...f, assigned_to: v }))} disabled={loadingEmployees} required>
               <SelectTrigger className="bg-white text-neutral-900">
-                <SelectValue placeholder={loadingEmployees ? "Loading employees..." : employees.length === 0 ? "No employees found" : "Select executive *"} />
+                <SelectValue placeholder={loadingEmployees ? "Loading employees..." : employees.length === 0 ? "No employees found" : "Select BDE"} />
               </SelectTrigger>
               <SelectContent>
                 {employees.length === 0 ? (
@@ -899,6 +788,7 @@ export default function CreateDealPage() {
               type="date"
               className={`bg-white text-neutral-900 ${fieldErrors.follow_up_date ? 'border-red-500' : ''}`}
               name="follow_up_date"
+              min={todayYmd()}
               value={form.follow_up_date || ''}
               onChange={(e) => {
                 const dateValue = e.target.value

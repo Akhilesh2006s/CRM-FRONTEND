@@ -19,6 +19,17 @@ import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives
 import { navigateRoot } from '../../navigation/navigationRef';
 import { DueRenewalsCard, type DueRenewalRow } from '../../components/clients/DueRenewalsCard';
 import { ContractEditor } from '../../components/clients/ContractEditor';
+import {
+  followUpLineError,
+  followUpLineFromLead,
+  followUpLinePayload,
+  followUpStatusOptions,
+  isDroppedStatus,
+  isPricedStatus,
+  newCrossSaleFollowUpLine,
+  withFollowUpStatus,
+  type RenewalFollowUpLine,
+} from '../../lib/crm/renewalFollowUp';
 
 type DcOrderRow = {
   _id: string;
@@ -217,7 +228,7 @@ export default function LeadsRenewalListScreen() {
   const [priority, setPriority] = useState('Hot');
   const [updateRemarks, setUpdateRemarks] = useState('');
   const [updateRecommendations, setUpdateRecommendations] = useState('');
-  const [productsInterested, setProductsInterested] = useState<RenewProductLine[]>([]);
+  const [productsInterested, setProductsInterested] = useState<RenewalFollowUpLine[]>([]);
   const [updating, setUpdating] = useState(false);
 
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -424,34 +435,17 @@ export default function LeadsRenewalListScreen() {
     setPriority(lead.priority || 'Hot');
     setUpdateRemarks('');
     setUpdateRecommendations(lead.recommendations || '');
-    const pi: RenewProductLine[] =
-      Array.isArray(lead.products) && lead.products.length > 0
-        ? lead.products.map((p: any) => {
-            const pct = p.renewal_pct ?? p.chance;
-            const strengthRaw = p.strength ?? p.quantity;
-            return {
-              product_name: p.product_name || p.product || '',
-              term: p.term || 'Term 1',
-              strength:
-                strengthRaw != null && strengthRaw !== '' && Number.isFinite(Number(strengthRaw))
-                  ? Number(strengthRaw)
-                  : ('' as const),
-              renewal_pct:
-                pct != null && pct !== '' && Number.isFinite(Number(pct)) ? Number(pct) : ('' as const),
-              isFromPreviousDc: Boolean(p.is_from_previous_dc),
-            };
-          })
-        : [];
-    setProductsInterested(pi.length ? pi : [emptyAdditionalLine()]);
+    const pi = Array.isArray(lead.products) ? lead.products.map(followUpLineFromLead) : [];
+    setProductsInterested(pi.length ? pi : [newCrossSaleFollowUpLine()]);
     setUpdateOpen(true);
   };
 
-  const updateInterestedProduct = (
-    i: number,
-    field: keyof RenewProductLine,
-    value: string | number | boolean,
-  ) => {
-    setProductsInterested((p) => p.map((row, idx) => (idx === i ? { ...row, [field]: value } : row)));
+  const updateInterestedProduct = (i: number, patch: Partial<RenewalFollowUpLine>) => {
+    setProductsInterested((p) => p.map((row, idx) => (idx === i ? { ...row, ...patch } : row)));
+  };
+
+  const setInterestedProductStatus = (i: number, status: string) => {
+    setProductsInterested((p) => p.map((row, idx) => (idx === i ? withFollowUpStatus(row, status) : row)));
   };
 
   const handleUpdateLead = async () => {
@@ -462,22 +456,12 @@ export default function LeadsRenewalListScreen() {
     }
     const productRows = productsInterested.filter((p) => p.product_name?.trim());
     if (productRows.length === 0) {
-      Alert.alert('Validation', 'Add at least one product with Strength and Chance %');
+      Alert.alert('Validation', 'Add at least one product');
       return;
     }
-    const invalidRows = productRows.some((p) => {
-      const strength = Number(p.strength);
-      const pct = Number(p.renewal_pct);
-      return (
-        !Number.isFinite(strength) ||
-        strength <= 0 ||
-        !Number.isFinite(pct) ||
-        pct < 1 ||
-        pct > 100
-      );
-    });
-    if (invalidRows) {
-      Alert.alert('Validation', 'Each product must have Strength > 0 and Chance % between 1 and 100');
+    const lineError = productRows.map(followUpLineError).find(Boolean);
+    if (lineError) {
+      Alert.alert('Validation', lineError);
       return;
     }
     setUpdating(true);
@@ -487,18 +471,9 @@ export default function LeadsRenewalListScreen() {
         priority,
         remarks: updateRemarks,
         recommendations: updateRecommendations,
-        productsInterested: productRows.map((p) => ({
-          product_name: p.product_name.trim(),
-          term: p.term || 'Term 1',
-          strength: Number(p.strength),
-          renewal_pct: Number(p.renewal_pct),
-          chance: Number(p.renewal_pct),
-          is_from_previous_dc: p.isFromPreviousDc,
-          quantity: Number(p.strength),
-          unit_price: 0,
-        })),
+        productsInterested: productRows.map(followUpLinePayload),
       });
-      Alert.alert('Success', 'Renewal saved');
+      Alert.alert('Success', 'Follow-up saved');
       setUpdateOpen(false);
       loadLeads();
     } catch (e: any) {
@@ -571,36 +546,6 @@ export default function LeadsRenewalListScreen() {
       </View>
     );
   };
-
-  const renderStrengthChanceInputs = (
-    row: RenewProductLine,
-    i: number,
-    onChange: (i: number, field: keyof RenewProductLine, value: string | number | boolean) => void,
-    editable = true,
-  ) => (
-    <View style={styles.productRowInline}>
-      <View style={styles.numField}>
-        <WebLabel>Strength</WebLabel>
-        <WebInput
-          placeholder="—"
-          value={row.strength === '' ? '' : String(row.strength)}
-          onChangeText={(v) => onChange(i, 'strength', v === '' ? '' : Number(v) || '')}
-          keyboardType="number-pad"
-          editable={editable}
-        />
-      </View>
-      <View style={styles.numField}>
-        <WebLabel>Chance %</WebLabel>
-        <WebInput
-          placeholder="%"
-          value={row.renewal_pct === '' ? '' : String(row.renewal_pct)}
-          onChangeText={(v) => onChange(i, 'renewal_pct', v === '' ? '' : Number(v) || '')}
-          keyboardType="number-pad"
-          editable={editable}
-        />
-      </View>
-    </View>
-  );
 
   return (
     <ScreenShell
@@ -950,7 +895,7 @@ export default function LeadsRenewalListScreen() {
                   variant="outline"
                   onPress={() => navigateRoot('LeadEdit', { id: lead._id })}
                 />
-                <WebButton title="Create Renewal" onPress={() => openUpdateModal(lead)} />
+                <WebButton title="Create Follow-up" onPress={() => openUpdateModal(lead)} />
                 <WebButton
                   title="View History"
                   variant="outline"
@@ -972,8 +917,8 @@ export default function LeadsRenewalListScreen() {
       <Modal visible={updateOpen} animationType="slide" transparent onRequestClose={() => setUpdateOpen(false)}>
         <View style={styles.modalOverlay}>
           <ScrollView style={styles.modalBox} keyboardShouldPersistTaps="handled">
-            <Text style={styles.modalTitle}>Create renewal</Text>
-            <Text style={styles.hint}>Log renewal interaction for this lead</Text>
+            <Text style={styles.modalTitle}>Create Follow-up</Text>
+            <Text style={styles.hint}>Log the renewal follow-up for this school</Text>
             <TouchableOpacity onPress={() => setShowDatePicker(true)}>
               <Text style={styles.dateBtn}>
                 Follow-up date *: {followUpDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
@@ -998,44 +943,96 @@ export default function LeadsRenewalListScreen() {
               <WebButton
                 title="Add"
                 variant="outline"
-                onPress={() => setProductsInterested((p) => [...p, emptyAdditionalLine()])}
+                onPress={() => setProductsInterested((p) => [...p, newCrossSaleFollowUpLine()])}
               />
             </View>
             <Text style={styles.hint}>
-              Enter Strength and Chance % (1–100) for each product. New lines default Chance % to
-              100%.
+              Mark each of last year's products Renewed or Not Renewed (or Hot / Warm / Visit Again while still
+              discussing). Renewed needs Strength and Price; Hot and Warm also need Chance %; Not Renewed needs the
+              reason. Products added here are Cross-Sale.
             </Text>
-            {productsInterested.map((row, i) => (
-              <View key={`up-${i}`} style={styles.productRow}>
-                {row.isFromPreviousDc ? (
-                  <Text style={styles.productLabel}>
-                    {row.product_name} <Text style={styles.priorTag}>(prior DC)</Text>
-                  </Text>
-                ) : (
+            {productsInterested.map((row, i) => {
+              const priced = isPricedStatus(row.status);
+              return (
+                <View key={`up-${i}`} style={styles.productRow}>
+                  {row.isFromPreviousDc ? (
+                    <Text style={styles.productLabel}>
+                      {row.product_name} <Text style={styles.priorTag}>(Renewal)</Text>
+                    </Text>
+                  ) : (
+                    <WebSelect
+                      label="Product (Cross-Sale)"
+                      value={row.product_name}
+                      onValueChange={(v) => updateInterestedProduct(i, { product_name: v })}
+                      items={productNames.map((n) => ({ label: n, value: n }))}
+                      placeholder="Product"
+                    />
+                  )}
                   <WebSelect
-                    label="Product"
-                    value={row.product_name}
-                    onValueChange={(v) => updateInterestedProduct(i, 'product_name', v)}
-                    items={productNames.map((n) => ({ label: n, value: n }))}
-                    placeholder="Product"
+                    label="Status *"
+                    value={row.status}
+                    onValueChange={(v) => setInterestedProductStatus(i, v)}
+                    items={followUpStatusOptions(row).map((st) => ({ label: st, value: st }))}
+                    placeholder="Select status"
                   />
-                )}
-                <WebSelect
-                  label="Term"
-                  value={row.term}
-                  onValueChange={(v) => updateInterestedProduct(i, 'term', v)}
-                  items={TERMS}
-                />
-                {renderStrengthChanceInputs(row, i, updateInterestedProduct)}
-                <WebButton
-                  title="Remove"
-                  variant="outline"
-                  onPress={() =>
-                    setProductsInterested((p) => p.filter((_, idx) => idx !== i))
-                  }
-                />
-              </View>
-            ))}
+                  <WebSelect
+                    label="Term"
+                    value={row.term}
+                    onValueChange={(v) => updateInterestedProduct(i, { term: v })}
+                    items={TERMS}
+                  />
+                  {priced ? (
+                    <View style={styles.productRowInline}>
+                      <View style={styles.numField}>
+                        <WebLabel>Strength *</WebLabel>
+                        <WebInput
+                          placeholder="—"
+                          value={row.strength === '' ? '' : String(row.strength)}
+                          onChangeText={(v) => updateInterestedProduct(i, { strength: Number(v) || '' })}
+                          keyboardType="number-pad"
+                        />
+                      </View>
+                      <View style={styles.numField}>
+                        <WebLabel>Price (₹) *</WebLabel>
+                        <WebInput
+                          placeholder="—"
+                          value={row.unit_price === '' ? '' : String(row.unit_price)}
+                          onChangeText={(v) => updateInterestedProduct(i, { unit_price: Number(v) || '' })}
+                          keyboardType="number-pad"
+                        />
+                      </View>
+                      <View style={styles.numField}>
+                        <WebLabel>{row.status === 'Renewed' ? 'Chance %' : 'Chance % *'}</WebLabel>
+                        <WebInput
+                          placeholder="%"
+                          value={row.chance === '' ? '' : String(row.chance)}
+                          onChangeText={(v) =>
+                            updateInterestedProduct(i, { chance: Math.min(100, Number(v) || 0) || '' })
+                          }
+                          keyboardType="number-pad"
+                          editable={row.status !== 'Renewed'}
+                        />
+                      </View>
+                    </View>
+                  ) : null}
+                  {isDroppedStatus(row.status) ? (
+                    <>
+                      <WebLabel>{row.status === 'Not Renewed' ? 'Reason not renewed *' : 'Reason not interested *'}</WebLabel>
+                      <WebInput
+                        placeholder="Reason"
+                        value={row.reason}
+                        onChangeText={(v) => updateInterestedProduct(i, { reason: v })}
+                      />
+                    </>
+                  ) : null}
+                  <WebButton
+                    title="Remove"
+                    variant="outline"
+                    onPress={() => setProductsInterested((p) => p.filter((_, idx) => idx !== i))}
+                  />
+                </View>
+              );
+            })}
 
             <WebLabel>Recommendations</WebLabel>
             <WebInput
@@ -1056,7 +1053,7 @@ export default function LeadsRenewalListScreen() {
             <View style={styles.modalFooter}>
               <WebButton title="Cancel" variant="outline" onPress={() => setUpdateOpen(false)} />
               <WebButton
-                title={updating ? 'Creating…' : 'Create renewal'}
+                title={updating ? 'Saving…' : 'Create Follow-up'}
                 onPress={handleUpdateLead}
                 loading={updating}
               />

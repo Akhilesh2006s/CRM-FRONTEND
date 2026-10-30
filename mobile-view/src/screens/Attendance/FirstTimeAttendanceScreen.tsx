@@ -14,7 +14,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../context/AuthContext';
 import LogoutButton from '../../components/LogoutButton';
 import { apiService } from '../../services/api';
-import { getCurrentLocation, getTownFromPincode } from '../../services/location';
+import { getCurrentLocation, getPincodeFromLocation, getTownFromPincode } from '../../services/location';
 
 const ATTENDANCE_REASONS = [
   { label: 'Employee', value: 'employee' },
@@ -64,23 +64,29 @@ export default function FirstTimeAttendanceScreen({ navigation }: any) {
       setLoading(true);
       const location = await getCurrentLocation();
       setLocationData(location);
-      Alert.alert('Success', 'Location captured successfully');
+      // Pincode always comes from the GPS location; it cannot be typed or changed.
+      const found = await getPincodeFromLocation(location);
+      setPincode(found.pincode);
+      let name = found.town;
+      if (found.pincode) {
+        try {
+          const result = await getTownFromPincode(found.pincode);
+          if (result?.town) name = result.town;
+        } catch {
+          // keep the town from the location lookup
+        }
+      }
+      if (name) setTown((t) => t || name);
+      Alert.alert(
+        found.pincode ? 'Success' : 'Pincode not detected',
+        found.pincode
+          ? 'Location captured successfully'
+          : 'Location captured, but its pincode could not be found. Tap Capture Location again.',
+      );
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to get location');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handlePincodeChange = async (text: string) => {
-    setPincode(text);
-    if (text.length === 6) {
-      try {
-        const result = await getTownFromPincode(text);
-        setTown(result.town);
-      } catch (error) {
-        // Town lookup failed, user can enter manually
-      }
     }
   };
 
@@ -98,7 +104,7 @@ export default function FirstTimeAttendanceScreen({ navigation }: any) {
       return;
     }
     if (!pincode || pincode.length !== 6) {
-      Alert.alert('Error', 'Please enter a valid 6-digit pincode');
+      Alert.alert('Error', 'Pincode not detected for your location. Tap Capture Location again.');
       return;
     }
     if (!town) {
@@ -196,12 +202,10 @@ export default function FirstTimeAttendanceScreen({ navigation }: any) {
         <View style={styles.section}>
           <Text style={styles.label}>Pincode *</Text>
           <TextInput
-            style={styles.input}
-            placeholder="Enter 6-digit pincode"
+            style={[styles.input, styles.inputLocked]}
+            placeholder="Filled automatically from your location"
             value={pincode}
-            onChangeText={handlePincodeChange}
-            keyboardType="numeric"
-            maxLength={6}
+            editable={false}
           />
         </View>
 
@@ -360,6 +364,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 16,
     fontSize: 16,
+  },
+  inputLocked: {
+    backgroundColor: '#F1F5F9',
+    color: '#334155',
   },
   textArea: {
     height: 100,
