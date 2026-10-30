@@ -10,6 +10,7 @@ import {
   approvalHistory,
   expenseStatusColor,
   expenseStatusText,
+  isExpenseCompleted,
 } from '../../lib/expenseApproval';
 import { ExpenseBillButton } from '../../components/expenses/ExpenseBillViewer';
 
@@ -36,8 +37,7 @@ type Expense = ApprovalExpense & {
 
 type ViewMode = 'pending' | 'completed';
 
-/** Approved and rejected expenses are finished; everything else is still moving. */
-const COMPLETED_STATUSES = new Set(['Approved', 'Rejected']);
+/** Completed = rejected, or approved by Finance and credited to the bank; everything else is still moving. */
 
 const formatDate = (dateString?: string) => {
   if (!dateString) return '-';
@@ -162,8 +162,8 @@ export default function ExpenseMyScreen({ navigation, route }: any) {
     loadData();
   };
 
-  const countFor = (v: ViewMode) => expenses.filter((e) => COMPLETED_STATUSES.has(e.status) === (v === 'completed')).length;
-  const shown = expenses.filter((e) => COMPLETED_STATUSES.has(e.status) === (view === 'completed'));
+  const countFor = (v: ViewMode) => expenses.filter((e) => isExpenseCompleted(e) === (v === 'completed')).length;
+  const shown = expenses.filter((e) => isExpenseCompleted(e) === (view === 'completed'));
 
   return (
     <ScreenShell
@@ -198,7 +198,7 @@ export default function ExpenseMyScreen({ navigation, route }: any) {
         {shown.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>
-              {view === 'completed' ? 'No approved or rejected expenses yet.' : 'No pending expenses.'}
+              {view === 'completed' ? 'No credited or rejected expenses yet.' : 'No pending expenses.'}
             </Text>
           </View>
         ) : (

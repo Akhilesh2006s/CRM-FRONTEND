@@ -15,7 +15,15 @@ import { apiService } from '../../services/api';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, DataTable } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
-import { LEAVE_TYPE_OPTIONS, leaveTypeLabel } from '../../lib/leaveTypes';
+import {
+  LEAVE_TYPE_OPTIONS,
+  LEAVE_DAY_TYPES,
+  HALF_DAY_SESSIONS,
+  leaveTypeLabel,
+  leaveDayTypeLabel,
+  leaveDayCount,
+  formatLeaveDays,
+} from '../../lib/leaveTypes';
 
 import DateField from '../../ui/DateField';
 export default function LeaveListScreen({ navigation }: any) {
@@ -29,6 +37,11 @@ export default function LeaveListScreen({ navigation }: any) {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [leaveType, setLeaveType] = useState('');
+  const [dayType, setDayType] = useState<string>('Full Day');
+  const [halfDaySession, setHalfDaySession] = useState<string>('First Half');
+  const isHalfDay = dayType === 'Half Day';
+  // Half Day is a single date: the end date follows the start date.
+  const effectiveEndDate = isHalfDay ? startDate : endDate;
   const [reason, setReason] = useState('');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -73,7 +86,7 @@ export default function LeaveListScreen({ navigation }: any) {
   const handleSubmit = async () => {
     setSuccessMessage(null);
     setErrorMessage(null);
-    if (!startDate || !endDate || !leaveType || !reason) {
+    if (!startDate || !effectiveEndDate || !leaveType || !reason) {
       setErrorMessage('Please fill all required fields');
       return;
     }
@@ -83,8 +96,10 @@ export default function LeaveListScreen({ navigation }: any) {
       await apiService.post('/leaves/create', {
         employeeId: user?._id,
         startDate,
-        endDate,
+        endDate: effectiveEndDate,
         leaveType,
+        dayType,
+        ...(isHalfDay ? { halfDaySession } : {}),
         reason,
       });
       setSuccessMessage('Leave request submitted successfully.');
@@ -102,6 +117,8 @@ export default function LeaveListScreen({ navigation }: any) {
     setStartDate('');
     setEndDate('');
     setLeaveType('');
+    setDayType('Full Day');
+    setHalfDaySession('First Half');
     setReason('');
   };
 
@@ -156,6 +173,9 @@ export default function LeaveListScreen({ navigation }: any) {
                     {leave.status || 'Pending'}
                   </Text>
                 </View>
+                <Text style={styles.cardSubtitle}>
+                  {leaveDayTypeLabel(leave)} · {formatLeaveDays(leaveDayCount(leave))}
+                </Text>
                 <Text style={styles.cardSubtitle}>
                   From: {leave.startDate ? new Date(leave.startDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'N/A'}
                 </Text>
@@ -215,14 +235,58 @@ export default function LeaveListScreen({ navigation }: any) {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Start Date *</Text>
-              <DateField placeholder="Start Date *" value={startDate} onChange={setStartDate} />
+              <Text style={styles.label}>Leave Duration *</Text>
+              <View style={styles.typeGrid}>
+                {LEAVE_DAY_TYPES.map((t) => (
+                  <TouchableOpacity
+                    key={t}
+                    style={[styles.typeButton, dayType === t && styles.typeButtonSelected]}
+                    onPress={() => setDayType(t)}
+                  >
+                    <Text style={[styles.typeButtonText, dayType === t && styles.typeButtonTextSelected]}>
+                      {t === 'Half Day' ? 'Half-Day Leave' : 'Full-Day Leave'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
 
+            {isHalfDay && (
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Which half *</Text>
+                <View style={styles.typeGrid}>
+                  {HALF_DAY_SESSIONS.map((s) => (
+                    <TouchableOpacity
+                      key={s}
+                      style={[styles.typeButton, halfDaySession === s && styles.typeButtonSelected]}
+                      onPress={() => setHalfDaySession(s)}
+                    >
+                      <Text style={[styles.typeButtonText, halfDaySession === s && styles.typeButtonTextSelected]}>
+                        {s}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>End Date *</Text>
-              <DateField placeholder="End Date *" value={endDate} onChange={setEndDate} />
+              <Text style={styles.label}>{isHalfDay ? 'Leave Date *' : 'Start Date *'}</Text>
+              <DateField placeholder={isHalfDay ? 'Leave Date *' : 'Start Date *'} value={startDate} onChange={setStartDate} />
             </View>
+
+            {!isHalfDay && (
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>End Date *</Text>
+                <DateField placeholder="End Date *" value={endDate} onChange={setEndDate} />
+              </View>
+            )}
+
+            {startDate && effectiveEndDate ? (
+              <Text style={styles.label}>
+                Total: {formatLeaveDays(leaveDayCount({ dayType, startDate, endDate: effectiveEndDate }))}
+              </Text>
+            ) : null}
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Reason *</Text>

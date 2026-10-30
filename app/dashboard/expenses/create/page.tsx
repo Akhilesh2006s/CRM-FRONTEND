@@ -25,6 +25,8 @@ export default function CreateExpensePage() {
   const [billFile, setBillFile] = useState<File | null>(null)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [rates, setRates] = useState<Partial<TravelPerKmRates>>({})
+  // Travel modes that need a bill / ticket upload (Super Admin → Expense Policy).
+  const [ticketModes, setTicketModes] = useState<string[] | null>(null)
 
   const [form, setForm] = useState({
     type: '', // travel, food, accommodation, others
@@ -46,16 +48,23 @@ export default function CreateExpensePage() {
 
   // Per-km rates for Bike / Car come from the expense policy (defaults ₹2.80 / ₹8).
   useEffect(() => {
-    apiRequest<Partial<TravelPerKmRates>>('/expenses/policy')
-      .then((policy) => setRates(policy || {}))
+    apiRequest<Partial<TravelPerKmRates> & { requireTicketForModes?: string[] }>('/expenses/policy')
+      .then((policy) => {
+        setRates(policy || {})
+        setTicketModes(Array.isArray(policy?.requireTicketForModes) ? policy.requireTicketForModes : [])
+      })
       .catch(() => setRates({}))
   }, [])
 
   const amountLocked = isTravelAmountLocked(form.type, form.transportType)
   const autoAmount = amountLocked ? calcTravelAmount(form.transportType, Number(form.approxKms) || 0, rates) : ''
   const amountValue = amountLocked ? autoAmount : form.amount
-  // Auto rickshaws give no bill: bill and receipt number are optional for Auto travel.
-  const billOptional = form.type === 'travel' && form.transportType === 'Auto'
+  // Travel needs a bill / ticket only in the modes the expense policy lists; other types always need a bill.
+  const billOptional =
+    form.type === 'travel' &&
+    !!form.transportType &&
+    ticketModes !== null &&
+    !ticketModes.some((m) => m.trim().toLowerCase() === form.transportType.toLowerCase())
   const needsHotel = form.type === 'food' || form.type === 'accommodation'
   const isStay = form.type === 'accommodation'
   const isTravelType = form.type === 'travel'
@@ -360,7 +369,7 @@ export default function CreateExpensePage() {
           </div>
 
           <div>
-            <Label htmlFor="bill">Upload Bill{billOptional ? ' (optional for Auto)' : ' *'}</Label>
+            <Label htmlFor="bill">{form.type === 'travel' ? 'Upload Bill / Ticket' : 'Upload Bill'}{billOptional ? ` (optional for ${form.transportType})` : ' *'}</Label>
             <Input
               id="bill"
               type="file"

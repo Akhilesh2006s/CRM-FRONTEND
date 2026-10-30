@@ -19,6 +19,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { getCurrentUser } from '@/lib/auth'
 import VendorDashboard from '@/components/dashboard/VendorDashboard'
 import ChainClientsPanel from '@/components/dashboard/ChainClientsPanel'
+import { BirthdaysCard } from '@/components/dashboard/BirthdaysCard'
 
 const sections = [
   { href: '/dashboard/leads', label: 'Leads' },
@@ -576,6 +577,9 @@ export default function DashboardPage() {
               <div className="text-sm text-emerald-900">Open pending leave requests</div>
             </Card>
           </Link>
+          <div className="sm:col-span-2">
+            <BirthdaysCard />
+          </div>
         </div>
       )}
       <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 ${hideLeadsOnDashboard ? 'lg:grid-cols-3' : 'lg:grid-cols-4'}`}>

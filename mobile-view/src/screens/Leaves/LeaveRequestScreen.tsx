@@ -16,6 +16,7 @@ import { useAuth } from '../../context/AuthContext';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
+import { LEAVE_DAY_TYPES, HALF_DAY_SESSIONS, formatLeaveDays } from '../../lib/leaveTypes';
 
 const todayDateString = () => {
   const d = new Date();
@@ -35,15 +36,24 @@ const LEAVE_TYPE_OPTIONS = [
   { label: 'Other', value: 'Other' },
 ];
 
+const HALF_DAY_SESSION_OPTIONS = HALF_DAY_SESSIONS.map((s) => ({ label: s, value: s }));
+
+const emptyForm = () => ({
+  startDate: '',
+  endDate: '',
+  leaveType: 'Casual Leave',
+  dayType: 'Full Day' as string,
+  halfDaySession: 'First Half' as string,
+  reason: '',
+  days: 0,
+});
+
 export default function LeaveRequestScreen({ navigation }: any) {
   const { user } = useAuth();
-  const [form, setForm] = useState({
-    startDate: '',
-    endDate: '',
-    leaveType: 'Casual Leave',
-    reason: '',
-    days: 0,
-  });
+  const [form, setForm] = useState(emptyForm);
+  const isHalfDay = form.dayType === 'Half Day';
+  // Half Day is a single date: the end date follows the start date.
+  const effectiveEndDate = isHalfDay ? form.startDate : form.endDate;
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -57,37 +67,39 @@ export default function LeaveRequestScreen({ navigation }: any) {
   };
 
   useEffect(() => {
-    if (form.startDate && form.endDate) {
+    if (form.startDate && effectiveEndDate) {
       const start = new Date(form.startDate + 'T00:00:00');
-      const end = new Date(form.endDate + 'T00:00:00');
+      const end = new Date(effectiveEndDate + 'T00:00:00');
       if (!isNaN(start.getTime()) && !isNaN(end.getTime()) && end >= start) {
         const diffTime = end.getTime() - start.getTime();
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        const diffDays = isHalfDay ? 0.5 : Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
         setForm((f) => ({ ...f, days: diffDays }));
       } else {
         setForm((f) => ({ ...f, days: 0 }));
       }
+    } else {
+      setForm((f) => (f.days ? { ...f, days: 0 } : f));
     }
-  }, [form.startDate, form.endDate]);
+  }, [form.startDate, effectiveEndDate, isHalfDay]);
 
   const handleSubmit = async () => {
     clearMessages();
     if (!form.startDate?.trim()) {
-      setErrorMessage('Start date is required');
+      setErrorMessage(isHalfDay ? 'Leave date is required' : 'Start date is required');
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
-    if (!form.endDate?.trim()) {
+    if (!effectiveEndDate?.trim()) {
       setErrorMessage('End date is required');
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
-    if (isBeforeToday(form.startDate) || isBeforeToday(form.endDate)) {
+    if (isBeforeToday(form.startDate) || isBeforeToday(effectiveEndDate)) {
       setErrorMessage('Past dates cannot be selected for leave');
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
-    if (new Date(form.endDate) < new Date(form.startDate)) {
+    if (new Date(effectiveEndDate) < new Date(form.startDate)) {
       setErrorMessage('End date must be on or after start date');
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       return;
@@ -102,20 +114,16 @@ export default function LeaveRequestScreen({ navigation }: any) {
     try {
       await apiService.post('/leaves/create', {
         leaveType: form.leaveType,
+        dayType: form.dayType,
+        ...(isHalfDay ? { halfDaySession: form.halfDaySession } : {}),
         startDate: form.startDate,
-        endDate: form.endDate,
+        endDate: effectiveEndDate,
         reason: form.reason.trim(),
         days: form.days,
         employeeId: user?._id,
       });
       setSuccessMessage('Leave request submitted successfully!');
-      setForm({
-        startDate: '',
-        endDate: '',
-        leaveType: 'Casual Leave',
-        reason: '',
-        days: 0,
-      });
+      setForm(emptyForm());
       scrollRef.current?.scrollTo({ y: 0, animated: true });
     } catch (error: any) {
       setErrorMessage(error.message || 'Failed to submit leave request');
@@ -160,16 +168,52 @@ export default function LeaveRequestScreen({ navigation }: any) {
           items={LEAVE_TYPE_OPTIONS}
         />
 
+        <View style={styles.fieldContainer}>
+          <Text style={styles.label}>Leave Duration *</Text>
+          <View style={styles.segment}>
+            {LEAVE_DAY_TYPES.map((t) => {
+              const active = form.dayType === t;
+              return (
+                <TouchableOpacity
+                  key={t}
+                  style={[styles.segmentItem, active && styles.segmentItemActive]}
+                  onPress={() => setForm((f) => ({ ...f, dayType: t }))}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: active }}
+                >
+                  <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
+                    {t === 'Half Day' ? 'Half-Day Leave' : 'Full-Day Leave'}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        {isHalfDay && (
+          <WebSelect
+            label="Which half *"
+            value={form.halfDaySession}
+            onValueChange={(v) => setForm((f) => ({ ...f, halfDaySession: v }))}
+            items={HALF_DAY_SESSION_OPTIONS}
+          />
+        )}
+
         <DateField
-          label="Start Date *"
+          label={isHalfDay ? 'Leave Date *' : 'Start Date *'}
           value={form.startDate}
           onPress={() => setShowStartPicker(true)}
         />
-        <DateField label="End Date *" value={form.endDate} onPress={() => setShowEndPicker(true)} />
+        {!isHalfDay && (
+          <DateField label="End Date *" value={form.endDate} onPress={() => setShowEndPicker(true)} />
+        )}
 
         {form.days > 0 && (
           <View style={styles.daysContainer}>
-            <Text style={styles.daysText}>Total days: {form.days}</Text>
+            <Text style={styles.daysText}>
+              Total: {formatLeaveDays(form.days)}
+              {isHalfDay ? ` (${form.halfDaySession})` : ''}
+            </Text>
           </View>
         )}
 
@@ -201,7 +245,7 @@ export default function LeaveRequestScreen({ navigation }: any) {
 
       {showStartPicker && (
         <DatePickerModal
-          title="Start date"
+          title={isHalfDay ? 'Leave date' : 'Start date'}
           value={form.startDate}
           minimumDate={startOfToday()}
           onClose={() => setShowStartPicker(false)}
@@ -337,6 +381,19 @@ const styles = StyleSheet.create({
   },
   dateText: { ...typography.body.medium, color: colors.textPrimary },
   datePlaceholder: { color: colors.textSecondary },
+  segment: {
+    flexDirection: 'row',
+    backgroundColor: colors.backgroundLight,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 4,
+    gap: 4,
+  },
+  segmentItem: { flex: 1, paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
+  segmentItemActive: { backgroundColor: colors.primary },
+  segmentText: { ...typography.body.medium, color: colors.textPrimary, fontWeight: '600' },
+  segmentTextActive: { color: '#fff' },
   daysContainer: {
     marginBottom: 16,
     padding: 12,

@@ -5,6 +5,7 @@ import { typography } from '../../theme/typography';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
+import { leaveDayTypeLabel, leaveDayCount, formatLeaveDays } from '../../lib/leaveTypes';
 
 export default function EmployeesLeavesScreen({ navigation, route }: any) {
   const employeeId = route?.params?.employeeId;
@@ -90,7 +91,9 @@ export default function EmployeesLeavesScreen({ navigation, route }: any) {
                 </View>
                 <View style={styles.infoRow}>
                   <Text style={styles.infoLabel}>Days:</Text>
-                  <Text style={styles.infoValue}>{leave.days || '-'}</Text>
+                  <Text style={styles.infoValue}>
+                    {formatLeaveDays(leaveDayCount(leave))} ({leaveDayTypeLabel(leave)})
+                  </Text>
                 </View>
                 {leave.reason && (
                   <View style={styles.infoRow}>

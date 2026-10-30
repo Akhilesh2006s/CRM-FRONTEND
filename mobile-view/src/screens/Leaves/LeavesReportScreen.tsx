@@ -5,7 +5,7 @@ import { typography } from '../../theme/typography';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebSelect } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
-import { leaveTypeLabel } from '../../lib/leaveTypes';
+import { leaveTypeLabel, isHalfDayLeave } from '../../lib/leaveTypes';
 import { slotLabel } from '../../lib/leaveApproval';
 
 import DateField from '../../ui/DateField';
@@ -120,7 +120,7 @@ export default function LeavesReportScreen({ navigation }: any) {
               </View>
               {filteredLeaves.length === 0 ? <Text style={styles.emptyRow}>No leaves match filters</Text> : filteredLeaves.map((leave) => (
                 <View key={leave._id} style={styles.tableRow}>
-                  <Text style={[styles.cell, styles.employeeColumn]} numberOfLines={1}>{employeeName(leave)}</Text><Text style={[styles.cell, styles.managerColumn]} numberOfLines={1}>{managerName(leave)}</Text><Text style={[styles.cell, styles.statusColumn]}>{leave.status || 'Pending'}</Text><Text style={[styles.cell, styles.approvalColumn]} numberOfLines={2}>{approvalText(leave)}</Text><Text style={[styles.cell, styles.typeColumn]} numberOfLines={1}>{leaveTypeLabel(leave.leaveType)}</Text><Text style={[styles.cell, styles.dateColumn]}>{formatDate(leave.startDate)}</Text><Text style={[styles.cell, styles.dateColumn]}>{formatDate(leave.endDate)}</Text><Text style={[styles.cell, styles.approvedByColumn]} numberOfLines={1}>{approvedByName(leave)}</Text><Text style={[styles.cell, styles.dateColumn]}>{formatDate(leave.approvedAt)}</Text><Text style={[styles.cell, styles.reasonColumn]} numberOfLines={1}>{leave.reason || '—'}</Text>
+                  <Text style={[styles.cell, styles.employeeColumn]} numberOfLines={1}>{employeeName(leave)}</Text><Text style={[styles.cell, styles.managerColumn]} numberOfLines={1}>{managerName(leave)}</Text><Text style={[styles.cell, styles.statusColumn]}>{leave.status || 'Pending'}</Text><Text style={[styles.cell, styles.approvalColumn]} numberOfLines={2}>{approvalText(leave)}</Text><Text style={[styles.cell, styles.typeColumn]} numberOfLines={2}>{leaveTypeLabel(leave.leaveType)}{isHalfDayLeave(leave) ? ' (Half Day)' : ''}</Text><Text style={[styles.cell, styles.dateColumn]}>{formatDate(leave.startDate)}</Text><Text style={[styles.cell, styles.dateColumn]}>{formatDate(leave.endDate)}</Text><Text style={[styles.cell, styles.approvedByColumn]} numberOfLines={1}>{approvedByName(leave)}</Text><Text style={[styles.cell, styles.dateColumn]}>{formatDate(leave.approvedAt)}</Text><Text style={[styles.cell, styles.reasonColumn]} numberOfLines={1}>{leave.reason || '—'}</Text>
                 </View>
               ))}
             </View>

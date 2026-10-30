@@ -11,7 +11,8 @@ import { useAuth } from '../../context/AuthContext';
 import EmployeeTaggingPicker, { supportsEmployeeTagging } from '../../components/EmployeeTaggingPicker';
 
 import DateField from '../../ui/DateField';
-import { bankDetailsError, bankDetailsPayload, emptyBankDetails } from '../../utils/bankDetails';
+import { bankDetailsError, bankDetailsFromEmployee, bankDetailsPayload, emptyBankDetails } from '../../utils/bankDetails';
+import { employeeDateYmd, employeeDocName, openEmployeeDoc } from '../../utils/employeeDocs';
 /** User types, same values / labels as web app/dashboard/employees/new/page.tsx */
 const ROLE_OPTIONS: { value: string; label: string }[] = [
   { value: 'Executive', label: 'BDE' },
@@ -57,7 +58,7 @@ const roleRequiresZones = (role: string) => isSingleZoneRole(role) || ['Trainer'
 type Reference = { relation: string; name: string; mobile: string; aadhaarUrl: string };
 type Product = { _id: string; productName: string };
 type EmployeeOption = { _id: string; name: string; role: string; assignedProductIds?: Array<string | { _id?: string }> };
-type UploadKind = 'aadhaar' | 'location' | 'passport' | 'reference-aadhaar';
+type UploadKind = 'aadhaar' | 'location' | 'passport' | 'reference-aadhaar' | 'passbook';
 
 const todayDate = () => {
   const now = new Date();
@@ -65,8 +66,14 @@ const todayDate = () => {
 };
 const isIsoDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(new Date(v).getTime());
 
-export default function EmployeeNewScreen({ navigation }: any) {
+/**
+ * Add employee. With route param `id` (EmployeeEdit) it loads that employee and
+ * saves every create-time field except the password (web: components/employees/EmployeeForm.tsx).
+ */
+export default function EmployeeNewScreen({ navigation, route }: any) {
   const { user } = useAuth();
+  const editId: string = String(route?.params?.id || '');
+  const isEdit = Boolean(editId);
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
@@ -105,7 +112,20 @@ export default function EmployeeNewScreen({ navigation }: any) {
     onboardingOtherNote: '',
     trainerProducts: [] as string[],
     verticalManagerId: '',
+    bankPassbookUrl: '',
   });
+  /** Saved employee in edit mode; fields an older record never had may stay blank. */
+  const [original, setOriginal] = useState<Record<string, any> | null>(null);
+  const [loadingEmployee, setLoadingEmployee] = useState(isEdit);
+  const onFile = (key: string) => {
+    const value = original?.[key];
+    if (Array.isArray(value)) return value.length > 0;
+    if (key === 'phone') return Boolean(value) && value !== '0';
+    if (typeof value === 'boolean') return true;
+    return value !== undefined && value !== null && value !== 0 && String(value).trim() !== '';
+  };
+  /** Required at creation; in edit mode only when the employee already has it on file. */
+  const needs = (key: string) => !isEdit || onFile(key);
   const [sameAsPermanent, setSameAsPermanent] = useState(false);
   const [productId, setProductId] = useState('');
   const [products, setProducts] = useState<Product[]>([]);
@@ -158,6 +178,83 @@ export default function EmployeeNewScreen({ navigation }: any) {
       .then((d: any) => setEmployees(Array.isArray(d) ? d : []))
       .catch(() => setEmployees([]));
   }, []);
+
+  useEffect(() => {
+    if (!isEdit) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const emp: any = await apiService.get(`/employees/${editId}`);
+        if (cancelled || !emp) return;
+        const parts = String(emp.name || '').trim().split(/\s+/);
+        const savedZones: string[] = Array.isArray(emp.zones) && emp.zones.length ? emp.zones : emp.zone ? [emp.zone] : [];
+        const refs: any[] = Array.isArray(emp.references) ? emp.references : [];
+        const refAt = (i: number): Reference => ({
+          relation: String(refs[i]?.relation || ''),
+          name: String(refs[i]?.name || ''),
+          mobile: String(refs[i]?.mobile || ''),
+          aadhaarUrl: String(refs[i]?.aadhaarUrl || ''),
+        });
+        const rel = emp.employeeRelationshipDetails || {};
+        const permanentAddress = String(emp.permanentAddress || '');
+        const temporaryAddress = String(emp.temporaryAddress || emp.address1 || '');
+        setOriginal(emp);
+        setForm((f) => ({
+          ...f,
+          firstName: emp.firstName || parts[0] || '',
+          lastName: emp.lastName ?? parts.slice(1).join(' '),
+          empCode: String(emp.empCode || ''),
+          email: emp.email || '',
+          password: '',
+          phone: emp.phone && emp.phone !== '0' ? String(emp.phone) : '',
+          mobile: String(emp.mobile || ''),
+          permanentAddress,
+          temporaryAddress,
+          state: String(emp.state || ''),
+          zone: savedZones[0] || '',
+          zones: savedZones,
+          cluster: String(emp.cluster || ''),
+          district: String(emp.district || ''),
+          city: String(emp.city || ''),
+          pincode: String(emp.pincode || ''),
+          role: emp.role || 'Executive',
+          designation: String(emp.designation || ''),
+          taggedEmployeeIds: (Array.isArray(emp.taggedEmployeeIds) ? emp.taggedEmployeeIds : []).map((x: any) => String(x?._id || x)),
+          dateOfBirth: employeeDateYmd(emp.dateOfBirth),
+          dateOfJoining: employeeDateYmd(emp.dateOfJoining),
+          yearlySalary: emp.yearlySalary ? String(emp.yearlySalary) : '',
+          monthlyTakeHome: emp.monthlyTakeHome ? String(emp.monthlyTakeHome) : '',
+          ...bankDetailsFromEmployee(emp),
+          hasEmployeeRelationship: typeof emp.hasEmployeeRelationship === 'boolean' ? emp.hasEmployeeRelationship : null,
+          employeeRelationshipDetails: {
+            fullName: String(rel.fullName || ''),
+            relationship: String(rel.relationship || ''),
+            department: String(rel.department || ''),
+            designation: String(rel.designation || ''),
+          },
+          references: [refAt(0), refAt(1)],
+          aadhaarUrl: String(emp.aadhaarUrl || ''),
+          locationPhotoUrl: String(emp.locationPhotoUrl || ''),
+          passportPhotoUrl: String(emp.passportPhotoUrl || ''),
+          onboardingChecklist: Array.isArray(emp.onboardingChecklist) ? emp.onboardingChecklist : [],
+          onboardingOtherNote: String(emp.onboardingOtherNote || ''),
+          trainerProducts: Array.isArray(emp.trainerProducts) ? emp.trainerProducts : [],
+          verticalManagerId: emp.verticalManagerId ? String(emp.verticalManagerId?._id || emp.verticalManagerId) : '',
+          bankPassbookUrl: String(emp.bankPassbookUrl || ''),
+        }));
+        setSameAsPermanent(Boolean(permanentAddress.trim()) && permanentAddress === temporaryAddress);
+        const productIds = Array.isArray(emp.assignedProductIds) ? emp.assignedProductIds : [];
+        setProductId(productIds.length ? String(productIds[0]?._id || productIds[0]) : '');
+      } catch (e: any) {
+        if (!cancelled) setErrorMessage(e?.message || 'Failed to load employee');
+      } finally {
+        if (!cancelled) setLoadingEmployee(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isEdit, editId]);
 
   // Trainer: Product Heads (role Manager) that own every selected product.
   const eligibleProductHeads = useMemo(() => {
@@ -227,15 +324,25 @@ export default function EmployeeNewScreen({ navigation }: any) {
 
   const toggleIn = (list: string[], value: string) => (list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
 
-  /** Pick a PDF and POST it to /employees/upload (fields `file` + `kind`), returning the stored URL. */
+  /**
+   * Pick a PDF (the bank passbook may also be a photo) and POST it to /employees/upload
+   * (fields `file` + `kind`), returning the stored URL.
+   */
   const uploadPdf = async (kind: UploadKind, key: string, onUrl: (url: string) => void) => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({ type: 'application/pdf', copyToCacheDirectory: true, multiple: false });
+      const allowImage = kind === 'passbook';
+      const result = await DocumentPicker.getDocumentAsync({
+        type: allowImage ? ['application/pdf', 'image/*'] : 'application/pdf',
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
       if (result.canceled || !result.assets?.[0]) return;
       const asset = result.assets[0];
-      const name = asset.name || 'document.pdf';
-      if (asset.mimeType && asset.mimeType !== 'application/pdf' && !name.toLowerCase().endsWith('.pdf')) {
-        fail('Only PDF files are allowed.');
+      const name = asset.name || (allowImage ? 'passbook' : 'document.pdf');
+      const isPdf = asset.mimeType === 'application/pdf' || name.toLowerCase().endsWith('.pdf');
+      const isImage = /^image\//.test(asset.mimeType || '') || /\.(jpe?g|png|webp|heic|heif)$/i.test(name);
+      if (asset.mimeType && !isPdf && !(allowImage && isImage)) {
+        fail(allowImage ? 'Upload the passbook as a PDF or an image (JPG, PNG).' : 'Only PDF files are allowed.');
         return;
       }
       setUploading(key);
@@ -245,10 +352,10 @@ export default function EmployeeNewScreen({ navigation }: any) {
         const blob = (asset as any).file || (await fetch(asset.uri).then((r) => r.blob()));
         fd.append('file', blob, name);
       } else {
-        fd.append('file', { uri: asset.uri, name, type: 'application/pdf' } as any);
+        fd.append('file', { uri: asset.uri, name, type: asset.mimeType || (isPdf ? 'application/pdf' : 'image/jpeg') } as any);
       }
       fd.append('kind', kind);
-      const data = await apiService.upload('/employees/upload', fd);
+      const data = await apiService.upload(`/employees/upload?kind=${kind}`, fd);
       if (!data?.url) throw new Error('Upload failed');
       onUrl(data.url);
     } catch (e: any) {
@@ -265,29 +372,29 @@ export default function EmployeeNewScreen({ navigation }: any) {
     if (!form.email?.trim()) return fail('Email is required');
     if (!form.mobile.trim()) return fail('Employee mobile number is required.');
     if (!/^\d{10,15}$/.test(form.mobile)) return fail('Enter a mobile number with 10 to 15 digits.');
-    if (!form.phone.trim()) return fail('Company contact number is required.');
-    if (!/^\d{10,15}$/.test(form.phone)) return fail('Company contact number must be 10 to 15 digits.');
-    if (form.phone === form.mobile) return fail('Official contact number and personal mobile number cannot be the same.');
-    if (form.hasEmployeeRelationship === null) return fail('Select Yes or No for the employee relationship declaration');
+    if (!form.phone.trim() && needs('phone')) return fail('Company contact number is required.');
+    if (form.phone.trim() && !/^\d{10,15}$/.test(form.phone)) return fail('Company contact number must be 10 to 15 digits.');
+    if (form.phone && form.phone === form.mobile) return fail('Official contact number and personal mobile number cannot be the same.');
+    if (form.hasEmployeeRelationship === null && needs('hasEmployeeRelationship')) return fail('Select Yes or No for the employee relationship declaration');
     if (form.hasEmployeeRelationship) {
       const r = form.employeeRelationshipDetails;
       if (!r.fullName.trim() || !r.relationship.trim() || !r.department.trim() || !r.designation.trim()) {
         return fail('Enter the full name, relationship, department, and designation of the employee connection');
       }
     }
-    if (!form.dateOfBirth) return fail('Date of birth is required');
-    if (!isIsoDate(form.dateOfBirth)) return fail('Pick a valid date of birth');
+    if (!form.dateOfBirth && needs('dateOfBirth')) return fail('Date of birth is required');
+    if (form.dateOfBirth && !isIsoDate(form.dateOfBirth)) return fail('Pick a valid date of birth');
     if (form.dateOfBirth > todayDate()) return fail('Date of birth cannot be a future date');
-    if (!form.dateOfJoining) return fail('Date of joining is required');
-    if (!isIsoDate(form.dateOfJoining)) return fail('Pick a valid date of joining');
+    if (!form.dateOfJoining && needs('dateOfJoining')) return fail('Date of joining is required');
+    if (form.dateOfJoining && !isIsoDate(form.dateOfJoining)) return fail('Pick a valid date of joining');
     if (form.dateOfJoining > todayDate()) return fail('Date of joining cannot be a future date');
     const ctc = Number(form.yearlySalary);
-    if (!(ctc > 0)) return fail('CTC (per year) is required');
+    if (!(ctc > 0) && (needs('yearlySalary') || form.yearlySalary.trim() !== '')) return fail('CTC (per year) is required');
     const takeHome = form.monthlyTakeHome.trim() === '' ? 0 : Number(form.monthlyTakeHome);
     if (!Number.isFinite(takeHome) || takeHome < 0) return fail('Monthly take-home must be a valid amount');
     const bankError = bankDetailsError(form);
     if (bankError) return fail(bankError);
-    if (!form.passportPhotoUrl.trim()) return fail('Passport size photo PDF is required');
+    if (!form.passportPhotoUrl.trim() && needs('passportPhotoUrl')) return fail('Passport size photo PDF is required');
     if (form.role === 'Office Team' && !form.designation.trim()) return fail('Enter the designation');
 
     const selectedZones = !usesZones
@@ -302,7 +409,12 @@ export default function EmployeeNewScreen({ navigation }: any) {
     }
     if (singleZone && !form.cluster?.trim()) return fail('Cluster is required for BDE role');
 
-    for (let i = 0; i < 2; i++) {
+    // Older employees may have no references yet; leave both blank or fill both.
+    const skipReferences =
+      isEdit &&
+      !onFile('references') &&
+      form.references.every((r) => !r.relation && !r.name.trim() && !r.mobile.trim() && !r.aadhaarUrl);
+    for (let i = 0; i < (skipReferences ? 0 : 2); i++) {
       const ref = form.references[i];
       if (!REFERENCE_RELATIONS.includes(ref.relation)) {
         return fail(`Reference ${i + 1}: select relationship (Wife, Husband, Brother, Sister, Father, or Mother)`);
@@ -311,20 +423,24 @@ export default function EmployeeNewScreen({ navigation }: any) {
       if (!/^\d{10,15}$/.test(ref.mobile)) return fail(`Reference ${i + 1}: enter a mobile number with 10 to 15 digits`);
       if (!ref.aadhaarUrl.trim()) return fail(`Reference ${i + 1}: Aadhaar PDF is required`);
     }
-    if (form.references[0].mobile === form.references[1].mobile) {
+    if (!skipReferences && form.references[0].mobile === form.references[1].mobile) {
       return fail('Reference 1 and Reference 2 cannot have the same mobile number');
     }
-    if (!form.permanentAddress.trim()) return fail('Permanent address is required');
-    if (!temporaryAddress.trim()) return fail('Temporary address is required');
-    if (!form.aadhaarUrl.trim()) return fail('Aadhaar upload is required');
-    if (!form.locationPhotoUrl.trim()) return fail('Location upload is required');
-    if (form.role === 'Manager' && !productId) return fail('Select the product for this Product Manager');
-    if (form.role === 'Trainer') {
+    if (!form.permanentAddress.trim() && needs('permanentAddress')) return fail('Permanent address is required');
+    if (!temporaryAddress.trim() && (needs('temporaryAddress') || (isEdit && onFile('address1')))) return fail('Temporary address is required');
+    if (!form.aadhaarUrl.trim() && needs('aadhaarUrl')) return fail('Aadhaar upload is required');
+    if (!form.locationPhotoUrl.trim() && needs('locationPhotoUrl')) return fail('Location upload is required');
+    const keepLegacyManager = isEdit && original?.role === 'Manager' && !onFile('assignedProductIds') && !productId;
+    const keepLegacyTrainer =
+      isEdit && original?.role === 'Trainer' && !onFile('trainerProducts') && !form.trainerProducts.length && !form.verticalManagerId;
+    if (form.role === 'Manager' && !productId && !keepLegacyManager) return fail('Select the product for this Product Manager');
+    if (form.role === 'Trainer' && !keepLegacyTrainer) {
       if (!form.trainerProducts.length) return fail('Select at least one product for this Trainer');
       if (!form.verticalManagerId) return fail('Select the Product Head for this Trainer');
     }
-    if (form.onboardingChecklist.length < 2) return fail('Select at least two onboarding checklist items');
-    if (!form.pincode || form.pincode.length !== 6) return fail('Pincode must contain 6 digits');
+    const skipOnboarding = isEdit && !onFile('onboardingChecklist') && form.onboardingChecklist.length === 0;
+    if (form.onboardingChecklist.length < 2 && !skipOnboarding) return fail('Select at least two onboarding checklist items');
+    if ((form.pincode || needs('pincode')) && form.pincode.length !== 6) return fail('Pincode must contain 6 digits');
 
     setSubmitting(true);
     try {
@@ -343,10 +459,31 @@ export default function EmployeeNewScreen({ navigation }: any) {
       };
       if (form.role !== 'Executive') delete payload.cluster;
       if (!supportsEmployeeTagging(form.role)) delete payload.taggedEmployeeIds;
-      if (form.role === 'Manager') payload.assignedProductIds = [productId];
+      if (form.role === 'Manager' && productId) payload.assignedProductIds = [productId];
       if (form.role !== 'Trainer') {
         delete payload.trainerProducts;
         delete payload.verticalManagerId;
+      }
+      if (isEdit) {
+        delete payload.password;
+        if (!form.empCode.trim()) delete payload.empCode;
+        if (form.hasEmployeeRelationship === null) {
+          delete payload.hasEmployeeRelationship;
+          delete payload.employeeRelationshipDetails;
+        }
+        if (skipOnboarding) {
+          delete payload.onboardingChecklist;
+          delete payload.onboardingOtherNote;
+        }
+        if (form.role === 'Trainer' && keepLegacyTrainer) {
+          delete payload.trainerProducts;
+          delete payload.verticalManagerId;
+        }
+        if (!temporaryAddress.trim()) delete payload.address1;
+        await apiService.put(`/employees/${editId}`, payload);
+        setSuccessMessage('Employee updated.');
+        scrollRef.current?.scrollTo({ y: 0, animated: true });
+        return;
       }
       await apiService.post('/employees/create', payload);
       const role = user?.role;
@@ -359,7 +496,7 @@ export default function EmployeeNewScreen({ navigation }: any) {
       );
       scrollRef.current?.scrollTo({ y: 0, animated: true });
     } catch (error: any) {
-      fail(error.response?.data?.message || error.message || 'Failed to create employee');
+      fail(error.response?.data?.message || error.message || (isEdit ? 'Failed to update employee' : 'Failed to create employee'));
     } finally {
       setSubmitting(false);
     }
@@ -370,9 +507,20 @@ export default function EmployeeNewScreen({ navigation }: any) {
       <Text style={styles.label}>{label}</Text>
       <TouchableOpacity style={styles.uploadButton} onPress={() => uploadPdf(kind, uploadKey, onUrl)} disabled={!!uploading}>
         <Text style={styles.uploadButtonText} numberOfLines={1}>
-          {uploading === uploadKey ? 'Uploading…' : url ? `Uploaded: ${url.split('/').pop()}` : 'Choose PDF'}
+          {uploading === uploadKey
+            ? 'Uploading…'
+            : url
+              ? `Uploaded: ${employeeDocName(url)}${isEdit ? ' · tap to replace' : ''}`
+              : kind === 'passbook'
+                ? 'Choose PDF or photo'
+                : 'Choose PDF'}
         </Text>
       </TouchableOpacity>
+      {url && uploading !== uploadKey ? (
+        <TouchableOpacity onPress={() => openEmployeeDoc(url)} style={styles.viewDocLink}>
+          <Text style={styles.viewDocLinkText}>View uploaded file</Text>
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 
@@ -383,8 +531,16 @@ export default function EmployeeNewScreen({ navigation }: any) {
     </TouchableOpacity>
   );
 
+  if (loadingEmployee) {
+    return (
+      <ScreenShell title="Edit Employee" loading>
+        <View />
+      </ScreenShell>
+    );
+  }
+
   return (
-    <ScreenShell title="New Employee" noScroll>
+    <ScreenShell title={isEdit ? 'Edit Employee' : 'New Employee'} noScroll>
       <ScrollView ref={scrollRef} style={styles.content} contentContainerStyle={styles.contentContainer} keyboardShouldPersistTaps="handled">
         {successMessage ? (
           <View style={styles.successBanner}>
@@ -392,10 +548,14 @@ export default function EmployeeNewScreen({ navigation }: any) {
             <Text style={styles.successText}>{successMessage}</Text>
             <TouchableOpacity
               style={styles.viewEmployeesButton}
-              onPress={() => navigation.navigate(user?.role === 'Super Admin' ? 'EmployeesActive' : 'EmployeeVerification')}
+              onPress={() =>
+                isEdit
+                  ? navigation.goBack()
+                  : navigation.navigate(user?.role === 'Super Admin' ? 'EmployeesActive' : 'EmployeeVerification')
+              }
             >
               <Text style={styles.viewEmployeesButtonText}>
-                {user?.role === 'Super Admin' ? 'View Employees' : 'View Verification Queue'}
+                {isEdit ? 'Back' : user?.role === 'Super Admin' ? 'View Employees' : 'View Verification Queue'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -469,6 +629,13 @@ export default function EmployeeNewScreen({ navigation }: any) {
         <FormField label="IFSC" value={form.bankIfsc} onChangeText={(t: string) => setForm((f) => ({ ...f, bankIfsc: t.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() }))} placeholder="e.g. SBIN0001234" maxLength={11} />
         <FormField label="Bank name" value={form.bankName} onChangeText={(t: string) => setForm((f) => ({ ...f, bankName: t }))} placeholder="e.g. State Bank of India" />
         <FormField label="Branch" value={form.bankBranch} onChangeText={(t: string) => setForm((f) => ({ ...f, bankBranch: t }))} placeholder="Branch name" />
+        <UploadRow
+          label="Bank passbook / cancelled cheque (PDF or photo)"
+          url={form.bankPassbookUrl}
+          kind="passbook"
+          uploadKey="passbook"
+          onUrl={(u) => setForm((f) => ({ ...f, bankPassbookUrl: u }))}
+        />
         <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Address & KYC</Text>
         <View style={styles.textAreaContainer}>
           <Text style={styles.label}>Permanent address *</Text>
@@ -652,10 +819,17 @@ export default function EmployeeNewScreen({ navigation }: any) {
           <FormField label="Other onboarding note" value={form.onboardingOtherNote} onChangeText={(t: string) => setForm((f) => ({ ...f, onboardingOtherNote: t }))} />
         ) : null}
 
-        <FormField label="Password" value={form.password} onChangeText={(t: string) => setForm((f) => ({ ...f, password: t }))} placeholder="Default password if left blank" secureTextEntry />
+        {!isEdit ? (
+          <FormField label="Password" value={form.password} onChangeText={(t: string) => setForm((f) => ({ ...f, password: t }))} placeholder="Default password if left blank" secureTextEntry />
+        ) : null}
         <TouchableOpacity style={[styles.submitButton, (submitting || !!uploading) && styles.submitButtonDisabled]} onPress={handleSubmit} disabled={submitting || !!uploading}>
-          {submitting ? <ActivityIndicator color={colors.textLight} /> : <Text style={styles.submitButtonText}>Submit</Text>}
+          {submitting ? <ActivityIndicator color={colors.textLight} /> : <Text style={styles.submitButtonText}>{isEdit ? 'Save Changes' : 'Submit'}</Text>}
         </TouchableOpacity>
+        {isEdit ? (
+          <TouchableOpacity style={styles.cancelButton} onPress={() => navigation.goBack()} disabled={submitting}>
+            <Text style={styles.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+        ) : null}
       </ScrollView>
     </ScreenShell>
   );
@@ -694,6 +868,10 @@ const styles = StyleSheet.create({
   roleOptionTextSelected: { color: colors.primary, fontWeight: '600' },
   uploadButton: { padding: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundLight, alignItems: 'center' },
   uploadButtonText: { ...typography.body.medium, color: colors.primary },
+  viewDocLink: { marginTop: 6, alignSelf: 'flex-start' },
+  viewDocLinkText: { ...typography.body.small, color: colors.primary, textDecorationLine: 'underline' },
+  cancelButton: { marginTop: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundLight, padding: 16, borderRadius: 12, alignItems: 'center' },
+  cancelText: { color: colors.textPrimary, fontWeight: '600' },
   refCard: { borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, marginBottom: 16, backgroundColor: colors.backgroundMuted },
   refTitle: { ...typography.label.medium, color: colors.textPrimary, marginBottom: 8, fontWeight: '600' },
   listBox: { borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 8, backgroundColor: colors.backgroundLight },

@@ -16,7 +16,9 @@ import { downloadReportFile } from '@/lib/reportDownload'
 import { formatDate } from '@/lib/dateFormat'
 import { todayDateString } from '@/lib/todayDate'
 
-export type PayoutsMode = 'list' | 'bank-sheet' | 'credit-status'
+export type PayoutsMode = 'list' | 'bank-sheet' | 'credit-status' | 'salary-sheet'
+
+type SalaryMonth = { month: string; label: string; employees: number; total: number; credited: number }
 
 type PayoutEmployee = {
   _id: string
@@ -31,7 +33,7 @@ type PayoutEmployee = {
 }
 
 type PayoutItem = {
-  kind: 'expense' | 'advance'
+  kind: 'expense' | 'advance' | 'salary'
   id: string
   employee: PayoutEmployee | null
   label: string
@@ -75,6 +77,12 @@ const COPY: Record<PayoutsMode, { title: string; subtitle: string; defaultStatus
       'Employees sent in a bank sheet. Tick those whose amount was credited; for the rest, a remark explaining the failure or delay is required.',
     defaultStatus: 'Pending',
   },
+  'salary-sheet': {
+    title: 'Salary Sheet',
+    subtitle:
+      'Net salaries from a finalized payroll month. Select employees and generate the salary bank sheet in the bank payment format, then update their credit status under Bank Credit Status (Type: Salary).',
+    defaultStatus: 'open',
+  },
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -107,7 +115,8 @@ async function downloadPost(apiPath: string, body: unknown, fallbackName: string
   window.URL.revokeObjectURL(url)
 }
 
-function defaultNarration(kind: string) {
+function defaultNarration(kind: string, salaryMonthLabel = '') {
+  if (kind === 'salary') return `${salaryMonthLabel || new Date().toLocaleString('en-GB', { month: 'long', year: 'numeric' })} Sal`
   const month = new Date().toLocaleString('en-GB', { month: 'long', year: 'numeric' })
   if (kind === 'advance') return `${month} Advance`
   if (kind === 'expense') return `${month} Expenses`
@@ -117,7 +126,11 @@ function defaultNarration(kind: string) {
 export default function PayoutsWorkspace({ mode }: { mode: PayoutsMode }) {
   const copy = COPY[mode]
   const grouped = mode !== 'list'
-  const [type, setType] = useState(ALL)
+  /** Bank sheet pages: pick employees and generate the bank payment file. */
+  const isSheet = mode === 'bank-sheet' || mode === 'salary-sheet'
+  const [type, setType] = useState(mode === 'salary-sheet' ? 'salary' : ALL)
+  const [salaryMonths, setSalaryMonths] = useState<SalaryMonth[]>([])
+  const [month, setMonth] = useState('')
   const [status, setStatus] = useState(copy.defaultStatus)
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
@@ -136,6 +149,7 @@ export default function PayoutsWorkspace({ mode }: { mode: PayoutsMode }) {
   const query = useMemo(() => {
     const p = new URLSearchParams()
     if (type !== ALL) p.set('type', type)
+    if (type === 'salary' && month) p.set('month', month)
     if (status !== ALL) p.set('status', status)
     if (from) p.set('from', from)
     if (to) p.set('to', to)
@@ -144,9 +158,15 @@ export default function PayoutsWorkspace({ mode }: { mode: PayoutsMode }) {
     if (grouped) p.set('group', 'employee')
     if (mode === 'credit-status') p.set('inSheet', '1')
     return p.toString()
-  }, [type, status, from, to, zone, q, grouped, mode])
+  }, [type, month, status, from, to, zone, q, grouped, mode])
 
   const load = useCallback(async () => {
+    // The salary sheet waits for its month.
+    if (mode === 'salary-sheet' && !month) {
+      setData(null)
+      setLoading(false)
+      return
+    }
     setLoading(true)
     try {
       const res = await apiRequest<PayoutsResponse>(`/finance/payouts?${query}`)
@@ -159,11 +179,21 @@ export default function PayoutsWorkspace({ mode }: { mode: PayoutsMode }) {
     } finally {
       setLoading(false)
     }
-  }, [query])
+  }, [query, mode, month])
 
   useEffect(() => {
     load()
   }, [load])
+
+  useEffect(() => {
+    if (mode !== 'salary-sheet') return
+    apiRequest<SalaryMonth[]>('/finance/salary-months')
+      .then((list) => {
+        setSalaryMonths(list || [])
+        setMonth((prev) => prev || list?.[0]?.month || '')
+      })
+      .catch(() => setSalaryMonths([]))
+  }, [mode])
 
   useEffect(() => {
     apiRequest<{ zones: string[] }>('/finance/payees')
@@ -172,11 +202,11 @@ export default function PayoutsWorkspace({ mode }: { mode: PayoutsMode }) {
   }, [])
 
   useEffect(() => {
-    if (mode === 'bank-sheet') setNarration(defaultNarration(type))
-  }, [type, mode])
+    if (isSheet) setNarration(defaultNarration(type, salaryMonths.find((m) => m.month === month)?.label))
+  }, [type, mode, isSheet, month, salaryMonths])
 
   const groups = data?.groups || []
-  const selectableGroups = mode === 'bank-sheet' ? groups.filter((g) => g.employee?.hasBankDetails) : groups
+  const selectableGroups = isSheet ? groups.filter((g) => g.employee?.hasBankDetails) : groups
   const allSelected = selectableGroups.length > 0 && selectableGroups.every((g) => selected.has(groupKey(g)))
   const selectedGroups = groups.filter((g) => selected.has(groupKey(g)))
   const selectedTotal = selectedGroups.reduce((s, g) => s + g.total, 0)
@@ -194,7 +224,10 @@ export default function PayoutsWorkspace({ mode }: { mode: PayoutsMode }) {
     try {
       const p = new URLSearchParams(query)
       p.delete('group')
-      await downloadReportFile(`/finance/payouts/export?${p.toString()}`, 'Approved_Expenses_Advances.xlsx')
+      await downloadReportFile(
+        `/finance/payouts/export?${p.toString()}`,
+        type === 'salary' ? 'Salary_Payouts.xlsx' : 'Approved_Expenses_Advances.xlsx'
+      )
     } catch (error: any) {
       toast.error(error?.message || 'Download failed')
     } finally {
@@ -266,17 +299,34 @@ export default function PayoutsWorkspace({ mode }: { mode: PayoutsMode }) {
 
       <Card className="p-4">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-          <div>
-            <Label className="mb-1 block text-xs">Type</Label>
-            <Select value={type} onValueChange={setType}>
-              <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>Expenses & Advances</SelectItem>
-                <SelectItem value="expense">Expenses</SelectItem>
-                <SelectItem value="advance">Advances</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {mode === 'salary-sheet' ? (
+            <div>
+              <Label className="mb-1 block text-xs">Payroll month</Label>
+              <Select value={month} onValueChange={setMonth}>
+                <SelectTrigger className="bg-white"><SelectValue placeholder="No finalized payroll" /></SelectTrigger>
+                <SelectContent>
+                  {salaryMonths.map((m) => (
+                    <SelectItem key={m.month} value={m.month}>
+                      {m.label} · {m.employees} employees
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
+            <div>
+              <Label className="mb-1 block text-xs">Type</Label>
+              <Select value={type} onValueChange={setType}>
+                <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>Expenses & Advances</SelectItem>
+                  <SelectItem value="expense">Expenses</SelectItem>
+                  <SelectItem value="advance">Advances</SelectItem>
+                  {mode !== 'bank-sheet' && <SelectItem value="salary">Salary</SelectItem>}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           {mode !== 'credit-status' && (
             <div>
               <Label className="mb-1 block text-xs">Bank status</Label>
@@ -292,14 +342,18 @@ export default function PayoutsWorkspace({ mode }: { mode: PayoutsMode }) {
               </Select>
             </div>
           )}
-          <div>
-            <Label className="mb-1 block text-xs">Approved from</Label>
-            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-          </div>
-          <div>
-            <Label className="mb-1 block text-xs">Approved to</Label>
-            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-          </div>
+          {mode !== 'salary-sheet' && (
+            <>
+              <div>
+                <Label className="mb-1 block text-xs">Approved from</Label>
+                <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+              </div>
+              <div>
+                <Label className="mb-1 block text-xs">Approved to</Label>
+                <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+              </div>
+            </>
+          )}
           <div>
             <Label className="mb-1 block text-xs">Zone</Label>
             <Select value={zone} onValueChange={setZone}>
@@ -332,7 +386,7 @@ export default function PayoutsWorkspace({ mode }: { mode: PayoutsMode }) {
         </div>
       </Card>
 
-      {mode === 'bank-sheet' && (
+      {isSheet && (
         <Card className="p-4">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div>
@@ -369,7 +423,13 @@ export default function PayoutsWorkspace({ mode }: { mode: PayoutsMode }) {
           <p className="p-6 text-sm text-neutral-500">
             {mode === 'credit-status'
               ? 'No employees are waiting for a credit update. Generate a bank sheet first.'
-              : 'No Finance-approved expenses or advances match these filters.'}
+              : mode === 'salary-sheet'
+                ? salaryMonths.length
+                  ? 'No salaries to pay for this month with these filters.'
+                  : 'No finalized payroll yet. HR finalizes the month in Payroll first.'
+                : type === 'salary'
+                  ? 'No salaries match these filters.'
+                  : 'No Finance-approved expenses or advances match these filters.'}
           </p>
         ) : mode === 'list' ? (
           <Table>
@@ -430,7 +490,7 @@ export default function PayoutsWorkspace({ mode }: { mode: PayoutsMode }) {
               {groups.map((g) => {
                 const key = groupKey(g)
                 const noBank = !g.employee?.hasBankDetails
-                const disabled = mode === 'bank-sheet' && noBank
+                const disabled = isSheet && noBank
                 const statuses = [...new Set(g.items.map((i) => i.payout.status))]
                 const sheetAt = g.items.map((i) => i.payout.bankSheetAt).filter(Boolean).sort().pop() || null
                 return (
@@ -462,7 +522,7 @@ export default function PayoutsWorkspace({ mode }: { mode: PayoutsMode }) {
                     <TableCell className="text-xs">
                       {g.items.map((i) => (
                         <div key={`${i.kind}:${i.id}`}>
-                          {i.label} · {formatDate(i.date) || '-'} · {money(i.approvedAmount)}
+                          {i.label}{i.kind === 'salary' ? '' : ` · ${formatDate(i.date) || '-'}`} · {money(i.approvedAmount)}
                         </div>
                       ))}
                     </TableCell>

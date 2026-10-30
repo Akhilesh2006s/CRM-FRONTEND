@@ -6,7 +6,7 @@ import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebSelect, WebButton } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
-import { leaveTypeLabel } from '../../lib/leaveTypes';
+import { leaveTypeLabel, leaveDayTypeLabel, leaveDayCount, formatLeaveDays } from '../../lib/leaveTypes';
 import type { LeaveApprovalFields } from '../../lib/leaveApproval';
 import LeaveApprovalStatus from '../../components/leaves/LeaveApprovalStatus';
 import LeaveDecisionActions from '../../components/leaves/LeaveDecisionActions';
@@ -21,6 +21,8 @@ type Leave = LeaveApprovalFields & {
   startDate: string;
   endDate: string;
   days: number;
+  dayType?: string;
+  halfDaySession?: string | null;
   reason: string;
   approvedBy?: { name: string; email?: string };
   approvedAt?: string;
@@ -152,7 +154,7 @@ export default function ExecutiveManagerLeavesScreen({ navigation, route }: any)
               <View key={leave._id} style={styles.card}>
                 <Text style={styles.cardTitle}>{leaveTypeLabel(leave.leaveType)}</Text>
                 <Text style={styles.meta}>
-                  {formatDate(leave.startDate)} – {formatDate(leave.endDate)} · {leave.days ?? '-'} day(s)
+                  {formatDate(leave.startDate)} – {formatDate(leave.endDate)} · {leaveDayTypeLabel(leave)} · {formatLeaveDays(leaveDayCount(leave))}
                 </Text>
                 {leave.reason ? <Text style={styles.meta}>Reason: {leave.reason}</Text> : null}
                 <View style={styles.section}>
@@ -205,7 +207,7 @@ export default function ExecutiveManagerLeavesScreen({ navigation, route }: any)
                   <Text style={styles.meta}>{leaveTypeLabel(leave.leaveType)}</Text>
                 </View>
                 <Text style={styles.meta}>
-                  {formatDate(leave.startDate)} – {formatDate(leave.endDate)} · {leave.days ?? '-'} day(s)
+                  {formatDate(leave.startDate)} – {formatDate(leave.endDate)} · {leaveDayTypeLabel(leave)} · {formatLeaveDays(leaveDayCount(leave))}
                 </Text>
                 {leave.reason ? <Text style={styles.meta}>Reason: {leave.reason}</Text> : null}
                 <Text style={styles.meta}>City: {leave.employeeId?.assignedCity || '-'}</Text>

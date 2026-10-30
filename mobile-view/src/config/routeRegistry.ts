@@ -147,6 +147,7 @@ export const ROUTE_REGISTRY: RouteEntry[] = [
   { webPath: '/dashboard/finance/payouts', mobileScreen: 'FinancePayouts', module: 'Bank Payouts', status: 'done' },
   { webPath: '/dashboard/finance/bank-sheet', mobileScreen: 'FinanceBankSheet', module: 'Bank Payouts', status: 'done' },
   { webPath: '/dashboard/finance/credit-status', mobileScreen: 'FinanceCreditStatus', module: 'Bank Payouts', status: 'done' },
+  { webPath: '/dashboard/finance/salary-sheet', mobileScreen: 'FinanceSalarySheet', module: 'Bank Payouts', status: 'done' },
   { webPath: '/dashboard/employees/salary', mobileScreen: 'EmployeesSalary', module: 'Employees', status: 'done' },
   { webPath: '/dashboard/employees/history', mobileScreen: 'EmployeesHistory', module: 'Employees', status: 'done' },
   { webPath: '/dashboard/employees/move-schools', mobileScreen: 'EmployeesMoveSchools', module: 'Employees', status: 'done' },

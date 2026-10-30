@@ -26,6 +26,10 @@ type Expense = ApprovalExpense & {
   employee?: (ExpensePerson & { zone?: string }) | null
   /** Server-computed status text (same wording as the export) */
   statusText?: string
+  /** Travel kilometres claimed (server-computed) */
+  kilometres?: number
+  /** When the Finance Manager approved it (Approved expenses only) */
+  financeApprovedAt?: string | null
 }
 
 type Employee = {
@@ -254,12 +258,14 @@ export default function ExpensesReportPage() {
                 <TableHead className="font-semibold">Created On</TableHead>
                 <TableHead className="font-semibold">Exp Date</TableHead>
                 <TableHead className="font-semibold">Employee Name</TableHead>
+                <TableHead className="font-semibold text-right">Kilometer</TableHead>
                 <TableHead className="font-semibold text-right">Expense Amount</TableHead>
                 <TableHead className="font-semibold">First-level Approver</TableHead>
                 <TableHead className="font-semibold text-right">First-level Amount</TableHead>
                 <TableHead className="font-semibold">First-level Remarks</TableHead>
                 <TableHead className="font-semibold">Finance Approver</TableHead>
                 <TableHead className="font-semibold text-right">Final Amount</TableHead>
+                <TableHead className="font-semibold">Finance Approved Date</TableHead>
                 <TableHead className="font-semibold">Finance Remarks</TableHead>
                 <TableHead className="font-semibold">Status</TableHead>
               </TableRow>
@@ -267,13 +273,13 @@ export default function ExpensesReportPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={13} className="text-center py-8 text-neutral-500">
+                  <TableCell colSpan={15} className="text-center py-8 text-neutral-500">
                     Loading expenses...
                   </TableCell>
                 </TableRow>
               ) : expenses.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={13} className="text-center py-8 text-neutral-500">
+                  <TableCell colSpan={15} className="text-center py-8 text-neutral-500">
                     No expenses found
                   </TableCell>
                 </TableRow>
@@ -292,6 +298,7 @@ export default function ExpensesReportPage() {
                     <TableCell className="font-medium">
                       {(expense.employee || expense.employeeId || expense.trainerId)?.name || '-'}
                     </TableCell>
+                    <TableCell className="text-right">{expense.kilometres ? expense.kilometres : '-'}</TableCell>
                     <TableCell className="text-right font-medium">
                       {money(expense.employeeAmount ?? expense.amount)}
                     </TableCell>
@@ -316,6 +323,7 @@ export default function ExpensesReportPage() {
                     <TableCell className="text-right font-medium">
                       {expense.status === 'Approved' ? money(expense.approvedAmount) : '-'}
                     </TableCell>
+                    <TableCell>{expense.financeApprovedAt ? formatExpDate(expense.financeApprovedAt) : '-'}</TableCell>
                     <TableCell className="max-w-[220px] whitespace-pre-wrap">{expense.financeRemarks || '-'}</TableCell>
                     <TableCell>
                       <span className={`px-2 py-1 rounded text-xs font-medium ${expenseStatusColor(expense.status)}`}>

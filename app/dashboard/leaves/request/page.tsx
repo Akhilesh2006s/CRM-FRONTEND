@@ -12,13 +12,27 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { todayDateString, isBeforeToday } from '@/lib/todayDate'
-import { LEAVE_TYPE_OPTIONS } from '@/lib/leaveTypes'
+import { LEAVE_TYPE_OPTIONS, LEAVE_DAY_TYPES, HALF_DAY_SESSIONS, leaveDayCount, formatLeaveDays } from '@/lib/leaveTypes'
 
 const LEAVE_REQUEST_PATH = '/dashboard/leaves/request'
 
 export default function LeaveRequestPage() {
   const router = useRouter()
-  const [form, setForm] = useState({ leaveType: 'Casual Leave', startDate: '', endDate: '', reason: '' })
+  const [form, setForm] = useState({
+    leaveType: 'Casual Leave',
+    dayType: 'Full Day',
+    halfDaySession: 'First Half',
+    startDate: '',
+    endDate: '',
+    reason: '',
+  })
+  const isHalfDay = form.dayType === 'Half Day'
+  // Half Day is a single date: the end date follows the start date.
+  const effectiveEndDate = isHalfDay ? form.startDate : form.endDate
+  const dayCount =
+    form.startDate && effectiveEndDate && new Date(effectiveEndDate) >= new Date(form.startDate)
+      ? leaveDayCount({ dayType: form.dayType, startDate: form.startDate, endDate: effectiveEndDate })
+      : 0
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -35,22 +49,30 @@ export default function LeaveRequestPage() {
       setError('Please provide a reason for your leave request.')
       return
     }
-    if (!form.startDate || !form.endDate) {
-      setError('Start date and end date are required.')
+    if (!form.startDate || !effectiveEndDate) {
+      setError(isHalfDay ? 'Leave date is required.' : 'Start date and end date are required.')
       return
     }
-    if (isBeforeToday(form.startDate) || isBeforeToday(form.endDate)) {
+    if (isBeforeToday(form.startDate) || isBeforeToday(effectiveEndDate)) {
       setError('Past dates cannot be selected for leave.')
       return
     }
-    if (new Date(form.endDate) < new Date(form.startDate)) {
+    if (new Date(effectiveEndDate) < new Date(form.startDate)) {
       setError('End date must be on or after start date.')
       return
     }
 
     setSubmitting(true)
     try {
-      await apiRequest('/leaves/create', { method: 'POST', body: JSON.stringify(form) })
+      const payload = {
+        leaveType: form.leaveType,
+        dayType: form.dayType,
+        ...(isHalfDay ? { halfDaySession: form.halfDaySession } : {}),
+        startDate: form.startDate,
+        endDate: effectiveEndDate,
+        reason: form.reason,
+      }
+      await apiRequest('/leaves/create', { method: 'POST', body: JSON.stringify(payload) })
       toast.success('Leave request submitted successfully!')
       router.push('/dashboard/leaves/approved?submitted=1')
     } catch (e: unknown) {
@@ -96,9 +118,50 @@ export default function LeaveRequestPage() {
             </Select>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <Label>Leave Duration</Label>
+            <div className="mt-1 inline-flex rounded-md border bg-white p-1" role="radiogroup" aria-label="Leave duration">
+              {LEAVE_DAY_TYPES.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  role="radio"
+                  aria-checked={form.dayType === t}
+                  onClick={() => setForm((f) => ({ ...f, dayType: t }))}
+                  className={`px-4 py-1.5 text-sm rounded ${
+                    form.dayType === t ? 'bg-neutral-900 text-white' : 'text-neutral-700 hover:bg-neutral-100'
+                  }`}
+                >
+                  {t === 'Half Day' ? 'Half-Day Leave' : 'Full-Day Leave'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {isHalfDay && (
             <div>
-              <Label htmlFor="startDate">Start Date</Label>
+              <Label htmlFor="halfDaySession">Which half</Label>
+              <Select
+                value={form.halfDaySession}
+                onValueChange={(v) => setForm((f) => ({ ...f, halfDaySession: v }))}
+              >
+                <SelectTrigger id="halfDaySession" className="mt-1 bg-white">
+                  <SelectValue placeholder="Select half" />
+                </SelectTrigger>
+                <SelectContent>
+                  {HALF_DAY_SESSIONS.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {s}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          <div className={`grid grid-cols-1 gap-4 ${isHalfDay ? '' : 'sm:grid-cols-2'}`}>
+            <div>
+              <Label htmlFor="startDate">{isHalfDay ? 'Leave Date' : 'Start Date'}</Label>
               <Input
                 id="startDate"
                 name="startDate"
@@ -110,20 +173,29 @@ export default function LeaveRequestPage() {
                 required
               />
             </div>
-            <div>
-              <Label htmlFor="endDate">End Date</Label>
-              <Input
-                id="endDate"
-                name="endDate"
-                type="date"
-                min={minDate}
-                className="bg-white mt-1"
-                value={form.endDate}
-                onChange={onChange}
-                required
-              />
-            </div>
+            {!isHalfDay && (
+              <div>
+                <Label htmlFor="endDate">End Date</Label>
+                <Input
+                  id="endDate"
+                  name="endDate"
+                  type="date"
+                  min={form.startDate || minDate}
+                  className="bg-white mt-1"
+                  value={form.endDate}
+                  onChange={onChange}
+                  required
+                />
+              </div>
+            )}
           </div>
+
+          {dayCount > 0 && (
+            <p className="text-sm text-neutral-600">
+              Total: <span className="font-medium text-neutral-900">{formatLeaveDays(dayCount)}</span>
+              {isHalfDay ? ` (${form.halfDaySession})` : ''}
+            </p>
+          )}
 
           <div>
             <Label htmlFor="reason">Reason</Label>

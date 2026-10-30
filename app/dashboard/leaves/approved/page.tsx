@@ -5,6 +5,7 @@ import { apiRequest } from '@/lib/api'
 import { Card } from '@/components/ui/card'
 import { usePermissions } from '@/components/permissions/PermissionsProvider'
 import { leaveTypeLabel } from '@/lib/leaveTypes'
+import { LeaveDayTypeBadge } from '@/components/leaves/LeaveDayTypeBadge'
 import { LeaveApprovalStatus, type LeaveApprovalFields } from '@/components/leaves/LeaveApprovalStatus'
 
 type Leave = LeaveApprovalFields & {
@@ -14,6 +15,9 @@ type Leave = LeaveApprovalFields & {
   reason?: string
   status: 'Pending' | 'Approved' | 'Rejected'
   leaveType?: string
+  dayType?: string
+  halfDaySession?: string | null
+  days?: number
 }
 
 export default function EmployeeApprovedLeavesPage() {
@@ -70,7 +74,10 @@ export default function EmployeeApprovedLeavesPage() {
               )}
               {items.map((l) => (
                 <tr key={l._id} className="border-b last:border-0">
-                  <td className="py-2 px-3">{leaveTypeLabel(l.leaveType)}</td>
+                  <td className="py-2 px-3">
+                    <div>{leaveTypeLabel(l.leaveType)}</div>
+                    <LeaveDayTypeBadge leave={l} />
+                  </td>
                   <td className="py-2 px-3 text-center">
                     {new Date(l.startDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                   </td>

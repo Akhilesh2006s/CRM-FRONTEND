@@ -9,7 +9,8 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { apiRequest } from '@/lib/api'
 import { LeaveApprovalStatus, type LeaveApprovalFields } from '@/components/leaves/LeaveApprovalStatus'
-import { leaveTypeLabel } from '@/lib/leaveTypes'
+import { leaveTypeLabel, leaveDayCount } from '@/lib/leaveTypes'
+import { LeaveDayTypeBadge } from '@/components/leaves/LeaveDayTypeBadge'
 import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
 import { Calendar, CheckCircle, XCircle, ArrowLeft, PlusCircle, RefreshCw } from 'lucide-react'
@@ -66,6 +67,8 @@ type Leave = {
   startDate: string
   endDate: string
   days: number
+  dayType?: string
+  halfDaySession?: string | null
   reason: string
   status: 'Pending' | 'Approved' | 'Rejected'
   approvedBy?: {
@@ -282,10 +285,13 @@ export default function ExecutiveManagerLeavesPage() {
                 <TableBody>
                   {myLeaves.map((leave) => (
                     <TableRow key={leave._id}>
-                      <TableCell>{leaveTypeLabel(leave.leaveType)}</TableCell>
+                      <TableCell>
+                        <div>{leaveTypeLabel(leave.leaveType)}</div>
+                        <LeaveDayTypeBadge leave={leave} showDays={false} />
+                      </TableCell>
                       <TableCell>{new Date(leave.startDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</TableCell>
                       <TableCell>{new Date(leave.endDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</TableCell>
-                      <TableCell>{leave.days}</TableCell>
+                      <TableCell>{leaveDayCount(leave)}</TableCell>
                       <TableCell className="max-w-xs truncate">{leave.reason}</TableCell>
                       <TableCell className="align-top">
                         <LeaveApprovalStatus leave={leave} />
@@ -401,10 +407,13 @@ export default function ExecutiveManagerLeavesPage() {
                         <p className="text-xs text-neutral-500">{leave.employeeId?.email || ''}</p>
                       </div>
                     </TableCell>
-                    <TableCell>{leaveTypeLabel(leave.leaveType)}</TableCell>
+                    <TableCell>
+                      <div>{leaveTypeLabel(leave.leaveType)}</div>
+                      <LeaveDayTypeBadge leave={leave} showDays={false} />
+                    </TableCell>
                     <TableCell>{new Date(leave.startDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</TableCell>
                     <TableCell>{new Date(leave.endDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</TableCell>
-                    <TableCell>{leave.days}</TableCell>
+                    <TableCell>{leaveDayCount(leave)}</TableCell>
                     <TableCell className="max-w-xs truncate">{leave.reason}</TableCell>
                     <TableCell>{leave.employeeId?.assignedCity || '-'}</TableCell>
                     <TableCell className="align-top">

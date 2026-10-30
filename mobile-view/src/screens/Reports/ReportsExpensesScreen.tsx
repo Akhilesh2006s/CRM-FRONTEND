@@ -36,6 +36,10 @@ type Expense = ApprovalExpense & {
   employee?: (ExpensePerson & { zone?: string }) | null;
   /** Server-computed status text (same wording as the export) */
   statusText?: string;
+  /** Travel kilometres claimed (server-computed) */
+  kilometres?: number;
+  /** When the Finance Manager approved it (Approved expenses only) */
+  financeApprovedAt?: string | null;
 };
 
 type Employee = {
@@ -265,6 +269,7 @@ export default function ReportsExpensesScreen() {
                 <InfoRow label="Created On" value={formatCreatedOn(expense.createdAt)} />
                 <InfoRow label="Exp Date" value={formatExpDate(expense.date)} />
                 <InfoRow label="Employee Name" value={employeeName} />
+                <InfoRow label="Kilometer" value={expense.kilometres ? String(expense.kilometres) : '-'} />
                 <InfoRow label="Expense Amount" value={expenseAmount.toFixed(2)} />
                 <InfoRow label="1st Level Approver" value={firstLevelApprovedBy(expense)?.name || '-'} />
                 <InfoRow
@@ -280,6 +285,7 @@ export default function ReportsExpensesScreen() {
                   label="Final Amount"
                   value={expense.status === 'Approved' && typeof expense.approvedAmount === 'number' ? expense.approvedAmount.toFixed(2) : '-'}
                 />
+                <InfoRow label="Finance Approved Date" value={expense.financeApprovedAt ? formatExpDate(expense.financeApprovedAt) : '-'} />
                 <InfoRow label="Finance Remarks" value={expense.financeRemarks || '-'} />
               </View>
             );

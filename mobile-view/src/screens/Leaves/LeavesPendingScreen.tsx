@@ -7,7 +7,7 @@ import ScreenShell from '../../ui/ScreenShell';
 import MessageBanner from '../../components/MessageBanner';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
-import { leaveTypeLabel } from '../../lib/leaveTypes';
+import { leaveTypeLabel, leaveDayTypeLabel, leaveDayCount, formatLeaveDays } from '../../lib/leaveTypes';
 import { type LeaveApprovalFields, sortDecidableFirst } from '../../lib/leaveApproval';
 import LeaveApprovalStatus from '../../components/leaves/LeaveApprovalStatus';
 import LeaveDecisionActions from '../../components/leaves/LeaveDecisionActions';
@@ -19,6 +19,9 @@ type Leave = LeaveApprovalFields & {
   startDate: string;
   endDate: string;
   leaveType?: string;
+  dayType?: string;
+  halfDaySession?: string | null;
+  days?: number;
 };
 
 /** Display legacy numeric and current employee codes with the VESPL prefix (web lib/employeeCode.ts). */
@@ -98,7 +101,9 @@ export default function LeavesPendingScreen() {
                   {formatEmployeeCode(typeof leave.employeeId === 'object' && leave.employeeId ? leave.employeeId.empCode : undefined)}
                 </Text>
               </View>
-              <Text style={styles.leaveType}>{leaveTypeLabel(leave.leaveType)}</Text>
+              <Text style={styles.leaveType}>
+                {leaveTypeLabel(leave.leaveType)} · {leaveDayTypeLabel(leave)} · {formatLeaveDays(leaveDayCount(leave))}
+              </Text>
             </View>
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>From:</Text>

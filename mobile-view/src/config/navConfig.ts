@@ -40,6 +40,7 @@ const BANK_PAYOUT_LINKS: NavLink[] = [
   { label: 'Approved Expenses & Advances', screen: 'FinancePayouts', icon: '📄' },
   { label: 'Generate Bank Sheet', screen: 'FinanceBankSheet', icon: '🏦' },
   { label: 'Bank Credit Status', screen: 'FinanceCreditStatus', icon: '✅' },
+  { label: 'Salary Sheet', screen: 'FinanceSalarySheet', icon: '💵' },
 ];
 
 function roleNavSections(user: CrmUser | null | undefined): NavSection[] {

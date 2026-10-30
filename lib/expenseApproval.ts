@@ -45,6 +45,25 @@ export type ApprovalExpense = {
   rejectedBy?: ExpensePerson | null
   rejectedAt?: string
   rejectedStage?: 'first' | 'finance'
+  /** Bank transfer status, set by the Finance Executive after Finance approval */
+  payout?: { status?: string; remark?: string; updatedAt?: string | null; bankSheetAt?: string | null } | null
+}
+
+export const CREDITED_TO_BANK = 'Amount Credited to Bank'
+
+const indianDate = (value?: string | null) => {
+  const d = value ? new Date(value) : null
+  if (!d || Number.isNaN(d.getTime())) return ''
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Kolkata' })
+}
+
+/**
+ * Done from the employee's side: rejected, or approved by Finance and credited to their bank.
+ * Finance-approved expenses not yet credited are still pending for the employee.
+ */
+export function isExpenseCompleted(expense: ApprovalExpense): boolean {
+  if (expense.status === 'Rejected') return true
+  return expense.status === 'Approved' && expense.payout?.status === CREDITED_TO_BANK
 }
 
 export const FINANCE_STAGE_STATUSES = ['Executive Manager Approved', 'Manager Approved']
@@ -82,10 +101,19 @@ export function expenseStatusText(expense: ApprovalExpense): string {
     case 'Executive Manager Approved':
     case 'Manager Approved': {
       const by = firstLevelApprovedBy(expense)?.name
-      return `Approved by ${by || 'first-level approver'}, Pending at Finance Manager`
+      return by ? `Approved by ${by}, Pending at Finance Manager` : 'Pending at Finance Manager'
     }
-    case 'Approved':
-      return expense.approvedBy?.name ? `Approved by Finance (${expense.approvedBy.name})` : 'Approved'
+    case 'Approved': {
+      const payout = expense.payout || {}
+      if (payout.status === CREDITED_TO_BANK) {
+        const on = indianDate(payout.updatedAt)
+        return `Amount Credited to Bank${on ? ` on ${on}` : ''}`
+      }
+      if (payout.status === 'Not Credited') {
+        return `Approved by Finance Manager, not credited to bank${payout.remark ? `: ${payout.remark}` : ''}`
+      }
+      return 'Approved by Finance Manager, Pending bank credit'
+    }
     case 'Rejected': {
       const by = expense.rejectedBy?.name
       const stage = expense.rejectedStage === 'finance' ? 'Finance' : expense.rejectedStage === 'first' ? 'first-level approver' : ''
@@ -156,6 +184,11 @@ export function approvalHistory(expense: ApprovalExpense): ApprovalHistoryEntry[
       amount: expense.approvedAmount,
       remarks: expense.financeRemarks,
     })
+  }
+  if (expense.status === 'Approved' && expense.payout?.status === CREDITED_TO_BANK) {
+    entries.push({ step: 'Amount Credited to Bank', at: expense.payout.updatedAt || undefined, amount: expense.approvedAmount })
+  } else if (expense.status === 'Approved' && expense.payout?.status === 'Not Credited') {
+    entries.push({ step: 'Not credited to bank', at: expense.payout.updatedAt || undefined, remarks: expense.payout.remark })
   }
   if (expense.status === 'Rejected') {
     entries.push({

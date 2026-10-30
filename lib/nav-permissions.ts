@@ -79,6 +79,7 @@ export const HREF_PERMISSION_MAP: Record<string, string> = {
   '/dashboard/finance/payouts': 'finance.payouts.page.view',
   '/dashboard/finance/bank-sheet': 'finance.bank_sheet.page.view',
   '/dashboard/finance/credit-status': 'finance.credit_status.page.view',
+  '/dashboard/finance/salary-sheet': 'finance.salary_sheet.page.view',
   '/dashboard/expenses/finance-pending': 'expenses.finance_pending.page.view',
   '/dashboard/expenses/create': 'expenses.create.page.view',
   '/dashboard/expenses/my': 'expenses.my.page.view',

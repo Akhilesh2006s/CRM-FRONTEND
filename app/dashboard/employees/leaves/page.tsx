@@ -6,6 +6,8 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { apiRequest } from '@/lib/api'
 import { formatEmployeeCode } from '@/lib/employeeCode'
+import { leaveDayCount } from '@/lib/leaveTypes'
+import { LeaveDayTypeBadge } from '@/components/leaves/LeaveDayTypeBadge'
 
 type Leave = {
   _id: string
@@ -15,6 +17,8 @@ type Leave = {
   startDate: string
   endDate: string
   days: number
+  dayType?: string
+  halfDaySession?: string | null
 }
 
 export default function PendingLeavesPage() {
@@ -67,7 +71,10 @@ export default function PendingLeavesPage() {
                 <td className="py-2 px-3">{l.reason || '-'}</td>
                 <td className="py-2 px-3 text-center">{new Date(l.startDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
                 <td className="py-2 px-3 text-center">{new Date(l.endDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
-                <td className="py-2 px-3 text-center">{l.days}</td>
+                <td className="py-2 px-3 text-center">
+                  <div>{leaveDayCount(l)}</div>
+                  <LeaveDayTypeBadge leave={l} showDays={false} />
+                </td>
                 <td className="py-2 px-3 text-center">{l.status}</td>
               </tr>
             ))}

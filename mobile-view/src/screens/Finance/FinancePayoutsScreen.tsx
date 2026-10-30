@@ -11,14 +11,16 @@ import { formatDate } from '../../utils/dateFormat';
 import { showAlert } from '../../utils/showAlert';
 
 /**
- * Finance Executive: Finance-approved expenses and advances, the bank sheet and bank credit status.
- * One screen, three menu entries (FinancePayouts / FinanceBankSheet / FinanceCreditStatus).
+ * Finance Executive: Finance-approved expenses and advances, the bank sheet, bank credit status and
+ * the salary sheet. One screen, four menu entries (FinancePayouts / FinanceBankSheet /
+ * FinanceCreditStatus / FinanceSalarySheet).
  */
-type Mode = 'list' | 'bank-sheet' | 'credit-status';
+type Mode = 'list' | 'bank-sheet' | 'credit-status' | 'salary-sheet';
+type SalaryMonth = { month: string; label: string; employees: number; total: number };
 
 type PayoutEmployee = { _id: string; name: string; empCode: string; role: string; zone: string; hasBankDetails: boolean; bankName: string; ifsc: string; accountLast4: string };
 type PayoutItem = {
-  kind: 'expense' | 'advance';
+  kind: 'expense' | 'advance' | 'salary';
   id: string;
   employee: PayoutEmployee | null;
   label: string;
@@ -33,12 +35,19 @@ type PayoutsResponse = { items: PayoutItem[]; groups?: PayoutGroup[]; summary: {
 const CREDITED = 'Amount Credited to Bank';
 const NOT_CREDITED = 'Not Credited';
 const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-const MODE_BY_SCREEN: Record<string, Mode> = { FinancePayouts: 'list', FinanceBankSheet: 'bank-sheet', FinanceCreditStatus: 'credit-status' };
+const MODE_BY_SCREEN: Record<string, Mode> = {
+  FinancePayouts: 'list',
+  FinanceBankSheet: 'bank-sheet',
+  FinanceCreditStatus: 'credit-status',
+  FinanceSalarySheet: 'salary-sheet',
+};
 const TITLES: Record<Mode, { title: string; subtitle: string; status: string }> = {
   list: { title: 'Approved Expenses & Advances', subtitle: 'Approved by the Finance Manager', status: 'all' },
   'bank-sheet': { title: 'Generate Bank Sheet', subtitle: 'One row per employee, bank payment format', status: 'open' },
   'credit-status': { title: 'Bank Credit Status', subtitle: 'Tick credited employees; remark required for the rest', status: 'Pending' },
+  'salary-sheet': { title: 'Salary Sheet', subtitle: 'Net salaries of a finalized payroll month, bank payment format', status: 'open' },
 };
+const KIND_LABELS: Record<PayoutItem['kind'], string> = { expense: 'Expense', advance: 'Advance', salary: 'Salary' };
 
 const money = (n: number) => `₹${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const keyOf = (g: PayoutGroup) => g.employee?._id || g.items[0]?.id || '';
@@ -47,8 +56,9 @@ const todayYmd = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
-const narrationFor = (type: string) => {
+const narrationFor = (type: string, salaryMonthLabel = '') => {
   const month = new Date().toLocaleString('en-GB', { month: 'long', year: 'numeric' });
+  if (type === 'salary') return `${salaryMonthLabel || month} Sal`;
   return type === 'advance' ? `${month} Advance` : type === 'expense' ? `${month} Expenses` : `${month} Exp & Adv`;
 };
 
@@ -121,7 +131,10 @@ function StatusPill({ status }: { status: string }) {
 export default function FinancePayoutsScreen({ route }: any) {
   const mode: Mode = MODE_BY_SCREEN[route?.name] || 'list';
   const copy = TITLES[mode];
-  const [type, setType] = useState('all');
+  const isSheet = mode === 'bank-sheet' || mode === 'salary-sheet';
+  const [type, setType] = useState(mode === 'salary-sheet' ? 'salary' : 'all');
+  const [salaryMonths, setSalaryMonths] = useState<SalaryMonth[]>([]);
+  const [month, setMonth] = useState('');
   const [status, setStatus] = useState(copy.status);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -138,6 +151,7 @@ export default function FinancePayoutsScreen({ route }: any) {
   const query = useMemo(() => {
     const p: string[] = [];
     if (type !== 'all') p.push(`type=${type}`);
+    if (type === 'salary' && month) p.push(`month=${month}`);
     if (status !== 'all') p.push(`status=${encodeURIComponent(status)}`);
     if (from) p.push(`from=${from}`);
     if (to) p.push(`to=${to}`);
@@ -145,9 +159,15 @@ export default function FinancePayoutsScreen({ route }: any) {
     if (mode !== 'list') p.push('group=employee');
     if (mode === 'credit-status') p.push('inSheet=1');
     return p.join('&');
-  }, [type, status, from, to, q, mode]);
+  }, [type, month, status, from, to, q, mode]);
 
   const load = useCallback(async () => {
+    // The salary sheet waits for its month.
+    if (mode === 'salary-sheet' && !month) {
+      setData(null);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const res: PayoutsResponse = await apiService.get(`/finance/payouts?${query}`);
@@ -160,15 +180,26 @@ export default function FinancePayoutsScreen({ route }: any) {
     } finally {
       setLoading(false);
     }
-  }, [query]);
+  }, [query, mode, month]);
 
   useEffect(() => {
     load();
   }, [load]);
 
   useEffect(() => {
-    if (mode === 'bank-sheet') setNarration(narrationFor(type));
-  }, [type, mode]);
+    if (mode !== 'salary-sheet') return;
+    apiService
+      .get('/finance/salary-months')
+      .then((list: SalaryMonth[]) => {
+        setSalaryMonths(list || []);
+        setMonth((prev) => prev || list?.[0]?.month || '');
+      })
+      .catch(() => setSalaryMonths([]));
+  }, [mode]);
+
+  useEffect(() => {
+    if (isSheet) setNarration(narrationFor(type, salaryMonths.find((m) => m.month === month)?.label));
+  }, [type, isSheet, month, salaryMonths]);
 
   const groups = data?.groups || [];
   const chosen = groups.filter((g) => selected.has(keyOf(g)));
@@ -185,7 +216,7 @@ export default function FinancePayoutsScreen({ route }: any) {
     setBusy(true);
     try {
       const p = query.split('&').filter((x) => x && x !== 'group=employee').join('&');
-      await downloadExcel(`/finance/payouts/export?${p}`, `Approved_Expenses_Advances_${todayYmd()}.xlsx`);
+      await downloadExcel(`/finance/payouts/export?${p}`, `${type === 'salary' ? 'Salary_Payouts' : 'Approved_Expenses_Advances'}_${todayYmd()}.xlsx`);
     } catch (e) {
       showAlert('Download failed', errorText(e));
     } finally {
@@ -248,14 +279,24 @@ export default function FinancePayoutsScreen({ route }: any) {
   return (
     <ScreenShell title={copy.title} subtitle={copy.subtitle} refreshing={loading} onRefresh={load}>
       <View style={styles.card}>
-        <WebSelect label="Type" value={type} onValueChange={setType} items={[
-          { label: 'Expenses & Advances', value: 'all' },
-          { label: 'Expenses', value: 'expense' },
-          { label: 'Advances', value: 'advance' },
-        ]} />
+        {mode === 'salary-sheet' ? (
+          <WebSelect
+            label="Payroll month"
+            value={month}
+            onValueChange={setMonth}
+            items={salaryMonths.map((m) => ({ label: `${m.label} · ${m.employees} employees`, value: m.month }))}
+          />
+        ) : (
+          <WebSelect label="Type" value={type} onValueChange={setType} items={[
+            { label: 'Expenses & Advances', value: 'all' },
+            { label: 'Expenses', value: 'expense' },
+            { label: 'Advances', value: 'advance' },
+            ...(mode !== 'bank-sheet' ? [{ label: 'Salary', value: 'salary' }] : []),
+          ]} />
+        )}
         {mode !== 'credit-status' ? <WebSelect label="Bank status" value={status} onValueChange={setStatus} items={statusItems} /> : null}
-        <DateField placeholder="Approved from" value={from} onChange={setFrom} />
-        <DateField placeholder="Approved to" value={to} onChange={setTo} />
+        {mode !== 'salary-sheet' ? <DateField placeholder="Approved from" value={from} onChange={setFrom} /> : null}
+        {mode !== 'salary-sheet' ? <DateField placeholder="Approved to" value={to} onChange={setTo} /> : null}
         <WebLabel>Employee</WebLabel>
         <WebInput value={q} onChangeText={setQ} placeholder="Name or Emp ID" />
         <View style={styles.row}>
@@ -265,7 +306,7 @@ export default function FinancePayoutsScreen({ route }: any) {
         {data ? <Text style={styles.muted}>{data.summary.count} item(s) · {money(data.summary.total)}</Text> : null}
       </View>
 
-      {mode === 'bank-sheet' ? (
+      {isSheet ? (
         <View style={styles.card}>
           <DateField placeholder="Payment date *" value={paymentDate} onChange={setPaymentDate} />
           <WebLabel>Narration (Consultancy column) *</WebLabel>
@@ -283,7 +324,13 @@ export default function FinancePayoutsScreen({ route }: any) {
 
       {!loading && !data?.items.length ? (
         <Text style={styles.empty}>
-          {mode === 'credit-status' ? 'No employees are waiting for a credit update. Generate a bank sheet first.' : 'No Finance-approved expenses or advances match these filters.'}
+          {mode === 'credit-status'
+            ? 'No employees are waiting for a credit update. Generate a bank sheet first.'
+            : mode === 'salary-sheet'
+              ? salaryMonths.length
+                ? 'No salaries to pay for this month with these filters.'
+                : 'No finalized payroll yet. HR finalizes the month in Payroll first.'
+              : 'No Finance-approved expenses or advances match these filters.'}
         </Text>
       ) : null}
 
@@ -295,7 +342,7 @@ export default function FinancePayoutsScreen({ route }: any) {
                 <Text style={styles.amount}>{money(i.approvedAmount)}</Text>
               </View>
               <Text style={styles.muted}>{[i.employee?.empCode, i.employee?.role, i.employee?.zone].filter(Boolean).join(' · ')}</Text>
-              <Text style={styles.line}>{i.kind === 'expense' ? 'Expense' : 'Advance'} · {i.label} · {formatDate(i.date) || '-'}</Text>
+              <Text style={styles.line}>{KIND_LABELS[i.kind]} · {i.label}{i.kind === 'salary' ? '' : ` · ${formatDate(i.date) || '-'}`}</Text>
               <Text style={styles.muted}>Finance approved {formatDate(i.approvedAt) || '-'}</Text>
               <StatusPill status={i.payout.status} />
               {i.payout.remark ? <Text style={styles.remark}>{i.payout.remark}</Text> : null}
@@ -304,7 +351,7 @@ export default function FinancePayoutsScreen({ route }: any) {
         : groups.map((g) => {
             const key = keyOf(g);
             const noBank = !g.employee?.hasBankDetails;
-            const disabled = mode === 'bank-sheet' && noBank;
+            const disabled = isSheet && noBank;
             const on = selected.has(key);
             return (
               <View key={key} style={[styles.card, on && styles.cardOn, disabled && styles.cardOff]}>
@@ -320,9 +367,9 @@ export default function FinancePayoutsScreen({ route }: any) {
                     <Text style={styles.muted}>{g.employee?.bankName || g.employee?.ifsc} · A/c ••••{g.employee?.accountLast4} · {g.employee?.ifsc}</Text>
                   )}
                   {g.items.map((i) => (
-                    <Text key={`${i.kind}:${i.id}`} style={styles.line}>• {i.label} · {formatDate(i.date) || '-'} · {money(i.approvedAmount)}</Text>
+                    <Text key={`${i.kind}:${i.id}`} style={styles.line}>• {i.label}{i.kind === 'salary' ? '' : ` · ${formatDate(i.date) || '-'}`} · {money(i.approvedAmount)}</Text>
                   ))}
-                  {mode === 'bank-sheet' ? (
+                  {isSheet ? (
                     <View style={styles.pills}>{[...new Set(g.items.map((i) => i.payout.status))].map((s) => <StatusPill key={s} status={s} />)}</View>
                   ) : (
                     <Text style={styles.muted}>Sent to bank {formatDate(g.items.map((i) => i.payout.bankSheetAt).filter(Boolean).sort().pop() || null) || '-'}</Text>

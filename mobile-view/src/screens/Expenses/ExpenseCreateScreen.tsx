@@ -72,6 +72,8 @@ type DateField = 'date' | 'checkInDate' | 'checkOutDate';
 
 export default function ExpenseCreateScreen({ navigation }: any) {
   const [rates, setRates] = useState<TravelPerKmRates>({});
+  // Travel modes that need a bill / ticket upload (Super Admin → Expense Policy).
+  const [ticketModes, setTicketModes] = useState<string[] | null>(null);
   const [form, setForm] = useState(emptyForm());
   const [billFile, setBillFile] = useState<PickedFile | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -83,7 +85,10 @@ export default function ExpenseCreateScreen({ navigation }: any) {
   useEffect(() => {
     apiService
       .get('/expenses/policy')
-      .then((policy: TravelPerKmRates) => setRates(policy || {}))
+      .then((policy: TravelPerKmRates & { requireTicketForModes?: string[] }) => {
+        setRates(policy || {});
+        setTicketModes(Array.isArray(policy?.requireTicketForModes) ? policy.requireTicketForModes : []);
+      })
       .catch(() => setRates({}));
   }, []);
 
@@ -93,8 +98,12 @@ export default function ExpenseCreateScreen({ navigation }: any) {
   const amountLocked = isTravelType && isPerKmMode(form.transportType);
   const autoAmount = amountLocked ? calcTravelAmount(form.transportType, Number(form.approxKms) || 0, rates) : '';
   const amountValue = amountLocked ? autoAmount : form.amount;
-  // Auto rickshaws give no bill: bill and receipt number are optional for Auto travel.
-  const billOptional = isTravelType && form.transportType === 'Auto';
+  // Travel needs a bill / ticket only in the modes the expense policy lists; other types always need a bill.
+  const billOptional =
+    isTravelType &&
+    !!form.transportType &&
+    ticketModes !== null &&
+    !ticketModes.some((m) => m.trim().toLowerCase() === form.transportType.toLowerCase());
 
   const update = (patch: Partial<ReturnType<typeof emptyForm>>) => {
     setForm((prev) => ({ ...prev, ...patch }));
@@ -393,7 +402,7 @@ export default function ExpenseCreateScreen({ navigation }: any) {
           />
 
           <View style={styles.fieldContainer}>
-            <Text style={styles.label}>{`Upload Bill${billOptional ? ' (optional for Auto)' : ' *'}`}</Text>
+            <Text style={styles.label}>{`${isTravelType ? 'Upload Bill / Ticket' : 'Upload Bill'}${billOptional ? ` (optional for ${form.transportType})` : ' *'}`}</Text>
             <View style={styles.uploadRow}>
               <TouchableOpacity style={[styles.uploadButton, errStyle('bill')]} onPress={pickPhoto} disabled={submitting}>
                 <Text style={styles.uploadButtonText}>Choose photo</Text>

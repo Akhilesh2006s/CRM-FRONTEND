@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { leaveTypeLabel } from '@/lib/leaveTypes'
+import { LeaveDayTypeBadge } from '@/components/leaves/LeaveDayTypeBadge'
 import { formatEmployeeCode } from '@/lib/employeeCode'
 import {
   LeaveApprovalStatus,
@@ -39,6 +40,9 @@ type Leave = LeaveApprovalFields & {
   endDate: string
   status: string
   leaveType?: string
+  dayType?: string
+  halfDaySession?: string | null
+  days?: number
 }
 
 export default function AdminPendingLeavesPage() {
@@ -196,7 +200,10 @@ export default function AdminPendingLeavesPage() {
                 <tr key={l._id} className="border-b last:border-0">
                   <td className="py-2 px-3">{formatEmployeeCode(typeof l.employeeId === 'object' && l.employeeId ? l.employeeId.empCode : undefined)}</td>
                   <td className="py-2 px-3">{getEmployeeName(l)}</td>
-                  <td className="py-2 px-3">{leaveTypeLabel(l.leaveType)}</td>
+                  <td className="py-2 px-3">
+                    <div>{leaveTypeLabel(l.leaveType)}</div>
+                    <LeaveDayTypeBadge leave={l} />
+                  </td>
                   <td className="py-2 px-3 text-center">
                     {new Date(l.startDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                   </td>

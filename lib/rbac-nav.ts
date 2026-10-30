@@ -192,6 +192,7 @@ export const RBAC_NAV_MODULES: RbacNavModule[] = [
       { label: 'Approved Expenses & Advances', href: '/dashboard/finance/payouts' },
       { label: 'Generate Bank Sheet', href: '/dashboard/finance/bank-sheet' },
       { label: 'Bank Credit Status', href: '/dashboard/finance/credit-status' },
+      { label: 'Salary Sheet', href: '/dashboard/finance/salary-sheet' },
     ],
   },
   {

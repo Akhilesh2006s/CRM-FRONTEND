@@ -12,6 +12,7 @@ import { useAuth } from '../../context/AuthContext';
 import AttendanceCard from '../../components/AttendanceCard';
 import TripCard from '../../components/TripCard';
 import PendingAdvanceApprovalsCard from '../../components/PendingAdvanceApprovalsCard';
+import { BirthdayWishCard, EmployeeBirthdaysCard } from '../../components/BirthdayCards';
 import { Ionicons } from '@expo/vector-icons';
 import StatCard from '../../components/dashboard/StatCard';
 import SimpleBarChart from '../../components/dashboard/SimpleBarChart';
@@ -197,17 +198,25 @@ export default function DashboardScreen({ navigation }: { navigation?: any }) {
   }
 
   if (flags.isManager && user?._id) {
-    return <ProductManagerScreen embedded managerId={user._id} navigation={navigation} />;
+    return (
+      <View style={styles.container}>
+        <BirthdayWishCard role={user?.role} style={styles.wishWrap} />
+        <ProductManagerScreen embedded managerId={user._id} navigation={navigation} />
+      </View>
+    );
   }
 
   if (hierarchyLevel && user?._id) {
     return (
-      <HierarchyDashboardScreen
-        embedded
-        level={hierarchyLevel}
-        personId={user._id}
-        navigation={navigation}
-      />
+      <View style={styles.container}>
+        <BirthdayWishCard role={user?.role} style={styles.wishWrap} />
+        <HierarchyDashboardScreen
+          embedded
+          level={hierarchyLevel}
+          personId={user._id}
+          navigation={navigation}
+        />
+      </View>
     );
   }
 
@@ -234,6 +243,8 @@ export default function DashboardScreen({ navigation }: { navigation?: any }) {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           showsVerticalScrollIndicator={false}
         >
+          <BirthdayWishCard role={user?.role} />
+          <EmployeeBirthdaysCard role={user?.role} />
           <PendingAdvanceApprovalsCard />
           {showAttendance ? (
             <View style={styles.block}>
@@ -451,6 +462,7 @@ const styles = StyleSheet.create({
   loadingWrap: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scroll: { padding: 16, paddingBottom: 48 },
   block: { marginBottom: 8 },
+  wishWrap: { marginHorizontal: 16, marginTop: 12, marginBottom: 4 },
   leaveRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   quickRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
   quickCard: {

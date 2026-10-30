@@ -163,6 +163,10 @@ export default function ManagerExpenseUpdatePage() {
     if (form.decision === 'approve') {
       const n = parsedAmount(expense)
       if (n === null || Number.isNaN(n) || n < 0) return 'enter a valid approval amount'
+      // Approvers may reduce an amount, never raise it above the claim / the first-level amount.
+      if (n > startingAmount(expense) + 0.001) {
+        return `approved amount cannot be more than Rs. ${startingAmount(expense).toFixed(2)} (${expenseStage(expense) === 'finance' ? 'approved at first level' : 'claimed by the employee'})`
+      }
       if (Math.abs(n - startingAmount(expense)) > 0.001 && !form.remarks.trim()) return 'remarks are required when you change the amount'
     }
     return null

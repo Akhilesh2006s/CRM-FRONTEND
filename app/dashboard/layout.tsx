@@ -9,6 +9,7 @@ import { SidebarProvider } from "@/contexts/SidebarContext"
 import { PermissionsProvider } from "@/components/permissions/PermissionsProvider"
 import { RouteGuard } from "@/components/permissions/RouteGuard"
 import { PendingAdvanceApprovals } from "@/components/advances/PendingAdvanceApprovals"
+import { BirthdayWish } from "@/components/dashboard/BirthdayWish"
 
 function MainContent({ children }: { children: React.ReactNode }) {
   return (
@@ -19,6 +20,7 @@ function MainContent({ children }: { children: React.ReactNode }) {
       <RequireAuth>
         <RouteGuard>
           <div className="w-full min-w-0">
+            <BirthdayWish />
             <PendingAdvanceApprovals />
             {children}
           </div>

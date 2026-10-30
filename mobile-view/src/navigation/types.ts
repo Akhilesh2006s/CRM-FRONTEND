@@ -38,6 +38,7 @@ export type RootStackParamList = {
   // Employees
   EmployeeNew: undefined;
   EmployeeEdit: { id: string };
+  EmployeeDetails: { id: string };
   EmployeesActive: undefined;
   EmployeesInactive: undefined;
   EmployeesLeaves: undefined;
@@ -121,6 +122,7 @@ export type RootStackParamList = {
   FinancePayouts: undefined;
   FinanceBankSheet: undefined;
   FinanceCreditStatus: undefined;
+  FinanceSalarySheet: undefined;
   EmployeesSalary: undefined;
   EmployeesHistory: undefined;
   EmployeesMoveSchools: undefined;

@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Plus, Eye } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { type ApprovalExpense, approvalHistory, expenseStatusColor, expenseStatusText } from '@/lib/expenseApproval'
+import { type ApprovalExpense, approvalHistory, expenseStatusColor, expenseStatusText, isExpenseCompleted } from '@/lib/expenseApproval'
 import { ExpenseBillButton } from '@/components/expenses/ExpenseBillViewer'
 
 type Expense = ApprovalExpense & {
@@ -35,8 +35,7 @@ type Expense = ApprovalExpense & {
   checkOutDate?: string
 }
 
-/** Approved and rejected expenses are finished; everything else is still moving. */
-const COMPLETED_STATUSES = new Set(['Approved', 'Rejected'])
+/** Completed = rejected, or approved by Finance and credited to the bank; everything else is still moving. */
 type View = 'pending' | 'completed'
 
 const formatDate = (dateString?: string) => {
@@ -137,7 +136,7 @@ function MyExpensesList() {
     })()
   }, [])
 
-  const shown = expenses.filter((e) => COMPLETED_STATUSES.has(e.status) === (view === 'completed'))
+  const shown = expenses.filter((e) => isExpenseCompleted(e) === (view === 'completed'))
 
   return (
     <div className="space-y-6">
@@ -157,7 +156,7 @@ function MyExpensesList() {
         {(['pending', 'completed'] as View[]).map((v) => (
           <Link key={v} href={`/dashboard/expenses/my?view=${v}`}>
             <Button variant={view === v ? 'default' : 'outline'} size="sm">
-              {v === 'pending' ? 'Pending' : 'Completed'} ({expenses.filter((e) => COMPLETED_STATUSES.has(e.status) === (v === 'completed')).length})
+              {v === 'pending' ? 'Pending' : 'Completed'} ({expenses.filter((e) => isExpenseCompleted(e) === (v === 'completed')).length})
             </Button>
           </Link>
         ))}
@@ -185,7 +184,7 @@ function MyExpensesList() {
               ) : shown.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8 text-neutral-500">
-                    {view === 'completed' ? 'No approved or rejected expenses yet.' : 'No pending expenses.'}
+                    {view === 'completed' ? 'No credited or rejected expenses yet.' : 'No pending expenses.'}
                   </TableCell>
                 </TableRow>
               ) : (

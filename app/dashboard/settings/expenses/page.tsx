@@ -11,6 +11,9 @@ import { getCurrentUser } from '@/lib/auth'
 import { isSuperAdmin } from '@/lib/permissions'
 import { DEFAULT_TRAVEL_PER_KM_RATES } from '@/lib/expenseTravelRates'
 
+/** Travel modes on the Create Expense form. */
+const TRAVEL_MODES = ['Bike', 'Car', 'Bus', 'Train', 'Flight', 'Auto']
+
 type ExpensePolicyForm = {
   skipFinanceStage: boolean
   foodBillMandatoryAbove: number
@@ -23,7 +26,7 @@ export default function ExpensePolicySettingsPage() {
   const [form, setForm] = useState<ExpensePolicyForm>({
     skipFinanceStage: false,
     foodBillMandatoryAbove: 500,
-    requireTicketForModes: 'Bus, Train, Flight, Other',
+    requireTicketForModes: 'Bus, Train, Flight',
     bikeRatePerKm: String(DEFAULT_TRAVEL_PER_KM_RATES.bikeRatePerKm),
     carRatePerKm: String(DEFAULT_TRAVEL_PER_KM_RATES.carRatePerKm),
   })
@@ -117,12 +120,28 @@ export default function ExpensePolicySettingsPage() {
       </div>
 
       <div>
-        <Label>Travel modes requiring ticket upload (comma-separated)</Label>
-        <Input
-          className="mt-1 bg-white"
-          value={form.requireTicketForModes}
-          onChange={(e) => setForm({ ...form, requireTicketForModes: e.target.value })}
-        />
+        <Label>Travel modes requiring bill / ticket upload</Label>
+        <p className="text-xs text-neutral-500">Employees must upload a bill or ticket for these modes when they create a travel expense.</p>
+        <div className="mt-2 flex flex-wrap gap-4">
+          {TRAVEL_MODES.map((mode) => {
+            const selected = form.requireTicketForModes.split(',').map((s) => s.trim()).filter(Boolean)
+            const checked = selected.some((s) => s.toLowerCase() === mode.toLowerCase())
+            return (
+              <label key={mode} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={checked}
+                  onChange={(e) => {
+                    const rest = selected.filter((s) => s.toLowerCase() !== mode.toLowerCase())
+                    setForm({ ...form, requireTicketForModes: (e.target.checked ? [...rest, mode] : rest).join(', ') })
+                  }}
+                />
+                {mode}
+              </label>
+            )
+          })}
+        </div>
       </div>
 
       <div className="rounded-lg border p-4 space-y-3">

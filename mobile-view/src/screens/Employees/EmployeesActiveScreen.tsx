@@ -123,6 +123,8 @@ export default function EmployeesActiveScreen({ navigation }: any) {
   };
 
   const isCoordinator = user?.role === 'Coordinator' || user?.role === 'Senior Coordinator';
+  // HR Executives have view-only access to employee details (backend PUT rule).
+  const isHrExecutive = user?.role === 'HR Executive';
   // Only Admin / Super Admin may clear a mobile device binding (backend route rule).
   const canResetDevice = user?.role === 'Admin' || user?.role === 'Super Admin';
   const filtered = items.filter(
@@ -183,15 +185,25 @@ export default function EmployeesActiveScreen({ navigation }: any) {
                 <InfoRow label="Cluster" value={e.cluster || '-'} />
               </View>
 
+              <View style={styles.actions}>
+                <TouchableOpacity
+                  style={styles.viewButton}
+                  onPress={() => navigation.navigate('EmployeeDetails', { id: e._id })}
+                >
+                  <Text style={styles.viewButtonText}>View Details</Text>
+                </TouchableOpacity>
+              </View>
               {!isCoordinator && (
                 <View style={styles.actions}>
-                  <TouchableOpacity
-                    style={styles.editButton}
-                    onPress={() => navigation.navigate('EmployeeEdit', { id: e._id })}
-                    disabled={busyId === e._id}
-                  >
-                    <Text style={styles.editButtonText}>Edit</Text>
-                  </TouchableOpacity>
+                  {!isHrExecutive ? (
+                    <TouchableOpacity
+                      style={styles.editButton}
+                      onPress={() => navigation.navigate('EmployeeEdit', { id: e._id })}
+                      disabled={busyId === e._id}
+                    >
+                      <Text style={styles.editButtonText}>Edit</Text>
+                    </TouchableOpacity>
+                  ) : null}
                   <TouchableOpacity
                     style={styles.resetButton}
                     onPress={() => resetPassword(e._id, e.name)}
@@ -323,6 +335,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
+  },
+  viewButton: {
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: colors.primary,
+  },
+  viewButtonText: {
+    ...typography.label.medium,
+    color: colors.textLight,
+    fontWeight: '600',
   },
   editButton: {
     borderWidth: 1,

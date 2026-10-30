@@ -52,6 +52,7 @@ import ClientEditPOScreen from './src/screens/Clients/ClientEditPOScreen';
 import DCEmpScreen from './src/screens/DC/DCEmpScreen';
 import EmployeeNewScreen from './src/screens/Employees/EmployeeNewScreen';
 import EmployeeEditScreen from './src/screens/Employees/EmployeeEditScreen';
+import EmployeeDetailsScreen from './src/screens/Employees/EmployeeDetailsScreen';
 import EmployeesActiveScreen from './src/screens/Employees/EmployeesActiveScreen';
 import EmployeesInactiveScreen from './src/screens/Employees/EmployeesInactiveScreen';
 import EmployeesLeavesScreen from './src/screens/Employees/EmployeesLeavesScreen';
@@ -300,6 +301,7 @@ function AuthenticatedStack() {
         {/* Employees */}
         <Stack.Screen name="EmployeeNew" component={EmployeeNewScreen} />
         <Stack.Screen name="EmployeeEdit" component={EmployeeEditScreen} />
+        <Stack.Screen name="EmployeeDetails" component={EmployeeDetailsScreen} />
         <Stack.Screen name="EmployeesZones" component={EmployeesZonesScreen} />
         <Stack.Screen name="EmployeesZonesClusters" component={EmployeesZonesClustersScreen} />
         <Stack.Screen name="EmployeesClusters" component={EmployeesClustersScreen} />
@@ -466,6 +468,7 @@ function AuthenticatedStack() {
         <Stack.Screen name="FinancePayouts" component={FinancePayoutsScreen} />
         <Stack.Screen name="FinanceBankSheet" component={FinancePayoutsScreen} />
         <Stack.Screen name="FinanceCreditStatus" component={FinancePayoutsScreen} />
+        <Stack.Screen name="FinanceSalarySheet" component={FinancePayoutsScreen} />
         <Stack.Screen name="EmployeesSalary" component={SalaryScreen} />
         <Stack.Screen name="EmployeesHistory" component={EmployeeHistoryScreen} />
         <Stack.Screen name="EmployeesMoveSchools" component={MoveSchoolsScreen} />

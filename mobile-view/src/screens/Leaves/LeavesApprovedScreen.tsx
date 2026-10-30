@@ -6,7 +6,7 @@ import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
-import { leaveTypeLabel } from '../../lib/leaveTypes';
+import { leaveTypeLabel, leaveDayTypeLabel, leaveDayCount, formatLeaveDays } from '../../lib/leaveTypes';
 import LeaveApprovalStatus from '../../components/leaves/LeaveApprovalStatus';
 
 export default function LeavesApprovedScreen({ navigation }: any) {
@@ -82,7 +82,9 @@ export default function LeavesApprovedScreen({ navigation }: any) {
                 </View>
                 <View style={styles.infoRow}>
                   <Text style={styles.infoLabel}>Days:</Text>
-                  <Text style={styles.infoValue}>{leave.days || '-'}</Text>
+                  <Text style={styles.infoValue}>
+                    {formatLeaveDays(leaveDayCount(leave))} ({leaveDayTypeLabel(leave)})
+                  </Text>
                 </View>
                 {leave.reason && (
                   <View style={styles.infoRow}>

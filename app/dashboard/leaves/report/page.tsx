@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { leaveTypeLabel } from '@/lib/leaveTypes'
+import { LeaveDayTypeBadge } from '@/components/leaves/LeaveDayTypeBadge'
 import { formatEmployeeCode } from '@/lib/employeeCode'
 import { usePermissions } from '@/components/permissions/PermissionsProvider'
 import { LeaveApprovalStatus, type LeaveApprovalFields } from '@/components/leaves/LeaveApprovalStatus'
@@ -34,6 +35,9 @@ type Leave = LeaveApprovalFields & {
   endDate: string
   reason?: string
   leaveType?: string
+  dayType?: string
+  halfDaySession?: string | null
+  days?: number
   approvedBy?: { name?: string } | string
   approvedAt?: string
 }
@@ -295,7 +299,10 @@ export default function LeavesReportPage() {
                     <td className="py-2 px-3 align-top min-w-[220px]">
                       <LeaveApprovalStatus leave={l} />
                     </td>
-                    <td className="py-2 px-3">{leaveTypeLabel(l.leaveType)}</td>
+                    <td className="py-2 px-3">
+                    <div>{leaveTypeLabel(l.leaveType)}</div>
+                    <LeaveDayTypeBadge leave={l} />
+                  </td>
                     <td className="py-2 px-3 text-center">
                       {new Date(l.startDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                     </td>

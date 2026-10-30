@@ -122,7 +122,7 @@ export default function SettingsExpensesScreen() {
             onChangeText={setFoodBillMandatoryAbove}
           />
 
-          <WebLabel>Travel modes requiring ticket upload (comma-separated)</WebLabel>
+          <WebLabel>Travel modes requiring bill / ticket upload (comma-separated: Bike, Car, Bus, Train, Flight, Auto)</WebLabel>
           <WebInput
             style={styles.input}
             value={requireTicketForModes}

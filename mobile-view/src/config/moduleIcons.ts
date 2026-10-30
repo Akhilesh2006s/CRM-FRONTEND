@@ -34,6 +34,7 @@ export const SCREEN_ICONS: Record<string, { name: IonName; color: string }> = {
   FinancePayouts: { name: 'document-text-outline', color: '#0F766E' },
   FinanceBankSheet: { name: 'business-outline', color: '#0F766E' },
   FinanceCreditStatus: { name: 'checkmark-circle-outline', color: '#0F766E' },
+  FinanceSalarySheet: { name: 'cash-outline', color: '#0F766E' },
   LeadsList: { name: 'list-outline', color: '#2563EB' },
   LeadAdd: { name: 'person-add-outline', color: '#16A34A' },
   LeadAddNewSchool: { name: 'school-outline', color: '#2563EB' },
