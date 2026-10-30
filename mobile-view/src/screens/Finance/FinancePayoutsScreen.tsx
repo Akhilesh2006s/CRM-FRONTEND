@@ -26,6 +26,7 @@ type PayoutItem = {
   label: string;
   date: string | null;
   approvedAmount: number;
+  kilometres?: number | null;
   approvedAt: string | null;
   payout: { status: string; remark: string; bankSheetAt: string | null };
 };
@@ -270,7 +271,7 @@ export default function FinancePayoutsScreen({ route }: any) {
 
   const statusItems = [
     ...(mode === 'list' ? [{ label: 'All', value: 'all' }] : []),
-    { label: 'To pay (Pending + Not Credited)', value: 'open' },
+    { label: 'To pay (not yet sent + Not Credited)', value: 'open' },
     { label: 'Pending', value: 'Pending' },
     { label: NOT_CREDITED, value: NOT_CREDITED },
     ...(mode === 'list' ? [{ label: CREDITED, value: CREDITED }] : []),
@@ -343,7 +344,8 @@ export default function FinancePayoutsScreen({ route }: any) {
               </View>
               <Text style={styles.muted}>{[i.employee?.empCode, i.employee?.role, i.employee?.zone].filter(Boolean).join(' · ')}</Text>
               <Text style={styles.line}>{KIND_LABELS[i.kind]} · {i.label}{i.kind === 'salary' ? '' : ` · ${formatDate(i.date) || '-'}`}</Text>
-              <Text style={styles.muted}>Finance approved {formatDate(i.approvedAt) || '-'}</Text>
+              {i.kilometres ? <Text style={styles.muted}>Kilometer: {i.kilometres}</Text> : null}
+              <Text style={styles.muted}>Finance Approved Date: {formatDate(i.approvedAt) || '-'}</Text>
               <StatusPill status={i.payout.status} />
               {i.payout.remark ? <Text style={styles.remark}>{i.payout.remark}</Text> : null}
             </View>
@@ -357,7 +359,12 @@ export default function FinancePayoutsScreen({ route }: any) {
               <View key={key} style={[styles.card, on && styles.cardOn, disabled && styles.cardOff]}>
                 <TouchableOpacity disabled={disabled} onPress={() => toggle(key)} accessibilityRole="checkbox" accessibilityState={{ checked: on, disabled }}>
                   <View style={styles.rowBetween}>
-                    <Text style={styles.name}>{on ? '☑' : '☐'} {g.employee?.name || '-'}</Text>
+                    <View style={styles.nameRow}>
+                      <View style={[styles.checkbox, on && styles.checkboxOn, disabled && styles.checkboxOff]}>
+                        {on ? <Text style={styles.checkMark}>✓</Text> : null}
+                      </View>
+                      <Text style={styles.name}>{g.employee?.name || '-'}</Text>
+                    </View>
                     <Text style={styles.amount}>{money(g.total)}</Text>
                   </View>
                   <Text style={styles.muted}>{[g.employee?.empCode, g.employee?.role, g.employee?.zone].filter(Boolean).join(' · ')}</Text>
@@ -409,6 +416,11 @@ const styles = StyleSheet.create({
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   flex: { flex: 1 },
   name: { fontSize: 15, fontWeight: '700', color: colors.textPrimary, flexShrink: 1 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1 },
+  checkbox: { width: 24, height: 24, borderRadius: 5, borderWidth: 2, borderColor: '#4B5563', backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+  checkboxOn: { backgroundColor: '#059669', borderColor: '#059669' },
+  checkboxOff: { borderColor: '#D1D5DB', backgroundColor: '#F3F4F6' },
+  checkMark: { color: '#FFFFFF', fontSize: 15, fontWeight: '800', lineHeight: 18 },
   amount: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
   line: { fontSize: 13, color: colors.textPrimary },
   muted: { fontSize: 12, color: colors.textSecondary },

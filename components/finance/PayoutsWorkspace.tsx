@@ -39,6 +39,7 @@ type PayoutItem = {
   label: string
   date: string | null
   requestedAmount: number
+  kilometres?: number | null
   approvedAmount: number
   approvedAt: string | null
   payout: { status: string; remark: string; updatedAt: string | null; bankSheetAt: string | null }
@@ -58,6 +59,9 @@ const NOT_CREDITED = 'Not Credited'
 const ALL = 'all'
 
 const money = (n: number) => `₹${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+/** Large, high-contrast checkboxes: selecting employees is the main action on these pages. */
+const CHECKBOX_CLASS =
+  'size-5 border-2 border-neutral-600 bg-white data-[state=checked]:border-emerald-600 data-[state=checked]:bg-emerald-600 data-[state=checked]:text-white disabled:border-neutral-300 disabled:bg-neutral-100 disabled:opacity-100'
 const groupKey = (g: PayoutGroup) => g.employee?._id || g.items[0]?.id || ''
 
 const COPY: Record<PayoutsMode, { title: string; subtitle: string; defaultStatus: string }> = {
@@ -334,7 +338,7 @@ export default function PayoutsWorkspace({ mode }: { mode: PayoutsMode }) {
                 <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {mode === 'list' && <SelectItem value={ALL}>All</SelectItem>}
-                  <SelectItem value="open">To pay (Pending + Not Credited)</SelectItem>
+                  <SelectItem value="open">To pay (not yet sent + Not Credited)</SelectItem>
                   <SelectItem value="Pending">Pending</SelectItem>
                   <SelectItem value={NOT_CREDITED}>Not Credited</SelectItem>
                   {mode === 'list' && <SelectItem value={CREDITED}>{CREDITED}</SelectItem>}
@@ -440,8 +444,9 @@ export default function PayoutsWorkspace({ mode }: { mode: PayoutsMode }) {
                 <TableHead>Zone</TableHead>
                 <TableHead>Expense / Advance</TableHead>
                 <TableHead>Date</TableHead>
+                <TableHead className="text-right">Kilometer</TableHead>
                 <TableHead className="text-right">Approved</TableHead>
-                <TableHead>Approved On</TableHead>
+                <TableHead>Finance Approved Date</TableHead>
                 <TableHead>Bank Status</TableHead>
                 <TableHead>Remark</TableHead>
               </TableRow>
@@ -457,6 +462,7 @@ export default function PayoutsWorkspace({ mode }: { mode: PayoutsMode }) {
                   <TableCell>{i.employee?.zone || '-'}</TableCell>
                   <TableCell>{i.label}</TableCell>
                   <TableCell>{formatDate(i.date) || '-'}</TableCell>
+                  <TableCell className="text-right">{i.kilometres ?? '-'}</TableCell>
                   <TableCell className="text-right font-medium">{money(i.approvedAmount)}</TableCell>
                   <TableCell>{formatDate(i.approvedAt) || '-'}</TableCell>
                   <TableCell><StatusBadge status={i.payout.status} /></TableCell>
@@ -476,6 +482,7 @@ export default function PayoutsWorkspace({ mode }: { mode: PayoutsMode }) {
                       setSelected(on ? new Set(selectableGroups.map(groupKey)) : new Set())
                     }
                     aria-label={mode === 'credit-status' ? 'Mark all as credited' : 'Select all'}
+                    className={CHECKBOX_CLASS}
                   />
                 </TableHead>
                 <TableHead>Employee</TableHead>
@@ -501,6 +508,7 @@ export default function PayoutsWorkspace({ mode }: { mode: PayoutsMode }) {
                         disabled={disabled}
                         onCheckedChange={(on) => toggle(key, on === true)}
                         aria-label={`Select ${g.employee?.name || 'employee'}`}
+                        className={CHECKBOX_CLASS}
                       />
                     </TableCell>
                     <TableCell>
