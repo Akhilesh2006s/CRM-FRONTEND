@@ -50,7 +50,8 @@ export default function DCClientScreen({ navigation }: any) {
   const loadDCs = async () => {
     try {
       setLoading(true);
-      const data = await apiService.get('/dc/employee/my');
+      // My Clients checks every client's DCs on the server, so it can take longer than other lists.
+      const data = await apiService.get('/dc/employee/my', { timeout: 45000 });
       const dataArray = Array.isArray(data) ? data : [];
       setDcs(dataArray);
     } catch (error: any) {

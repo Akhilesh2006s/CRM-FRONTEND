@@ -84,7 +84,7 @@ export default function AttendanceRosterPage() {
       <div className="flex flex-wrap items-end gap-3">
         <div>
           <label htmlFor="day" className="text-sm font-medium text-neutral-700">Date</label>
-          <Input id="day" type="date" value={day} onChange={(e) => setDay(e.target.value)} className="mt-1 w-44 bg-white" />
+          <Input id="day" type="date" allowPastDates value={day} onChange={(e) => setDay(e.target.value)} className="mt-1 w-44 bg-white" />
         </div>
         <Button variant="outline" size="sm" onClick={() => setDay(todayIST())}>Today</Button>
         <Button variant="outline" size="sm" onClick={() => setDay('')}>All recent</Button>

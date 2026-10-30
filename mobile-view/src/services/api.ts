@@ -123,15 +123,19 @@ class ApiService {
     return `Cannot connect to production API (${this.baseURL}). Check internet connection and try again.`;
   }
 
-  async get(endpoint: string) {
+  async get(endpoint: string, { timeout = 15000 }: { timeout?: number } = {}) {
     try {
       const headers = await this.getHeaders();
       const response = await axios.get(`${this.baseURL}${endpoint}`, {
         headers,
-        timeout: 15000,
+        timeout,
       });
       return response.data;
     } catch (error: any) {
+      // The server was reached but did not answer in time: not a connection problem.
+      if (error.code === 'ECONNABORTED' && error.message?.includes('timeout')) {
+        throw new Error('The server is taking too long to respond. Pull down to try again.');
+      }
       if (
         error.code === 'ECONNREFUSED' ||
         error.code === 'ETIMEDOUT' ||
