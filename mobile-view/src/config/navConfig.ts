@@ -199,8 +199,29 @@ function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
         items: [{ label: 'Executives', screen: 'ExecutiveManagerExecutives' }],
       },
       {
+        // Same day-to-day DC, client and lead work as the BDEs they supervise (web menu).
+        title: 'DC',
+        items: [
+          { label: 'Create Sale', screen: 'DCCreateSale' },
+          { label: 'Emp DC', screen: 'DCEmp' },
+        ],
+      },
+      {
         title: 'Clients',
-        items: [{ label: 'PO Edit Request', screen: 'ClientsClosedSales' }],
+        items: [
+          { label: 'My Clients', screen: 'DCClient' },
+          { label: 'Renewal', screen: 'LeadsRenewalList' },
+          { label: 'Term-Wise DC', screen: 'DCTermWise' },
+          { label: 'Closed Sales', screen: 'DCClosed' },
+          { label: 'PO Edit Request', screen: 'ClientsClosedSales' },
+        ],
+      },
+      {
+        title: 'Leads',
+        items: [
+          { label: 'Add Lead', screen: 'LeadAdd' },
+          { label: 'Followup Leads', screen: 'LeadFollowup' },
+        ],
       },
       {
         title: 'Expenses',
