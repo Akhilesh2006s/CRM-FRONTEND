@@ -88,7 +88,8 @@ export default function ExpenseExecutiveManagerPendingScreen({ navigation, route
   const openReview = (exp: Expense) => {
     const empId = getEmployee(exp)?._id;
     if (empId) navigateRoot('ExpenseManagerUpdate', { employeeId: empId });
-    else navigateRoot('ExpenseEdit', { id: exp._id });
+    // Approvers only review; the claim stays as the employee submitted it.
+    else navigateRoot('ExpenseDetail', { id: exp._id });
   };
 
   const setTab = (t: Tab) => {

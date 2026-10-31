@@ -113,12 +113,12 @@ function ExecutiveManagerExpenses() {
     loadExpenses()
   }
 
-  const handleEdit = (expenseId: string, employeeId?: string) => {
-    // Navigate to manager expense update page for the employee
+  // Approvers review on the employee's review page (approve / reject); they never edit the claim itself.
+  const handleEdit = (_expenseId: string, employeeId?: string) => {
     if (employeeId) {
       router.push(`/dashboard/expenses/manager-update/${employeeId}`)
     } else {
-      router.push(`/dashboard/expenses/edit/${expenseId}`)
+      toast.error('This expense has no employee linked, so it cannot be reviewed here.')
     }
   }
 

@@ -149,7 +149,7 @@ export default function ExpenseFinancePendingScreen({ navigation }: any) {
           </View>
         ) : (
           expenses.map((expense) => (
-            <TouchableOpacity key={expense._id} style={styles.card} onPress={() => navigation.navigate('ExpenseEdit', { id: expense._id })} activeOpacity={0.7}>
+            <TouchableOpacity key={expense._id} style={styles.card} onPress={() => navigation.navigate('ExpenseDetail', { id: expense._id })} activeOpacity={0.7}>
               <View style={styles.cardHeader}>
                 <Text style={styles.expenseTitle}>{expense.title || 'Expense'}</Text>
                 <Text style={styles.amountText}>₹{money(expense.approvedAmount)}</Text>
