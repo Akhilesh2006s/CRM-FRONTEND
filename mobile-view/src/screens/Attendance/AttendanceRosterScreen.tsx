@@ -5,6 +5,18 @@ import ScreenShell from '../../ui/ScreenShell';
 import MessageBanner from '../../components/MessageBanner';
 import { attendanceReasonLabel } from '../../components/AttendanceCard';
 import { apiService } from '../../services/api';
+import DateField from '../../ui/DateField';
+
+/** Today's date in India as yyyy-mm-dd. */
+function todayIST() {
+  return new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
+}
+
+/** yyyy-mm-dd (India day) to the UTC instants the API filters on. */
+function dayRange(day: string) {
+  const start = new Date(`${day}T00:00:00+05:30`);
+  return { from: start.toISOString(), to: new Date(start.getTime() + 86400000 - 1).toISOString() };
+}
 
 type RosterRow = {
   _id: string;
@@ -47,6 +59,8 @@ export default function AttendanceRosterScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  /** Day shown; any past day can be picked (same as web Team Attendance). */
+  const [day, setDay] = useState(todayIST());
   /** Selfies opened on this screen: photo data URL, 'loading' or 'none'. */
   const [selfies, setSelfies] = useState<Record<string, string>>({});
 
@@ -66,8 +80,11 @@ export default function AttendanceRosterScreen() {
 
   const load = useCallback(async () => {
     try {
-      const data = await apiService.get('/attendance/roster');
-      setRows(Array.isArray(data) ? data : []);
+      const query = day ? `?fromDate=${encodeURIComponent(dayRange(day).from)}&toDate=${day}` : '';
+      const data = await apiService.get(`/attendance/roster${query}`);
+      const list: RosterRow[] = Array.isArray(data) ? data : [];
+      const { from, to } = day ? dayRange(day) : { from: '', to: '' };
+      setRows(day ? list.filter((r) => r.startTime && r.startTime >= from && r.startTime <= to) : list);
       setError('');
     } catch (e: any) {
       setError(e?.response?.data?.message || e?.message || 'Failed to load attendance');
@@ -75,9 +92,10 @@ export default function AttendanceRosterScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [day]);
 
   useEffect(() => {
+    setLoading(true);
     load();
   }, [load]);
 
@@ -92,8 +110,10 @@ export default function AttendanceRosterScreen() {
         load();
       }}
     >
+      <Text style={styles.dayLabel}>Day</Text>
+      <DateField value={day} onChange={(v) => setDay(v || todayIST())} maximumDate={new Date()} />
       {error ? <MessageBanner type="error" message={error} onDismiss={() => setError('')} /> : null}
-      {!error && rows.length === 0 ? <Text style={styles.empty}>No attendance records.</Text> : null}
+      {!error && rows.length === 0 ? <Text style={styles.empty}>No attendance records for this day.</Text> : null}
       {rows.map((row) => {
         const employee = typeof row.employeeId === 'object' && row.employeeId ? row.employeeId : null;
         const location = [row.town, row.pincode].filter(Boolean).join(' - ') || '—';
@@ -146,6 +166,7 @@ export default function AttendanceRosterScreen() {
 
 const styles = StyleSheet.create({
   empty: { color: colors.textSecondary, textAlign: 'center', paddingVertical: 24 },
+  dayLabel: { fontSize: 12, fontWeight: '600', color: colors.textSecondary, marginBottom: 4 },
   card: {
     backgroundColor: colors.backgroundLight,
     borderWidth: 1,
