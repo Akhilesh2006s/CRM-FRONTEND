@@ -302,7 +302,7 @@ export default function PayoutsWorkspace({ mode }: { mode: PayoutsMode }) {
       </div>
 
       <Card className="p-4">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6 [&>div]:min-w-0">
           {mode === 'salary-sheet' ? (
             <div>
               <Label className="mb-1 block text-xs">Payroll month</Label>
@@ -335,7 +335,10 @@ export default function PayoutsWorkspace({ mode }: { mode: PayoutsMode }) {
             <div>
               <Label className="mb-1 block text-xs">Bank status</Label>
               <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
+                {/* Long labels are cut with … so they don't run into the next field. */}
+                <SelectTrigger className="w-full min-w-0 bg-white [&>span]:block [&>span]:min-w-0 [&>span]:truncate" title={status === 'open' ? 'To pay (not yet sent + Not Credited)' : undefined}>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   {mode === 'list' && <SelectItem value={ALL}>All</SelectItem>}
                   <SelectItem value="open">To pay (not yet sent + Not Credited)</SelectItem>
@@ -350,11 +353,11 @@ export default function PayoutsWorkspace({ mode }: { mode: PayoutsMode }) {
             <>
               <div>
                 <Label className="mb-1 block text-xs">Approved from</Label>
-                <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+                <Input type="date" allowPastDates value={from} onChange={(e) => setFrom(e.target.value)} />
               </div>
               <div>
                 <Label className="mb-1 block text-xs">Approved to</Label>
-                <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+                <Input type="date" allowPastDates value={to} onChange={(e) => setTo(e.target.value)} />
               </div>
             </>
           )}
