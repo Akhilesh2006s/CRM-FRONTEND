@@ -230,6 +230,8 @@ function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
           { label: 'Create Expenses', screen: 'ExpenseCreate' },
           { label: 'My Pending Expenses', screen: 'ExpenseMy', params: { view: 'pending' } },
           { label: 'My Completed Expenses', screen: 'ExpenseMy', params: { view: 'completed' } },
+          { label: 'My Rejected Expenses', screen: 'ExpenseMy', params: { view: 'rejected' } },
+          { label: 'All My Expenses', screen: 'ExpenseMy', params: { view: 'all' } },
           { label: 'Team Expenses to Approve', screen: 'ExpenseExecutiveManagerPending' },
           { label: 'Team Approved / Rejected', screen: 'ExpenseExecutiveManagerPending', params: { tab: 'decided' } },
           { label: 'Employee Track', screen: 'ReportsEmployeeTrack' },
@@ -281,6 +283,8 @@ function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
           { label: 'Create Expenses', screen: 'ExpenseCreate', icon: '➕' },
           { label: 'Pending Expenses', screen: 'ExpenseMy', params: { view: 'pending' }, icon: '⏳' },
           { label: 'Completed Expenses', screen: 'ExpenseMy', params: { view: 'completed' }, icon: '✅' },
+          { label: 'Rejected Expenses', screen: 'ExpenseMy', params: { view: 'rejected' }, icon: '❌' },
+          { label: 'All My Expenses', screen: 'ExpenseMy', params: { view: 'all' }, icon: '📄' },
         ],
       },
       {
@@ -308,6 +312,8 @@ function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
           { label: 'Create Expenses', screen: 'ExpenseCreate', icon: '➕' },
           { label: 'Pending Expenses', screen: 'ExpenseMy', params: { view: 'pending' }, icon: '⏳' },
           { label: 'Completed Expenses', screen: 'ExpenseMy', params: { view: 'completed' }, icon: '✅' },
+          { label: 'Rejected Expenses', screen: 'ExpenseMy', params: { view: 'rejected' }, icon: '❌' },
+          { label: 'All My Expenses', screen: 'ExpenseMy', params: { view: 'all' }, icon: '📄' },
         ],
       },
       {
@@ -734,6 +740,8 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
         return [
           { label: 'Pending Expenses', screen: 'ExpenseMy', params: { view: 'pending' }, icon: '⏳' },
           { label: 'Completed Expenses', screen: 'ExpenseMy', params: { view: 'completed' }, icon: '✅' },
+          { label: 'Rejected Expenses', screen: 'ExpenseMy', params: { view: 'rejected' }, icon: '❌' },
+          { label: 'All My Expenses', screen: 'ExpenseMy', params: { view: 'all' }, icon: '📄' },
         ];
       }
       if (item.screen === 'ExpenseCreate' && item.label === 'Create Expense') return [{ ...item, label: 'Create Expenses' }];
@@ -774,6 +782,8 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
         { label: 'Create Expenses', screen: 'ExpenseCreate', icon: '➕' },
         { label: 'Pending Expenses', screen: 'ExpenseMy', params: { view: 'pending' }, icon: '⏳' },
         { label: 'Completed Expenses', screen: 'ExpenseMy', params: { view: 'completed' }, icon: '✅' },
+        { label: 'Rejected Expenses', screen: 'ExpenseMy', params: { view: 'rejected' }, icon: '❌' },
+        { label: 'All My Expenses', screen: 'ExpenseMy', params: { view: 'all' }, icon: '📄' },
       ],
     };
     const at = sections.findIndex((section) => section.title === 'Expenses');

@@ -9,7 +9,19 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Plus, Eye } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { type ApprovalExpense, approvalHistory, expenseStatusColor, expenseStatusText, isExpenseCompleted } from '@/lib/expenseApproval'
+import {
+  type ApprovalExpense,
+  type MyExpenseView,
+  MY_EXPENSE_VIEWS,
+  MY_EXPENSE_VIEW_EMPTY,
+  MY_EXPENSE_VIEW_LABELS,
+  MY_EXPENSE_VIEW_TITLES,
+  approvalHistory,
+  expenseStatusColor,
+  expenseStatusText,
+  inMyExpenseView,
+  toMyExpenseView,
+} from '@/lib/expenseApproval'
 import { ExpenseBillButton } from '@/components/expenses/ExpenseBillViewer'
 
 type Expense = ApprovalExpense & {
@@ -35,8 +47,6 @@ type Expense = ApprovalExpense & {
   checkOutDate?: string
 }
 
-/** Completed = rejected, or approved by Finance and credited to the bank; everything else is still moving. */
-type View = 'pending' | 'completed'
 
 const formatDate = (dateString?: string) => {
   if (!dateString) return '-'
@@ -116,7 +126,7 @@ function ExpenseView({ expense, onClose }: { expense: Expense | null; onClose: (
 
 function MyExpensesList() {
   const searchParams = useSearchParams()
-  const view: View = searchParams?.get('view') === 'completed' ? 'completed' : 'pending'
+  const view: MyExpenseView = toMyExpenseView(searchParams?.get('view'))
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
   const [viewing, setViewing] = useState<Expense | null>(null)
@@ -136,13 +146,15 @@ function MyExpensesList() {
     })()
   }, [])
 
-  const shown = expenses.filter((e) => isExpenseCompleted(e) === (view === 'completed'))
+  const shown = expenses.filter((e) => inMyExpenseView(e, view))
+  const showReason = view === 'rejected'
+  const columns = showReason ? 8 : 7
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">
-          {view === 'completed' ? 'Completed Expenses' : 'Pending Expenses'}
+          {MY_EXPENSE_VIEW_TITLES[view]}
         </h1>
         <Link href="/dashboard/expenses/create">
           <Button className="bg-blue-600 hover:bg-blue-700 text-white">
@@ -152,11 +164,11 @@ function MyExpensesList() {
         </Link>
       </div>
 
-      <div className="flex gap-2">
-        {(['pending', 'completed'] as View[]).map((v) => (
+      <div className="flex flex-wrap gap-2">
+        {MY_EXPENSE_VIEWS.map((v) => (
           <Link key={v} href={`/dashboard/expenses/my?view=${v}`}>
             <Button variant={view === v ? 'default' : 'outline'} size="sm">
-              {v === 'pending' ? 'Pending' : 'Completed'} ({expenses.filter((e) => isExpenseCompleted(e) === (v === 'completed')).length})
+              {MY_EXPENSE_VIEW_LABELS[v]} ({expenses.filter((e) => inMyExpenseView(e, v)).length})
             </Button>
           </Link>
         ))}
@@ -173,18 +185,19 @@ function MyExpensesList() {
                 <TableHead className="font-semibold text-right">Amount</TableHead>
                 <TableHead className="font-semibold text-right">Approved Amount</TableHead>
                 <TableHead className="font-semibold">Approval Status</TableHead>
+                {showReason && <TableHead className="font-semibold">Rejection Remarks</TableHead>}
                 <TableHead className="font-semibold">View</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-neutral-500">Loading expenses...</TableCell>
+                  <TableCell colSpan={columns} className="text-center py-8 text-neutral-500">Loading expenses...</TableCell>
                 </TableRow>
               ) : shown.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-neutral-500">
-                    {view === 'completed' ? 'No credited or rejected expenses yet.' : 'No pending expenses.'}
+                  <TableCell colSpan={columns} className="text-center py-8 text-neutral-500">
+                    {MY_EXPENSE_VIEW_EMPTY[view]}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -202,6 +215,11 @@ function MyExpensesList() {
                         {expenseStatusText(expense)}
                       </span>
                     </TableCell>
+                    {showReason && (
+                      <TableCell className="max-w-[260px] whitespace-pre-wrap text-sm text-neutral-700">
+                        {expense.rejectionReason || '-'}
+                      </TableCell>
+                    )}
                     <TableCell>
                       <Button
                         variant="ghost"

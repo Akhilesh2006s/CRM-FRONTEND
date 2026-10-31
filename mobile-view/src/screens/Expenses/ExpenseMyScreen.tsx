@@ -10,7 +10,13 @@ import {
   approvalHistory,
   expenseStatusColor,
   expenseStatusText,
-  isExpenseCompleted,
+  inMyExpenseView,
+  MY_EXPENSE_VIEWS,
+  MY_EXPENSE_VIEW_EMPTY,
+  MY_EXPENSE_VIEW_LABELS,
+  MY_EXPENSE_VIEW_TITLES,
+  toMyExpenseView,
+  type MyExpenseView,
 } from '../../lib/expenseApproval';
 import { ExpenseBillButton } from '../../components/expenses/ExpenseBillViewer';
 
@@ -35,7 +41,6 @@ type Expense = ApprovalExpense & {
   checkOutDate?: string;
 };
 
-type ViewMode = 'pending' | 'completed';
 
 /** Completed = rejected, or approved by Finance and credited to the bank; everything else is still moving. */
 
@@ -133,7 +138,7 @@ function ExpenseView({ expense, onClose }: { expense: Expense | null; onClose: (
 }
 
 export default function ExpenseMyScreen({ navigation, route }: any) {
-  const view: ViewMode = route?.params?.view === 'completed' ? 'completed' : 'pending';
+  const view: MyExpenseView = toMyExpenseView(route?.params?.view);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -162,13 +167,13 @@ export default function ExpenseMyScreen({ navigation, route }: any) {
     loadData();
   };
 
-  const countFor = (v: ViewMode) => expenses.filter((e) => isExpenseCompleted(e) === (v === 'completed')).length;
-  const shown = expenses.filter((e) => isExpenseCompleted(e) === (view === 'completed'));
+  const countFor = (v: MyExpenseView) => expenses.filter((e) => inMyExpenseView(e, v)).length;
+  const shown = expenses.filter((e) => inMyExpenseView(e, view));
 
   return (
     <ScreenShell
       noScroll
-      title={view === 'completed' ? 'Completed Expenses' : 'Pending Expenses'}
+      title={MY_EXPENSE_VIEW_TITLES[view]}
       loading={loading && !refreshing}
       headerRight={
         <TouchableOpacity onPress={() => navigation.navigate('ExpenseCreate')} style={styles.headerAction}>
@@ -182,14 +187,14 @@ export default function ExpenseMyScreen({ navigation, route }: any) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <View style={styles.toggleRow}>
-          {(['pending', 'completed'] as ViewMode[]).map((v) => (
+          {MY_EXPENSE_VIEWS.map((v) => (
             <TouchableOpacity
               key={v}
               style={[styles.toggleBtn, view === v && styles.toggleBtnActive]}
               onPress={() => navigation.setParams({ view: v })}
             >
               <Text style={[styles.toggleText, view === v && styles.toggleTextActive]}>
-                {v === 'pending' ? 'Pending' : 'Completed'} ({countFor(v)})
+                {MY_EXPENSE_VIEW_LABELS[v]} ({countFor(v)})
               </Text>
             </TouchableOpacity>
           ))}
@@ -198,7 +203,7 @@ export default function ExpenseMyScreen({ navigation, route }: any) {
         {shown.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>
-              {view === 'completed' ? 'No credited or rejected expenses yet.' : 'No pending expenses.'}
+              {MY_EXPENSE_VIEW_EMPTY[view]}
             </Text>
           </View>
         ) : (
@@ -220,6 +225,9 @@ export default function ExpenseMyScreen({ navigation, route }: any) {
                   <Text style={styles.amountText}>{expense.approvedAmount != null ? expense.approvedAmount.toFixed(2) : '-'}</Text>
                 </View>
               </View>
+              {expense.status === 'Rejected' && expense.rejectionReason ? (
+                <Text style={styles.rejectionText}>Rejection remarks: {expense.rejectionReason}</Text>
+              ) : null}
               <View style={styles.cardFooter}>
                 <StatusBadge expense={expense} />
                 <Ionicons name="eye-outline" size={20} color={colors.primary} />
@@ -238,7 +246,8 @@ const styles = StyleSheet.create({
   listContent: { padding: 16, paddingBottom: 40 },
   headerAction: { paddingHorizontal: 8, paddingVertical: 4 },
   headerActionText: { color: colors.primary, fontWeight: '700', fontSize: 14 },
-  toggleRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  toggleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+  rejectionText: { fontSize: 13, color: colors.error, marginBottom: 8 },
   toggleBtn: {
     paddingHorizontal: 14,
     paddingVertical: 8,

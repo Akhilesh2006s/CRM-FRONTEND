@@ -118,6 +118,8 @@ function ensureExpenseApprovalNav(
         { label: 'Create Expenses', href: '/dashboard/expenses/create' },
         { label: 'Pending Expenses', href: '/dashboard/expenses/my?view=pending' },
         { label: 'Completed Expenses', href: '/dashboard/expenses/my?view=completed' },
+        { label: 'Rejected Expenses', href: '/dashboard/expenses/my?view=rejected' },
+        { label: 'All My Expenses', href: '/dashboard/expenses/my?view=all' },
       )
     }
   }
@@ -938,6 +940,8 @@ export function Sidebar() {
           { label: 'Create Expenses', href: '/dashboard/expenses/create', icon: PlusCircle },
           { label: 'Pending Expenses', href: '/dashboard/expenses/my?view=pending', icon: Clock },
           { label: 'Completed Expenses', href: '/dashboard/expenses/my?view=completed', icon: CheckCircle2 },
+          { label: 'Rejected Expenses', href: '/dashboard/expenses/my?view=rejected', icon: XCircle },
+          { label: 'All My Expenses', href: '/dashboard/expenses/my?view=all', icon: History },
         ],
       },
       {
@@ -1002,6 +1006,8 @@ export function Sidebar() {
           { label: 'Create Expenses', href: '/dashboard/expenses/create', icon: PlusCircle },
           { label: 'Pending Expenses', href: '/dashboard/expenses/my?view=pending', icon: Clock },
           { label: 'Completed Expenses', href: '/dashboard/expenses/my?view=completed', icon: CheckCircle2 },
+          { label: 'Rejected Expenses', href: '/dashboard/expenses/my?view=rejected', icon: XCircle },
+          { label: 'All My Expenses', href: '/dashboard/expenses/my?view=all', icon: History },
         ],
       },
       {
@@ -1164,6 +1170,8 @@ export function Sidebar() {
           { label: 'Create Expenses', href: '/dashboard/expenses/create', icon: PlusCircle },
           { label: 'My Pending Expenses', href: '/dashboard/expenses/my?view=pending', icon: Clock },
           { label: 'My Completed Expenses', href: '/dashboard/expenses/my?view=completed', icon: CheckCircle2 },
+          { label: 'My Rejected Expenses', href: '/dashboard/expenses/my?view=rejected', icon: XCircle },
+          { label: 'All My Expenses', href: '/dashboard/expenses/my?view=all', icon: History },
           { label: 'Team Expenses to Approve', href: '/dashboard/expenses/executive-manager-pending', icon: Clock },
           { label: 'Team Approved / Rejected', href: '/dashboard/expenses/executive-manager-pending?tab=decided', icon: CheckCircle2 },
           { label: 'Employee Track', href: '/dashboard/reports/employee-track', icon: MapPin },
@@ -1215,6 +1223,8 @@ export function Sidebar() {
           { label: 'Create Expenses', href: '/dashboard/expenses/create', icon: PlusCircle },
           { label: 'Pending Expenses', href: '/dashboard/expenses/my?view=pending', icon: Clock },
           { label: 'Completed Expenses', href: '/dashboard/expenses/my?view=completed', icon: CheckCircle2 },
+          { label: 'Rejected Expenses', href: '/dashboard/expenses/my?view=rejected', icon: XCircle },
+          { label: 'All My Expenses', href: '/dashboard/expenses/my?view=all', icon: History },
         ],
       },
       {
@@ -1294,6 +1304,8 @@ export function Sidebar() {
           { label: 'Create Expenses', href: '/dashboard/expenses/create', icon: PlusCircle },
           { label: 'Pending Expenses', href: '/dashboard/expenses/my?view=pending', icon: Clock },
           { label: 'Completed Expenses', href: '/dashboard/expenses/my?view=completed', icon: CheckCircle2 },
+          { label: 'Rejected Expenses', href: '/dashboard/expenses/my?view=rejected', icon: XCircle },
+          { label: 'All My Expenses', href: '/dashboard/expenses/my?view=all', icon: History },
         ],
       },
       { label: 'Payslips', icon: FileText, href: '/dashboard/payslips' },

@@ -59,12 +59,43 @@ const indianDate = (value?: string | null) => {
 }
 
 /**
- * Done from the employee's side: rejected, or approved by Finance and credited to their bank.
- * Finance-approved expenses not yet credited are still pending for the employee.
+ * Completed for the employee only once the approved amount is credited to their bank.
+ * Rejected expenses are never completed; Finance-approved ones not yet credited are still pending.
  */
 export function isExpenseCompleted(expense: ApprovalExpense): boolean {
-  if (expense.status === 'Rejected') return true
   return expense.status === 'Approved' && expense.payout?.status === CREDITED_TO_BANK
+}
+
+/** The employee's expense lists: Pending, Completed (credited), Rejected, and All (history). */
+export type MyExpenseView = 'pending' | 'completed' | 'rejected' | 'all'
+export const MY_EXPENSE_VIEWS: MyExpenseView[] = ['pending', 'completed', 'rejected', 'all']
+export const MY_EXPENSE_VIEW_LABELS: Record<MyExpenseView, string> = {
+  pending: 'Pending',
+  completed: 'Completed',
+  rejected: 'Rejected',
+  all: 'All',
+}
+export const MY_EXPENSE_VIEW_TITLES: Record<MyExpenseView, string> = {
+  pending: 'Pending Expenses',
+  completed: 'Completed Expenses',
+  rejected: 'Rejected Expenses',
+  all: 'All My Expenses',
+}
+export const MY_EXPENSE_VIEW_EMPTY: Record<MyExpenseView, string> = {
+  pending: 'No pending expenses.',
+  completed: 'No expenses credited to your bank yet.',
+  rejected: 'No rejected expenses.',
+  all: 'No expenses submitted yet.',
+}
+
+export function toMyExpenseView(value: unknown): MyExpenseView {
+  return MY_EXPENSE_VIEWS.includes(value as MyExpenseView) ? (value as MyExpenseView) : 'pending'
+}
+
+export function inMyExpenseView(expense: ApprovalExpense, view: MyExpenseView): boolean {
+  if (view === 'all') return true
+  if (expense.status === 'Rejected') return view === 'rejected'
+  return isExpenseCompleted(expense) ? view === 'completed' : view === 'pending'
 }
 
 export const FINANCE_STAGE_STATUSES = ['Executive Manager Approved', 'Manager Approved']
