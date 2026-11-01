@@ -16,6 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { apiService } from '../services/api';
 import { getCurrentLocation, getTownFromPincode } from '../services/location';
+import { takeLivePhoto } from '../services/photo';
 import { useAuth } from '../context/AuthContext';
 import { colors, gradients } from '../theme/colors';
 import { typography } from '../theme/typography';
@@ -198,14 +199,23 @@ export default function AttendanceCard({ onChange }: { onChange?: () => void } =
     }
   };
 
+  // Check-out takes an exit photo and the location: office days end in the office, field days in the field.
   const handleCheckOut = async () => {
     setLoading(true);
     try {
-      await apiService.post('/attendance/check-out', {});
+      const exitPhoto = await takeLivePhoto({ front: true });
+      if (!exitPhoto) return;
+      const here = await getCurrentLocation();
+      const res: any = await apiService.post('/attendance/check-out', {
+        photo: exitPhoto,
+        latitude: here.latitude,
+        longitude: here.longitude,
+        accuracy: here.accuracy,
+      });
       setCurrentAttendance(null);
       await checkCurrentAttendance();
       onChange?.();
-      Alert.alert('Success', 'Attendance checked out successfully');
+      Alert.alert(res?.needsReview ? 'Sent for review' : 'Success', res?.message || 'Attendance checked out successfully');
     } catch (error: any) {
       Alert.alert('Error', error?.message || 'Failed to check out');
     } finally {

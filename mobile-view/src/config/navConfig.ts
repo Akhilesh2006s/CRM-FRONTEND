@@ -804,8 +804,14 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
 
   const extra: NavLink[] = [];
   if (!hasScreen(sections, 'MyAttendance')) extra.push({ label: 'Attendance', screen: 'MyAttendance', icon: '🕒' });
+  // Trips, school entry / exit photos and field visit permission.
+  if (!hasScreen(sections, 'FieldDay')) extra.push({ label: 'My Field Day', screen: 'FieldDay', icon: '📍' });
   if (TEAM_ATTENDANCE_ROLES.has(role) && !hasScreen(sections, 'AttendanceRoster')) {
     extra.push({ label: 'Team Attendance', screen: 'AttendanceRoster', icon: '👥' });
+  }
+  // Reporting managers approve field visits and office / field check-out mismatches (Admin: everyone's).
+  if (TEAM_ATTENDANCE_ROLES.has(role) && !hasScreen(sections, 'FieldApprovals')) {
+    extra.push({ label: 'Field Approvals', screen: 'FieldApprovals', icon: '✅' });
   }
   if (!hasScreen(sections, 'MyPayslips')) extra.push({ label: 'My Pay Slips', screen: 'MyPayslips', icon: '🧾' });
   if (extra.length) {

@@ -4,6 +4,8 @@ import { apiService } from './api';
 export interface LocationData {
   latitude: number;
   longitude: number;
+  /** Metres; how sure the phone is of the fix. */
+  accuracy?: number;
 }
 
 export class LocationPermissionError extends Error {
@@ -43,6 +45,7 @@ export const getCurrentLocation = async (
     return {
       latitude: location.coords.latitude,
       longitude: location.coords.longitude,
+      accuracy: location.coords.accuracy ?? undefined,
     };
   } catch (error) {
     if (!(error instanceof LocationPermissionError)) {

@@ -160,6 +160,8 @@ import SettingsBackupScreen from './src/screens/Settings/SettingsBackupScreen';
 import ExpenseApproversScreen from './src/screens/Expenses/ExpenseApproversScreen';
 import MyAttendanceScreen from './src/screens/Attendance/MyAttendanceScreen';
 import AttendanceRosterScreen from './src/screens/Attendance/AttendanceRosterScreen';
+import FieldDayScreen from './src/screens/Attendance/FieldDayScreen';
+import FieldApprovalsScreen from './src/screens/Attendance/FieldApprovalsScreen';
 import EmployeeVerificationScreen from './src/screens/Employees/EmployeeVerificationScreen';
 import MyPayslipsScreen from './src/screens/Employees/MyPayslipsScreen';
 import CrossSaleLeadsScreen from './src/screens/Leads/CrossSaleLeadsScreen';
@@ -458,6 +460,8 @@ function AuthenticatedStack() {
         <Stack.Screen name="ExpenseApprovers" component={ExpenseApproversScreen} />
         <Stack.Screen name="MyAttendance" component={MyAttendanceScreen} />
         <Stack.Screen name="AttendanceRoster" component={AttendanceRosterScreen} />
+        <Stack.Screen name="FieldDay" component={FieldDayScreen} />
+        <Stack.Screen name="FieldApprovals" component={FieldApprovalsScreen} />
         <Stack.Screen name="EmployeeVerification" component={EmployeeVerificationScreen} />
         <Stack.Screen name="MyPayslips" component={MyPayslipsScreen} />
         <Stack.Screen name="CrossSaleLeads" component={CrossSaleLeadsScreen} />

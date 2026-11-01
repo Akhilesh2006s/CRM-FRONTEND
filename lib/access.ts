@@ -212,6 +212,20 @@ export function canAccessPath(
   if (pathname === '/dashboard/employees/payroll' || pathname.startsWith('/dashboard/employees/payroll/')) {
     return role === 'hr manager'
   }
+  // Field tracking: Admin / Super Admin (or the Field Tracking permission) see everyone. Reporting
+  // managers approve their team's field visits and check-out reviews; the API scopes the rows.
+  if (matchesRoute(pathname, '/dashboard/tracking/approvals')) {
+    return role === 'admin' || TEAM_ATTENDANCE_ROLES.has(user.role) || hasPermission(user, 'tracking.field_days.page.view')
+  }
+  if (matchesRoute(pathname, '/dashboard/tracking/approvers')) {
+    return role === 'admin' || hasPermission(user, 'tracking.approvers.page.view')
+  }
+  if (matchesRoute(pathname, '/dashboard/tracking')) {
+    return role === 'admin' || hasPermission(user, 'tracking.field_days.page.view')
+  }
+  if (matchesRoute(pathname, '/dashboard/settings/offices')) {
+    return role === 'admin' || hasPermission(user, 'settings.offices.page.view')
+  }
   // Every employee sees and records their own attendance.
   if (pathname === '/dashboard/attendance' || pathname.startsWith('/dashboard/attendance/')) {
     return !['vendor', 'partner', 'franchise'].includes(role)

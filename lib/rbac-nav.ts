@@ -237,6 +237,16 @@ export const RBAC_NAV_MODULES: RbacNavModule[] = [
       { label: 'SMS', href: '/dashboard/settings/sms' },
       { label: 'DB Backup', href: '/dashboard/settings/backup' },
       { label: 'Expense policy', href: '/dashboard/settings/expenses' },
+      { label: 'Office Locations', href: '/dashboard/settings/offices' },
+    ],
+  },
+  {
+    module: 'tracking',
+    label: MODULE_LABELS.tracking,
+    pages: [
+      { label: 'Field Tracking', href: '/dashboard/tracking' },
+      { label: 'Field Approvals', href: '/dashboard/tracking/approvals' },
+      { label: 'Field Approvers', href: '/dashboard/tracking/approvers' },
     ],
   },
   {

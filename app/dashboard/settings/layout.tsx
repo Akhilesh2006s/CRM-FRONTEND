@@ -9,6 +9,7 @@ const SETTINGS_LABELS: Record<string, string> = {
   sms: 'SMS Settings',
   backup: 'DB Backup',
   expenses: 'Expense policy',
+  offices: 'Office Locations',
   roles: 'Roles & Permissions',
 }
 

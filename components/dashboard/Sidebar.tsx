@@ -173,6 +173,41 @@ function ensureAttendanceNav(nav: NavItem[], role: string | undefined): NavItem[
   return insertAt < 0 ? [...next, item] : [...next.slice(0, insertAt), item, ...next.slice(insertAt)]
 }
 
+/**
+ * Field Tracking for Admin / Super Admin (or the Field Tracking permission): everyone's GPS day,
+ * approvals and approvers. Other team heads get Field Approvals for the people they review.
+ */
+function ensureTrackingNav(
+  nav: NavItem[],
+  role: string | undefined,
+  permissions: string[] | undefined,
+  superAdmin: boolean
+): NavItem[] {
+  const has = (items: NavItem[] | undefined, href: string): boolean =>
+    (items || []).some((item) => item.href === href || has(item.children as NavItem[] | undefined, href))
+  if (has(nav, '/dashboard/tracking') || has(nav, '/dashboard/tracking/approvals')) return nav
+  const r = String(role || '')
+  const admin = superAdmin || r === 'Admin' || r === 'Super Admin' || (permissions || []).includes('tracking.field_days.page.view')
+  let entry: NavItem | null = null
+  if (admin) {
+    entry = {
+      label: 'Field Tracking',
+      icon: MapPin,
+      children: [
+        { label: 'Field Days', href: '/dashboard/tracking' },
+        { label: 'Field Approvals', href: '/dashboard/tracking/approvals' },
+        { label: 'Field Approvers', href: '/dashboard/tracking/approvers' },
+        { label: 'Office Locations', href: '/dashboard/settings/offices' },
+      ],
+    }
+  } else if (TEAM_ATTENDANCE_ROLES.has(r)) {
+    entry = { label: 'Field Approvals', icon: MapPin, href: '/dashboard/tracking/approvals' }
+  }
+  if (!entry) return nav
+  const at = nav.findIndex((item) => item.label === 'Settings' || item.label === 'Sign out')
+  return at < 0 ? [...nav, entry] : [...nav.slice(0, at), entry, ...nav.slice(at)]
+}
+
 function ensureRaiseTicketNav(nav: NavItem[]): NavItem[] {
   const href = '/dashboard/complaints/raise'
   const withoutNestedRaiseTicket = nav.flatMap((item) => {
@@ -513,6 +548,7 @@ const NAV: NavItem[] = [
       { label: 'SMS', href: '/dashboard/settings/sms' },
       { label: 'DB Backup', href: '/dashboard/settings/backup' },
       { label: 'Expense policy', href: '/dashboard/settings/expenses', adminOnly: true },
+      { label: 'Office Locations', href: '/dashboard/settings/offices', adminOnly: true },
     ],
   },
   { label: 'Sign out', icon: LogOut, href: '/auth/login' },
@@ -1469,6 +1505,12 @@ export function Sidebar() {
   // Ticket raising is available to every authenticated role under one consistent name.
   finalNav = ensureRaiseTicketNav(finalNav)
   finalNav = ensureAttendanceNav(finalNav, user?.role || permUser?.role)
+  finalNav = ensureTrackingNav(
+    finalNav,
+    user?.role || permUser?.role,
+    permUser?.permissions,
+    Boolean((permUser as { isSuperAdmin?: boolean } | null | undefined)?.isSuperAdmin)
+  )
 
   const navReady = mounted && (!rbacActive || permissionsReady)
 

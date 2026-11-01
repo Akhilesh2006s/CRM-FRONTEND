@@ -17,6 +17,17 @@ type AttendanceRow = {
   endTime?: string
   attendanceReason?: string
   town?: string
+  mode?: 'office' | 'field'
+  officeName?: string
+  checkoutMode?: 'office' | 'field' | null
+  reviewStatus?: 'none' | 'pending' | 'approved' | 'rejected'
+  reviewRemarks?: string
+}
+
+const REVIEW_LABELS: Record<string, string> = {
+  pending: 'Waiting for review',
+  approved: 'Review approved',
+  rejected: 'Review rejected',
 }
 
 const REASONS: Array<{ value: string; label: string }> = [
@@ -57,15 +68,15 @@ function photoToDataUrl(file: File, maxSide = 640): Promise<string> {
   })
 }
 
-function currentPosition(): Promise<{ latitude: number; longitude: number }> {
+function currentPosition(): Promise<{ latitude: number; longitude: number; accuracy?: number }> {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
       reject(new Error('Location is not available in this browser'))
       return
     }
     navigator.geolocation.getCurrentPosition(
-      (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
-      () => reject(new Error('Allow location access to check in')),
+      (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy }),
+      () => reject(new Error('Allow location access to check in or out')),
       { enableHighAccuracy: true, timeout: 15000 }
     )
   })
@@ -80,6 +91,7 @@ export default function MyAttendancePage() {
   const [busy, setBusy] = useState(false)
   const [form, setForm] = useState({ attendanceReason: 'office', town: '', pincode: '', remarks: '' })
   const [photo, setPhoto] = useState('')
+  const [exitPhoto, setExitPhoto] = useState('')
 
   const load = useCallback(async () => {
     try {
@@ -111,6 +123,16 @@ export default function MyAttendancePage() {
     }
   }
 
+  const onExitPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return setExitPhoto('')
+    try {
+      setExitPhoto(await photoToDataUrl(file))
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Could not read the photo')
+    }
+  }
+
   const checkIn = async () => {
     if (!photo) return toast.error('Take a photo to check in')
     if (!form.town.trim() || !/^\d{6}$/.test(form.pincode.trim())) {
@@ -119,7 +141,7 @@ export default function MyAttendancePage() {
     setBusy(true)
     try {
       const position = await currentPosition()
-      await apiRequest('/attendance/check-in', {
+      const res = await apiRequest<{ message?: string }>('/attendance/check-in', {
         method: 'POST',
         body: JSON.stringify({
           ...form,
@@ -130,7 +152,7 @@ export default function MyAttendancePage() {
           ...position,
         }),
       })
-      toast.success('Checked in')
+      toast.success(res?.message || 'Checked in')
       setPhoto('')
       await load()
     } catch (err: unknown) {
@@ -140,11 +162,19 @@ export default function MyAttendancePage() {
     }
   }
 
+  // Check-out takes an exit photo and the location: office days end in the office, field days in the field.
   const checkOut = async () => {
+    if (!exitPhoto) return toast.error('Take the exit photo to check out')
     setBusy(true)
     try {
-      await apiRequest('/attendance/check-out', { method: 'POST' })
-      toast.success('Checked out')
+      const position = await currentPosition()
+      const res = await apiRequest<{ message?: string; needsReview?: boolean }>('/attendance/check-out', {
+        method: 'POST',
+        body: JSON.stringify({ photo: exitPhoto, ...position }),
+      })
+      if (res?.needsReview) toast.warning(res.message || 'Sent for review')
+      else toast.success(res?.message || 'Checked out')
+      setExitPhoto('')
       await load()
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Check-out failed')
@@ -173,11 +203,28 @@ export default function MyAttendancePage() {
                 <div className="font-semibold text-green-700">Checked in</div>
                 <div className="text-sm text-neutral-600">
                   Since {when(active.startTime)}{active.town ? ` · ${active.town}` : ''}
+                  {' · '}
+                  {active.mode === 'office' ? `Office${active.officeName ? `: ${active.officeName}` : ''}` : 'Field'}
                 </div>
+                <p className="mt-1 text-xs text-neutral-500">
+                  {active.mode === 'office'
+                    ? 'Check out inside the office. Checking out elsewhere goes to review.'
+                    : 'Check out in the field. Checking out at the office goes to review.'}
+                </p>
               </div>
-              <Button onClick={checkOut} disabled={busy} className="bg-red-600 hover:bg-red-700 text-white">
-                {busy ? 'Checking out…' : 'Check Out'}
-              </Button>
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <Label htmlFor="exitPhoto">Exit photo *</Label>
+                  <Input id="exitPhoto" type="file" accept="image/*" capture="user" className="mt-1 bg-white" onChange={onExitPhoto} />
+                </div>
+                {exitPhoto && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={exitPhoto} alt="Exit photo" className="h-16 w-16 rounded border object-cover" />
+                )}
+                <Button onClick={checkOut} disabled={busy} className="bg-red-600 hover:bg-red-700 text-white">
+                  {busy ? 'Checking out…' : 'Check Out'}
+                </Button>
+              </div>
             </div>
           ) : (
             <>
@@ -217,7 +264,9 @@ export default function MyAttendancePage() {
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={photo} alt="Check-in photo" className="h-24 w-24 rounded border object-cover" />
               )}
-              <p className="text-xs text-neutral-500">Your location is recorded when you check in.</p>
+              <p className="text-xs text-neutral-500">
+                Your location is recorded when you check in. Within 200 m of an office it is an office day; anywhere else is a field day.
+              </p>
               <Button onClick={checkIn} disabled={busy} className="bg-green-600 hover:bg-green-700 text-white">
                 {busy ? 'Checking in…' : 'Check In'}
               </Button>
@@ -236,8 +285,10 @@ export default function MyAttendancePage() {
               <tr className="bg-neutral-100">
                 <th className="py-2 px-3 text-left">Check in</th>
                 <th className="py-2 px-3 text-left">Check out</th>
+                <th className="py-2 px-3 text-left">Type</th>
                 <th className="py-2 px-3 text-left">Reason</th>
                 <th className="py-2 px-3 text-left">Town</th>
+                <th className="py-2 px-3 text-left">Review</th>
               </tr>
             </thead>
             <tbody>
@@ -245,8 +296,20 @@ export default function MyAttendancePage() {
                 <tr key={row._id} className="border-t">
                   <td className="py-2 px-3">{when(row.startTime)}</td>
                   <td className="py-2 px-3">{when(row.endTime)}</td>
+                  <td className="py-2 px-3">
+                    {row.mode === 'office' ? 'Office' : 'Field'}
+                    {row.checkoutMode && row.checkoutMode !== (row.mode || 'field') ? ` → ${row.checkoutMode === 'office' ? 'Office' : 'Field'}` : ''}
+                  </td>
                   <td className="py-2 px-3">{REASONS.find((r) => r.value === row.attendanceReason)?.label || row.attendanceReason || '—'}</td>
                   <td className="py-2 px-3">{row.town || '—'}</td>
+                  <td className="py-2 px-3">
+                    {row.reviewStatus && row.reviewStatus !== 'none' ? (
+                      <span className={row.reviewStatus === 'rejected' ? 'text-red-600' : row.reviewStatus === 'pending' ? 'text-amber-600' : 'text-green-700'}>
+                        {REVIEW_LABELS[row.reviewStatus]}
+                        {row.reviewRemarks ? `: ${row.reviewRemarks}` : ''}
+                      </span>
+                    ) : '—'}
+                  </td>
                 </tr>
               ))}
             </tbody>

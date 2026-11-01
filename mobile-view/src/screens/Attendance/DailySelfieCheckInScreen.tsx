@@ -36,7 +36,7 @@ export default function DailySelfieCheckInScreen({ onDone }: { onDone: () => voi
   const [photo, setPhoto] = useState<string | null>(null);
   const [capturing, setCapturing] = useState(false);
   const [attendanceReason, setAttendanceReason] = useState('employee');
-  const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [location, setLocation] = useState<{ latitude: number; longitude: number; accuracy?: number } | null>(null);
   const [locating, setLocating] = useState(false);
   const [pincode, setPincode] = useState('');
   const [town, setTown] = useState('');
@@ -97,6 +97,7 @@ export default function DailySelfieCheckInScreen({ onDone }: { onDone: () => voi
         photo,
         latitude: location.latitude,
         longitude: location.longitude,
+        accuracy: location.accuracy,
         pincode,
         town: town.trim(),
         remarks: remarks.trim(),
