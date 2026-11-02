@@ -10,7 +10,6 @@ import {
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import AttendanceCard from '../../components/AttendanceCard';
-import TripCard from '../../components/TripCard';
 import PendingAdvanceApprovalsCard from '../../components/PendingAdvanceApprovalsCard';
 import { BirthdayWishCard, EmployeeBirthdaysCard } from '../../components/BirthdayCards';
 import { Ionicons } from '@expo/vector-icons';
@@ -243,19 +242,15 @@ export default function DashboardScreen({ navigation }: { navigation?: any }) {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           showsVerticalScrollIndicator={false}
         >
-          <BirthdayWishCard role={user?.role} />
-          <EmployeeBirthdaysCard role={user?.role} />
-          <PendingAdvanceApprovalsCard />
+          {/* Start Day / End Day first, so End Day is always at the top. */}
           {showAttendance ? (
             <View style={styles.block}>
               <AttendanceCard />
-              </View>
-          ) : null}
-          {showAttendance ? (
-            <View style={styles.block}>
-              <TripCard />
             </View>
           ) : null}
+          <BirthdayWishCard role={user?.role} />
+          <EmployeeBirthdaysCard role={user?.role} />
+          <PendingAdvanceApprovalsCard />
 
           {flags.isAdmin ? (
             <>

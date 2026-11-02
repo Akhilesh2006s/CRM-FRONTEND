@@ -1,13 +1,17 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Alert, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Alert, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import ScreenShell from '../../ui/ScreenShell';
+import * as DocumentPicker from 'expo-document-picker';
+import { readAsStringAsync } from 'expo-file-system/legacy';
 import { WebButton, WebInput, WebLabel } from '../../ui/WebPrimitives';
+import { useAuth } from '../../context/AuthContext';
+import { navigateRoot } from '../../navigation/navigationRef';
+import MissedExitCard from '../../components/MissedExitCard';
 import { colors, radii } from '../../theme/colors';
 import { apiService } from '../../services/api';
 import { getCurrentLocation } from '../../services/location';
 import { takeLivePhoto } from '../../services/photo';
-import { endTrip, resumeActiveTrip, startTrip, subscribeTrip, type TripVehicle } from '../../services/trip';
 
 type TimelineEntry = {
   kind: 'trip' | 'school';
@@ -20,12 +24,28 @@ type TimelineEntry = {
   distanceKm?: number;
   active: boolean;
 };
+type Activity = { subject?: string; term?: string; level?: string; participants?: number; remarks?: string };
+type OpenVisit = {
+  _id: string;
+  schoolName: string;
+  schoolCode?: string;
+  leadId?: string | null;
+  entryAt: string;
+  activityType?: 'Training' | 'Service' | '';
+  activity?: Activity;
+  trainingId?: string | null;
+  serviceId?: string | null;
+  feedbackFormName?: string;
+  hasFeedbackForm?: boolean;
+};
+type School = { schoolName: string; schoolCode: string; leadId?: string; town?: string; zone?: string; source: string };
+type Assignment = { _id: string; subject: string; term?: string; trainingLevel?: string; trainingDate?: string; serviceDate?: string };
 type FieldDay = {
   attendance: { _id: string; mode?: 'office' | 'field'; officeName?: string; startTime: string; endTime?: string; fieldPermission?: boolean; reviewStatus?: string } | null;
   checkedIn: boolean;
   fieldWorkAllowed: boolean;
   activeTrip: { _id: string; sequence?: number; startedAt: string; distanceKm: number } | null;
-  openVisit: { _id: string; schoolName: string; entryAt: string } | null;
+  openVisit: OpenVisit | null;
   permission: { _id: string; status: 'pending' | 'approved' | 'rejected'; reason: string; remarks?: string } | null;
   next: { startTrip: string | null; schoolEntry: string | null; checkout: string | null };
   summary: {
@@ -39,7 +59,9 @@ type FieldDay = {
   };
 };
 
-const VEHICLES: TripVehicle[] = ['Bike', 'Car'];
+const SUBJECTS = ['Abacus', 'Vedic Maths', 'EEL', 'IIT', 'Financial literacy', 'Brain bytes', 'Spelling bee', 'Skill pro', 'Maths lab', 'Codechamp'];
+const TERMS = ['Term 1', 'Term 2', 'Term 3'];
+const MAX_FORM_BYTES = 5 * 1024 * 1024;
 
 const time = (v?: string | null) =>
   v ? new Date(v).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
@@ -47,22 +69,27 @@ const hours = (minutes: number) => {
   const m = Math.max(0, Math.round(minutes || 0));
   return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`;
 };
+const apiError = (e: any, fallback: string) => e?.response?.data?.message || e?.message || fallback;
 
 /**
- * My Field Day: Start trip → reach the school → Entry photo → Exit photo → Start the next trip ...
- * Office check-ins request field visit permission first. Distance, time at each school and working
- * hours are worked out on the server.
+ * My Field Day: Start Day → check in at a school → update the school's work → check out → next school
+ * ... → End Day. GPS runs all day, so distance comes from the tracked route. Trainers record the
+ * Training / Service and upload the feedback form before checking out of each school.
  */
 export default function FieldDayScreen() {
+  const { user } = useAuth();
+  const isTrainer = user?.role === 'Trainer';
   const [day, setDay] = useState<FieldDay | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState('');
-  const [vehicle, setVehicle] = useState<TripVehicle>('Bike');
-  const [schoolName, setSchoolName] = useState('');
   const [reason, setReason] = useState('');
   const [places, setPlaces] = useState('');
-  const [liveKm, setLiveKm] = useState(0);
+  const [query, setQuery] = useState('');
+  const [schools, setSchools] = useState<School[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [school, setSchool] = useState<School | null>(null);
+  const [forgot, setForgot] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -82,11 +109,27 @@ export default function FieldDayScreen() {
     }, [load])
   );
 
+  // School code / name search (trainers also see their scheduled schools with an empty search).
   useEffect(() => {
-    const unsub = subscribeTrip((_t, km) => setLiveKm(km));
-    void resumeActiveTrip();
-    return unsub;
-  }, []);
+    if (school) return undefined;
+    const q = query.trim();
+    if (!isTrainer && q.length < 2) {
+      setSchools([]);
+      return undefined;
+    }
+    const timer = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const rows = await apiService.get(`/field-day/schools?q=${encodeURIComponent(q)}`);
+        setSchools(Array.isArray(rows) ? rows : []);
+      } catch {
+        setSchools([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [query, school, isTrainer]);
 
   const run = async (label: string, fn: () => Promise<void>) => {
     setBusy(label);
@@ -94,40 +137,32 @@ export default function FieldDayScreen() {
       await fn();
       await load();
     } catch (e: any) {
-      Alert.alert('Could not continue', e?.message || 'Something went wrong');
+      Alert.alert('Could not continue', apiError(e, 'Something went wrong'));
     } finally {
       setBusy('');
     }
   };
 
-  const onStartTrip = () =>
-    run('trip', async () => {
-      await startTrip(vehicle, 'Field visit', day?.summary.schoolCount ? 'Last school' : 'Start of day');
-    });
-
-  const onEndTrip = () =>
-    run('trip', async () => {
-      await endTrip('');
-    });
-
-  const onSchoolEntry = () =>
+  const onCheckIn = () =>
     run('entry', async () => {
-      const name = schoolName.trim();
-      if (!name) throw new Error('Enter the school name first.');
+      if (!school) throw new Error('Select the school first.');
       const photo = await takeLivePhoto();
       if (!photo) return;
       const here = await getCurrentLocation();
       await apiService.post('/field-day/visits/entry', {
-        schoolName: name,
+        schoolName: school.schoolName,
+        schoolCode: school.schoolCode,
+        leadId: school.leadId,
         photo,
         latitude: here.latitude,
         longitude: here.longitude,
         accuracy: here.accuracy,
       });
-      setSchoolName('');
+      setSchool(null);
+      setQuery('');
     });
 
-  const onSchoolExit = () =>
+  const onCheckOut = () =>
     run('exit', async () => {
       if (!day?.openVisit) return;
       const photo = await takeLivePhoto();
@@ -141,6 +176,17 @@ export default function FieldDayScreen() {
       });
     });
 
+  const onForgotCheckOut = async (missedReason: string, exitTime: string) => {
+    if (!day?.openVisit) return;
+    try {
+      await apiService.post(`/field-day/missed/visit/${day.openVisit._id}`, { reason: missedReason, exitTime });
+    } catch (e: any) {
+      throw new Error(apiError(e, 'Could not save.'));
+    }
+    setForgot(false);
+    await load();
+  };
+
   const onRequestPermission = () =>
     run('permission', async () => {
       if (!reason.trim()) throw new Error('Enter why you need to go to the field.');
@@ -152,11 +198,12 @@ export default function FieldDayScreen() {
 
   const attendance = day?.attendance;
   const summary = day?.summary;
+  const visit = day?.openVisit;
 
   return (
     <ScreenShell
       title="My Field Day"
-      subtitle="Start a trip, take Entry and Exit photos at each school, and repeat until you check out."
+      subtitle="Check in at each school, update the work done, and check out. GPS runs from Start Day to End Day."
       loading={loading && !refreshing}
       refreshing={refreshing}
       onRefresh={() => {
@@ -166,30 +213,30 @@ export default function FieldDayScreen() {
     >
       {!day?.checkedIn ? (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Not checked in</Text>
+          <Text style={styles.cardTitle}>Day not started</Text>
           <Text style={styles.muted}>
-            {attendance?.endTime ? `You checked out at ${time(attendance.endTime)}.` : 'Check in for the day first (Attendance).'}
+            {attendance?.endTime ? `You ended your day at ${time(attendance.endTime)}.` : 'Tap Start Day on the home screen first.'}
           </Text>
         </View>
       ) : (
         <View style={styles.card}>
           <View style={styles.rowBetween}>
             <Text style={styles.cardTitle}>{attendance?.mode === 'office' ? `Office day · ${attendance?.officeName || 'Office'}` : 'Field day'}</Text>
-            <Text style={styles.badge}>In {time(attendance?.startTime)}</Text>
+            <Text style={styles.badge}>Started {time(attendance?.startTime)}</Text>
           </View>
           <Text style={styles.muted}>
             {attendance?.mode === 'office'
               ? attendance?.fieldPermission
-                ? 'Field visit approved: you can travel to schools today and check out in the field.'
-                : 'Checked in within the office. Check out in the office, or request a field visit below.'
-              : 'Checked in outside the office. Check out in the field.'}
+                ? 'Field visit approved: you can visit schools today and end the day in the field.'
+                : 'Day started in the office. End the day in the office, or request a field visit below.'
+              : 'Day started outside the office. End the day in the field.'}
           </Text>
         </View>
       )}
 
       {summary ? (
         <View style={styles.statsRow}>
-          <Stat label="Distance" value={`${(summary.distanceKm + (day?.activeTrip ? Math.max(0, liveKm - (day.activeTrip.distanceKm || 0)) : 0)).toFixed(2)} km`} />
+          <Stat label="Distance" value={`${(summary.distanceKm || 0).toFixed(2)} km`} />
           <Stat label="Schools" value={String(summary.schoolCount)} />
           <Stat label="At schools" value={hours(summary.schoolMinutes)} />
           <Stat label="Working" value={hours(summary.workingMinutes)} />
@@ -217,40 +264,64 @@ export default function FieldDayScreen() {
       ) : null}
 
       {day?.checkedIn && day.fieldWorkAllowed ? (
-        <View style={styles.card}>
-          {day.openVisit ? (
-            <>
-              <Text style={styles.cardTitle}>At {day.openVisit.schoolName}</Text>
-              <Text style={styles.muted}>Entered at {time(day.openVisit.entryAt)}. Take the exit photo when you leave.</Text>
-              <WebButton title="Take Exit Photo" onPress={onSchoolExit} loading={busy === 'exit'} />
-            </>
-          ) : day.activeTrip ? (
-            <>
-              <Text style={styles.cardTitle}>Trip {day.activeTrip.sequence || ''} running</Text>
+        visit ? (
+          <>
+            <View style={[styles.card, styles.activeCard]}>
+              <Text style={styles.cardTitle}>Checked in: {visit.schoolName}</Text>
               <Text style={styles.muted}>
-                Started {time(day.activeTrip.startedAt)} · {liveKm.toFixed(2)} km. End the trip when you reach the school.
+                {visit.schoolCode ? `${visit.schoolCode} · ` : ''}since {time(visit.entryAt)}
               </Text>
-              <WebButton title="End Trip" variant="destructive" onPress={onEndTrip} loading={busy === 'trip'} />
-            </>
-          ) : (
-            <>
-              <Text style={styles.cardTitle}>Next step</Text>
-              <Text style={styles.muted}>Start a trip before travelling, or take the entry photo if you are already at a school.</Text>
-              <View style={styles.chips}>
-                {VEHICLES.map((v) => (
-                  <TouchableOpacity key={v} style={[styles.chip, vehicle === v && styles.chipOn]} onPress={() => setVehicle(v)}>
-                    <Text style={[styles.chipText, vehicle === v && styles.chipTextOn]}>{v}</Text>
+              {!isTrainer ? (
+                <WebButton
+                  title="Update School Activities"
+                  variant="outline"
+                  onPress={() => navigateRoot('SchoolVisits', { leadId: visit.leadId || undefined, schoolName: visit.schoolName })}
+                />
+              ) : null}
+            </View>
+            {isTrainer ? <TrainerActivityForm visit={visit} onSaved={load} /> : null}
+            <View style={styles.card}>
+              <WebButton title="Check Out of School" variant="destructive" onPress={onCheckOut} loading={busy === 'exit'} />
+              <TouchableOpacity onPress={() => setForgot((f) => !f)}>
+                <Text style={styles.link}>{forgot ? 'Cancel' : 'Forgot to check out? Enter the exit time'}</Text>
+              </TouchableOpacity>
+            </View>
+            {forgot ? <MissedExitCard title={visit.schoolName} startAt={visit.entryAt} onSubmit={onForgotCheckOut} /> : null}
+          </>
+        ) : (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Check in at a school</Text>
+            {school ? (
+              <View style={styles.selected}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.selectedName}>{school.schoolName}</Text>
+                  <Text style={styles.muted}>{[school.schoolCode, school.town].filter(Boolean).join(' · ')}</Text>
+                </View>
+                <TouchableOpacity onPress={() => setSchool(null)}>
+                  <Text style={styles.link}>Change</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <>
+                <WebLabel>School code / name *</WebLabel>
+                <WebInput placeholder="Search by school code or name" value={query} onChangeText={setQuery} autoCapitalize="none" />
+                {searching ? <ActivityIndicator color={colors.primary} /> : null}
+                {schools.map((s) => (
+                  <TouchableOpacity key={`${s.schoolCode}-${s.schoolName}`} style={styles.result} onPress={() => setSchool(s)}>
+                    <Text style={styles.resultName}>{s.schoolName}</Text>
+                    <Text style={styles.muted}>
+                      {[s.schoolCode || 'No code', s.town, s.source === 'training' ? 'Training scheduled' : s.source === 'service' ? 'Service scheduled' : '']
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </Text>
                   </TouchableOpacity>
                 ))}
-              </View>
-              <WebButton title="Start Trip" onPress={onStartTrip} loading={busy === 'trip'} />
-              <View style={styles.divider} />
-              <WebLabel>School name *</WebLabel>
-              <WebInput placeholder="School you have reached" value={schoolName} onChangeText={setSchoolName} />
-              <WebButton title="Take Entry Photo" variant="outline" onPress={onSchoolEntry} loading={busy === 'entry'} />
-            </>
-          )}
-        </View>
+                {!searching && query.trim().length >= 2 && !schools.length ? <Text style={styles.muted}>No school found.</Text> : null}
+              </>
+            )}
+            <WebButton title="Check In (entry photo)" onPress={onCheckIn} loading={busy === 'entry'} disabled={!school} />
+          </View>
+        )
       ) : null}
 
       {summary?.timeline?.length ? (
@@ -262,7 +333,7 @@ export default function FieldDayScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.timelineTitle}>
                   {e.kind === 'trip' ? `Trip ${e.sequence || ''}` : e.schoolName}
-                  {e.active ? ' (in progress)' : ''}
+                  {e.active ? ' (checked in)' : ''}
                 </Text>
                 <Text style={styles.muted}>
                   {time(e.at)} – {e.endAt ? time(e.endAt) : 'now'} · {hours(e.minutes)}
@@ -275,9 +346,168 @@ export default function FieldDayScreen() {
       ) : null}
 
       {day?.checkedIn && day.next.checkout ? (
-        <Text style={styles.hint}>Before checking out: {day.next.checkout}</Text>
+        <Text style={styles.hint}>Before End Day: {day.next.checkout}</Text>
       ) : null}
     </ScreenShell>
+  );
+}
+
+/** Trainer at a school: Training or Service, the mandatory details and the feedback form. */
+function TrainerActivityForm({ visit, onSaved }: { visit: OpenVisit; onSaved: () => Promise<void> }) {
+  const [type, setType] = useState<'Training' | 'Service'>(visit.activityType === 'Service' ? 'Service' : 'Training');
+  const [subject, setSubject] = useState(visit.activity?.subject || '');
+  const [term, setTerm] = useState(visit.activity?.term || '');
+  const [level, setLevel] = useState(visit.activity?.level || '');
+  const [participants, setParticipants] = useState(visit.activity?.participants ? String(visit.activity.participants) : '');
+  const [remarks, setRemarks] = useState(visit.activity?.remarks || '');
+  const [linkedId, setLinkedId] = useState<string>(visit.trainingId || visit.serviceId || '');
+  const [form, setForm] = useState<{ data: string; name: string } | null>(null);
+  const [assignments, setAssignments] = useState<{ trainings: Assignment[]; services: Assignment[] }>({ trainings: [], services: [] });
+  const [saving, setSaving] = useState(false);
+  const saved = Boolean(visit.activityType) && Boolean(visit.hasFeedbackForm);
+
+  useEffect(() => {
+    if (!visit.schoolCode) return;
+    apiService
+      .get(`/field-day/assignments?schoolCode=${encodeURIComponent(visit.schoolCode)}`)
+      .then((data) => setAssignments({ trainings: data?.trainings || [], services: data?.services || [] }))
+      .catch(() => undefined);
+  }, [visit.schoolCode]);
+
+  const scheduled = type === 'Training' ? assignments.trainings : assignments.services;
+
+  const pickScheduled = (a: Assignment) => {
+    if (linkedId === a._id) return setLinkedId('');
+    setLinkedId(a._id);
+    if (a.subject) setSubject(a.subject);
+    if (a.term) setTerm(a.term);
+    if (a.trainingLevel) setLevel(a.trainingLevel);
+  };
+
+  const photoForm = async () => {
+    try {
+      const photo = await takeLivePhoto();
+      if (photo) setForm({ data: photo, name: 'feedback-form.jpg' });
+    } catch (e: any) {
+      Alert.alert('Camera', e?.message || 'Could not open the camera');
+    }
+  };
+
+  const fileForm = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/jpeg', 'image/png'], copyToCacheDirectory: true });
+      if (result.canceled || !result.assets?.[0]) return;
+      const file = result.assets[0];
+      if (file.size && file.size > MAX_FORM_BYTES) throw new Error('The file is larger than 5 MB. Take a photo of the form instead.');
+      const base64 = await readAsStringAsync(file.uri, { encoding: 'base64' });
+      const mime = file.mimeType || (file.name?.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+      setForm({ data: `data:${mime};base64,${base64}`, name: file.name || 'feedback-form' });
+    } catch (e: any) {
+      Alert.alert('Feedback form', e?.message || 'Could not read the file');
+    }
+  };
+
+  const save = async () => {
+    if (!form && !visit.hasFeedbackForm) return Alert.alert('Feedback form', 'Upload the completed feedback form.');
+    setSaving(true);
+    try {
+      await apiService.put(`/field-day/visits/${visit._id}/activity`, {
+        activityType: type,
+        subject,
+        term,
+        level,
+        participants: type === 'Training' ? Number(participants) || 0 : undefined,
+        remarks,
+        linkedId: linkedId || undefined,
+        ...(form ? { feedbackForm: form.data, feedbackFormName: form.name } : {}),
+      });
+      setForm(null);
+      await onSaved();
+      Alert.alert('Saved', 'Details saved. You can check out of the school now.');
+    } catch (e: any) {
+      Alert.alert('Not saved', apiError(e, 'Could not save the details'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <View style={styles.card}>
+      <View style={styles.rowBetween}>
+        <Text style={styles.cardTitle}>Training / Service details</Text>
+        {saved ? <Text style={styles.badge}>Saved ✓</Text> : <Text style={styles.required}>Required</Text>}
+      </View>
+      <View style={styles.chips}>
+        {(['Training', 'Service'] as const).map((t) => (
+          <TouchableOpacity
+            key={t}
+            style={[styles.chip, type === t && styles.chipOn]}
+            onPress={() => {
+              setType(t);
+              setLinkedId('');
+            }}
+          >
+            <Text style={[styles.chipText, type === t && styles.chipTextOn]}>{t}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {scheduled.length ? (
+        <>
+          <WebLabel>{`Scheduled ${type.toLowerCase()} at this school`}</WebLabel>
+          {scheduled.map((a) => (
+            <TouchableOpacity key={a._id} style={[styles.result, linkedId === a._id && styles.resultOn]} onPress={() => pickScheduled(a)}>
+              <Text style={styles.resultName}>
+                {a.subject}
+                {a.term ? ` · ${a.term}` : ''}
+              </Text>
+              <Text style={styles.muted}>
+                {new Date(a.trainingDate || a.serviceDate || '').toLocaleDateString('en-IN')}
+                {linkedId === a._id ? ' · marked Completed on check-out' : ''}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </>
+      ) : null}
+      <WebLabel>Product / Subject *</WebLabel>
+      <View style={styles.wrapChips}>
+        {SUBJECTS.map((s) => (
+          <TouchableOpacity key={s} style={[styles.smallChip, subject === s && styles.chipOn]} onPress={() => setSubject(s)}>
+            <Text style={[styles.smallChipText, subject === s && styles.chipTextOn]}>{s}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <WebLabel>Term *</WebLabel>
+      <View style={styles.wrapChips}>
+        {TERMS.map((t) => (
+          <TouchableOpacity key={t} style={[styles.smallChip, term === t && styles.chipOn]} onPress={() => setTerm(t)}>
+            <Text style={[styles.smallChipText, term === t && styles.chipTextOn]}>{t}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {type === 'Training' ? (
+        <>
+          <WebLabel>Level</WebLabel>
+          <WebInput placeholder="e.g. Level 2" value={level} onChangeText={setLevel} />
+          <WebLabel>Teachers / students attended *</WebLabel>
+          <WebInput placeholder="Number attended" keyboardType="number-pad" value={participants} onChangeText={setParticipants} />
+        </>
+      ) : null}
+      <WebLabel>{type === 'Training' ? 'What was covered *' : 'Service details *'}</WebLabel>
+      <WebInput placeholder={type === 'Training' ? 'Topics covered in the training' : 'Work done at the school'} value={remarks} onChangeText={setRemarks} multiline />
+      <WebLabel>Feedback form *</WebLabel>
+      <Text style={styles.muted}>
+        {form ? `Selected: ${form.name}` : visit.hasFeedbackForm ? `Uploaded: ${visit.feedbackFormName || 'feedback form'}` : 'Not uploaded yet'}
+      </Text>
+      <View style={styles.chips}>
+        <View style={{ flex: 1 }}>
+          <WebButton title="Take Photo" variant="outline" onPress={photoForm} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <WebButton title="Choose File" variant="outline" onPress={fileForm} />
+        </View>
+      </View>
+      <WebButton title="Save Details" onPress={save} loading={saving} />
+    </View>
   );
 }
 
@@ -320,6 +550,17 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
   statLabel: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
   chips: { flexDirection: 'row', gap: 8 },
+  wrapChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  smallChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border },
+  smallChipText: { color: colors.textPrimary, fontSize: 12, fontWeight: '600' },
+  activeCard: { borderColor: colors.success, borderWidth: 2 },
+  required: { fontSize: 12, fontWeight: '600', color: colors.warning },
+  link: { color: colors.primary, fontWeight: '600', textAlign: 'center', paddingVertical: 6 },
+  selected: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderRadius: radii.md, backgroundColor: colors.borderLight },
+  selectedName: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
+  result: { paddingVertical: 8, paddingHorizontal: 10, borderRadius: radii.md, borderWidth: 1, borderColor: colors.borderLight },
+  resultOn: { borderColor: colors.primary, backgroundColor: '#EFF6FF' },
+  resultName: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
   chip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border },
   chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: { color: colors.textPrimary, fontWeight: '600' },

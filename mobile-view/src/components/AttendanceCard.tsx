@@ -17,6 +17,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { apiService } from '../services/api';
 import { getCurrentLocation, getTownFromPincode } from '../services/location';
 import { takeLivePhoto } from '../services/photo';
+import { stopDayTracking } from '../services/tracking';
 import { useAuth } from '../context/AuthContext';
 import { colors, gradients } from '../theme/colors';
 import { typography } from '../theme/typography';
@@ -199,8 +200,15 @@ export default function AttendanceCard({ onChange }: { onChange?: () => void } =
     }
   };
 
-  // Check-out takes an exit photo and the location: office days end in the office, field days in the field.
-  const handleCheckOut = async () => {
+  // End Day takes an exit photo and the location: office days end in the office, field days in the field.
+  const handleCheckOut = () => {
+    Alert.alert('End Day', 'End your day now? GPS tracking stops after this.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'End Day', style: 'destructive', onPress: () => void endDay() },
+    ]);
+  };
+
+  const endDay = async () => {
     setLoading(true);
     try {
       const exitPhoto = await takeLivePhoto({ front: true });
@@ -213,11 +221,12 @@ export default function AttendanceCard({ onChange }: { onChange?: () => void } =
         accuracy: here.accuracy,
       });
       setCurrentAttendance(null);
+      await stopDayTracking();
       await checkCurrentAttendance();
       onChange?.();
-      Alert.alert(res?.needsReview ? 'Sent for review' : 'Success', res?.message || 'Attendance checked out successfully');
+      Alert.alert(res?.needsReview ? 'Sent for review' : 'Day ended', res?.message || 'Your day has ended.');
     } catch (error: any) {
-      Alert.alert('Error', error?.message || 'Failed to check out');
+      Alert.alert('Error', error?.response?.data?.message || error?.message || 'Could not end the day');
     } finally {
       setLoading(false);
     }
@@ -234,10 +243,10 @@ export default function AttendanceCard({ onChange }: { onChange?: () => void } =
           <View style={styles.attendanceStatus}>
             <View style={styles.statusBadge}>
               <Text style={styles.statusIcon}>✓</Text>
-              <Text style={styles.statusText}>Checked In</Text>
+              <Text style={styles.statusText}>Day started</Text>
             </View>
             <Text style={styles.statusTime}>
-              Started: {new Date(currentAttendance.startTime).toLocaleTimeString()}
+              Started: {new Date(currentAttendance.startTime).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
             </Text>
             <TouchableOpacity 
               style={styles.checkOutButton} 
@@ -250,7 +259,7 @@ export default function AttendanceCard({ onChange }: { onChange?: () => void } =
                 end={{ x: 1, y: 1 }}
                 style={styles.buttonGradient}
               >
-                <Text style={styles.checkOutButtonText}>Check Out</Text>
+                <Text style={styles.checkOutButtonText}>{loading ? 'Ending…' : 'End Day'}</Text>
               </LinearGradient>
             </TouchableOpacity>
           </View>
@@ -267,7 +276,7 @@ export default function AttendanceCard({ onChange }: { onChange?: () => void } =
               end={{ x: 1, y: 1 }}
               style={styles.buttonGradient}
             >
-              <Text style={styles.checkInButtonText}>Check In</Text>
+              <Text style={styles.checkInButtonText}>Start Day</Text>
             </LinearGradient>
           </TouchableOpacity>
         )}
@@ -291,7 +300,7 @@ export default function AttendanceCard({ onChange }: { onChange?: () => void } =
             style={styles.modalHeader}
           >
             <Text style={styles.modalTitle}>
-              {isFirstTime ? 'First Time Setup' : 'Check In'}
+              {isFirstTime ? 'First Time Setup' : 'Start Day'}
             </Text>
             {!isFirstTime && (
               <TouchableOpacity onPress={() => setShowModal(false)} activeOpacity={0.7}>

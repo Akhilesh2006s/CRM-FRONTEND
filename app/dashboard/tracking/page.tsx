@@ -21,6 +21,8 @@ type DayRow = {
   reviewStatus: 'none' | 'pending' | 'approved' | 'rejected'
   reviewReason?: string
   fieldPermission: boolean
+  missedEndDay?: boolean
+  missedCheckouts?: number
   town?: string
   distanceKm: number
   tripCount: number
@@ -52,6 +54,12 @@ type Visit = {
   exitLongitude?: number
   exitDistanceFromEntryM?: number
   status: 'open' | 'closed'
+  schoolCode?: string
+  activityType?: string
+  activity?: { subject?: string; term?: string; level?: string; participants?: number; remarks?: string }
+  feedbackFormName?: string
+  missedCheckout?: boolean
+  missedReason?: string
 }
 type Attendance = {
   _id: string
@@ -68,6 +76,8 @@ type Attendance = {
   reviewStatus?: string
   reviewReason?: string
   reviewRemarks?: string
+  missedEndDay?: boolean
+  missedReason?: string
 }
 type Request = { _id: string; reason: string; places?: string; status: string; remarks?: string; decidedBy?: { name?: string } }
 type DayDetail = {
@@ -236,6 +246,8 @@ export default function FieldTrackingPage() {
                       <td className="py-2 px-3">{time(r.startTime)}</td>
                       <td className="py-2 px-3">
                         {r.endTime ? time(r.endTime) : <span className="text-green-700">Working</span>}
+                        {r.missedEndDay ? <div className="text-xs text-amber-700">End Day missed</div> : null}
+                        {r.missedCheckouts ? <div className="text-xs text-amber-700">{r.missedCheckouts} school check-out missed</div> : null}
                         {r.checkoutMode ? <div className="text-xs text-neutral-500">{r.checkoutMode === 'office' ? 'at office' : 'in field'}</div> : null}
                       </td>
                       <td className="py-2 px-3 text-right">{r.tripCount}</td>
@@ -285,6 +297,9 @@ export default function FieldTrackingPage() {
                                         </>
                                       ) : null}
                                     </div>
+                                    {a.missedEndDay ? (
+                                      <div className="text-amber-700">End Day missed. Reason: {a.missedReason}</div>
+                                    ) : null}
                                     {a.reviewStatus && a.reviewStatus !== 'none' ? (
                                       <div className="text-amber-700">
                                         {REVIEW[a.reviewStatus]?.label}: {a.reviewReason}
@@ -326,7 +341,10 @@ export default function FieldTrackingPage() {
                                       </div>
                                     ) : visit ? (
                                       <div key={visit._id} className="rounded border bg-white p-3 text-sm space-y-1">
-                                        <div className="font-medium">🏫 {visit.schoolName}</div>
+                                        <div className="font-medium">
+                                          🏫 {visit.schoolName}
+                                          {visit.schoolCode ? <span className="text-neutral-500"> · {visit.schoolCode}</span> : null}
+                                        </div>
                                         <div>
                                           Entry {time(visit.entryAt)} · <MapLink lat={visit.entryLatitude} lng={visit.entryLongitude} /> ·{' '}
                                           <button className="text-sky-700 underline" onClick={() => showPhoto(`${visit.schoolName}: entry`, `/field-day/visits/${visit._id}/photo?which=entry`)}>
@@ -352,6 +370,20 @@ export default function FieldTrackingPage() {
                                             ? ` · exit photo ${visit.exitDistanceFromEntryM} m from entry`
                                             : ''}
                                         </div>
+                                        {visit.missedCheckout ? (
+                                          <div className="text-amber-700">Check-out missed; exit time entered later. Reason: {visit.missedReason}</div>
+                                        ) : null}
+                                        {visit.activityType ? (
+                                          <div className="text-neutral-700">
+                                            {visit.activityType}: {[visit.activity?.subject, visit.activity?.term, visit.activity?.level].filter(Boolean).join(' · ')}
+                                            {visit.activity?.participants ? ` · ${visit.activity.participants} attended` : ''}
+                                            {visit.activity?.remarks ? ` · ${visit.activity.remarks}` : ''}
+                                            {' · '}
+                                            <button className="text-sky-700 underline" onClick={() => showPhoto(`${visit.schoolName}: feedback form`, `/field-day/visits/${visit._id}/photo?which=feedback`)}>
+                                              Feedback form
+                                            </button>
+                                          </div>
+                                        ) : null}
                                       </div>
                                     ) : null
                                   )}
@@ -378,6 +410,8 @@ export default function FieldTrackingPage() {
             </div>
             {photo.loading ? (
               <p className="text-sm text-neutral-500">Loading…</p>
+            ) : photo.src?.startsWith('data:application/pdf') ? (
+              <iframe src={photo.src} title={photo.title} className="h-[70vh] w-full rounded" />
             ) : photo.src ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={photo.src} alt={photo.title} className="max-h-[70vh] w-full rounded object-contain" />

@@ -45,6 +45,8 @@ module.exports = ({ config }) => ({
       'expo-location',
       {
         locationAlwaysAndWhenInUsePermission: 'Allow CRM Forge to use your location for attendance.',
+        isAndroidBackgroundLocationEnabled: true,
+        isAndroidForegroundServiceEnabled: true,
       },
     ],
     [

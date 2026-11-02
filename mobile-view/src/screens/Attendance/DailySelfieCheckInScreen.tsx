@@ -115,7 +115,7 @@ export default function DailySelfieCheckInScreen({ onDone }: { onDone: () => voi
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>Check In</Text>
+          <Text style={styles.title}>Start Day</Text>
           <Text style={styles.subtitle}>Hi {user?.name || 'there'}, take a selfie to start your day.</Text>
         </View>
         <LogoutButton />
@@ -191,7 +191,7 @@ export default function DailySelfieCheckInScreen({ onDone }: { onDone: () => voi
       <TextInput style={[styles.input, { minHeight: 60 }]} value={remarks} onChangeText={setRemarks} placeholder="Optional" multiline />
 
       <TouchableOpacity style={[styles.primaryBtn, { marginTop: 20 }]} onPress={submit} disabled={submitting}>
-        {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Check In</Text>}
+        {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Start Day</Text>}
       </TouchableOpacity>
     </ScrollView>
   );

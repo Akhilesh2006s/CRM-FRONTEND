@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } fr
 import { colors, radii } from '../../theme/colors';
 import ScreenShell from '../../ui/ScreenShell';
 import MessageBanner from '../../components/MessageBanner';
-import TripCard from '../../components/TripCard';
 import { apiService } from '../../services/api';
 import { claimTrip, type TripSummary } from '../../services/trip';
 
@@ -63,7 +62,6 @@ export default function MyTripsScreen() {
         load();
       }}
     >
-      <TripCard />
       {error ? <MessageBanner type="error" message={error} onDismiss={() => setError('')} /> : null}
       <Text style={styles.summary}>
         {ended.length} trip{ended.length === 1 ? '' : 's'} · {Math.round(totalKm * 100) / 100} km

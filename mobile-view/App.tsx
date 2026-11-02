@@ -7,10 +7,7 @@ import MainTabs from './src/navigation/MainTabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, StyleSheet, Text, TouchableOpacity } from 'react-native';
-import {
-  startForegroundTracking,
-  stopForegroundTracking,
-} from './src/services/tracking';
+import { stopDayTracking } from './src/services/tracking';
 import LoginScreen from './src/screens/Auth/LoginScreen';
 import FirstTimeAttendanceScreen from './src/screens/Attendance/FirstTimeAttendanceScreen';
 import CheckInGate from './src/components/CheckInGate';
@@ -492,15 +489,8 @@ function AppNavigator() {
   const { user, loading } = useAuth();
 
   useEffect(() => {
-    if (user) {
-      try {
-        startForegroundTracking();
-      } catch (err) {
-        console.warn('[tracking] failed to start:', err);
-      }
-      return () => stopForegroundTracking();
-    }
-    stopForegroundTracking();
+    // GPS follows the day: CheckInGate starts it at Start Day and AttendanceCard stops it at End Day.
+    if (!user) void stopDayTracking();
     return undefined;
   }, [user]);
 

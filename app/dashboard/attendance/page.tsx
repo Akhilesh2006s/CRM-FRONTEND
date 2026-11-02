@@ -208,8 +208,8 @@ export default function MyAttendancePage() {
                 </div>
                 <p className="mt-1 text-xs text-neutral-500">
                   {active.mode === 'office'
-                    ? 'Check out inside the office. Checking out elsewhere goes to review.'
-                    : 'Check out in the field. Checking out at the office goes to review.'}
+                    ? 'End the day inside the office. Ending it elsewhere goes to review.'
+                    : 'End the day in the field. Ending it at the office goes to review.'}
                 </p>
               </div>
               <div className="flex flex-wrap items-end gap-3">
@@ -222,13 +222,13 @@ export default function MyAttendancePage() {
                   <img src={exitPhoto} alt="Exit photo" className="h-16 w-16 rounded border object-cover" />
                 )}
                 <Button onClick={checkOut} disabled={busy} className="bg-red-600 hover:bg-red-700 text-white">
-                  {busy ? 'Checking out…' : 'Check Out'}
+                  {busy ? 'Ending…' : 'End Day'}
                 </Button>
               </div>
             </div>
           ) : (
             <>
-              <div className="font-semibold text-neutral-900">Check In</div>
+              <div className="font-semibold text-neutral-900">Start Day</div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <Label htmlFor="reason">Reason *</Label>
@@ -268,7 +268,7 @@ export default function MyAttendancePage() {
                 Your location is recorded when you check in. Within 200 m of an office it is an office day; anywhere else is a field day.
               </p>
               <Button onClick={checkIn} disabled={busy} className="bg-green-600 hover:bg-green-700 text-white">
-                {busy ? 'Checking in…' : 'Check In'}
+                {busy ? 'Starting…' : 'Start Day'}
               </Button>
             </>
           )}

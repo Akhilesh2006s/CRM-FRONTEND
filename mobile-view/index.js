@@ -2,6 +2,8 @@ import 'react-native-gesture-handler';
 import 'react-native-reanimated';
 import { registerRootComponent } from 'expo';
 import App from './App';
+// Registers the all-day GPS task before the app starts (it also runs with the app closed).
+import './src/services/tracking';
 
 try {
   const errorUtils = global.ErrorUtils;
