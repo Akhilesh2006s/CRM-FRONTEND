@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { apiRequest } from '@/lib/api'
+import { apiRequest, API_BASE_URL, resolveUploadUrl } from '@/lib/api'
+import { getCurrentUser } from '@/lib/auth'
 import { toast } from 'sonner'
 
 type Item = {
@@ -19,18 +20,35 @@ type Item = {
   isActive?: boolean
 }
 
+const TYPES = [
+  { value: 'brochure', label: 'Brochure' },
+  { value: 'video', label: 'Video' },
+  { value: 'ppt', label: 'PPT' },
+  { value: 'link', label: 'Link' },
+  { value: 'other', label: 'Other' },
+]
+
+/** Sales Collateral: Admin / Super Admin upload brochures and videos; everyone else views them. */
 export default function SalesCollateralPage() {
   const [items, setItems] = useState<Item[]>([])
   const [loading, setLoading] = useState(true)
+  const [canManage, setCanManage] = useState(false)
   const [title, setTitle] = useState('')
   const [url, setUrl] = useState('')
-  const [type, setType] = useState('link')
+  const [file, setFile] = useState<File | null>(null)
+  const [type, setType] = useState('brochure')
   const [description, setDescription] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    const user = getCurrentUser() as { role?: string; isSuperAdmin?: boolean } | null
+    setCanManage(user?.role === 'Admin' || user?.role === 'Super Admin' || Boolean(user?.isSuperAdmin))
+  }, [])
 
   const load = async () => {
     setLoading(true)
     try {
-      const data = await apiRequest<Item[]>('/collateral?active=0')
+      const data = await apiRequest<Item[]>(`/collateral${canManage ? '?active=0' : ''}`)
       setItems(Array.isArray(data) ? data : [])
     } catch (e: any) {
       toast.error(e?.message || 'Failed to load collateral')
@@ -41,25 +59,51 @@ export default function SalesCollateralPage() {
 
   useEffect(() => {
     load()
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canManage])
+
+  const uploadFile = async (picked: File): Promise<string> => {
+    const body = new FormData()
+    body.append('file', picked)
+    const res = await fetch(`${API_BASE_URL}/api/collateral/upload`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` },
+      body,
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok || !data?.url) throw new Error(data?.message || 'Upload failed')
+    return data.url
+  }
 
   const add = async () => {
-    if (!title.trim() || !url.trim()) {
-      toast.error('Title and URL are required')
-      return
-    }
+    if (!title.trim()) return toast.error('Enter the title')
+    if (!file && !url.trim()) return toast.error('Choose a file to upload or enter a link')
+    setSaving(true)
     try {
+      const link = file ? await uploadFile(file) : url.trim()
       await apiRequest('/collateral', {
         method: 'POST',
-        body: JSON.stringify({ title, url, type, description }),
+        body: JSON.stringify({ title: title.trim(), url: link, type, description }),
       })
       setTitle('')
       setUrl('')
+      setFile(null)
       setDescription('')
       toast.success('Collateral added')
       await load()
     } catch (e: any) {
       toast.error(e?.message || 'Failed to add')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const toggleActive = async (item: Item) => {
+    try {
+      await apiRequest(`/collateral/${item._id}`, { method: 'PUT', body: JSON.stringify({ isActive: item.isActive === false }) })
+      await load()
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to update')
     }
   }
 
@@ -68,50 +112,55 @@ export default function SalesCollateralPage() {
       <div>
         <h1 className="text-2xl font-semibold">Sales Collateral</h1>
         <p className="text-sm text-neutral-500 mt-1">
-          Demo videos, PPTs and brochures for field visits
+          Brochures, videos and PPTs for school visits{canManage ? '' : '. Uploaded by Admin.'}
         </p>
       </div>
 
-      <Card className="p-4 space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <div>
-            <Label>Title</Label>
-            <Input className="bg-white" value={title} onChange={(e) => setTitle(e.target.value)} />
+      {canManage ? (
+        <Card className="p-4 space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <Label>Title *</Label>
+              <Input className="bg-white" value={title} onChange={(e) => setTitle(e.target.value)} />
+            </div>
+            <div>
+              <Label>Type</Label>
+              <Select value={type} onValueChange={setType}>
+                <SelectTrigger className="bg-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TYPES.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Input className="bg-white" value={description} onChange={(e) => setDescription(e.target.value)} />
+            </div>
           </div>
-          <div>
-            <Label>URL</Label>
-            <Input className="bg-white" value={url} onChange={(e) => setUrl(e.target.value)} />
-          </div>
-          <div>
-            <Label>Type</Label>
-            <Select value={type} onValueChange={setType}>
-              <SelectTrigger className="bg-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="video">Video</SelectItem>
-                <SelectItem value="ppt">PPT</SelectItem>
-                <SelectItem value="brochure">Brochure</SelectItem>
-                <SelectItem value="link">Link</SelectItem>
-                <SelectItem value="other">Other</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-end">
-            <Button type="button" onClick={add} className="w-full">
-              Add
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+            <div>
+              <Label>Upload file (brochure PDF / image / PPT / video, up to 200 MB)</Label>
+              <Input
+                className="bg-white"
+                type="file"
+                accept="application/pdf,image/*,video/*,.ppt,.pptx"
+                onChange={(e) => setFile(e.target.files?.[0] || null)}
+              />
+            </div>
+            <div>
+              <Label>Or link (YouTube / Drive)</Label>
+              <Input className="bg-white" value={url} disabled={Boolean(file)} onChange={(e) => setUrl(e.target.value)} />
+            </div>
+            <Button type="button" onClick={add} disabled={saving} className="w-full">
+              {saving ? 'Uploading…' : 'Add'}
             </Button>
           </div>
-        </div>
-        <div>
-          <Label>Description</Label>
-          <Input
-            className="bg-white"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          />
-        </div>
-      </Card>
+        </Card>
+      ) : null}
 
       <Card className="p-0 overflow-hidden">
         {loading ? (
@@ -124,26 +173,29 @@ export default function SalesCollateralPage() {
               <tr>
                 <th className="px-3 py-2 text-left">Title</th>
                 <th className="px-3 py-2 text-left">Type</th>
-                <th className="px-3 py-2 text-left">Link</th>
-                <th className="px-3 py-2 text-left">Active</th>
+                <th className="px-3 py-2 text-left">Description</th>
+                <th className="px-3 py-2 text-left">View</th>
+                {canManage ? <th className="px-3 py-2 text-left">Active</th> : null}
               </tr>
             </thead>
             <tbody>
               {items.map((item) => (
                 <tr key={item._id} className="border-t">
                   <td className="px-3 py-2 font-medium">{item.title}</td>
-                  <td className="px-3 py-2">{item.type}</td>
+                  <td className="px-3 py-2 capitalize">{item.type}</td>
+                  <td className="px-3 py-2 text-neutral-600">{item.description || '—'}</td>
                   <td className="px-3 py-2">
-                    <a
-                      href={item.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-teal-700 hover:underline break-all"
-                    >
-                      Open
+                    <a href={resolveUploadUrl(item.url) || item.url} target="_blank" rel="noreferrer" className="text-teal-700 hover:underline">
+                      {item.type === 'video' ? 'Play' : 'Open'}
                     </a>
                   </td>
-                  <td className="px-3 py-2">{item.isActive === false ? 'No' : 'Yes'}</td>
+                  {canManage ? (
+                    <td className="px-3 py-2">
+                      <button className="text-sky-700 underline" onClick={() => toggleActive(item)}>
+                        {item.isActive === false ? 'No (show)' : 'Yes (hide)'}
+                      </button>
+                    </td>
+                  ) : null}
                 </tr>
               ))}
             </tbody>

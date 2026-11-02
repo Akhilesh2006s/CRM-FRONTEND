@@ -155,7 +155,7 @@ function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
         items: [
           { label: 'Add Lead', screen: 'LeadAdd' },
           { label: 'Followup Leads', screen: 'LeadFollowup' },
-          { label: 'My Leads', screen: 'LeadsList' },
+          { label: 'My Schools', screen: 'LeadsList' },
           { label: 'School Visits', screen: 'SchoolVisits' },
         ],
       },
@@ -177,7 +177,6 @@ function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
       {
         title: 'More',
         items: [
-          { label: 'Sample Request', screen: 'SamplesRequest' },
           { label: 'Stock Returns', screen: 'ReturnsEmployee' },
           { label: 'Leave Request', screen: 'LeaveRequest' },
           { label: 'My Leaves', screen: 'LeavesApproved' },
@@ -682,7 +681,7 @@ const WEB_PORTED_LINKS: { section: string; link: NavLink; allowed: (role: string
     link: { label: 'Training Requests', screen: 'TrainingRequests', icon: '📋' },
     allowed: (r, sa) => sa || r === 'Admin' || COORDINATOR_ROLES.has(r),
   },
-  { section: 'Leads', link: { label: 'Sales Collateral', screen: 'SalesCollateral', icon: '📁' }, allowed: (r, sa) => sa || BDE_ROLES.has(r) },
+  { section: 'Leads', link: { label: 'Sales Collateral', screen: 'SalesCollateral', icon: '📁' }, allowed: (r, sa) => sa || r === 'Admin' || BDE_ROLES.has(r) },
   {
     section: 'Reports',
     link: { label: 'Operational Reports', screen: 'ReportsOperational', icon: '📊' },
@@ -690,7 +689,6 @@ const WEB_PORTED_LINKS: { section: string; link: NavLink; allowed: (role: string
   },
   { section: 'Settings', link: { label: 'Roles & Permissions', screen: 'SettingsRoles', icon: '🔐' }, allowed: (_r, sa) => sa },
   ...BANK_PAYOUT_LINKS.map((link) => ({ section: 'Bank Payouts', link, allowed: (r: string, sa: boolean) => sa || r === 'Admin' })),
-  { section: 'Expenses', link: { label: 'My Trips (GPS km)', screen: 'MyTrips', icon: '🛵' }, allowed: () => true },
 ];
 
 function addWebPortedLinks(sections: NavSection[], role: string, superAdmin: boolean): NavSection[] {

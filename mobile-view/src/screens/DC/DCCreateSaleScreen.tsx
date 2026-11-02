@@ -186,21 +186,17 @@ export default function DCCreateSaleScreen({ navigation }: any) {
     region: '',
     area: '',
     lead_status: 'pending',
-    zone: '',
     cluster: '',
+    clusterId: '',
     branches: '',
     strength: '',
     average_fee: '',
     remarks: '',
     follow_up_date: '',
-    assigned_to: '',
   });
   const [products, setProducts] = useState<SaleProduct[]>([]);
-  const [employees, setEmployees] = useState<{ _id: string; name: string }[]>([]);
-  const [zones, setZones] = useState<{ _id: string; name: string }[]>([]);
-  const [clusters, setClusters] = useState<string[]>([]);
+  const [clusters, setClusters] = useState<{ _id: string; name: string; zone: string }[]>([]);
   const [areas, setAreas] = useState<{ name: string; district?: string; block?: string; branchType?: string }[]>([]);
-  const [loadingEmployees, setLoadingEmployees] = useState(true);
   const [loadingPincode, setLoadingPincode] = useState(false);
   const [pincodeError, setPincodeError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -317,59 +313,23 @@ export default function DCCreateSaleScreen({ navigation }: any) {
     })();
   }, []);
 
-  useEffect(() => {
-    (async () => {
-      setLoadingEmployees(true);
-      try {
-        const data = await apiService.get('/employees?isActive=true&role=Executive');
-        const list = Array.isArray(data) ? data : data?.data || [];
-        setEmployees(
-          list
-            .map((u: any) => ({ _id: u._id || u.id, name: u.name || 'Unknown' }))
-            .filter((e: { name: string }) => e.name !== 'Unknown'),
-        );
-      } catch {
-        setEmployees([]);
-      } finally {
-        setLoadingEmployees(false);
-      }
-    })();
-  }, []);
 
-  // Zone / Cluster pick lists, as on the web Create Sale.
+  // Cluster pick list (all zones). The zone is taken from the chosen cluster on the server.
   useEffect(() => {
     (async () => {
       try {
-        const data = await apiService.get('/zones');
+        const data = await apiService.get('/clusters');
         const list = Array.isArray(data) ? data : data?.data || [];
-        setZones(
+        setClusters(
           list
-            .map((z: any) => ({ _id: String(z._id || ''), name: String(z.name || '') }))
-            .filter((z: { name: string }) => z.name),
+            .map((c: any) => ({ _id: String(c._id || ''), name: String(c.name || ''), zone: String(c.zoneId?.name || '') }))
+            .filter((c: { name: string }) => c.name),
         );
-      } catch {
-        setZones([]);
-      }
-    })();
-  }, []);
-
-  useEffect(() => {
-    const zoneName = form.zone.trim().toLowerCase();
-    const match = zones.find((z) => z.name.toLowerCase() === zoneName);
-    if (!zoneName || !match) {
-      setClusters([]);
-      return;
-    }
-    (async () => {
-      try {
-        const data = await apiService.get(`/zones/${match._id}/clusters`);
-        const list = Array.isArray(data) ? data : data?.data || [];
-        setClusters(list.map((c: any) => String(c.name || '')).filter(Boolean));
       } catch {
         setClusters([]);
       }
     })();
-  }, [form.zone, zones]);
+  }, []);
 
   const updateProduct = (index: number, patch: Partial<SaleProduct>) => {
     setProducts((prev) => prev.map((p, i) => (i === index ? { ...p, ...patch } : p)));
@@ -411,8 +371,8 @@ export default function DCCreateSaleScreen({ navigation }: any) {
       setError('Address is required');
       return;
     }
-    if (!form.assigned_to) {
-      setError('Please assign the deal to a BDE. DC will not be created without assignment.');
+    if (!form.cluster.trim()) {
+      setError('Select the cluster.');
       return;
     }
     if (!form.follow_up_date) {
@@ -473,8 +433,8 @@ export default function DCCreateSaleScreen({ navigation }: any) {
         city: form.city || undefined,
         region: form.region || undefined,
         area: form.area || undefined,
-        zone: form.zone,
         cluster: form.cluster || undefined,
+        clusterId: form.clusterId || undefined,
         status: form.lead_status || 'pending',
         branches: Number(form.branches),
         strength: Number(form.strength),
@@ -483,7 +443,6 @@ export default function DCCreateSaleScreen({ navigation }: any) {
         email,
         products: selectedProducts,
         follow_up_date: followUp,
-        assigned_to: form.assigned_to,
       });
       setSuccess('Deal created successfully. DC entry has been created — submit PO from EMP DC / Admin DCs.');
       const isAdmin = user?.role === 'Admin' || user?.role === 'Super Admin';
@@ -516,10 +475,10 @@ export default function DCCreateSaleScreen({ navigation }: any) {
         onChangeText={(v) => setField('school_name', v)}
       />
       <Text style={styles.label}>School code</Text>
-      <WebInput
-        value="Assigned automatically from the pincode, zone, and cluster"
-        editable={false}
-      />
+      <View style={styles.autoBox}>
+        <Text style={styles.autoValue}>Auto-generated</Text>
+        <Text style={styles.autoNote}>Created when the deal is saved, from the pincode and cluster.</Text>
+      </View>
       <WebSelect
         label="School Type"
         value={form.school_type}
@@ -678,32 +637,21 @@ export default function DCCreateSaleScreen({ navigation }: any) {
         onValueChange={(v) => setField('lead_status', v)}
         items={DEAL_STATUS_OPTIONS}
       />
-      {zones.length > 0 ? (
-        <WebSelect
-          label="Zone *"
-          value={form.zone}
-          onValueChange={(v) => setForm((f) => ({ ...f, zone: v, cluster: '' }))}
-          items={zones.map((z) => ({ label: z.name, value: z.name }))}
-          placeholder="Select zone"
-        />
-      ) : (
-        <>
-          <Text style={styles.label}>Zone *</Text>
-          <WebInput placeholder="Zone" value={form.zone} onChangeText={(v) => setField('zone', v)} />
-        </>
-      )}
       {clusters.length > 0 ? (
         <WebSelect
           label="Cluster *"
-          value={form.cluster}
-          onValueChange={(v) => setField('cluster', v)}
-          items={clusters.map((c) => ({ label: c, value: c }))}
+          value={form.clusterId}
+          onValueChange={(v) => {
+            const picked = clusters.find((c) => c._id === v);
+            setForm((f) => ({ ...f, clusterId: v, cluster: picked?.name || '' }));
+          }}
+          items={clusters.map((c) => ({ label: c.zone ? `${c.name} (${c.zone})` : c.name, value: c._id }))}
           placeholder="Select cluster"
         />
       ) : (
         <>
           <Text style={styles.label}>Cluster *</Text>
-          <WebInput placeholder="Cluster in this zone" value={form.cluster} onChangeText={(v) => setField('cluster', v)} />
+          <WebInput placeholder="Cluster" value={form.cluster} onChangeText={(v) => setField('cluster', v)} />
         </>
       )}
       <Text style={styles.label}>No. of Branches *</Text>
@@ -720,22 +668,6 @@ export default function DCCreateSaleScreen({ navigation }: any) {
         onChangeText={(v) => setField('average_fee', v)}
         keyboardType="number-pad"
       />
-      <WebSelect
-        label="Assign to (BDE) *"
-        value={form.assigned_to}
-        onValueChange={(v) => setField('assigned_to', v)}
-        items={employees.map((e) => ({ label: e.name, value: e._id }))}
-        placeholder={
-          loadingEmployees
-            ? 'Loading employees...'
-            : employees.length === 0
-              ? 'No employees found'
-              : 'Select BDE'
-        }
-      />
-      {employees.length === 0 && !loadingEmployees ? (
-        <Text style={styles.errorText}>Create employees first in Users / Employees → New Employee</Text>
-      ) : null}
       <Text style={styles.label}>School strength (students) *</Text>
       <WebInput
         placeholder="School strength (students)"
@@ -778,6 +710,17 @@ const styles = StyleSheet.create({
   sectionTitle: { ...typography.heading.h3, color: colors.textPrimary, marginTop: 8, marginBottom: 8 },
   hint: { ...typography.body.small, color: colors.textSecondary, marginBottom: 12 },
   errorText: { ...typography.body.small, color: colors.error, marginBottom: 12 },
+  autoBox: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  autoValue: { fontSize: 16, fontWeight: '600', color: colors.textPrimary },
+  autoNote: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
   saleProductRow: {
     borderWidth: 1,
     borderColor: colors.border,

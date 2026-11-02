@@ -61,6 +61,9 @@ function normalizedRole(user: AuthUserWithPermissions): string {
   return String(user.role || user.roleName || '').trim().toLowerCase()
 }
 const BDE_OPERATIONAL_ROUTES = [
+  '/dashboard/leads/my-schools',
+  '/dashboard/visits',
+  '/dashboard/collateral',
   '/dashboard/leads/add',
   '/dashboard/leads/followup',
   '/dashboard/leads/renewal',

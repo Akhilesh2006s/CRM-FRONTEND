@@ -16,6 +16,7 @@ import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 import { confirmLogout } from '../../utils/confirmLogout';
+import SchoolOverview from '../../components/SchoolOverview';
 
 interface Lead {
   _id: string;
@@ -36,6 +37,7 @@ export default function LeadsListScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'open' | 'followup' | 'closed'>('all');
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const handleLogout = () => {
     confirmLogout(logout);
@@ -117,7 +119,8 @@ export default function LeadsListScreen({ navigation }: any) {
 
   return (
     <ScreenShell
-      title="Leads"
+      title="My Schools"
+      subtitle="Tap a school to see all of its details, deals, DCs, payments and visits."
       loading={loading && !refreshing}
       refreshing={refreshing}
       onRefresh={onRefresh}
@@ -156,7 +159,7 @@ export default function LeadsListScreen({ navigation }: any) {
         {leads.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyIcon}>📋</Text>
-            <Text style={styles.emptyText}>No leads found</Text>
+            <Text style={styles.emptyText}>No schools found</Text>
             <TouchableOpacity
               style={styles.emptyButton}
               onPress={() => navigation.navigate('LeadAdd')}
@@ -169,13 +172,7 @@ export default function LeadsListScreen({ navigation }: any) {
             <TouchableOpacity
               key={lead._id}
               style={styles.leadCard}
-              onPress={() => {
-                if (lead.status === 'Closed') {
-                  navigation.navigate('LeadClose', { id: lead._id });
-                } else {
-                  navigation.navigate('LeadEdit', { id: lead._id });
-                }
-              }}
+              onPress={() => setOpenId(openId === lead._id ? null : lead._id)}
               activeOpacity={0.7}
             >
               <View style={styles.leadCardHeader}>
@@ -259,8 +256,14 @@ export default function LeadsListScreen({ navigation }: any) {
                 <Text style={styles.leadDate}>
                   Created: {formatDate(lead.createdAt)}
                 </Text>
-                <Text style={styles.leadArrow}>›</Text>
+                <Text style={styles.leadArrow}>{openId === lead._id ? '⌃' : '⌄'}</Text>
               </View>
+              {openId === lead._id ? (
+                <SchoolOverview
+                  leadId={lead._id}
+                  onEdit={() => navigation.navigate(lead.status === 'Closed' ? 'LeadClose' : 'LeadEdit', { id: lead._id })}
+                />
+              ) : null}
             </TouchableOpacity>
           ))
         )}

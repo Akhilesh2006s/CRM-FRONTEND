@@ -271,11 +271,6 @@ export const RBAC_NAV_MODULES: RbacNavModule[] = [
       { label: 'BDEs', href: '/dashboard/executive-managers/executives' },
     ],
   },
-  {
-    module: 'samples',
-    label: MODULE_LABELS.samples,
-    pages: [{ label: 'Request Samples', href: '/dashboard/samples/request' }],
-  },
 ]
 
 export type BuiltRbacNavItem = {

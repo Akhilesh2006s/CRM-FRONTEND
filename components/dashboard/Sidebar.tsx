@@ -736,7 +736,7 @@ function applyVendorSectionNav(nav: NavItem[]): NavItem[] {
   return withoutVendorSection
 }
 
-/** Executive: preferred sidebar order; Settings before Samples, then Sign out. */
+/** Executive: preferred sidebar order; Settings, then Sign out. */
 function applyExecutiveSidebarOrder(nav: NavItem[]): NavItem[] {
   const preferred = [
     'Dashboard',
@@ -750,7 +750,6 @@ function applyExecutiveSidebarOrder(nav: NavItem[]): NavItem[] {
     'Training',
     'View Tickets',
     'Settings',
-    'Samples',
   ] as const
 
   const isSignOut = (item: NavItem) =>
@@ -793,6 +792,21 @@ function applyExecutiveSidebarOrder(nav: NavItem[]): NavItem[] {
   // My Clients must not remain as a separate top-level item
   byLabel.delete('My Clients')
 
+  // Leads: the same options as the app (My Schools, School Visits, Sales Collateral).
+  byLabel.set('Leads', {
+    label: 'Leads',
+    icon: TrendingUp,
+    children: [
+        { label: 'Add Lead', href: '/dashboard/leads/add', icon: PlusCircle },
+        { label: 'Followup Leads', href: '/dashboard/leads/followup', icon: Phone },
+        { label: 'My Schools', href: '/dashboard/leads/my-schools', icon: Building2 },
+        { label: 'School Visits', href: '/dashboard/visits', icon: MapPin },
+        { label: 'Sales Collateral', href: '/dashboard/collateral', icon: FileText },
+    ],
+  })
+  // Samples are requested inside Emp DC; no separate Request Samples menu.
+  byLabel.delete('Samples')
+
   if (!byLabel.has('Settings')) {
     byLabel.set('Settings', {
       label: 'Settings',
@@ -818,19 +832,11 @@ function applyExecutiveSidebarOrder(nav: NavItem[]): NavItem[] {
     }
   }
 
-  const withoutSettingsAndSamples = ordered.filter(
-    (item) => item.label !== 'Settings' && item.label !== 'Samples'
-  )
+  const withoutSettings = ordered.filter((item) => item.label !== 'Settings')
   const settings = byLabel.get('Settings')
-  const samples = byLabel.get('Samples')
   const signOut = nav.filter(isSignOut)
 
-  return [
-    ...withoutSettingsAndSamples,
-    ...(settings ? [settings] : []),
-    ...(samples ? [samples] : []),
-    ...signOut,
-  ]
+  return [...withoutSettings, ...(settings ? [settings] : []), ...signOut]
 }
 
 /** Role-specific links (e.g. executive-manager dashboard) not in the RBAC catalog. */
@@ -1008,8 +1014,11 @@ export function Sidebar() {
         label: 'Leads',
         icon: TrendingUp,
         children: [
-          { label: 'Add Lead', href: '/dashboard/leads/add', icon: PlusCircle },
-          { label: 'Followup Leads', href: '/dashboard/leads/followup', icon: Phone },
+            { label: 'Add Lead', href: '/dashboard/leads/add', icon: PlusCircle },
+            { label: 'Followup Leads', href: '/dashboard/leads/followup', icon: Phone },
+            { label: 'My Schools', href: '/dashboard/leads/my-schools', icon: Building2 },
+            { label: 'School Visits', href: '/dashboard/visits', icon: MapPin },
+            { label: 'Sales Collateral', href: '/dashboard/collateral', icon: FileText },
         ],
       },
       {
@@ -1065,13 +1074,6 @@ export function Sidebar() {
         icon: Settings,
         children: [
           { label: 'Change Password', href: '/dashboard/settings/password' },
-        ],
-      },
-      {
-        label: 'Samples',
-        icon: Package,
-        children: [
-          { label: 'Request Samples', href: '/dashboard/samples/request', icon: PlusCircle },
         ],
       },
       { label: 'Sign out', icon: LogOut, href: '/auth/login' },

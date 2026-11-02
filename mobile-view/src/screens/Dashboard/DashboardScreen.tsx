@@ -7,6 +7,7 @@ import {
   RefreshControl,
   TouchableOpacity,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import AttendanceCard from '../../components/AttendanceCard';
@@ -14,7 +15,6 @@ import PendingAdvanceApprovalsCard from '../../components/PendingAdvanceApproval
 import { BirthdayWishCard, EmployeeBirthdaysCard } from '../../components/BirthdayCards';
 import { Ionicons } from '@expo/vector-icons';
 import StatCard from '../../components/dashboard/StatCard';
-import SimpleBarChart from '../../components/dashboard/SimpleBarChart';
 import PremiumIcon from '../../components/ui/PremiumIcon';
 import { apiService } from '../../services/api';
 import { colors } from '../../theme/colors';
@@ -24,7 +24,6 @@ import { getRoleFlags } from '../../utils/roles';
 import HierarchyDashboardScreen from '../Hierarchy/HierarchyDashboardScreen';
 import ProductManagerScreen from '../ProductManager/ProductManagerScreen';
 import PartnerDashboard from '../../components/partner/PartnerDashboard';
-import { fmtINR, sumAggAmount, sumAggCount } from '../../utils/format';
 import { DASHBOARD_STAT_ICONS } from '../../config/moduleIcons';
 
 type DashboardStats = {
@@ -37,8 +36,6 @@ type DashboardStats = {
   completedServices: number;
 };
 
-type TrendPoint = { name: string; leads: number; sales: number; revenue: number };
-type ZonePoint = { zone: string; total: number; hot?: number; warm?: number; cold?: number };
 
 const ADMIN_QUICK = [
   { label: 'Add Lead', screen: 'LeadAdd', ion: 'person-add-outline' as const, color: '#16A34A', bg: '#DCFCE7' },
@@ -65,14 +62,12 @@ export default function DashboardScreen({ navigation }: { navigation?: any }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [trends, setTrends] = useState<TrendPoint[]>([]);
-  const [zones, setZones] = useState<ZonePoint[]>([]);
   const [executiveAnalytics, setExecutiveAnalytics] = useState<any>(null);
   const [comprehensive, setComprehensive] = useState<any>(null);
 
-  // Web CRM has no field check-in/out for trainers; mobile attendance matches executive/employee roles.
+  // Start Day / End Day for field and office staff, trainers included.
   const showAttendance =
-    !flags.isTrainer &&
+    flags.isTrainer ||
     (flags.isEmployee ||
       flags.isExecutive ||
       flags.isManager ||
@@ -98,14 +93,8 @@ export default function DashboardScreen({ navigation }: { navigation?: any }) {
       return;
     }
     try {
-      const [statsData, trendsData, zonesData] = await Promise.all([
-        apiService.get('/dashboard/stats').catch(() => null),
-        apiService.get('/dashboard/revenue-trends').catch(() => []),
-        apiService.get('/dashboard/leads-by-zone').catch(() => []),
-      ]);
+      const statsData = await apiService.get('/dashboard/stats').catch(() => null);
       setStats(statsData);
-      setTrends(Array.isArray(trendsData) ? trendsData : []);
-      setZones(Array.isArray(zonesData) ? zonesData : []);
 
       if (flags.isExecutive) {
         const ex = await apiService.get('/dashboard/executive-analytics').catch(() => null);
@@ -136,55 +125,6 @@ export default function DashboardScreen({ navigation }: { navigation?: any }) {
     load();
   };
 
-  const financialKpis = () => {
-    if (flags.isExecutive && executiveAnalytics) {
-      const revenue = executiveAnalytics.payments?.totalAmount ?? 0;
-      const expenses = executiveAnalytics.expenses?.totalAmount ?? 0;
-      const totalLeads = executiveAnalytics.leads?.total ?? 0;
-      const closed = executiveAnalytics.leads?.closed ?? 0;
-      return {
-        totalLeads,
-        closedLabel: `${closed} closed (${totalLeads ? Math.round((closed / totalLeads) * 100) : 0}%)`,
-        revenue,
-        revenueSub: `${executiveAnalytics.payments?.total ?? 0} payments`,
-        expenses,
-        expensesSub: `${executiveAnalytics.expenses?.total ?? 0} expenses`,
-        netProfit: revenue - expenses,
-        sales: executiveAnalytics.sales?.total ?? stats?.totalSales ?? 0,
-        salesSub: `${executiveAnalytics.sales?.completed ?? 0} completed`,
-      };
-    }
-    if (comprehensive) {
-      const totalLeads = sumAggCount(comprehensive.leads?.byStatus);
-      const revenue = sumAggAmount(comprehensive.payments?.byStatus);
-      const expenses = sumAggAmount(comprehensive.expenses?.byStatus);
-      const sales = sumAggCount(comprehensive.sales?.byStatus);
-      return {
-        totalLeads,
-        closedLabel: 'All statuses',
-        revenue,
-        revenueSub: 'All payments',
-        expenses,
-        expensesSub: 'All expenses',
-        netProfit: revenue - expenses,
-        sales: sales || stats?.totalSales || 0,
-        salesSub: 'DC / sales',
-      };
-    }
-    return {
-      totalLeads: stats?.activeLeads ?? 0,
-      closedLabel: 'Active pipeline',
-      revenue: 0,
-      revenueSub: '—',
-      expenses: 0,
-      expensesSub: '—',
-      netProfit: 0,
-      sales: stats?.totalSales ?? 0,
-      salesSub: 'Total sales',
-    };
-  };
-
-  const kpis = financialKpis();
   const hot =
     executiveAnalytics?.leads?.byPriority?.find((p: any) => p._id === 'Hot')?.count ?? 0;
   const warm =
@@ -222,6 +162,7 @@ export default function DashboardScreen({ navigation }: { navigation?: any }) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
+        <Image source={require('../../../assets/logo-login.png')} style={styles.logo} resizeMode="contain" accessibilityLabel="Viswam" />
         <View>
           <Text style={styles.greeting}>Welcome back,</Text>
           <Text style={styles.userName}>{user?.name?.split(' ')[0] || 'User'}</Text>
@@ -334,39 +275,6 @@ export default function DashboardScreen({ navigation }: { navigation?: any }) {
             ))}
       </View>
 
-          <Text style={styles.sectionHeading}>Financial snapshot</Text>
-          <View style={styles.kpiRow}>
-            <View style={[styles.kpiCard, styles.kpiBlue]}>
-              <Text style={styles.kpiLabel}>Total Leads</Text>
-              <Text style={styles.kpiValue}>{kpis.totalLeads}</Text>
-              <Text style={styles.kpiSub}>{kpis.closedLabel}</Text>
-            </View>
-            <View style={[styles.kpiCard, styles.kpiGreen]}>
-              <Text style={styles.kpiLabel}>Revenue</Text>
-              <Text style={styles.kpiValue}>{fmtINR(kpis.revenue)}</Text>
-              <Text style={styles.kpiSub}>{kpis.revenueSub}</Text>
-          </View>
-        </View>
-          <View style={styles.kpiRow}>
-            <View style={[styles.kpiCard, styles.kpiRed]}>
-              <Text style={styles.kpiLabel}>Expenses</Text>
-              <Text style={styles.kpiValue}>{fmtINR(kpis.expenses)}</Text>
-              <Text style={styles.kpiSub}>{kpis.expensesSub}</Text>
-              </View>
-            <View style={[styles.kpiCard, styles.kpiProfit]}>
-              <Text style={styles.kpiLabel}>Net Profit</Text>
-              <Text style={styles.kpiValue}>{fmtINR(kpis.netProfit)}</Text>
-              <Text style={styles.kpiSub}>Revenue − Expenses</Text>
-              </View>
-              </View>
-          <View style={styles.kpiRow}>
-            <View style={[styles.kpiCard, styles.kpiPink, { flex: 1 }]}>
-              <Text style={styles.kpiLabel}>Total Sales</Text>
-              <Text style={styles.kpiValue}>{kpis.sales}</Text>
-              <Text style={styles.kpiSub}>{kpis.salesSub}</Text>
-            </View>
-      </View>
-
           {flags.isExecutive && executiveAnalytics ? (
             <>
               <Text style={styles.sectionHeading}>My leads breakdown</Text>
@@ -392,25 +300,6 @@ export default function DashboardScreen({ navigation }: { navigation?: any }) {
             </>
           ) : null}
 
-          {trends.length > 0 ? (
-            <SimpleBarChart
-              title="Revenue trend"
-              subtitle="Week-over-week (same as web)"
-              labels={trends.map((t) => t.name)}
-              values={trends.map((t) => t.revenue)}
-              valueFormatter={(n) => fmtINR(n)}
-            />
-          ) : null}
-
-          {zones.length > 0 ? (
-            <SimpleBarChart
-              title="Leads by zone"
-              subtitle="Distribution across zones"
-              labels={zones.map((z) => z.zone || 'Other')}
-              values={zones.map((z) => z.total)}
-            />
-          ) : null}
-
           <TouchableOpacity 
             style={styles.workCta}
             onPress={() => navigation?.navigate?.('Menu')}
@@ -431,11 +320,14 @@ export default function DashboardScreen({ navigation }: { navigation?: any }) {
 }
 
 const styles = StyleSheet.create({
+  logo: { width: 56, height: 56, marginRight: 12 },
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     paddingHorizontal: 20,
     paddingTop: 56,
     paddingBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: colors.backgroundLight,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,

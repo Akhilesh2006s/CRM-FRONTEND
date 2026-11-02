@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radii, spacing } from '../../theme/colors';
 import { apiService, getApiUrl } from '../../services/api';
@@ -52,8 +53,7 @@ function resolveUrl(raw?: string) {
 
 export default function SalesCollateralScreen() {
   const { user } = useAuth();
-  // Web lets anyone who can open the page add collateral; activate/deactivate (PUT /collateral/:id)
-  // has no web UI, so it is limited here to Admin / Super Admin.
+  // Admin / Super Admin upload brochures and videos; everyone else only views.
   const canManage = getRoleFlags(user).isAdmin;
 
   const [items, setItems] = useState<Item[]>([]);
@@ -61,7 +61,8 @@ export default function SalesCollateralScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
-  const [type, setType] = useState('link');
+  const [type, setType] = useState('brochure');
+  const [file, setFile] = useState<{ uri: string; name: string; mimeType?: string } | null>(null);
   const [description, setDescription] = useState('');
   const [adding, setAdding] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -69,7 +70,7 @@ export default function SalesCollateralScreen() {
 
   const load = useCallback(async () => {
     try {
-      const data = await apiService.get('/collateral?active=0');
+      const data = await apiService.get(canManage ? '/collateral?active=0' : '/collateral');
       setItems(Array.isArray(data) ? data : []);
     } catch (e: any) {
       setBanner({ type: 'error', message: errMsg(e, 'Failed to load collateral') });
@@ -77,22 +78,43 @@ export default function SalesCollateralScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [canManage]);
 
   useEffect(() => {
     load();
   }, [load]);
 
+  const pickFile = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ['application/pdf', 'image/*', 'video/*', 'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+      copyToCacheDirectory: true,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const picked = result.assets[0];
+    setFile({ uri: picked.uri, name: picked.name || 'collateral', mimeType: picked.mimeType || undefined });
+    if (picked.mimeType?.startsWith('video/')) setType('video');
+    if (!title.trim() && picked.name) setTitle(picked.name.replace(/\.[^.]+$/, ''));
+  };
+
   const add = async () => {
-    if (!title.trim() || !url.trim()) {
-      setBanner({ type: 'error', message: 'Title and URL are required' });
+    if (!title.trim() || (!file && !url.trim())) {
+      setBanner({ type: 'error', message: 'Enter the title, then choose a file or enter a link' });
       return;
     }
     setAdding(true);
     try {
-      await apiService.post('/collateral', { title, url, type, description });
+      let link = url.trim();
+      if (file) {
+        const data = new FormData();
+        data.append('file', { uri: file.uri, name: file.name, type: file.mimeType || 'application/octet-stream' } as any);
+        const uploaded = await apiService.upload('/collateral/upload', data);
+        if (!uploaded?.url) throw new Error(uploaded?.message || 'Upload failed');
+        link = uploaded.url;
+      }
+      await apiService.post('/collateral', { title, url: link, type, description });
       setTitle('');
       setUrl('');
+      setFile(null);
       setDescription('');
       setBanner({ type: 'success', message: 'Collateral added' });
       await load();
@@ -149,10 +171,13 @@ export default function SalesCollateralScreen() {
         <MessageBanner type={banner.type} message={banner.message} onDismiss={() => setBanner(null)} />
       ) : null}
 
-      <PageSection title="Add collateral">
+      {canManage ? (
+      <PageSection title="Upload brochure / video">
         <WebLabel>Title</WebLabel>
         <WebInput value={title} onChangeText={setTitle} />
-        <WebLabel>URL</WebLabel>
+        <WebButton title={file ? `File: ${file.name}` : 'Choose File (PDF / image / PPT / video)'} variant="outline" onPress={pickFile} />
+        {file ? <WebButton title="Remove file" variant="outline" onPress={() => setFile(null)} /> : null}
+        <WebLabel>Or link (YouTube / Drive)</WebLabel>
         <WebInput
           value={url}
           onChangeText={setUrl}
@@ -166,6 +191,7 @@ export default function SalesCollateralScreen() {
         <WebInput value={description} onChangeText={setDescription} />
         <WebButton title="Add" onPress={add} loading={adding} disabled={adding} />
       </PageSection>
+      ) : null}
 
       {loading ? (
         <Text style={styles.empty}>Loading…</Text>

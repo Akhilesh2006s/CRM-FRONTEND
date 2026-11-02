@@ -74,6 +74,7 @@ export default function CreateDealPage() {
     lead_status: 'pending',
     zone: '',
     cluster: '',
+    clusterId: '',
     branches: '',
     strength: '',
     average_fee: '',
@@ -110,58 +111,19 @@ export default function CreateDealPage() {
     clearFieldError('products')
   }
 
-  const [zones, setZones] = useState<{ _id: string; name: string }[]>([])
-  const [clusters, setClusters] = useState<string[]>([])
-  const [employees, setEmployees] = useState<{ _id: string; name: string }[]>([])
-  const [loadingEmployees, setLoadingEmployees] = useState(true)
+  // Cluster pick list across zones; the deal's zone is the chosen cluster's zone.
+  const [clusters, setClusters] = useState<{ _id: string; name: string; zone: string }[]>([])
   useEffect(() => {
     ;(async () => {
       try {
-        const data = await apiRequest<Array<{ _id: string; name?: string }>>('/zones')
-        setZones(
-          (Array.isArray(data) ? data : [])
-            .map((z) => ({ _id: z._id, name: z.name || '' }))
-            .filter((z) => z.name)
-        )
-      } catch {
-        setZones([])
-      }
-    })()
-  }, [])
-  useEffect(() => {
-    const zoneName = form.zone.trim()
-    if (!zoneName) {
-      setClusters([])
-      return
-    }
-    const match = zones.find((z) => z.name.toLowerCase() === zoneName.toLowerCase())
-    if (!match) {
-      setClusters([])
-      return
-    }
-    ;(async () => {
-      try {
-        const data = await apiRequest<Array<{ name?: string }>>(`/zones/${match._id}/clusters`)
+        const data = await apiRequest<Array<{ _id: string; name?: string; zoneId?: { name?: string } | null }>>('/clusters')
         setClusters(
-          (Array.isArray(data) ? data : []).map((c) => c.name || '').filter(Boolean)
+          (Array.isArray(data) ? data : [])
+            .map((c) => ({ _id: c._id, name: c.name || '', zone: c.zoneId?.name || '' }))
+            .filter((c) => c.name)
         )
       } catch {
         setClusters([])
-      }
-    })()
-  }, [form.zone, zones])
-  useEffect(() => {
-    ;(async () => {
-      setLoadingEmployees(true)
-      try {
-        const data = await apiRequest<any[]>('/employees?isActive=true&role=Executive')
-        const list = Array.isArray(data) ? data : []
-        setEmployees(list.map((u: any) => ({ _id: u._id || u.id, name: u.name || 'Unknown' })).filter(e => e.name !== 'Unknown'))
-      } catch (e) {
-        console.error('Failed to load employees:', e)
-        setEmployees([])
-      } finally {
-        setLoadingEmployees(false)
       }
     })()
   }, [])
@@ -358,8 +320,8 @@ export default function CreateDealPage() {
         throw new Error('Please enter a valid email address')
       }
 
-      if (!form.assigned_to) {
-        throw new Error('Please assign the deal to an executive. DC will not be created without assignment.')
+      if (!form.cluster.trim()) {
+        throw new Error('Select the cluster.')
       }
 
       if (!form.address || !form.address.trim()) {
@@ -400,8 +362,9 @@ export default function CreateDealPage() {
         city: form.city || undefined,
         region: form.region || undefined,
         area: form.area || undefined,
-        zone: form.zone,
+        zone: form.zone || undefined,
         cluster: form.cluster || undefined,
+        clusterId: form.clusterId || undefined,
         status: form.lead_status || 'pending',
         branches: Number(form.branches),
         strength: Number(form.strength),
@@ -410,7 +373,8 @@ export default function CreateDealPage() {
         email: form.email.trim(),
         products: selectedProducts,
         follow_up_date: followUpIso,
-        assigned_to: form.assigned_to,
+        // No Assign BDE on Create Sale: the deal is the creator's unless it came pre-assigned.
+        assigned_to: form.assigned_to || undefined,
       }
       
       const created = await apiRequest<{
@@ -473,12 +437,10 @@ export default function CreateDealPage() {
           </div>
           <div>
             <Label>School code</Label>
-            <Input
-              className="bg-neutral-100 text-neutral-700"
-              value="Assigned automatically from the pincode, zone, and cluster"
-              readOnly
-              disabled
-            />
+            <div className="rounded-md border bg-neutral-100 px-3 py-2">
+              <div className="font-medium text-neutral-900">Auto-generated</div>
+              <div className="text-xs text-neutral-600">Created when the deal is saved, from the pincode and cluster.</div>
+            </div>
           </div>
           <div>
             <Label>School Type</Label>
@@ -711,43 +673,26 @@ export default function CreateDealPage() {
             </Select>
           </div>
           <div>
-            <Label>Zone *</Label>
-            {zones.length > 0 ? (
-              <Select
-                value={form.zone || undefined}
-                onValueChange={(v) => setForm((f) => ({ ...f, zone: v, cluster: '' }))}
-              >
-                <SelectTrigger className="bg-white text-neutral-900">
-                  <SelectValue placeholder="Select zone" />
-                </SelectTrigger>
-                <SelectContent>
-                  {zones.map((z) => (
-                    <SelectItem key={z._id} value={z.name}>{z.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <Input className="bg-white text-neutral-900" name="zone" value={form.zone} onChange={onChange} />
-            )}
-          </div>
-          <div>
             <Label>Cluster *</Label>
             {clusters.length > 0 ? (
               <Select
-                value={form.cluster || undefined}
-                onValueChange={(v) => setForm((f) => ({ ...f, cluster: v }))}
+                value={form.clusterId || undefined}
+                onValueChange={(v) => {
+                  const picked = clusters.find((c) => c._id === v)
+                  setForm((f) => ({ ...f, clusterId: v, cluster: picked?.name || '', zone: picked?.zone || '' }))
+                }}
               >
                 <SelectTrigger className="bg-white text-neutral-900">
                   <SelectValue placeholder="Select cluster" />
                 </SelectTrigger>
                 <SelectContent>
                   {clusters.map((c) => (
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                    <SelectItem key={c._id} value={c._id}>{c.zone ? `${c.name} (${c.zone})` : c.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             ) : (
-              <Input className="bg-white text-neutral-900" name="cluster" value={form.cluster} onChange={onChange} placeholder="Cluster in this zone" />
+              <Input className="bg-white text-neutral-900" name="cluster" value={form.cluster} onChange={onChange} placeholder="Cluster" />
             )}
           </div>
           <div>
@@ -757,26 +702,6 @@ export default function CreateDealPage() {
           <div>
             <Label>Average School Fee *</Label>
             <Input className="bg-white text-neutral-900" type="number" min={1} name="average_fee" placeholder="Average School Fee" value={form.average_fee} onChange={onChange} required />
-          </div>
-          <div>
-            <Label>Assign to (BDE) *</Label>
-            <Select value={form.assigned_to} onValueChange={(v) => setForm((f) => ({ ...f, assigned_to: v }))} disabled={loadingEmployees} required>
-              <SelectTrigger className="bg-white text-neutral-900">
-                <SelectValue placeholder={loadingEmployees ? "Loading employees..." : employees.length === 0 ? "No employees found" : "Select BDE"} />
-              </SelectTrigger>
-              <SelectContent>
-                {employees.length === 0 ? (
-                  <div className="px-2 py-1.5 text-sm text-neutral-500">No employees available</div>
-                ) : (
-                  employees.map((e) => (
-                    <SelectItem key={e._id} value={e._id}>{e.name}</SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
-            {employees.length === 0 && !loadingEmployees && (
-              <p className="text-xs text-red-600 mt-1">Create employees first in Users / Employees → New Employee</p>
-            )}
           </div>
           <div>
             <Label>School strength (students) *</Label>
