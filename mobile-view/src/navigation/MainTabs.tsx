@@ -9,6 +9,8 @@ import WorkHubScreen from '../screens/Navigation/WorkHubScreen';
 import ReportsLeadsScreen from '../screens/Reports/ReportsLeadsScreen';
 import MoreHubScreen from '../screens/Navigation/MoreHubScreen';
 import { colors } from '../theme/colors';
+import { useAuth } from '../context/AuthContext';
+import { getRoleFlags } from '../utils/roles';
 
 const Tab = createBottomTabNavigator();
 
@@ -46,6 +48,10 @@ export default function MainTabs() {
   const insets = useSafeAreaInsets();
   const bottomInset = Math.max(insets.bottom, 8);
   const tabRef = useRef<any>(null);
+  const { user } = useAuth();
+  const flags = getRoleFlags(user);
+  // Leads Reports are for sales roles; Product Heads and Trainers do not work leads.
+  const showReports = !flags.isManager && !flags.isTrainer;
 
   // Native stack calls exitApp() on Android back from the root screen.
   useFocusEffect(
@@ -93,7 +99,7 @@ export default function MainTabs() {
     >
       <Tab.Screen name="Home" component={DashboardScreen} options={{ tabBarLabel: 'Home' }} />
       <Tab.Screen name="Menu" component={WorkHubScreen} options={{ tabBarLabel: 'Menu' }} />
-      <Tab.Screen name="Reports" component={ReportsLeadsScreen} options={{ tabBarLabel: 'Reports' }} />
+      {showReports ? <Tab.Screen name="Reports" component={ReportsLeadsScreen} options={{ tabBarLabel: 'Reports' }} /> : null}
       <Tab.Screen name="More" component={MoreHubScreen} options={{ tabBarLabel: 'More' }} />
     </Tab.Navigator>
   );

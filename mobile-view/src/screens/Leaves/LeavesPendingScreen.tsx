@@ -143,7 +143,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   cardActionable: { borderColor: colors.primaryLight },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10, gap: 8 },
+  // Name on its own line so long names are not squeezed into a narrow column.
+  cardHeader: { marginBottom: 10, gap: 4 },
   employeeName: { ...typography.heading.h3, color: colors.textPrimary },
   code: { fontSize: 12, color: colors.textSecondary },
   leaveType: { ...typography.body.medium, color: colors.textSecondary },
