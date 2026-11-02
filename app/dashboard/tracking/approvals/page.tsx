@@ -112,7 +112,7 @@ export default function FieldApprovalsPage() {
         <div>
           <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Field Approvals</h1>
           <p className="text-sm text-neutral-600 mt-1">
-            Field visit requests from office staff, and check-outs that did not match the check-in. A reviewed day counts for
+            Office to Field attendance change requests (approved = the day becomes a field day), and check-outs that did not match the check-in. A reviewed day counts for
             attendance only when approved.
           </p>
         </div>
@@ -127,7 +127,7 @@ export default function FieldApprovalsPage() {
       ) : (
         <>
           <section className="space-y-3">
-            <h2 className="text-lg font-semibold">Field visit requests ({requests.length})</h2>
+            <h2 className="text-lg font-semibold">Office to Field requests ({requests.length})</h2>
             {requests.length === 0 && <p className="text-sm text-neutral-500">None.</p>}
             {requests.map((r) => (
               <Card key={r._id} className="p-4 text-sm space-y-1">

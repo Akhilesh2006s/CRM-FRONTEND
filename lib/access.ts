@@ -226,6 +226,10 @@ export function canAccessPath(
   if (matchesRoute(pathname, '/dashboard/tracking')) {
     return role === 'admin' || hasPermission(user, 'tracking.field_days.page.view')
   }
+  // Employee locations and tracking details are for Admin only.
+  if (matchesRoute(pathname, '/dashboard/reports/employee-track')) {
+    return role === 'admin' || hasPermission(user, 'tracking.field_days.page.view')
+  }
   if (matchesRoute(pathname, '/dashboard/settings/offices')) {
     return role === 'admin' || hasPermission(user, 'settings.offices.page.view')
   }
@@ -323,11 +327,10 @@ export function canAccessPath(
     return canAccessHierarchyPath(user, pathname)
   }
 
-  // Zonal Managers also raise their own expenses and follow their team's travel (Employee Track);
-  // these pages stay open to the other roles that already use them.
+  // Zonal Managers also raise their own expenses; these pages stay open to the other roles that already use them.
   if (
     user.role === 'Executive Manager' &&
-    ['/dashboard/expenses/create', '/dashboard/expenses/my', '/dashboard/reports/employee-track'].some(
+    ['/dashboard/expenses/create', '/dashboard/expenses/my'].some(
       (route) => pathname === route || pathname.startsWith(route + '/')
     )
   ) {

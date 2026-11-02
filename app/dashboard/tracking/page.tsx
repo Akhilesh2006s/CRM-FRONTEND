@@ -9,12 +9,18 @@ import { Label } from '@/components/ui/label'
 import { apiRequest } from '@/lib/api'
 import { toast } from 'sonner'
 
+const START_LABELS: Record<string, string> = { home1: 'Home 1', home2: 'Home 2', other: 'Others' }
+
 type Person = { _id: string; name?: string; empCode?: string; role?: string; zone?: string }
 type DayRow = {
   employee: Person
   attendanceId: string
   mode: 'office' | 'field'
   officeName?: string
+  startLocationType?: string
+  startLocationDetails?: string
+  modeChangedFrom?: string
+  modeChangedAt?: string | null
   startTime: string
   endTime?: string | null
   checkoutMode?: 'office' | 'field' | null
@@ -241,7 +247,17 @@ export default function FieldTrackingPage() {
                       </td>
                       <td className="py-2 px-3">
                         {r.mode === 'office' ? `Office${r.officeName ? `: ${r.officeName}` : ''}` : 'Field'}
-                        {r.fieldPermission ? <div className="text-xs text-sky-700">Field visit approved</div> : null}
+                        {r.modeChangedFrom === 'office' ? (
+                          <div className="text-xs text-sky-700">Changed from Office at {time(r.modeChangedAt || undefined)} (approved)</div>
+                        ) : r.fieldPermission ? (
+                          <div className="text-xs text-sky-700">Field visit approved</div>
+                        ) : null}
+                        {START_LABELS[r.startLocationType || ''] ? (
+                          <div className="text-xs text-neutral-500">
+                            From {START_LABELS[r.startLocationType || '']}
+                            {r.startLocationDetails ? `: ${r.startLocationDetails}` : ''}
+                          </div>
+                        ) : null}
                       </td>
                       <td className="py-2 px-3">{time(r.startTime)}</td>
                       <td className="py-2 px-3">

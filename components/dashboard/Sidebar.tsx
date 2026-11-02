@@ -194,7 +194,9 @@ function ensureTrackingNav(
       label: 'Field Tracking',
       icon: MapPin,
       children: [
+        { label: 'Live Locations', href: '/dashboard/tracking/live' },
         { label: 'Field Days', href: '/dashboard/tracking' },
+        { label: 'Home Locations', href: '/dashboard/tracking/homes' },
         { label: 'Field Approvals', href: '/dashboard/tracking/approvals' },
         { label: 'Field Approvers', href: '/dashboard/tracking/approvers' },
         { label: 'Office Locations', href: '/dashboard/settings/offices' },
@@ -1212,7 +1214,6 @@ export function Sidebar() {
           { label: 'All My Expenses', href: '/dashboard/expenses/my?view=all', icon: History },
           { label: 'Team Expenses to Approve', href: '/dashboard/expenses/executive-manager-pending', icon: Clock },
           { label: 'Team Approved / Rejected', href: '/dashboard/expenses/executive-manager-pending?tab=decided', icon: CheckCircle2 },
-          { label: 'Employee Track', href: '/dashboard/reports/employee-track', icon: MapPin },
         ],
       },
       {

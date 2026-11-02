@@ -41,7 +41,7 @@ type OpenVisit = {
 type School = { schoolName: string; schoolCode: string; leadId?: string; town?: string; zone?: string; source: string };
 type Assignment = { _id: string; subject: string; term?: string; trainingLevel?: string; trainingDate?: string; serviceDate?: string };
 type FieldDay = {
-  attendance: { _id: string; mode?: 'office' | 'field'; officeName?: string; startTime: string; endTime?: string; fieldPermission?: boolean; reviewStatus?: string } | null;
+  attendance: { _id: string; mode?: 'office' | 'field'; officeName?: string; startTime: string; endTime?: string; fieldPermission?: boolean; modeChangedFrom?: string; modeChangedAt?: string; reviewStatus?: string } | null;
   checkedIn: boolean;
   fieldWorkAllowed: boolean;
   activeTrip: { _id: string; sequence?: number; startedAt: string; distanceKm: number } | null;
@@ -228,8 +228,10 @@ export default function FieldDayScreen() {
             {attendance?.mode === 'office'
               ? attendance?.fieldPermission
                 ? 'Field visit approved: you can visit schools today and end the day in the field.'
-                : 'Day started in the office. End the day in the office, or request a field visit below.'
-              : 'Day started outside the office. End the day in the field.'}
+                : 'Day started in the office. End the day in the office, or ask to change your attendance to Field below.'
+              : attendance?.modeChangedFrom === 'office'
+                ? `Changed from Office to Field at ${time(attendance?.modeChangedAt)} (approved). End the day in the field.`
+                : 'Day started outside the office. End the day in the field.'}
           </Text>
         </View>
       )}
@@ -245,7 +247,7 @@ export default function FieldDayScreen() {
 
       {day?.checkedIn && attendance?.mode === 'office' && !attendance?.fieldPermission ? (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Field visit permission</Text>
+          <Text style={styles.cardTitle}>Change attendance to Field (second half)</Text>
           {day.permission?.status === 'pending' ? (
             <Text style={styles.muted}>Waiting for approval: {day.permission.reason}</Text>
           ) : (
@@ -257,7 +259,7 @@ export default function FieldDayScreen() {
               <WebInput placeholder="Why do you need to go to the field?" value={reason} onChangeText={setReason} />
               <WebLabel>Schools / places</WebLabel>
               <WebInput placeholder="Where you will go" value={places} onChangeText={setPlaces} />
-              <WebButton title="Request Field Visit Permission" onPress={onRequestPermission} loading={busy === 'permission'} />
+              <WebButton title="Request Change to Field" onPress={onRequestPermission} loading={busy === 'permission'} />
             </>
           )}
         </View>

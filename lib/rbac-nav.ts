@@ -244,7 +244,9 @@ export const RBAC_NAV_MODULES: RbacNavModule[] = [
     module: 'tracking',
     label: MODULE_LABELS.tracking,
     pages: [
+      { label: 'Live Locations', href: '/dashboard/tracking/live' },
       { label: 'Field Tracking', href: '/dashboard/tracking' },
+      { label: 'Home Locations', href: '/dashboard/tracking/homes' },
       { label: 'Field Approvals', href: '/dashboard/tracking/approvals' },
       { label: 'Field Approvers', href: '/dashboard/tracking/approvers' },
     ],

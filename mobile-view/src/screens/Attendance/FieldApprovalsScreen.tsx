@@ -90,7 +90,7 @@ export default function FieldApprovalsScreen() {
   return (
     <ScreenShell
       title="Field Approvals"
-      subtitle="Field visit requests from office staff, and check-outs that did not match the check-in."
+      subtitle="Office to Field attendance change requests, and check-outs that did not match the check-in."
       loading={loading && !refreshing}
       refreshing={refreshing}
       onRefresh={() => {
@@ -98,7 +98,7 @@ export default function FieldApprovalsScreen() {
         load();
       }}
     >
-      <Text style={styles.section}>Field visit requests ({requests.length})</Text>
+      <Text style={styles.section}>Office to Field requests ({requests.length})</Text>
       {requests.length === 0 ? <Text style={styles.empty}>No requests waiting.</Text> : null}
       {requests.map((r) => (
         <View key={r._id} style={styles.card}>

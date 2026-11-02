@@ -16,6 +16,16 @@ import LogoutButton from '../../components/LogoutButton';
 import { apiService } from '../../services/api';
 import { getCurrentLocation, getPincodeFromLocation, getTownFromPincode } from '../../services/location';
 
+type Home = { latitude?: number; longitude?: number; address?: string };
+type Homes = { home1?: Home; home2?: Home };
+
+/** Field days start from Home 1 (address at joining), Home 2 (work location) or Others. */
+const START_LOCATIONS = [
+  { value: 'home1', label: 'Home 1' },
+  { value: 'home2', label: 'Home 2' },
+  { value: 'other', label: 'Others' },
+] as const;
+
 const ATTENDANCE_REASONS = [
   { label: 'Employee', value: 'employee' },
   { label: 'Collection', value: 'collection' },
@@ -42,6 +52,22 @@ export default function DailySelfieCheckInScreen({ onDone }: { onDone: () => voi
   const [town, setTown] = useState('');
   const [remarks, setRemarks] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [homes, setHomes] = useState<Homes>({});
+  const [startType, setStartType] = useState<'' | 'home1' | 'home2' | 'other'>('');
+  const [startDetails, setStartDetails] = useState('');
+
+  useEffect(() => {
+    apiService
+      .get('/field-day/my-homes')
+      .then((res: any) => setHomes((res?.data ?? res) || {}))
+      .catch(() => setHomes({}));
+  }, []);
+
+  const homeNote = (key: 'home1' | 'home2') => {
+    const home = homes[key];
+    if (home?.latitude == null) return 'Not saved yet. It is saved from this Start Day.';
+    return home.address ? `Saved: ${home.address}` : 'Saved. Start within 200 m of it.';
+  };
 
   const locate = async () => {
     setLocating(true);
@@ -90,6 +116,9 @@ export default function DailySelfieCheckInScreen({ onDone }: { onDone: () => voi
     if (!location) return Alert.alert('Location needed', 'Capture your location to check in.');
     if (pincode.length !== 6) return Alert.alert('Pincode not detected', 'Could not find the pincode for your location. Tap Refresh to try again.');
     if (!town.trim()) return Alert.alert('Town needed', 'Enter your town.');
+    if (startType === 'other' && startDetails.trim().length < 3) {
+      return Alert.alert('Location details needed', 'Enter the hotel name, address or location details.');
+    }
     setSubmitting(true);
     try {
       await apiService.post('/attendance/check-in', {
@@ -101,6 +130,9 @@ export default function DailySelfieCheckInScreen({ onDone }: { onDone: () => voi
         pincode,
         town: town.trim(),
         remarks: remarks.trim(),
+        // At the office this is ignored (office day); elsewhere the server asks for it.
+        startLocationType: startType,
+        startLocationDetails: startType === 'other' ? startDetails.trim() : '',
         source: 'login_selfie',
       });
       onDone();
@@ -173,6 +205,32 @@ export default function DailySelfieCheckInScreen({ onDone }: { onDone: () => voi
       <Text style={styles.muted}>Filled automatically from your location.</Text>
       <Text style={styles.label}>Town *</Text>
       <TextInput style={styles.input} value={town} onChangeText={setTown} placeholder="Town" />
+
+      <Text style={styles.label}>Starting from</Text>
+      <View style={styles.chips}>
+        {START_LOCATIONS.map((s) => (
+          <TouchableOpacity
+            key={s.value}
+            style={[styles.chip, startType === s.value && styles.chipOn]}
+            onPress={() => setStartType(s.value)}
+          >
+            <Text style={[styles.chipText, startType === s.value && styles.chipTextOn]}>{s.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {startType === 'home1' || startType === 'home2' ? (
+        <Text style={[styles.muted, { marginTop: 6 }]}>{homeNote(startType)}</Text>
+      ) : null}
+      {startType === 'other' ? (
+        <TextInput
+          style={[styles.input, { marginTop: 8, minHeight: 60 }]}
+          value={startDetails}
+          onChangeText={setStartDetails}
+          placeholder="Hotel name, address or location details"
+          multiline
+        />
+      ) : null}
+      <Text style={[styles.muted, { marginTop: 6, fontSize: 12 }]}>Not needed when you start at the office.</Text>
 
       <Text style={styles.label}>Reason</Text>
       <View style={styles.chips}>

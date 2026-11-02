@@ -1,4 +1,5 @@
 import { AppState, type AppStateStatus } from 'react-native';
+import * as Battery from 'expo-battery';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import { apiService } from './api';
@@ -7,6 +8,29 @@ import { getCurrentLocation, LocationPermissionError } from './location';
 const PING_INTERVAL_MS = 3 * 60 * 1000; // 3 minutes (within 2–5 min range)
 
 export type PingSource = 'foreground' | 'background' | 'manual';
+
+/** Battery % and charging state for the Admin map; empty when the phone does not tell. */
+async function batteryInfo(): Promise<{ batteryLevel?: number; charging?: boolean }> {
+  try {
+    const [level, state] = await Promise.all([Battery.getBatteryLevelAsync(), Battery.getBatteryStateAsync()]);
+    return {
+      batteryLevel: level >= 0 ? Math.round(level * 100) : undefined,
+      charging: state === Battery.BatteryState.CHARGING || state === Battery.BatteryState.FULL,
+    };
+  } catch {
+    return {};
+  }
+}
+
+/** Battery and GPS on/off to /tracking/status (Admin sees it on the employee's pin). */
+export async function sendDeviceStatus(): Promise<void> {
+  try {
+    const gpsEnabled = await Location.hasServicesEnabledAsync().catch(() => undefined);
+    await apiService.post('/tracking/status', { ...(await batteryInfo()), gpsEnabled });
+  } catch {
+    // Next tick tries again.
+  }
+}
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
 let appStateSub: { remove: () => void } | null = null;
@@ -28,9 +52,12 @@ export async function sendLocationPing(source: PingSource): Promise<boolean> {
       longitude: loc.longitude,
       recordedAt: new Date().toISOString(),
       source,
+      ...(await batteryInfo()),
     });
     return true;
   } catch (err) {
+    // GPS off or permission denied: still report battery and GPS status to Admin.
+    void sendDeviceStatus();
     // Denial is a normal permission state; retry silently when permission changes.
     if (err instanceof LocationPermissionError) return false;
     console.warn('[tracking] ping failed:', (err as Error)?.message || err);
@@ -100,12 +127,18 @@ export function isForegroundTrackingRunning(): boolean {
 export const DAY_GPS_TASK = 'crm-day-gps';
 
 TaskManager.defineTask(DAY_GPS_TASK, async ({ data, error }) => {
-  if (error) return;
+  if (error) {
+    // Usually GPS turned off: let Admin see GPS Off.
+    await sendDeviceStatus();
+    return;
+  }
   const locations = ((data as { locations?: Location.LocationObject[] })?.locations || []);
   if (!locations.length) return;
   try {
+    const battery = await batteryInfo();
     await apiService.post('/tracking/ping', {
-      pings: locations.map((l) => ({
+      pings: locations.map((l, i) => ({
+        ...(i === locations.length - 1 ? battery : {}),
         latitude: l.coords.latitude,
         longitude: l.coords.longitude,
         accuracy: l.coords.accuracy ?? undefined,
