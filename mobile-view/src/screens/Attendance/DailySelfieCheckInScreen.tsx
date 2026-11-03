@@ -75,6 +75,7 @@ export default function DailySelfieCheckInScreen({ onDone, onClose }: { onDone: 
       const loc = await getCurrentLocation();
       setLocation(loc);
       // Pincode always comes from the GPS location; it cannot be typed or changed.
+      // Area (town / pincode) is read from the GPS location; the server fills it in when this fails.
       const found = await getPincodeFromLocation(loc);
       setPincode(found.pincode);
       let name = found.town;
@@ -86,7 +87,7 @@ export default function DailySelfieCheckInScreen({ onDone, onClose }: { onDone: 
           // keep the town from the location lookup
         }
       }
-      if (name) setTown((t) => t || name);
+      setTown(name || '');
     } catch (error: any) {
       Alert.alert('Location needed', error?.message || 'Turn on location and try again.');
     } finally {
@@ -113,9 +114,7 @@ export default function DailySelfieCheckInScreen({ onDone, onClose }: { onDone: 
 
   const submit = async () => {
     if (!photo) return Alert.alert('Selfie needed', 'Take a selfie to check in.');
-    if (!location) return Alert.alert('Location needed', 'Capture your location to check in.');
-    if (pincode.length !== 6) return Alert.alert('Pincode not detected', 'Could not find the pincode for your location. Tap Refresh to try again.');
-    if (!town.trim()) return Alert.alert('Town needed', 'Enter your town.');
+    if (!location) return Alert.alert('Location needed', 'Turn on location (GPS) on your phone, then tap Refresh.');
     if (startType === 'other' && startDetails.trim().length < 3) {
       return Alert.alert('Location details needed', 'Enter the hotel name, address or location details.');
     }
@@ -201,16 +200,11 @@ export default function DailySelfieCheckInScreen({ onDone, onClose }: { onDone: 
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.label}>Pincode *</Text>
-      <TextInput
-        style={[styles.input, styles.inputLocked]}
-        value={pincode}
-        editable={false}
-        placeholder={locating ? 'Detecting from your location…' : 'Not detected. Tap Refresh above'}
-      />
-      <Text style={styles.muted}>Filled automatically from your location.</Text>
-      <Text style={styles.label}>Town *</Text>
-      <TextInput style={styles.input} value={town} onChangeText={setTown} placeholder="Town" />
+      <Text style={styles.label}>Area</Text>
+      <Text style={[styles.input, styles.inputLocked]}>
+        {locating ? 'Detecting from your location…' : [town, pincode].filter(Boolean).join(' - ') || (location ? 'Taken from your GPS location' : '—')}
+      </Text>
+      <Text style={styles.muted}>Taken from your phone's location. Nothing to type.</Text>
 
       <Text style={styles.label}>Starting from</Text>
       <View style={styles.chips}>

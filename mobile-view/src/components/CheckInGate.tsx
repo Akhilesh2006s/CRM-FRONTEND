@@ -49,7 +49,13 @@ export default function CheckInGate({ children }: { children: React.ReactNode })
     const sub = AppState.addEventListener('change', (next) => {
       if (next === 'active') void check();
     });
-    return () => sub.remove();
+    const timer = setInterval(() => {
+      if (AppState.currentState === 'active') void check();
+    }, 10 * 60 * 1000);
+    return () => {
+      sub.remove();
+      clearInterval(timer);
+    };
   }, [check]);
 
   const report = async (path: string, reason: string, exitTime: string) => {

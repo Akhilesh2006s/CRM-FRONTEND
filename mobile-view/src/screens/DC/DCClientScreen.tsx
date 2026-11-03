@@ -22,6 +22,7 @@ import { useAuth } from '../../context/AuthContext';
 import { isTransportComplete, TRANSPORT_REQUIRED_MESSAGE } from '../../utils/dcTransport';
 import { showAlert, showConfirm } from '../../utils/showAlert';
 import { navigateRoot } from '../../navigation/navigationRef';
+import SchoolOverview from '../../components/SchoolOverview';
 import { resolveMyClientsDcStatus } from '../../utils/myClientsDcStatus';
 
 export default function DCClientScreen({ navigation }: any) {
@@ -71,6 +72,8 @@ export default function DCClientScreen({ navigation }: any) {
     setSelectedDC(dc);
     setShowModal(true);
   };
+
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const getOrderId = (dc: any) => {
     if (dc._isConvertedLead && dc._id) return dc._id;
@@ -349,14 +352,22 @@ export default function DCClientScreen({ navigation }: any) {
 
             return (
               <View key={dc._id} style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <Text style={styles.customerName} numberOfLines={2}>
-                    {dc.customerName || dc.dcOrderId?.school_name || 'Unknown Customer'}
-                  </Text>
+                <TouchableOpacity
+                  style={styles.cardHeader}
+                  activeOpacity={0.7}
+                  onPress={() => setOpenId(openId === dc._id ? null : dc._id)}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.customerName} numberOfLines={2}>
+                      {dc.customerName || dc.dcOrderId?.school_name || 'Unknown Customer'}
+                    </Text>
+                    <Text style={styles.fullInfoLink}>{openId === dc._id ? 'Hide full info ▲' : 'Tap for full info ▼'}</Text>
+                  </View>
                   <View style={styles.statusBadge}>
                     <Text style={styles.statusText}>{statusLabel}</Text>
                   </View>
-                </View>
+                </TouchableOpacity>
+                {openId === dc._id ? <SchoolOverview leadId={orderId || dc._id} /> : null}
                 <View style={styles.cardBody}>
                   <View style={styles.infoRow}>
                     <Text style={styles.infoLabel}>School Code:</Text>
@@ -535,6 +546,7 @@ export default function DCClientScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
+  fullInfoLink: { color: '#2563EB', fontSize: 13, fontWeight: '600', marginTop: 4 },
   container: { flex: 1, backgroundColor: colors.background },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
   loadingText: { marginTop: 12, ...typography.body.medium, color: colors.textSecondary },

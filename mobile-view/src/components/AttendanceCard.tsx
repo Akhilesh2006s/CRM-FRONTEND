@@ -13,6 +13,10 @@ import { getCurrentLocation } from '../services/location';
 import { takeLivePhoto } from '../services/photo';
 import { enableLiveGps, liveGpsState, startDayTracking, stopDayTracking, type LiveGpsState } from '../services/tracking';
 import DailySelfieCheckInScreen from '../screens/Attendance/DailySelfieCheckInScreen';
+import MissedExitCard from './MissedExitCard';
+
+/** India date of an instant, e.g. '2026-11-03'. */
+const istDate = (v: string | Date) => new Date(new Date(v).getTime() + 330 * 60000).toISOString().slice(0, 10);
 import { useAuth } from '../context/AuthContext';
 import { colors, gradients } from '../theme/colors';
 import { typography } from '../theme/typography';
@@ -37,6 +41,7 @@ export default function AttendanceCard({ onChange }: { onChange?: () => void } =
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [gps, setGps] = useState<LiveGpsState | null>(null);
+  const [forgot, setForgot] = useState(false);
   const [currentAttendance, setCurrentAttendance] = useState<any>(null);
   const [isFirstTime, setIsFirstTime] = useState(false);
 
@@ -81,6 +86,20 @@ export default function AttendanceCard({ onChange }: { onChange?: () => void } =
   const fixGps = async () => {
     setGps('starting');
     setGps(await enableLiveGps());
+  };
+
+  // Forgot End Day (earlier today or a previous day): reason + actual end time; goes for review.
+  const reportMissedEndDay = async (reason: string, exitTime: string) => {
+    try {
+      await apiService.post(`/field-day/missed/day/${currentAttendance._id}`, { reason, exitTime });
+    } catch (e: any) {
+      throw new Error(e?.response?.data?.message || e?.message || 'Could not save.');
+    }
+    setForgot(false);
+    await stopDayTracking();
+    await checkCurrentAttendance();
+    onChange?.();
+    Alert.alert('Saved', 'End Day time recorded and sent for review. Start your day again for today.');
   };
 
   // End Day takes an exit photo and the location: office days end in the office, field days in the field.
@@ -131,6 +150,9 @@ export default function AttendanceCard({ onChange }: { onChange?: () => void } =
             <Text style={styles.statusTime}>
               Started: {new Date(currentAttendance.startTime).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
             </Text>
+            {istDate(currentAttendance.startTime) !== istDate(new Date()) ? (
+              <Text style={styles.oldDay}>This day was not ended. Enter the time you ended it below.</Text>
+            ) : null}
             <TouchableOpacity 
               style={styles.checkOutButton} 
               onPress={handleCheckOut}
@@ -145,6 +167,14 @@ export default function AttendanceCard({ onChange }: { onChange?: () => void } =
                 <Text style={styles.checkOutButtonText}>{loading ? 'Ending…' : 'End Day'}</Text>
               </LinearGradient>
             </TouchableOpacity>
+            <TouchableOpacity onPress={() => setForgot((f) => !f)} style={{ marginTop: 12 }}>
+              <Text style={styles.forgotLink}>{forgot ? 'Cancel' : 'Forgot to End Day? Enter the time'}</Text>
+            </TouchableOpacity>
+            {forgot ? (
+              <View style={{ alignSelf: 'stretch', marginTop: 8 }}>
+                <MissedExitCard title="End Day" startAt={currentAttendance.startTime} onSubmit={reportMissedEndDay} />
+              </View>
+            ) : null}
           </View>
         ) : (
           <TouchableOpacity
@@ -185,6 +215,8 @@ const styles = StyleSheet.create({
   gpsWarn: { alignSelf: 'stretch', backgroundColor: '#FEE2E2', borderColor: '#F87171', borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 12 },
   gpsWarnTitle: { color: '#B91C1C', fontWeight: '700', fontSize: 14 },
   gpsWarnText: { color: '#7F1D1D', fontSize: 13, marginTop: 4 },
+  oldDay: { color: '#B45309', fontWeight: '600', fontSize: 13, marginBottom: 12 },
+  forgotLink: { color: '#2563EB', fontWeight: '600', fontSize: 14 },
   gpsOn: { color: '#15803D', fontWeight: '600', fontSize: 13, marginBottom: 12 },
   card: {
     backgroundColor: colors.backgroundLight,
