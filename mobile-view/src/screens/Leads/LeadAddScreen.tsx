@@ -24,13 +24,6 @@ const OPTIONS: LeadOption[] = [
     icon: 'school-outline',
   },
   {
-    title: 'Renewal Leads',
-    subtitle: 'Search existing schools and submit renewal leads',
-    screen: 'LeadsRenewalList',
-    colors: ['#22C55E', '#16A34A'],
-    icon: 'refresh-outline',
-  },
-  {
     title: 'Followup Leads',
     subtitle: 'View and manage followup leads',
     screen: 'LeadFollowup',

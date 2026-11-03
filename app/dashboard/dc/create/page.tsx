@@ -28,13 +28,22 @@ const CREATE_SALE_SCHOOL_TYPES = ['New', 'Existing'] as const
 type CreateSaleSchoolType = (typeof CREATE_SALE_SCHOOL_TYPES)[number]
 
 /** Same product fields as the app's Create Sale: tick a product, then Price, Quantity, Strength. */
+type RenewalOption = 'renewed' | 'not_renewed' | 'cross_sale'
 type SaleProduct = {
   name: string
   checked: boolean
   price: string
   quantity: string
   strength: string
+  /** Existing school only. */
+  renewal?: RenewalOption
 }
+
+const RENEWAL_OPTIONS: { value: RenewalOption; label: string }[] = [
+  { value: 'renewed', label: 'Renewed' },
+  { value: 'not_renewed', label: 'Not renewed' },
+  { value: 'cross_sale', label: 'Cross sale' },
+]
 
 function todayYmd() {
   const d = new Date()
@@ -117,11 +126,20 @@ export default function CreateDealPage() {
     ;(async () => {
       try {
         const data = await apiRequest<Array<{ _id: string; name?: string; zoneId?: { name?: string } | null }>>('/clusters')
-        setClusters(
-          (Array.isArray(data) ? data : [])
-            .map((c) => ({ _id: c._id, name: c.name || '', zone: c.zoneId?.name || '' }))
-            .filter((c) => c.name)
-        )
+        const mapped = (Array.isArray(data) ? data : [])
+          .map((c) => ({ _id: c._id, name: c.name || '', zone: c.zoneId?.name || '' }))
+          .filter((c) => c.name)
+        setClusters(mapped)
+        // The BDE's own cluster is selected by default (they can still change it).
+        try {
+          const me = await apiRequest<{ cluster?: string; zone?: string }>('/auth/me')
+          const mine = String(me?.cluster || '').trim().toLowerCase()
+          const inZone = mapped.filter((c) => me?.zone && c.zone === me.zone)
+          const own = mapped.find((c) => mine && c.name.trim().toLowerCase() === mine) || (inZone.length === 1 ? inZone[0] : undefined)
+          if (own) setForm((f) => (f.clusterId ? f : { ...f, clusterId: own._id, cluster: own.name, zone: own.zone || f.zone }))
+        } catch {
+          // no default; the BDE picks it
+        }
       } catch {
         setClusters([])
       }
@@ -287,15 +305,23 @@ export default function CreateDealPage() {
         nextFieldErrors.follow_up_date = 'Follow-up date cannot be in the past'
       }
 
+      const existing = form.school_type === 'Existing'
+      const optionOf = (p: SaleProduct): RenewalOption => (existing ? p.renewal || 'renewed' : 'cross_sale')
+      const notRenewed = products.filter((p) => p.checked && existing && optionOf(p) === 'not_renewed').map((p) => p.name)
       const selectedProducts = products
-        .filter((p) => p.checked)
+        .filter((p) => p.checked && !(existing && optionOf(p) === 'not_renewed'))
         .map((p) => ({
           product_name: p.name,
           quantity: Math.max(1, Number(p.quantity) || 1),
           unit_price: Number(p.price) || 0,
           strength: Number(p.strength) || 0,
+          ...(existing ? { sale_type: optionOf(p) === 'cross_sale' ? 'cross_sale' : 'renewal' } : {}),
         }))
-      if (selectedProducts.length === 0) nextFieldErrors.products = 'Please select at least one product.'
+      if (selectedProducts.length === 0) {
+        nextFieldErrors.products = notRenewed.length
+          ? 'Mark at least one product as Renewed or Cross sale.'
+          : 'Please select at least one product.'
+      }
 
       setFieldErrors(nextFieldErrors)
       if (Object.keys(nextFieldErrors).length > 0) {
@@ -372,6 +398,7 @@ export default function CreateDealPage() {
         remarks: form.remarks.trim(),
         email: form.email.trim(),
         products: selectedProducts,
+        not_renewed_products: notRenewed,
         follow_up_date: followUpIso,
         // No Assign BDE on Create Sale: the deal is the creator's unless it came pre-assigned.
         assigned_to: form.assigned_to || undefined,
@@ -618,7 +645,24 @@ export default function CreateDealPage() {
                         {product.name}
                       </Label>
                     </div>
-                    {product.checked && (
+                    {product.checked && form.school_type === 'Existing' ? (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {RENEWAL_OPTIONS.map((o) => {
+                          const on = (product.renewal || 'renewed') === o.value
+                          return (
+                            <button
+                              key={o.value}
+                              type="button"
+                              onClick={() => updateProduct(index, { renewal: o.value })}
+                              className={`rounded-full border px-3 py-1 text-xs font-semibold ${on ? 'border-blue-600 bg-blue-600 text-white' : 'border-neutral-300 bg-white text-neutral-700'}`}
+                            >
+                              {o.label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    ) : null}
+                    {product.checked && !(form.school_type === 'Existing' && product.renewal === 'not_renewed') && (
                       <div className="mt-2 grid grid-cols-3 gap-2">
                         <div>
                           <Label className="text-xs text-neutral-600">Price (₹)</Label>

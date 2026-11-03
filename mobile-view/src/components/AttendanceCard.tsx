@@ -139,7 +139,12 @@ export default function AttendanceCard({ onChange }: { onChange?: () => void } =
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <Text style={styles.cardIcon}>⏰</Text>
-          <Text style={styles.cardTitle}>Attendance</Text>
+          <Text style={[styles.cardTitle, { flex: 1 }]}>Attendance</Text>
+          {currentAttendance ? (
+            <TouchableOpacity style={styles.endDayTop} onPress={handleCheckOut} disabled={loading} activeOpacity={0.7}>
+              <Text style={styles.checkOutButtonText}>{loading ? 'Ending…' : 'End Day'}</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
         {currentAttendance ? (
           <View style={styles.attendanceStatus}>
@@ -153,21 +158,7 @@ export default function AttendanceCard({ onChange }: { onChange?: () => void } =
             {istDate(currentAttendance.startTime) !== istDate(new Date()) ? (
               <Text style={styles.oldDay}>This day was not ended. Enter the time you ended it below.</Text>
             ) : null}
-            <TouchableOpacity 
-              style={styles.checkOutButton} 
-              onPress={handleCheckOut}
-              activeOpacity={0.7}
-            >
-              <LinearGradient
-                colors={[colors.error, colors.error]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.buttonGradient}
-              >
-                <Text style={styles.checkOutButtonText}>{loading ? 'Ending…' : 'End Day'}</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setForgot((f) => !f)} style={{ marginTop: 12 }}>
+            <TouchableOpacity onPress={() => setForgot((f) => !f)}>
               <Text style={styles.forgotLink}>{forgot ? 'Cancel' : 'Forgot to End Day? Enter the time'}</Text>
             </TouchableOpacity>
             {forgot ? (
@@ -215,6 +206,7 @@ const styles = StyleSheet.create({
   gpsWarn: { alignSelf: 'stretch', backgroundColor: '#FEE2E2', borderColor: '#F87171', borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 12 },
   gpsWarnTitle: { color: '#B91C1C', fontWeight: '700', fontSize: 14 },
   gpsWarnText: { color: '#7F1D1D', fontSize: 13, marginTop: 4 },
+  endDayTop: { backgroundColor: colors.error, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 18 },
   oldDay: { color: '#B45309', fontWeight: '600', fontSize: 13, marginBottom: 12 },
   forgotLink: { color: '#2563EB', fontWeight: '600', fontSize: 14 },
   gpsOn: { color: '#15803D', fontWeight: '600', fontSize: 13, marginBottom: 12 },

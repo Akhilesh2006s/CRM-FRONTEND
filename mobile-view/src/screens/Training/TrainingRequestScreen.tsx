@@ -96,6 +96,11 @@ function DateField({
   onChange: (v: string) => void;
 }) {
   const [show, setShow] = useState(false);
+  // Past dates are frozen: today is the earliest date.
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const picked = parseYmd(value);
+  const pickerValue = picked < today ? today : picked;
 
   if (Platform.OS === 'web') {
     return (
@@ -103,6 +108,7 @@ function DateField({
         <WebLabel>{label}</WebLabel>
         {React.createElement('input', {
           type: 'date',
+          min: toYmd(today),
           value: value || '',
           onChange: (e: any) => onChange(e.target.value || ''),
           style: {
@@ -129,7 +135,8 @@ function DateField({
       </TouchableOpacity>
       {show && Platform.OS === 'android' ? (
         <DateTimePicker
-          value={parseYmd(value)}
+          value={pickerValue}
+          minimumDate={today}
           mode="date"
           display="default"
           onChange={(event, d) => {
@@ -142,7 +149,8 @@ function DateField({
         <Modal visible transparent animationType="slide" onRequestClose={() => setShow(false)}>
           <View style={styles.datePickerBox}>
             <DateTimePicker
-              value={parseYmd(value)}
+              value={pickerValue}
+              minimumDate={today}
               mode="date"
               display="spinner"
               onChange={(_, d) => {
@@ -191,6 +199,10 @@ export default function TrainingRequestScreen() {
   const onSubmit = async () => {
     if (!form.schoolName.trim() || !form.subject || !form.preferredDate) {
       setBanner({ type: 'error', message: 'School, subject, and preferred date are required' });
+      return;
+    }
+    if (form.preferredDate < toYmd(new Date())) {
+      setBanner({ type: 'error', message: 'Preferred date cannot be in the past.' });
       return;
     }
     setSubmitting(true);

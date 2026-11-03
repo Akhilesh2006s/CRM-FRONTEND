@@ -184,6 +184,16 @@ function ProductStatusTable({ rows }: { rows: { name: string; chance?: string | 
   );
 }
 
+/** One search box: school, code, mobile, contact person, zone, town or BDE. */
+const leadMatches = (l: any, query: string) => {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return [
+    l.school_name, l.school_code, l.contact_mobile, l.contact_mobile2, l.contact_person, l.contact_person2,
+    l.zone, l.location, l.town, l.city, l.area, l.assignedToName, l.assigned_to?.name, l.createdBy?.name,
+  ].some((v) => String(v || '').toLowerCase().includes(q));
+};
+
 export default function LeadFollowupScreen({ navigation }: any) {
   const { user } = useAuth();
   const seesAllFollowups =
@@ -381,22 +391,8 @@ export default function LeadFollowupScreen({ navigation }: any) {
 
   const applyFilters = () => {
     let filtered = [...allLeads];
-    if (zoneFilter && zoneFilter !== 'all') {
-      filtered = filtered.filter((l) =>
-        l.zone?.toLowerCase().includes(zoneFilter.toLowerCase())
-      );
-    }
-    if (mobileFilter) {
-      filtered = filtered.filter((l) => l.contact_mobile?.includes(mobileFilter));
-    }
-    if (schoolFilter) {
-      filtered = filtered.filter((l) =>
-        l.school_name?.toLowerCase().includes(schoolFilter.toLowerCase())
-      );
-    }
-    if (schoolCodeFilter.trim()) {
-      const code = schoolCodeFilter.trim().toLowerCase();
-      filtered = filtered.filter((l) => String(l.school_code || '').toLowerCase().includes(code));
+    if (schoolFilter.trim()) {
+      filtered = filtered.filter((l) => leadMatches(l, schoolFilter));
     }
     if (employeeFilter) {
       filtered = filtered.filter((l) => l.assignedToId === employeeFilter);
@@ -743,37 +739,11 @@ export default function LeadFollowupScreen({ navigation }: any) {
               placeholder="All BDEs"
             />
           )}
-          {zones.length > 0 && (
-            <WebSelect
-              label="Zone"
-              value={zoneFilter || 'all'}
-              onValueChange={(v) => setZoneFilter(v === 'all' ? '' : v)}
-              items={zoneItems}
-              placeholder="All Zones"
-            />
-          )}
-          <Text style={styles.filterLabel}>School Name</Text>
           <WebInput
             style={styles.filterInput}
-            placeholder="Search school..."
+            placeholder="Search school, code, mobile, contact, zone or town"
             value={schoolFilter}
             onChangeText={setSchoolFilter}
-          />
-          <Text style={styles.filterLabel}>School Code</Text>
-          <WebInput
-            style={styles.filterInput}
-            placeholder="Search code..."
-            value={schoolCodeFilter}
-            onChangeText={setSchoolCodeFilter}
-            autoCapitalize="characters"
-          />
-          <Text style={styles.filterLabel}>Contact Mobile</Text>
-          <WebInput
-            style={styles.filterInput}
-            placeholder="Search mobile..."
-            value={mobileFilter}
-            onChangeText={setMobileFilter}
-            keyboardType="phone-pad"
           />
           <WebButton title="Refresh" onPress={loadLeads} variant="outline" />
         </View>

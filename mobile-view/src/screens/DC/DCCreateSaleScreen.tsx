@@ -26,13 +26,22 @@ const DEAL_STATUS_OPTIONS = [
 ];
 const SCHOOL_CODE_ALLOWED = /^[A-Za-z0-9_-]+$/;
 
+type RenewalOption = 'renewed' | 'not_renewed' | 'cross_sale';
 type SaleProduct = {
   name: string;
   checked: boolean;
   price: number;
   quantity: number;
   strength: number;
+  /** Existing school only. */
+  renewal?: RenewalOption;
 };
+
+const RENEWAL_OPTIONS: { value: RenewalOption; label: string }[] = [
+  { value: 'renewed', label: 'Renewed' },
+  { value: 'not_renewed', label: 'Not renewed' },
+  { value: 'cross_sale', label: 'Cross sale' },
+];
 
 function toYmd(d: Date) {
   const y = d.getFullYear();
@@ -320,11 +329,24 @@ export default function DCCreateSaleScreen({ navigation }: any) {
       try {
         const data = await apiService.get('/clusters');
         const list = Array.isArray(data) ? data : data?.data || [];
-        setClusters(
-          list
-            .map((c: any) => ({ _id: String(c._id || ''), name: String(c.name || ''), zone: String(c.zoneId?.name || '') }))
-            .filter((c: { name: string }) => c.name),
-        );
+        const mapped = list
+          .map((c: any) => ({ _id: String(c._id || ''), name: String(c.name || ''), zone: String(c.zoneId?.name || '') }))
+          .filter((c: { name: string }) => c.name);
+        setClusters(mapped);
+        // The BDE's own cluster is selected by default (they can still change it).
+        try {
+          const me: any = await apiService.get('/auth/me');
+          const mine = String(me?.cluster || '').trim().toLowerCase();
+          const own =
+            mapped.find((c: { name: string }) => mine && c.name.trim().toLowerCase() === mine) ||
+            (() => {
+              const inZone = mapped.filter((c: { zone: string }) => me?.zone && c.zone === me.zone);
+              return inZone.length === 1 ? inZone[0] : undefined;
+            })();
+          if (own) setForm((f) => (f.clusterId ? f : { ...f, clusterId: own._id, cluster: own.name }));
+        } catch {
+          // no default; the BDE picks it
+        }
       } catch {
         setClusters([]);
       }
@@ -403,16 +425,20 @@ export default function DCCreateSaleScreen({ navigation }: any) {
       setError('Remarks is required');
       return;
     }
+    const existing = form.school_type === 'Existing';
+    const optionOf = (p: SaleProduct): RenewalOption => (existing ? p.renewal || 'renewed' : 'cross_sale');
+    const notRenewed = products.filter((p) => p.checked && existing && optionOf(p) === 'not_renewed').map((p) => p.name);
     const selectedProducts = products
-      .filter((p) => p.checked)
+      .filter((p) => p.checked && !(existing && optionOf(p) === 'not_renewed'))
       .map((p) => ({
         product_name: p.name,
         quantity: p.quantity || 1,
         unit_price: p.price || 0,
         strength: p.strength || 0,
+        ...(existing ? { sale_type: optionOf(p) === 'cross_sale' ? 'cross_sale' : 'renewal' } : {}),
       }));
     if (selectedProducts.length === 0) {
-      setError('Please select at least one product.');
+      setError(notRenewed.length ? 'Mark at least one product as Renewed or Cross sale.' : 'Please select at least one product.');
       return;
     }
 
@@ -442,6 +468,7 @@ export default function DCCreateSaleScreen({ navigation }: any) {
         remarks: form.remarks.trim(),
         email,
         products: selectedProducts,
+        not_renewed_products: notRenewed,
         follow_up_date: followUp,
       });
       setSuccess('Deal created successfully. DC entry has been created — submit PO from EMP DC / Admin DCs.');
@@ -596,7 +623,23 @@ export default function DCCreateSaleScreen({ navigation }: any) {
               </View>
               <Text style={styles.productName}>{product.name}</Text>
             </TouchableOpacity>
-            {product.checked ? (
+            {product.checked && form.school_type === 'Existing' ? (
+              <View style={styles.renewalRow}>
+                {RENEWAL_OPTIONS.map((o) => {
+                  const on = (product.renewal || 'renewed') === o.value;
+                  return (
+                    <TouchableOpacity
+                      key={o.value}
+                      style={[styles.renewalChip, on && styles.renewalChipOn]}
+                      onPress={() => updateProduct(index, { renewal: o.value })}
+                    >
+                      <Text style={[styles.renewalChipText, on && styles.renewalChipTextOn]}>{o.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            ) : null}
+            {product.checked && !(form.school_type === 'Existing' && product.renewal === 'not_renewed') ? (
               <View style={styles.productFields}>
                 <View style={styles.productField}>
                   <Text style={styles.label}>Price (₹)</Text>
@@ -703,6 +746,11 @@ export default function DCCreateSaleScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
+  renewalRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+  renewalChip: { paddingVertical: 7, paddingHorizontal: 12, borderRadius: 18, borderWidth: 1, borderColor: '#CBD5E1', backgroundColor: '#fff' },
+  renewalChipOn: { backgroundColor: '#2563EB', borderColor: '#2563EB' },
+  renewalChipText: { fontSize: 13, color: '#334155', fontWeight: '600' },
+  renewalChipTextOn: { color: '#fff' },
   label: { ...typography.label.medium, color: colors.textPrimary, marginBottom: 6 },
   fieldError: { ...typography.body.small, color: colors.error, marginBottom: 10, marginTop: -4 },
   checkingText: { ...typography.body.small, color: '#2563EB', marginBottom: 10, marginTop: -4 },

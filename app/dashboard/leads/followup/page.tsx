@@ -205,6 +205,16 @@ function leadTown(lead: Lead): string {
   return String(lead.area || lead.city || lead.location || firstPart || lead.pincode || '').trim()
 }
 
+/** One search box: school, code, mobile, contact person, zone, town or BDE. */
+const leadMatches = (l: any, query: string) => {
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  return [
+    l.school_name, l.school_code, l.contact_mobile, l.contact_mobile2, l.contact_person, l.contact_person2,
+    l.zone, l.location, l.town, l.city, l.area, l.assignedToName, l.assigned_to?.name, l.createdBy?.name,
+  ].some((v) => String(v || '').toLowerCase().includes(q))
+}
+
 export default function FollowupLeadsPage() {
   const router = useRouter()
   const currentUser = getCurrentUser()
@@ -441,13 +451,7 @@ export default function FollowupLeadsPage() {
   const applyFilters = () => {
     let filtered = [...allLeads]
 
-    if (zone && zone !== 'all') filtered = filtered.filter(l => l.zone?.toLowerCase().includes(zone.toLowerCase()))
-    if (contactMobile) filtered = filtered.filter(l => l.contact_mobile?.includes(contactMobile))
-    if (schoolName) filtered = filtered.filter(l => l.school_name?.toLowerCase().includes(schoolName.toLowerCase()))
-    if (schoolCode.trim()) {
-      const code = schoolCode.trim().toLowerCase()
-      filtered = filtered.filter((l) => String(l.school_code || '').toLowerCase().includes(code))
-    }
+    if (schoolName.trim()) filtered = filtered.filter((l) => leadMatches(l, schoolName))
     if (employeeFilter) filtered = filtered.filter(l => l.assignedToId === employeeFilter)
 
     // Sort by createdAt descending so latest leads appear on top
@@ -918,44 +922,12 @@ export default function FollowupLeadsPage() {
               </Select>
             </div>
           )}
-          <div>
-            <label className="text-sm font-medium text-neutral-700 mb-1 block">Zone</label>
-            <Select value={zone || undefined} onValueChange={(v) => setZone(v === 'all' ? '' : v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="All Zones" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Zones</SelectItem>
-                {zones
-                  .filter(z => z && z.trim() !== '')
-                  .map((z) => (
-                    <SelectItem key={z} value={z}>{z}</SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <label className="text-sm font-medium text-neutral-700 mb-1 block">School Name</label>
+          <div className="md:col-span-2">
+            <label className="text-sm font-medium text-neutral-700 mb-1 block">Search</label>
             <Input
-              placeholder="Search school..."
+              placeholder="Search school, code, mobile, contact, zone or town"
               value={schoolName}
               onChange={(e) => setSchoolName(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium text-neutral-700 mb-1 block">School Code</label>
-            <Input
-              placeholder="Search code..."
-              value={schoolCode}
-              onChange={(e) => setSchoolCode(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium text-neutral-700 mb-1 block">Contact Mobile</label>
-            <Input
-              placeholder="Search mobile..."
-              value={contactMobile}
-              onChange={(e) => setContactMobile(e.target.value)}
             />
           </div>
           <div className="flex items-end">

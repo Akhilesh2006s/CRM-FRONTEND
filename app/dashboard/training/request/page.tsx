@@ -166,6 +166,7 @@ export default function TrainingRequestPage() {
             <Input
               className="bg-white"
               type="date"
+              min={new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)}
               value={form.preferredDate}
               onChange={(e) => setForm((f) => ({ ...f, preferredDate: e.target.value }))}
               required
