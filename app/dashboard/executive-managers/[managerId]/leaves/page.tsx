@@ -442,7 +442,7 @@ export default function ExecutiveManagerLeavesPage() {
                           </Button>
                         </div>
                       ) : leave.status === 'Pending' ? (
-                        <span className="text-xs text-neutral-500">Your decision is recorded or not required</span>
+                        null
                       ) : (
                         <div className="text-xs text-neutral-500">
                           {leave.approvedBy && (

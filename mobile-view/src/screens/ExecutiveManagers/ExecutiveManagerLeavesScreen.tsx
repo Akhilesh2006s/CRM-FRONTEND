@@ -218,7 +218,7 @@ export default function ExecutiveManagerLeavesScreen({ navigation, route }: any)
                   {leave.status === 'Pending' && leave.canDecide ? (
                     <LeaveDecisionActions leave={leave} onDone={loadLeaves} />
                   ) : leave.status === 'Pending' ? (
-                    <Text style={styles.meta}>Your decision is recorded or not required</Text>
+                    null
                   ) : (
                     <View>
                       {leave.approvedBy ? <Text style={styles.meta}>By: {leave.approvedBy.name}</Text> : null}
