@@ -23,6 +23,15 @@ import { isTransportComplete, TRANSPORT_REQUIRED_MESSAGE } from '../../utils/dcT
 import { showAlert, showConfirm } from '../../utils/showAlert';
 import { navigateRoot } from '../../navigation/navigationRef';
 import SchoolOverview from '../../components/SchoolOverview';
+
+/** Academic years run April to March, e.g. 2026-27. */
+const academicYearFor = (date: string | Date = new Date()) => {
+  const d = new Date(new Date(date).getTime() + 330 * 60000);
+  const start = d.getUTCMonth() >= 3 ? d.getUTCFullYear() : d.getUTCFullYear() - 1;
+  return `${start}-${String((start + 1) % 100).padStart(2, '0')}`;
+};
+const yearStart = (y: string) => Number(String(y).slice(0, 4)) || 0;
+const yearFrom = (start: number) => `${start}-${String((start + 1) % 100).padStart(2, '0')}`;
 import { resolveMyClientsDcStatus } from '../../utils/myClientsDcStatus';
 
 export default function DCClientScreen({ navigation }: any) {
@@ -74,6 +83,46 @@ export default function DCClientScreen({ navigation }: any) {
   };
 
   const [openId, setOpenId] = useState<string | null>(null);
+  const [addingYear, setAddingYear] = useState<string | null>(null);
+
+  /** The deal's academic year: saved year, else when it was created. */
+  const dealYear = (dc: any) => {
+    const o = typeof dc.dcOrderId === 'object' ? dc.dcOrderId : null;
+    const saved = String(o?.year || '').trim();
+    if (/^\d{4}-\d{2}$/.test(saved)) return saved;
+    return academicYearFor(o?.createdAt || dc.createdAt || new Date());
+  };
+
+  // New academic year for this school: a new PO row; earlier years' POs stay as they are.
+  const addNextYearPo = (dc: any) => {
+    const orderId = getOrderId(dc);
+    if (!orderId) return;
+    const year = yearFrom(Math.max(yearStart(dealYear(dc)) + 1, yearStart(academicYearFor())));
+    const name = dc.customerName || dc.dcOrderId?.school_name || 'this school';
+    Alert.alert('New Year PO', `Add a PO for ${year} for ${name}? The ${dealYear(dc)} PO stays as it is.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: `Add ${year}`,
+        onPress: async () => {
+          setAddingYear(dc._id);
+          try {
+            const res: any = await apiService.post(`/dc-orders/${orderId}/next-year`, { academicYear: year });
+            const created = res?.data ?? res;
+            await loadDCs();
+            Alert.alert(
+              created?.existing ? 'Already added' : 'Added',
+              `${year} row is ready. Upload the PO for ${year}, then Request DC.`,
+              [{ text: 'Upload PO', onPress: () => navigation.navigate('ClientEditPO', { orderId: created.orderId, dcId: created.dcId || undefined }) }]
+            );
+          } catch (e: any) {
+            Alert.alert('Could not add', e?.response?.data?.message || e?.message || 'Try again.');
+          } finally {
+            setAddingYear(null);
+          }
+        },
+      },
+    ]);
+  };
 
   const getOrderId = (dc: any) => {
     if (dc._isConvertedLead && dc._id) return dc._id;
@@ -370,6 +419,10 @@ export default function DCClientScreen({ navigation }: any) {
                 {openId === dc._id ? <SchoolOverview leadId={orderId || dc._id} /> : null}
                 <View style={styles.cardBody}>
                   <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Academic Year:</Text>
+                    <Text style={[styles.infoValue, { fontWeight: '700' }]}>{dealYear(dc)}</Text>
+                  </View>
+                  <View style={styles.infoRow}>
                     <Text style={styles.infoLabel}>School Code:</Text>
                     <Text style={styles.infoValue}>{getSchoolCode(dc)}</Text>
                   </View>
@@ -448,6 +501,15 @@ export default function DCClientScreen({ navigation }: any) {
                     </>
                   )}
                 </View>
+                {orderId ? (
+                  <TouchableOpacity
+                    style={styles.nextYearButton}
+                    onPress={() => addNextYearPo(dc)}
+                    disabled={addingYear === dc._id}
+                  >
+                    <Text style={styles.nextYearText}>{addingYear === dc._id ? 'Adding…' : '+ New Year PO'}</Text>
+                  </TouchableOpacity>
+                ) : null}
                 {!canEditRequest && (
                   <Text style={styles.cardDcFlowMessageText}>
                     PO can only be changed before requesting DC. Use View Invoice for clients in the DC process.
@@ -546,6 +608,8 @@ export default function DCClientScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
+  nextYearButton: { marginTop: 10, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: '#16A34A', alignItems: 'center' },
+  nextYearText: { color: '#15803D', fontWeight: '700', fontSize: 14 },
   fullInfoLink: { color: '#2563EB', fontSize: 13, fontWeight: '600', marginTop: 4 },
   container: { flex: 1, backgroundColor: colors.background },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },

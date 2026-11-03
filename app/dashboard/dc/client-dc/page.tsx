@@ -67,6 +67,20 @@ import {
   type RequestDcTermRouting,
 } from '@/lib/clientDcTermPartition'
 import { useRouter } from 'next/navigation'
+
+/** Academic years run April to March, e.g. 2026-27. */
+const academicYearFor = (date: string | Date = new Date()) => {
+  const d = new Date(new Date(date).getTime() + 330 * 60000)
+  const start = d.getUTCMonth() >= 3 ? d.getUTCFullYear() : d.getUTCFullYear() - 1
+  return `${start}-${String((start + 1) % 100).padStart(2, '0')}`
+}
+const yearFrom = (start: number) => `${start}-${String((start + 1) % 100).padStart(2, '0')}`
+/** The deal's academic year: saved year, else when it was created. */
+const dealYear = (d: any) => {
+  const o = typeof d?.dcOrderId === 'object' ? d.dcOrderId : null
+  const saved = String(o?.year || '').trim()
+  return /^\d{4}-\d{2}$/.test(saved) ? saved : academicYearFor(o?.createdAt || d?.createdAt || new Date())
+}
 import { abacusStudentStrength, defaultMasterAbacusQuantity } from '@/lib/abacusMaterials'
 import { AbacusMaterialsFields } from '@/components/dc/AbacusMaterialsFields'
 import { DC_ROW_CATEGORIES, canonicalDcRowCategory, buildRelatedItemRows, buildSpecimenRows, dcRowCategoryOrDefault, isBillableDcRow, isRelatedItemRow, isSpecimenRow, specimenCopiesValue, specimenRowQuantity, specimenSetsOfRow, isMarkerSpecs, type SpecimenItemChoice } from '@/lib/dcRowCategory'
@@ -597,6 +611,29 @@ export default function ClientDCPage() {
   const availableClasses = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
   const availableCategories = ['New Students', 'Existing Students', 'Both']
   const availableDCCategories = ['Term 1', 'Term 2', 'Term 3', 'Full Year']
+
+  // New academic year for this school: a new PO row; earlier years' POs stay as they are.
+  const [addingYear, setAddingYear] = useState<string | null>(null)
+  const addNextYearPo = async (d: any) => {
+    const orderId = typeof d.dcOrderId === 'object' ? d.dcOrderId?._id : d.dcOrderId || (d._isConvertedLead ? d._id : null)
+    if (!orderId) return
+    const year = yearFrom(Math.max(Number(dealYear(d).slice(0, 4)) + 1, Number(academicYearFor().slice(0, 4))))
+    const name = d.customerName || d.dcOrderId?.school_name || 'this school'
+    if (!window.confirm(`Add a PO for ${year} for ${name}? The ${dealYear(d)} PO stays as it is.`)) return
+    setAddingYear(d._id)
+    try {
+      const res = await apiRequest<{ existing?: boolean }>(`/dc-orders/${orderId}/next-year`, {
+        method: 'POST',
+        body: JSON.stringify({ academicYear: year }),
+      })
+      toast.success(`${res?.existing ? 'Already added' : 'Added'}: ${year} row. Use Edit PO on it to upload the ${year} PO, then Upload DC.`)
+      await load()
+    } catch (e: any) {
+      toast.error(e?.message || 'Could not add the new year')
+    } finally {
+      setAddingYear(null)
+    }
+  }
 
   const load = async () => {
     setLoading(true)
@@ -3379,6 +3416,7 @@ export default function ClientDCPage() {
                       <TableRow key={d._id} className={chainRowClass(d, 'hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-neutral-50 transition-all duration-200 border-b border-neutral-100/80 hover:shadow-sm')}>
                         <TableCell className="font-medium text-neutral-600">{idx + 1}</TableCell>
                         <TableCell className="font-semibold text-blue-600">
+                          <div className="text-xs font-bold text-emerald-700">{dealYear(d)}</div>
                           {schoolCode}
                           {/* Town / area under the code, as on the follow-up cards. */}
                           {typeof d.dcOrderId === 'object' && (d.dcOrderId?.area || d.dcOrderId?.city || d.dcOrderId?.location) && (
@@ -3704,6 +3742,16 @@ export default function ClientDCPage() {
                         </TableCell>
                         <TableCell className="text-center">
                           {!d._isConvertedLead && d.dcType !== 'shortage' && <Link className="mb-2 block text-xs font-medium text-blue-700 underline" href={`/dashboard/dc/grid?dc=${d._id}`}>Main DC / Sub DC history</Link>}
+                          {d.dcType !== 'shortage' && (d.dcOrderId || d._isConvertedLead) ? (
+                            <button
+                              type="button"
+                              className="mb-2 block w-full rounded border border-emerald-600 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+                              onClick={() => addNextYearPo(d)}
+                              disabled={addingYear === d._id}
+                            >
+                              {addingYear === d._id ? 'Adding…' : '+ New Year PO'}
+                            </button>
+                          ) : null}
                           {rawStatus === 'created' || rawStatus === 'po_submitted' || rawStatus === 'dc_requested' ? (
                           <div className="flex items-center gap-2 justify-center">
                             {d.poPhotoUrl && (
