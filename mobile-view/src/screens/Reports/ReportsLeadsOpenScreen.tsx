@@ -177,6 +177,16 @@ function PriorityChart({ data }: { data: { name: string; value: number; color: s
   );
 }
 
+/** BDEs and Zonal Managers see only their own zone(s); other roles see every zone. */
+const ZONE_LIMITED_ROLES = new Set(['Executive', 'Sales Executive', 'Executive Manager']);
+const ownZones = (me: any): string[] | null => {
+  if (!me || !ZONE_LIMITED_ROLES.has(String(me.role || '').trim()) || me.isSuperAdmin) return null;
+  const list = [me.zone, ...(Array.isArray(me.zones) ? me.zones : [])]
+    .map((z: any) => String(z || '').trim().toLowerCase())
+    .filter(Boolean);
+  return list.length ? Array.from(new Set(list)) : null;
+};
+
 export default function ReportsLeadsOpenScreen() {
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -205,13 +215,16 @@ export default function ReportsLeadsOpenScreen() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [leadRes, empRes] = await Promise.all([
+      const [leadRes, empRes, me] = await Promise.all([
         apiService.get<any>('/leads?status=Pending&limit=1000'),
         apiService.get<Employee[]>('/employees?isActive=true').catch(() => []),
+        apiService.get('/auth/me').catch(() => null),
       ]);
 
       let allData: Lead[] = Array.isArray(leadRes) ? leadRes : leadRes?.data || [];
       allData = allData.filter((lead) => lead.status === 'Pending');
+      const mine = ownZones(me);
+      if (mine) allData = allData.filter((lead) => mine.includes(String(lead.zone || '').trim().toLowerCase()));
 
       setAllLeads(allData);
       setEmployees(Array.isArray(empRes) ? empRes : []);

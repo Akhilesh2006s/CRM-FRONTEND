@@ -36,6 +36,16 @@ type Employee = {
   name?: string
 }
 
+/** BDEs and Zonal Managers see only their own zone(s); other roles see every zone. */
+const ZONE_LIMITED_ROLES = new Set(['Executive', 'Sales Executive', 'Executive Manager'])
+const ownZones = (me: any): string[] | null => {
+  if (!me || !ZONE_LIMITED_ROLES.has(String(me.role || '').trim()) || me.isSuperAdmin) return null
+  const list = [me.zone, ...(Array.isArray(me.zones) ? me.zones : [])]
+    .map((z: any) => String(z || '').trim().toLowerCase())
+    .filter(Boolean)
+  return list.length ? Array.from(new Set(list)) : null
+}
+
 export default function ReportsOpenLeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([])
   const [allLeads, setAllLeads] = useState<Lead[]>([])
@@ -79,11 +89,17 @@ export default function ReportsOpenLeadsPage() {
       if (contactMobile) qs.set('contactMobile', contactMobile)
       if (schoolName) qs.set('schoolName', schoolName)
 
-      const response = await apiRequest<any>(`/leads?${qs.toString()}`)
+      const [response, me] = await Promise.all([
+        apiRequest<any>(`/leads?${qs.toString()}`),
+        apiRequest<any>('/auth/me').catch(() => null),
+      ])
       const allData: Lead[] = Array.isArray(response)
         ? response
         : (response?.data || [])
-      const pending = allData.filter((lead: Lead) => lead.status === 'Pending')
+      const mine = ownZones(me)
+      const pending = allData.filter(
+        (lead: Lead) => lead.status === 'Pending' && (!mine || mine.includes(String(lead.zone || '').trim().toLowerCase()))
+      )
       setAllLeads(pending)
       setLeads(pending)
       const uniqueZones = Array.from(new Set(pending.map((l) => l.zone).filter(Boolean))) as string[]
