@@ -39,7 +39,7 @@ const ATTENDANCE_REASONS = [
  * Shown after login until today's attendance exists: a live front-camera selfie plus
  * GPS location. The selfie is saved with the attendance and shown to admin / HR.
  */
-export default function DailySelfieCheckInScreen({ onDone }: { onDone: () => void }) {
+export default function DailySelfieCheckInScreen({ onDone, onClose }: { onDone: () => void; onClose?: () => void }) {
   const { user } = useAuth();
   const cameraRef = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
@@ -150,7 +150,13 @@ export default function DailySelfieCheckInScreen({ onDone }: { onDone: () => voi
           <Text style={styles.title}>Start Day</Text>
           <Text style={styles.subtitle}>Hi {user?.name || 'there'}, take a selfie to start your day.</Text>
         </View>
-        <LogoutButton />
+        {onClose ? (
+          <TouchableOpacity style={styles.smallBtn} onPress={onClose}>
+            <Text style={styles.secondaryText}>Close</Text>
+          </TouchableOpacity>
+        ) : (
+          <LogoutButton />
+        )}
       </View>
 
       <View style={styles.cameraBox}>

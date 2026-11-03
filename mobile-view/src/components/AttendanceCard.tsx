@@ -5,19 +5,14 @@ import {
   TouchableOpacity,
   StyleSheet,
   Modal,
-  ScrollView,
-  TextInput,
   Alert,
-  ActivityIndicator,
-  Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as ImagePicker from 'expo-image-picker';
 import { apiService } from '../services/api';
-import { getCurrentLocation, getTownFromPincode } from '../services/location';
+import { getCurrentLocation } from '../services/location';
 import { takeLivePhoto } from '../services/photo';
-import { stopDayTracking } from '../services/tracking';
+import { enableLiveGps, liveGpsState, startDayTracking, stopDayTracking, type LiveGpsState } from '../services/tracking';
+import DailySelfieCheckInScreen from '../screens/Attendance/DailySelfieCheckInScreen';
 import { useAuth } from '../context/AuthContext';
 import { colors, gradients } from '../theme/colors';
 import { typography } from '../theme/typography';
@@ -40,14 +35,8 @@ export function attendanceReasonLabel(value?: string | null): string {
 export default function AttendanceCard({ onChange }: { onChange?: () => void } = {}) {
   const { user, checkAuth } = useAuth();
   const [showModal, setShowModal] = useState(false);
-  const [attendanceReason, setAttendanceReason] = useState('office');
-  const [photo, setPhoto] = useState<string | null>(null);
-  const [pincode, setPincode] = useState('');
-  const [town, setTown] = useState('');
-  const [remarks, setRemarks] = useState('');
   const [loading, setLoading] = useState(false);
-  const [locating, setLocating] = useState(false);
-  const [locationData, setLocationData] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [gps, setGps] = useState<LiveGpsState | null>(null);
   const [currentAttendance, setCurrentAttendance] = useState<any>(null);
   const [isFirstTime, setIsFirstTime] = useState(false);
 
@@ -73,131 +62,25 @@ export default function AttendanceCard({ onChange }: { onChange?: () => void } =
     try {
       const data = await apiService.get('/attendance/current');
       setCurrentAttendance(data.attendance ?? null);
+      setGps(data.attendance && !data.attendance.endTime ? await liveGpsState() : null);
     } catch (error) {
       console.error('Error checking attendance:', error);
     }
   };
 
-  const capturePhoto = async () => {
-    try {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Camera permission is required');
-        return;
-      }
-
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
-        base64: true,
-      });
-
-      if (!result.canceled && result.assets[0]) {
-        setPhoto(`data:image/jpeg;base64,${result.assets[0].base64}`);
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to capture photo');
-    }
+  // Start Day done from the home card: same screen as after login; live GPS starts with it.
+  const onStarted = async () => {
+    setShowModal(false);
+    await startDayTracking();
+    await checkAuth().catch(() => undefined);
+    await checkCurrentAttendance();
+    setGps(await liveGpsState());
+    onChange?.();
   };
 
-  const getLocation = async () => {
-    try {
-      setLocating(true);
-      const location = await getCurrentLocation();
-      setLocationData(location);
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to get location');
-    } finally {
-      setLocating(false);
-    }
-  };
-
-  const handlePincodeChange = async (text: string) => {
-    setPincode(text);
-    if (text.length === 6) {
-      try {
-        const result = await getTownFromPincode(text);
-        setTown(result.town);
-      } catch (error) {
-        // Town lookup failed, user can enter manually
-      }
-    }
-  };
-
-  const handleCheckIn = async () => {
-    if (!attendanceReason) {
-      Alert.alert('Error', 'Please select attendance reason');
-      return;
-    }
-    if (!photo) {
-      Alert.alert('Error', 'Please capture a photo');
-      return;
-    }
-    if (!locationData) {
-      Alert.alert('Error', 'Please capture location');
-      return;
-    }
-    if (!pincode || pincode.length !== 6) {
-      Alert.alert('Error', 'Please enter a valid 6-digit pincode');
-      return;
-    }
-    if (!town) {
-      Alert.alert('Error', 'Please enter town name');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      await apiService.post('/attendance/check-in', {
-        attendanceReason,
-        photo,
-        latitude: locationData.latitude,
-        longitude: locationData.longitude,
-        pincode,
-        town,
-        remarks,
-      });
-
-      // Fetch updated user data from backend to get the latest hasCompletedFirstTimeSetup
-      try {
-        const updatedUser = await apiService.get('/auth/me');
-        await AsyncStorage.setItem('userData', JSON.stringify(updatedUser));
-        // Update user in context by calling checkAuth
-        await checkAuth();
-      } catch (error) {
-        console.error('Error fetching updated user:', error);
-        // Still continue even if user fetch fails
-        await checkAuth();
-      }
-      
-      await checkCurrentAttendance();
-      onChange?.();
-      
-      // Wait a bit for state to update
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      Alert.alert('Success', isFirstTime ? 'First time setup completed!' : 'Attendance checked in successfully', [
-        {
-          text: 'OK',
-          onPress: () => {
-            setShowModal(false);
-            // Reset form
-            setAttendanceReason('office');
-            setPhoto(null);
-            setPincode('');
-            setTown('');
-            setRemarks('');
-            setLocationData(null);
-          }
-        }
-      ]);
-    } catch (error: any) {
-      Alert.alert('Error', error?.message || 'Failed to submit attendance');
-    } finally {
-      setLoading(false);
-    }
+  const fixGps = async () => {
+    setGps('starting');
+    setGps(await enableLiveGps());
   };
 
   // End Day takes an exit photo and the location: office days end in the office, field days in the field.
@@ -292,139 +175,17 @@ export default function AttendanceCard({ onChange }: { onChange?: () => void } =
           }
         }}
       >
-        <ScrollView style={styles.modalContainer}>
-          <LinearGradient
-            colors={gradients.primary as [string, string]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.modalHeader}
-          >
-            <Text style={styles.modalTitle}>
-              {isFirstTime ? 'First Time Setup' : 'Start Day'}
-            </Text>
-            {!isFirstTime && (
-              <TouchableOpacity onPress={() => setShowModal(false)} activeOpacity={0.7}>
-                <Text style={styles.closeButton}>✕</Text>
-              </TouchableOpacity>
-            )}
-          </LinearGradient>
-
-          <View style={styles.modalContent}>
-            <View style={styles.section}>
-              <Text style={styles.label}>Attendance Reason *</Text>
-              <View style={styles.reasonGrid}>
-                {ATTENDANCE_REASONS.map((reason) => (
-                  <TouchableOpacity
-                    key={reason.value}
-                    style={[
-                      styles.reasonButton,
-                      attendanceReason === reason.value && styles.reasonButtonSelected,
-                    ]}
-                    onPress={() => setAttendanceReason(reason.value)}
-                  >
-                    <Text
-                      style={[
-                        styles.reasonButtonText,
-                        attendanceReason === reason.value && styles.reasonButtonTextSelected,
-                      ]}
-                    >
-                      {reason.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.section}>
-              <Text style={styles.label}>Photo *</Text>
-              <TouchableOpacity style={styles.photoButton} onPress={capturePhoto}>
-                {photo ? (
-                  <Image source={{ uri: photo }} style={styles.photo} />
-                ) : (
-                  <Text style={styles.photoButtonText}>Capture Photo</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.section}>
-              <Text style={styles.label}>Location *</Text>
-              <TouchableOpacity
-                style={[styles.locationButton, locationData && styles.locationButtonSuccess]}
-                onPress={getLocation}
-                disabled={loading || locating}
-              >
-                <Text style={styles.locationButtonText}>
-                  {locating ? 'Getting location…' : locationData ? 'Location Captured ✓' : 'Capture Location'}
-                </Text>
-              </TouchableOpacity>
-              {locationData && (
-                <Text style={styles.locationText}>
-                  Lat: {locationData.latitude.toFixed(6)}, Lng: {locationData.longitude.toFixed(6)}
-                </Text>
-              )}
-            </View>
-
-            <View style={styles.section}>
-              <Text style={styles.label}>Pincode *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter 6-digit pincode"
-                value={pincode}
-                onChangeText={handlePincodeChange}
-                keyboardType="numeric"
-                maxLength={6}
-              />
-            </View>
-
-            <View style={styles.section}>
-              <Text style={styles.label}>Town *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Town name (auto-filled from pincode)"
-                value={town}
-                onChangeText={setTown}
-              />
-            </View>
-
-            <View style={styles.section}>
-              <Text style={styles.label}>Remarks</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder="Optional remarks"
-                value={remarks}
-                onChangeText={setRemarks}
-                multiline
-                numberOfLines={4}
-              />
-            </View>
-
-            <TouchableOpacity
-              style={[styles.submitButton, loading && styles.buttonDisabled]}
-              onPress={handleCheckIn}
-              disabled={loading}
-              activeOpacity={0.8}
-            >
-              <LinearGradient
-                colors={gradients.primary as [string, string]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.buttonGradient}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.submitButtonText}>Submit</Text>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
+        <DailySelfieCheckInScreen onDone={() => void onStarted()} onClose={isFirstTime ? undefined : () => setShowModal(false)} />
       </Modal>
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  gpsWarn: { alignSelf: 'stretch', backgroundColor: '#FEE2E2', borderColor: '#F87171', borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 12 },
+  gpsWarnTitle: { color: '#B91C1C', fontWeight: '700', fontSize: 14 },
+  gpsWarnText: { color: '#7F1D1D', fontSize: 13, marginTop: 4 },
+  gpsOn: { color: '#15803D', fontWeight: '600', fontSize: 13, marginBottom: 12 },
   card: {
     backgroundColor: colors.backgroundLight,
     borderRadius: 20,
