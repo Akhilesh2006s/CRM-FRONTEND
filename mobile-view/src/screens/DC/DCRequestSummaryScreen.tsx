@@ -5,18 +5,11 @@
  * Params: orderId (DcOrder id), optional client (preloaded item from My Clients), optional dcId.
  */
 import React, { useState, useEffect, useMemo } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  ActivityIndicator,
-} from 'react-native';
-import { colors, radii } from '../../theme/colors';
-import { typography } from '../../theme/typography';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { colors } from '../../theme/colors';
 import ScreenShell from '../../ui/ScreenShell';
-import { WebInput, WebLabel } from '../../ui/WebPrimitives';
+import { WebInput, WebLabel, WebButton } from '../../ui/WebPrimitives';
+import { InfoRow, EmptyState } from '../../ui/Kit';
 import { apiService } from '../../services/api';
 import { isTransportComplete, TRANSPORT_REQUIRED_MESSAGE } from '../../utils/dcTransport';
 import { showAlert, showConfirm } from '../../utils/showAlert';
@@ -77,14 +70,6 @@ const idOf = (v: any): string | null => {
   return String(v);
 };
 
-function ReadOnlyField({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
-      <Text style={styles.readOnlyValue}>{value || '-'}</Text>
-    </View>
-  );
-}
 
 type Row = {
   id: string;
@@ -438,27 +423,20 @@ export default function DCRequestSummaryScreen({ navigation, route }: any) {
   };
 
   if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading...</Text>
-      </View>
-    );
+    return <ScreenShell title="Request DC" loading>{null}</ScreenShell>;
   }
 
   if (!order) return null;
 
   if (order.status === 'dc_requested') {
     return (
-      <ScreenShell title={`Request DC${order.school_name ? ` - ${order.school_name}` : ''}`} loading={loading}>
-        <View style={styles.dcFlowBlock}>
-          <Text style={styles.dcFlowBlockMessage}>
-            This client was already sent to Closed Sales. Super Admin can review it under Closed Sales.
-          </Text>
-          <TouchableOpacity style={styles.dcFlowBlockButton} onPress={() => navigation.goBack()}>
-            <Text style={styles.dcFlowBlockButtonText}>Back to My Clients</Text>
-          </TouchableOpacity>
-        </View>
+      <ScreenShell title="Request DC" subtitle={order.school_name || undefined} loading={loading}>
+        <EmptyState
+          icon="✅"
+          title="Already sent to Closed Sales"
+          message="Super Admin can review it under Closed Sales."
+        />
+        <WebButton title="Back to My Clients" onPress={() => navigation.goBack()} />
       </ScreenShell>
     );
   }
@@ -519,19 +497,19 @@ export default function DCRequestSummaryScreen({ navigation, route }: any) {
   const hasSpecimens = rows.some((r) => isSpecimenRow(r));
 
   return (
-    <ScreenShell title={`Request DC${order.school_name ? ` - ${order.school_name}` : ''}`} loading={loading}>
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-        <Text style={styles.subtitle}>Review details. Tap Request DC to move this to Closed Sales.</Text>
+    <ScreenShell title="Request DC" subtitle={order.school_name || undefined} loading={loading} noScroll>
+      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer} keyboardShouldPersistTaps="handled">
+        <Text style={styles.subtitle}>Review, then tap Request DC to send it to Closed Sales.</Text>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Client / School</Text>
-          <ReadOnlyField label="Client Name" value={order.school_name} />
-          <ReadOnlyField label="Zone" value={order.zone} />
-          <ReadOnlyField label="Contact" value={order.contact_person} />
-          <ReadOnlyField label="Mobile" value={order.contact_mobile} />
-          <ReadOnlyField label="Address" value={order.address || order.location} />
-          <ReadOnlyField label="School type" value={order.school_type} />
-          <ReadOnlyField label="PO Document" value={dc?.poPhotoUrl || order.pod_proof_url ? 'Attached' : 'Not attached'} />
+          <InfoRow label="Client" value={order.school_name} bold />
+          <InfoRow label="Zone" value={order.zone} />
+          <InfoRow label="Contact" value={order.contact_person} />
+          <InfoRow label="Mobile" value={order.contact_mobile} phone />
+          <InfoRow label="Address" value={order.address || order.location} />
+          <InfoRow label="School type" value={order.school_type} />
+          <InfoRow label="PO document" value={dc?.poPhotoUrl || order.pod_proof_url ? 'Attached' : 'Not attached'} />
         </View>
 
         {termSplit.hasMixedTerms ? (
@@ -547,10 +525,7 @@ export default function DCRequestSummaryScreen({ navigation, route }: any) {
         {termSplit.hasMixedTerms ? (
           <View style={styles.routingBox}>
             <Text style={styles.routingTitle}>This DC has Term 1 and Term 2 products</Text>
-            <Text style={styles.routingText}>
-              Choose how to request DC. Term 1 only: Term 1 → Closed Sales, Term 2 → Term-Wise DC. Both terms: the
-              full DC goes to Closed Sales together.
-            </Text>
+            <Text style={styles.routingText}>Choose where each term goes.</Text>
             <TouchableOpacity
               style={[styles.routeBtn, routing === 'both_terms' && styles.routeBtnOnBlue]}
               onPress={() => setRouting('both_terms')}
@@ -594,10 +569,7 @@ export default function DCRequestSummaryScreen({ navigation, route }: any) {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.checkTitle}>Specimen copies requested</Text>
-                <Text style={styles.hint}>
-                  Adds each product's specimen set (the products set on the product, or one set as per DC list) as
-                  Training Material (no billing).
-                </Text>
+                <Text style={styles.hint}>Adds specimen sets as Training Material (no billing).</Text>
               </View>
             </TouchableOpacity>
             {hasSpecimens ? (
@@ -654,77 +626,68 @@ export default function DCRequestSummaryScreen({ navigation, route }: any) {
       </ScrollView>
 
       <View style={styles.stickyFooter}>
-        <TouchableOpacity style={styles.cancelButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.cancelButtonText}>Cancel</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.requestButton,
-            (submitting || (termSplit.hasMixedTerms && !routing)) && styles.buttonDisabled,
-          ]}
-          onPress={handleRequestDC}
-          disabled={submitting || (termSplit.hasMixedTerms && !routing)}
-        >
-          {submitting ? (
-            <ActivityIndicator size="small" color={colors.textLight} />
-          ) : (
-            <Text style={styles.requestButtonText}>Request DC</Text>
-          )}
-        </TouchableOpacity>
+        <View style={styles.flex1}>
+          <WebButton title="Cancel" variant="outline" onPress={() => navigation.goBack()} />
+        </View>
+        <View style={styles.flex1}>
+          <WebButton
+            title="Request DC"
+            onPress={handleRequestDC}
+            loading={submitting}
+            disabled={submitting || (termSplit.hasMixedTerms && !routing)}
+          />
+        </View>
       </View>
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { marginTop: 12, ...typography.body.medium, color: colors.textSecondary },
   content: { flex: 1 },
-  contentContainer: { padding: 20, paddingBottom: 24 },
-  subtitle: { ...typography.body.small, color: colors.textSecondary, marginBottom: 20 },
-  hint: { ...typography.body.small, color: colors.textSecondary, marginBottom: 6 },
-  section: { marginBottom: 24 },
-  sectionTitle: { ...typography.heading.h4, color: colors.textPrimary, marginBottom: 12 },
-  field: { marginBottom: 12 },
-  label: { ...typography.label.small, color: colors.textSecondary, marginBottom: 4 },
-  readOnlyValue: {
-    ...typography.body.medium,
-    color: colors.textPrimary,
-    backgroundColor: colors.backgroundDark,
-    padding: 12,
-    borderRadius: 8,
+  contentContainer: { padding: 16, paddingBottom: 24 },
+  subtitle: { fontSize: 13, color: colors.textTertiary, marginBottom: 12 },
+  hint: { fontSize: 13, color: colors.textTertiary, marginBottom: 6 },
+  flex1: { flex: 1 },
+  section: {
+    backgroundColor: colors.backgroundLight,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#EEF2F7',
+    padding: 16,
+    marginBottom: 12,
   },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, marginBottom: 10 },
   rowCard: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    padding: 10,
+    borderColor: '#EEF2F7',
+    borderRadius: 12,
+    padding: 12,
     marginBottom: 8,
-    backgroundColor: colors.backgroundLight,
+    backgroundColor: colors.background,
   },
   rowTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
   rowProduct: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.textPrimary },
   rowQty: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
-  rowMeta: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-  rowTag: { fontSize: 12, color: colors.textTertiary, marginTop: 6 },
+  rowMeta: { fontSize: 13, color: colors.textTertiary, marginTop: 2 },
+  rowTag: { fontSize: 13, color: colors.textTertiary, marginTop: 6 },
   totalLine: { textAlign: 'right', fontWeight: '700', color: colors.textPrimary, marginTop: 4 },
   routingBox: {
     borderWidth: 1,
     borderColor: '#FDE68A',
     backgroundColor: '#FFFBEB',
-    borderRadius: radii.md,
-    padding: 12,
-    marginBottom: 16,
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 12,
     gap: 8,
   },
   routingTitle: { fontSize: 15, fontWeight: '700', color: '#78350F' },
   routingText: { fontSize: 13, color: '#78350F' },
-  routingNote: { fontSize: 12, color: colors.textSecondary },
+  routingNote: { fontSize: 13, color: colors.textTertiary },
   routeBtn: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    paddingVertical: 10,
+    borderColor: '#DCE3EC',
+    borderRadius: 10,
+    paddingVertical: 12,
     paddingHorizontal: 12,
     backgroundColor: colors.backgroundLight,
   },
@@ -732,56 +695,30 @@ const styles = StyleSheet.create({
   routeBtnOnOrange: { backgroundColor: '#EA580C', borderColor: '#EA580C' },
   routeBtnText: { fontSize: 13, fontWeight: '600', color: colors.textPrimary, textAlign: 'center' },
   routeBtnTextOn: { color: '#fff' },
-  specimenBox: { borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, padding: 12, marginBottom: 16 },
+  specimenBox: { backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: '#EEF2F7', borderRadius: 14, padding: 16, marginBottom: 12 },
   checkRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 8 },
   checkBox: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-    borderWidth: 1,
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
     borderColor: colors.textMuted,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
   },
-  checkBoxOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  checkBoxOn: { backgroundColor: colors.primaryDark, borderColor: colors.primaryDark },
   tick: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  checkTitle: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+  checkTitle: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
   spacer: { height: 24 },
   stickyFooter: {
     flexDirection: 'row',
     gap: 12,
-    padding: 20,
-    paddingBottom: 32,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 24,
     backgroundColor: colors.backgroundLight,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: '#EEF2F7',
   },
-  cancelButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 48,
-  },
-  cancelButtonText: { ...typography.body.medium, color: colors.textPrimary, fontWeight: '600' },
-  requestButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 48,
-  },
-  requestButtonText: { ...typography.heading.h4, color: colors.textLight, fontWeight: '600' },
-  buttonDisabled: { opacity: 0.7 },
-  dcFlowBlock: { flex: 1, justifyContent: 'center', padding: 24, alignItems: 'center' },
-  dcFlowBlockMessage: { ...typography.body.medium, color: colors.textSecondary, textAlign: 'center', marginBottom: 24 },
-  dcFlowBlockButton: { paddingVertical: 14, paddingHorizontal: 24, backgroundColor: colors.primary, borderRadius: 12 },
-  dcFlowBlockButtonText: { ...typography.body.medium, color: colors.textLight, fontWeight: '600' },
 });

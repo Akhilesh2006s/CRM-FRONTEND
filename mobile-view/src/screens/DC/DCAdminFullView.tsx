@@ -14,7 +14,9 @@ import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
-import { colors, radii, spacing } from '../../theme/colors';
+import { colors } from '../../theme/colors';
+import { Card, CardTitle, InfoRow, EmptyState, type Tone } from '../../ui/Kit';
+import { SearchBar, matchesWords, ui } from '../../components/dc/DcUi';
 
 export type DCRow = {
   _id: string;
@@ -64,19 +66,10 @@ function formatCreatedOn(iso?: string) {
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-function statusColors(status?: string) {
-  if (status === 'po_submitted') return { bg: colors.warningLight, fg: colors.warning };
-  if (status === 'created' || !status) return { bg: colors.infoLight, fg: colors.info };
-  return { bg: colors.backgroundMuted, fg: colors.textSecondary };
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.infoRow}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value}</Text>
-    </View>
-  );
+function statusTone(status?: string): Tone {
+  if (status === 'po_submitted') return 'warning';
+  if (status === 'created' || !status) return 'info';
+  return 'neutral';
 }
 
 /** Matches web `dashboard/dc/admin/my` */
@@ -185,13 +178,14 @@ export default function DCAdminFullView() {
   }, [searchQuery]);
 
   const filteredItems = items.filter((d) => {
-    const schoolCode = getSchoolCode(d);
-    const customerName = getCustomerName(d);
-    const query = searchQuery.toLowerCase();
-    const matchesSearch =
-      !query ||
-      schoolCode.toLowerCase().includes(query) ||
-      customerName.toLowerCase().includes(query);
+    const matchesSearch = matchesWords(searchQuery, [
+      getSchoolCode(d),
+      getCustomerName(d),
+      getExecutiveName(d),
+      d.customerPhone || d.dcOrderId?.contact_mobile,
+      getProduct(d),
+      d.status || 'created',
+    ]);
     const empId = typeof d.employeeId === 'object' ? d.employeeId?._id : d.employeeId;
     const matchesEmployee = !filterEmployee || empId === filterEmployee;
     return matchesSearch && matchesEmployee;
@@ -285,7 +279,7 @@ export default function DCAdminFullView() {
   return (
     <ScreenShell
       title="All Created DCs"
-      subtitle="Admin view of all created DCs"
+      subtitle="Admin view"
       loading={loading && !refreshing}
       refreshing={refreshing}
       onRefresh={() => {
@@ -293,66 +287,49 @@ export default function DCAdminFullView() {
         load();
       }}
       headerRight={
-        <TouchableOpacity onPress={() => { setRefreshing(true); load(); }}>
-          <Text style={{ color: colors.primary, fontWeight: '600' }}>Refresh</Text>
+        <TouchableOpacity onPress={() => { setRefreshing(true); load(); }} hitSlop={8}>
+          <Text style={{ color: colors.primaryDark, fontWeight: '600', fontSize: 15 }}>Refresh</Text>
         </TouchableOpacity>
       }
     >
-      <PageSection title="Find a DC">
-        <WebInput
-          placeholder="Search by school code or name..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-        {backendSearching ? <Text style={styles.hint}>Searching backend…</Text> : null}
-        <WebSelect
-          value={filterEmployee}
-          onValueChange={setFilterEmployee}
-          placeholder="All Executives"
-          items={employees.map((e) => ({ label: e.name, value: e._id }))}
-        />
-        {filterEmployee ? (
-          <WebButton title="Clear filter" variant="outline" onPress={() => setFilterEmployee('')} />
-        ) : null}
-      </PageSection>
+      <SearchBar placeholder="Search school, code, executive, phone, product…" value={searchQuery} onChangeText={setSearchQuery} />
+      {backendSearching ? <Text style={styles.hint}>Searching backend…</Text> : null}
+      <WebSelect
+        value={filterEmployee}
+        onValueChange={setFilterEmployee}
+        placeholder="All Executives"
+        items={employees.map((e) => ({ label: e.name, value: e._id }))}
+      />
+      {filterEmployee ? (
+        <WebButton title="Clear filter" variant="outline" onPress={() => setFilterEmployee('')} />
+      ) : null}
 
       {filteredItems.length === 0 ? (
-        <PageSection title="No DCs">
-          <Text style={styles.hint}>No DCs found with status &quot;created&quot;.</Text>
-          <Text style={styles.hint}>
-            DCs are automatically created when a Deal is created and assigned to an employee.
-          </Text>
-        </PageSection>
+        <EmptyState title="No created DCs" message="DCs are created automatically when a deal is assigned to an employee." />
       ) : (
-        <PageSection
-          title={`DCs (${filteredItems.length})`}
-          description="Each card is one DC. School, executive, phone, and product are listed as full lines."
-        >
+        <>
+          <Text style={ui.count}>{filteredItems.length} DC{filteredItems.length === 1 ? '' : 's'}</Text>
           {filteredItems.map((d) => {
             const phone = d.customerPhone || d.dcOrderId?.contact_mobile || '—';
             const status = d.status || 'created';
-            const badge = statusColors(status);
             const code = getSchoolCode(d);
             return (
-              <View key={d._id} style={styles.dcCard}>
-                <View style={styles.dcCardTop}>
-                  <View style={styles.dcCardTitleWrap}>
-                    <Text style={styles.dcTitle}>{getCustomerName(d)}</Text>
-                    <Text style={styles.dcCode}>{code === '—' ? 'No school code' : `Code ${code}`}</Text>
-                  </View>
-                  <View style={[styles.badge, { backgroundColor: badge.bg }]}>
-                    <Text style={[styles.badgeText, { color: badge.fg }]}>{status}</Text>
-                  </View>
-                </View>
+              <Card key={d._id}>
+                <CardTitle
+                  title={getCustomerName(d)}
+                  subtitle={code === '—' ? 'No school code' : `Code ${code}`}
+                  badge={status}
+                  tone={statusTone(status)}
+                />
                 <InfoRow label="Created" value={formatCreatedOn(d.createdAt)} />
                 <InfoRow label="Executive" value={getExecutiveName(d)} />
-                <InfoRow label="Phone" value={phone} />
-                <InfoRow label="Product" value={getProduct(d)} />
+                <InfoRow label="Phone" value={phone === '—' ? '' : phone} phone />
+                <InfoRow label="Product" value={getProduct(d) === '—' ? '' : getProduct(d)} />
                 <InfoRow label="PO photo" value={d.poPhotoUrl ? 'Uploaded' : 'Not uploaded'} />
-              </View>
+              </Card>
             );
           })}
-        </PageSection>
+        </>
       )}
 
       <Modal visible={poModalOpen} animationType="slide" transparent onRequestClose={() => setPoModalOpen(false)}>
@@ -379,8 +356,8 @@ export default function DCAdminFullView() {
               />
             </ScrollView>
             <View style={styles.modalFooter}>
-              <WebButton title="Cancel" variant="outline" onPress={() => setPoModalOpen(false)} />
-              <WebButton title="Save" onPress={submitPO} loading={submitting} disabled={!poPhotoUrl.trim()} />
+              <View style={styles.flex1}><WebButton title="Cancel" variant="outline" onPress={() => setPoModalOpen(false)} /></View>
+              <View style={styles.flex1}><WebButton title="Save" onPress={submitPO} loading={submitting} disabled={!poPhotoUrl.trim()} /></View>
             </View>
           </View>
         </View>
@@ -395,16 +372,16 @@ export default function DCAdminFullView() {
             </Text>
             {selectedForRaise ? (
               <View style={styles.raiseSummary}>
-                <Text>School: {getCustomerName(selectedForRaise)}</Text>
-                <Text>Executive: {getExecutiveName(selectedForRaise)}</Text>
-                <Text>Phone: {selectedForRaise.customerPhone || selectedForRaise.dcOrderId?.contact_mobile || '—'}</Text>
-                <Text>Products: {getProduct(selectedForRaise)}</Text>
-                <Text>Status: {selectedForRaise.status || 'created'}</Text>
+                <InfoRow label="School" value={getCustomerName(selectedForRaise)} bold />
+                <InfoRow label="Executive" value={getExecutiveName(selectedForRaise)} />
+                <InfoRow label="Phone" value={selectedForRaise.customerPhone || selectedForRaise.dcOrderId?.contact_mobile || '—'} />
+                <InfoRow label="Products" value={getProduct(selectedForRaise)} />
+                <InfoRow label="Status" value={selectedForRaise.status || 'created'} />
               </View>
             ) : null}
             <View style={styles.modalFooter}>
-              <WebButton title="Cancel" variant="outline" onPress={() => setRaiseModalOpen(false)} disabled={raising} />
-              <WebButton title="Raise DC" onPress={confirmRaiseDc} loading={raising} />
+              <View style={styles.flex1}><WebButton title="Cancel" variant="outline" onPress={() => setRaiseModalOpen(false)} disabled={raising} /></View>
+              <View style={styles.flex1}><WebButton title="Raise DC" onPress={confirmRaiseDc} loading={raising} /></View>
             </View>
           </View>
         </View>
@@ -414,37 +391,13 @@ export default function DCAdminFullView() {
 }
 
 const styles = StyleSheet.create({
-  hint: { fontSize: 13, color: colors.textSecondary, marginTop: 4 },
-  dcCard: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
-    marginBottom: 12,
-  },
-  dcCardTop: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-    gap: 8,
-  },
-  dcCardTitleWrap: { flex: 1, minWidth: 0 },
-  dcTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, lineHeight: 22 },
-  dcCode: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
-  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, alignSelf: 'flex-start' },
-  badgeText: { fontSize: 11, fontWeight: '700', textTransform: 'capitalize' },
-  infoRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6, gap: 8 },
-  infoLabel: { width: 88, fontSize: 13, color: colors.textSecondary, paddingTop: 1 },
-  infoValue: { flex: 1, fontSize: 14, color: colors.textPrimary, lineHeight: 20 },
-  actionBtns: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
-  actionBtn: { flexGrow: 1, minWidth: 130 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-  modalBox: { backgroundColor: colors.backgroundLight, borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 20, maxHeight: '90%' },
-  modalTitle: { fontSize: 18, fontWeight: '600', marginBottom: 8 },
-  modalSub: { fontSize: 14, color: colors.textSecondary, marginBottom: 12 },
-  modalFooter: { flexDirection: 'row', gap: 12, marginTop: 16 },
-  preview: { width: '100%', height: 160, borderRadius: 8, marginVertical: 12 },
-  raiseSummary: { gap: 6, marginBottom: 12 },
+  hint: { fontSize: 13, color: colors.textTertiary, marginBottom: 8 },
+  flex1: { flex: 1 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(15,23,42,0.5)', justifyContent: 'flex-end' },
+  modalBox: { backgroundColor: colors.backgroundLight, borderTopLeftRadius: 14, borderTopRightRadius: 14, padding: 16, maxHeight: '90%' },
+  modalTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary, marginBottom: 6 },
+  modalSub: { fontSize: 13, color: colors.textTertiary, marginBottom: 12 },
+  modalFooter: { flexDirection: 'row', gap: 12, marginTop: 12 },
+  preview: { width: '100%', height: 160, borderRadius: 10, marginVertical: 12 },
+  raiseSummary: { marginBottom: 8 },
 });

@@ -1,16 +1,10 @@
 import React, { useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Alert,
-} from 'react-native';
+import { View, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { apiService } from '../../services/api';
-import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
 import ScreenShell from '../../ui/ScreenShell';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState } from '../../ui/Kit';
+import { Act } from '../../components/dc/DcUi';
 
 function lineQty(p: any): number {
   for (const raw of [p?.quantity, p?.strength, p?.qty]) {
@@ -126,88 +120,22 @@ export default function DCPendingScreen({ navigation }: any) {
       onRefresh={onRefresh}
     >
       {items.length === 0 && !loading ? (
-        <Text style={styles.empty}>No pending DCs.</Text>
+        <EmptyState title="No pending DCs" message="New DC requests will appear here." />
       ) : (
         <View>
-          {items.map((item, idx) => (
-            <View key={item._id} style={styles.card}>
-              <View style={styles.cardHeader}>
-                <View>
-                  <Text style={styles.cardNumber}>Pending DC #{idx + 1}</Text>
-                  <Text style={styles.dcNumber}>{getDCNumber(item)}</Text>
-                </View>
-                <Text style={styles.quantityBadge}>Qty: {String(totalQty(item))}</Text>
-              </View>
-              <TouchableOpacity onPress={() => openDC(item._id)} activeOpacity={0.7}>
-                <Text style={styles.customerName}>{getCustomerName(item)}</Text>
-                <Text style={styles.schoolCode}>School Code: {getSchoolCode(item)}</Text>
-              </TouchableOpacity>
-              <View style={styles.detailGrid}>
-                <View style={styles.detail}><Text style={styles.detailLabel}>Customer Phone</Text><Text style={styles.detailValue}>{getCustomerPhone(item)}</Text></View>
-                <View style={styles.detail}><Text style={styles.detailLabel}>Total Quantity</Text><Text style={styles.detailValue}>{String(totalQty(item))}</Text></View>
-              </View>
-              <View style={styles.productsBlock}>
-                <Text style={styles.detailLabel}>Products</Text>
-                <Text style={styles.productsText}>{productsSummary(item)}</Text>
-              </View>
-              <TouchableOpacity style={styles.openBtn} onPress={() => openDC(item._id)} activeOpacity={0.85}>
-                <Text style={styles.openBtnText}>Open DC</Text>
-              </TouchableOpacity>
-            </View>
+          {items.map((item) => (
+            <Card key={item._id} onPress={() => openDC(item._id)}>
+              <CardTitle title={getCustomerName(item)} subtitle={`DC ${getDCNumber(item)}`} badge={`Qty ${String(totalQty(item))}`} tone="info" />
+              <InfoRow label="School code" value={getSchoolCode(item)} bold />
+              <InfoRow label="Phone" value={getCustomerPhone(item)} phone />
+              <InfoRow label="Products" value={productsSummary(item)} />
+              <ActionRow>
+                <Act title="Open DC" onPress={() => openDC(item._id)} />
+              </ActionRow>
+            </Card>
           ))}
         </View>
       )}
     </ScreenShell>
   );
 }
-
-const styles = StyleSheet.create({
-  empty: {
-    ...typography.body.medium,
-    color: colors.textSecondary,
-    paddingVertical: 24,
-    textAlign: 'center',
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
-    marginBottom: 12,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  cardNumber: { ...typography.label.small, color: colors.textSecondary },
-  dcNumber: { ...typography.label.medium, color: colors.textPrimary, fontWeight: '700', marginTop: 2 },
-  quantityBadge: { ...typography.label.small, color: colors.primary, backgroundColor: colors.primary + '18', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, fontWeight: '700' },
-  customerName: { ...typography.heading.h4, color: colors.textPrimary },
-  schoolCode: { ...typography.label.small, color: colors.primary, fontWeight: '600', marginTop: 3 },
-  detailGrid: {
-    flexDirection: 'row',
-    marginTop: 12,
-    gap: 16,
-  },
-  detail: { flex: 1 },
-  detailLabel: { ...typography.label.small, color: colors.textSecondary, marginBottom: 3 },
-  detailValue: { ...typography.label.small, color: colors.textPrimary, fontWeight: '600' },
-  productsBlock: { borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 10, marginTop: 12 },
-  productsText: { ...typography.label.small, color: colors.textPrimary, lineHeight: 19 },
-  openBtn: {
-    backgroundColor: '#2563EB',
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    alignItems: 'center',
-    marginTop: 14,
-  },
-  openBtnText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 13,
-  },
-});

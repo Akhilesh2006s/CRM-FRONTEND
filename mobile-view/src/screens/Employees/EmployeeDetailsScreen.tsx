@@ -1,9 +1,9 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Linking } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
 import ScreenShell from '../../ui/ScreenShell';
+import { Card, CardTitle, ActionRow } from '../../ui/Kit';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { employeeDateText, employeeDocName, openEmployeeDoc } from '../../utils/employeeDocs';
@@ -27,12 +27,18 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Row({ label, value }: { label: string; value?: string | null }) {
+function Row({ label, value, phone }: { label: string; value?: string | null; phone?: boolean }) {
   const text = String(value ?? '').trim();
   return (
     <View style={styles.row}>
       <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={[styles.rowValue, !text && styles.rowEmpty]}>{text || '—'}</Text>
+      {phone && text ? (
+        <TouchableOpacity style={styles.docLinkWrap} onPress={() => Linking.openURL(`tel:${text}`)}>
+          <Text style={styles.phone}>{text}</Text>
+        </TouchableOpacity>
+      ) : (
+        <Text style={[styles.rowValue, !text && styles.rowEmpty]}>{text || '—'}</Text>
+      )}
     </View>
   );
 }
@@ -113,11 +119,21 @@ export default function EmployeeDetailsScreen({ navigation, route }: any) {
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {employee ? (
           <>
-            {canEdit ? (
-              <TouchableOpacity style={styles.editButton} onPress={() => navigation.navigate('EmployeeEdit', { id })}>
-                <Text style={styles.editButtonText}>Edit employee</Text>
-              </TouchableOpacity>
-            ) : null}
+            <Card>
+              <CardTitle
+                title={e.name || 'Employee'}
+                subtitle={[roleLabel(e.role), e.empCode].filter(Boolean).join(' · ') || undefined}
+                badge={e.isActive === false ? 'Inactive' : 'Active'}
+                tone={e.isActive === false ? 'neutral' : 'success'}
+              />
+              {canEdit ? (
+                <ActionRow>
+                  <TouchableOpacity style={styles.editButton} onPress={() => navigation.navigate('EmployeeEdit', { id })}>
+                    <Text style={styles.editButtonText}>Edit employee</Text>
+                  </TouchableOpacity>
+                </ActionRow>
+              ) : null}
+            </Card>
 
             <Section title="Personal details">
               <Row label="Full name" value={e.name} />
@@ -131,8 +147,8 @@ export default function EmployeeDetailsScreen({ navigation, route }: any) {
             </Section>
 
             <Section title="Contact">
-              <Row label="Company contact number" value={e.phone && e.phone !== '0' ? e.phone : ''} />
-              <Row label="Personal mobile" value={e.mobile} />
+              <Row label="Company contact number" value={e.phone && e.phone !== '0' ? e.phone : ''} phone />
+              <Row label="Personal mobile" value={e.mobile} phone />
             </Section>
 
             <Section title="Emergency contacts / references">
@@ -142,7 +158,7 @@ export default function EmployeeDetailsScreen({ navigation, route }: any) {
                   <Text style={styles.subTitle}>Reference {i + 1}</Text>
                   <Row label="Relationship" value={r?.relation} />
                   <Row label="Name" value={r?.name} />
-                  <Row label="Mobile" value={r?.mobile} />
+                  <Row label="Mobile" value={r?.mobile} phone />
                   <DocRow label="Aadhaar" url={r?.aadhaarUrl} />
                 </View>
               ))}
@@ -240,18 +256,26 @@ export default function EmployeeDetailsScreen({ navigation, route }: any) {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 16, paddingBottom: 32 },
-  error: { color: colors.error, marginBottom: 12 },
-  editButton: { alignSelf: 'flex-start', backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10, marginBottom: 12 },
-  editButtonText: { ...typography.label.medium, color: colors.textLight, fontWeight: '600' },
-  section: { backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 14, marginBottom: 12 },
-  sectionTitle: { ...typography.label.medium, color: colors.textPrimary, fontWeight: '700', marginBottom: 8, textTransform: 'uppercase' },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, paddingVertical: 5 },
-  rowLabel: { ...typography.body.small, color: colors.textMuted, flexShrink: 0, maxWidth: '45%' },
-  rowValue: { ...typography.body.medium, color: colors.textPrimary, flex: 1, textAlign: 'right' },
+  content: { paddingBottom: 16 },
+  error: { fontSize: 14, color: colors.error, marginBottom: 12 },
+  editButton: { backgroundColor: colors.primaryDark, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
+  editButtonText: { fontSize: 13, color: colors.primaryForeground, fontWeight: '700' },
+  section: {
+    backgroundColor: colors.backgroundLight,
+    borderWidth: 1,
+    borderColor: '#EEF2F7',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 12,
+  },
+  sectionTitle: { fontSize: 16, color: colors.textPrimary, fontWeight: '700', marginBottom: 8 },
+  row: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingVertical: 4 },
+  rowLabel: { width: 130, fontSize: 13, color: colors.textTertiary },
+  rowValue: { flex: 1, fontSize: 14, color: colors.textPrimary },
   rowEmpty: { color: colors.textMuted },
-  docLinkWrap: { flex: 1, alignItems: 'flex-end' },
-  docLink: { ...typography.body.medium, color: colors.primary, textDecorationLine: 'underline' },
-  subCard: { borderWidth: 1, borderColor: colors.borderLight, backgroundColor: colors.backgroundMuted, borderRadius: 10, padding: 10, marginBottom: 8 },
-  subTitle: { ...typography.label.small, color: colors.textSecondary, fontWeight: '600', marginBottom: 4 },
+  docLinkWrap: { flex: 1 },
+  docLink: { fontSize: 14, color: colors.primaryDark, textDecorationLine: 'underline' },
+  phone: { fontSize: 14, color: colors.primaryDark, textDecorationLine: 'underline' },
+  subCard: { borderWidth: 1, borderColor: '#EEF2F7', backgroundColor: colors.background, borderRadius: 10, padding: 12, marginBottom: 8 },
+  subTitle: { fontSize: 13, color: colors.textSecondary, fontWeight: '700', marginBottom: 4 },
 });

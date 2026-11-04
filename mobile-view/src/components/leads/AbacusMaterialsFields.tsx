@@ -50,8 +50,8 @@ export function AbacusMaterialsFields({
 }
 
 const styles = StyleSheet.create({
-  box: { borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, marginTop: 12, backgroundColor: '#fff' },
+  box: { borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, marginTop: 12, backgroundColor: colors.backgroundLight },
   title: { fontSize: 15, fontWeight: '700', color: colors.textPrimary, marginBottom: 10 },
   readOnly: { backgroundColor: colors.backgroundMuted, color: colors.textSecondary },
-  hint: { fontSize: 12, color: colors.textSecondary },
+  hint: { fontSize: 13, color: colors.textTertiary },
 });

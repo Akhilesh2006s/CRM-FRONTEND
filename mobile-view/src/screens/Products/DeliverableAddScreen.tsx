@@ -98,13 +98,9 @@ export default function DeliverableAddScreen({ route, navigation }: any) {
           }}
         />
         {formError ? <Text style={styles.errorText}>{formError}</Text> : null}
-        <View style={styles.btnGap}>
-          <WebButton
-            title={saving ? 'Saving…' : 'Save'}
-            onPress={handleSave}
-            loading={saving}
-            disabled={saving}
-          />
+      </PageSection>
+      <View style={styles.btnRow}>
+        <View style={{ flex: 1 }}>
           <WebButton
             title="Cancel"
             variant="outline"
@@ -125,7 +121,15 @@ export default function DeliverableAddScreen({ route, navigation }: any) {
             disabled={saving}
           />
         </View>
-      </PageSection>
+        <View style={{ flex: 1 }}>
+          <WebButton
+            title={saving ? 'Saving…' : 'Save'}
+            onPress={handleSave}
+            loading={saving}
+            disabled={saving}
+          />
+        </View>
+      </View>
     </ScreenShell>
   );
 }
@@ -137,5 +141,5 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     marginTop: -4,
   },
-  btnGap: { gap: 10, marginTop: 8 },
+  btnRow: { flexDirection: 'row', gap: 8 },
 });

@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import ScreenShell from '../../ui/ScreenShell';
+import { Card, CardTitle, EmptyState, toneFor } from '../../ui/Kit';
 import StatCard from '../../components/dashboard/StatCard';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -87,10 +88,12 @@ export default function HierarchyDashboardScreen({ navigation, route, level, per
   const body = (
     <View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <Text style={styles.person}>{data?.person?.name || user?.name}</Text>
-      <Text style={styles.meta}>
-        {[data?.person?.email, data?.person?.phone, data?.person?.state].filter(Boolean).join(' · ')}
-      </Text>
+      <Card>
+        <CardTitle
+          title={data?.person?.name || user?.name || ''}
+          subtitle={[data?.person?.email, data?.person?.phone, data?.person?.state].filter(Boolean).join(' · ') || undefined}
+        />
+      </Card>
       <View style={styles.stats}>
         {resolvedLevel === 'national-head' ? (
           <StatCard label="Regional Heads" value={totals.regionalHeads || 0} ion="people-outline" color="#7C3AED" bg="#EDE9FE" />
@@ -108,33 +111,28 @@ export default function HierarchyDashboardScreen({ navigation, route, level, per
 
       <Text style={styles.section}>Assigned people</Text>
       {reports.length === 0 ? (
-        <Text style={styles.empty}>Nothing is assigned yet. Super Admin manages these assignments.</Text>
+        <EmptyState icon="👥" title="Nothing assigned yet" message="Super Admin manages these assignments." />
       ) : (
         reports.map((report: any) => (
-          <TouchableOpacity key={report._id} style={styles.card} onPress={() => openReport(report.kind, report._id)}>
-            <Text style={styles.cardTitle}>{report.name}</Text>
-            <Text style={styles.cardMeta}>{report.email}</Text>
+          <Card key={report._id} onPress={() => openReport(report.kind, report._id)}>
+            <CardTitle title={report.name} subtitle={report.email || undefined} />
             <Text style={styles.cardMeta}>
               {report.metrics?.employees || 0} employees · {report.metrics?.leads || 0} leads · {report.metrics?.dcs || 0} DCs ·{' '}
               {report.metrics?.sales || 0} sales
             </Text>
-          </TouchableOpacity>
+          </Card>
         ))
       )}
 
       <Text style={styles.section}>Recent activity</Text>
       {activities.length === 0 ? (
-        <Text style={styles.empty}>No recent leads, delivery challans, or leaves.</Text>
+        <EmptyState icon="🕒" title="No recent activity" message="No recent leads, delivery challans, or leaves." />
       ) : (
         activities.map((item: any) => (
-          <View key={item.id} style={styles.card}>
-            <Text style={styles.cardTitle}>
-              {item.type}: {item.title}
-            </Text>
-            <Text style={styles.cardMeta}>
-              {[item.actorName, item.contextName, item.status].filter(Boolean).join(' · ')}
-            </Text>
-          </View>
+          <Card key={item.id}>
+            <CardTitle title={`${item.type}: ${item.title}`} badge={item.status || undefined} tone={toneFor(item.status)} />
+            <Text style={styles.cardMeta}>{[item.actorName, item.contextName].filter(Boolean).join(' · ')}</Text>
+          </Card>
         ))
       )}
     </View>
@@ -166,21 +164,20 @@ export default function HierarchyDashboardScreen({ navigation, route, level, per
 
 const styles = StyleSheet.create({
   embedded: { flex: 1, backgroundColor: colors.background || '#F8FAFC' },
-  embeddedTitle: { fontSize: 20, fontWeight: '700', marginBottom: 8, color: '#0F172A' },
-  person: { fontSize: 18, fontWeight: '700', color: '#0F172A' },
-  meta: { color: '#64748B', marginBottom: 12 },
-  stats: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  section: { marginTop: 18, marginBottom: 8, fontSize: 16, fontWeight: '700', color: '#0F172A' },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 12,
+  embeddedTitle: { fontSize: 17, fontWeight: '700', marginBottom: 12, color: '#1E293B' },
+  person: { fontSize: 17, fontWeight: '700', color: '#1E293B' },
+  meta: { color: '#64748B', fontSize: 13, marginBottom: 12 },
+  stats: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  section: {
+    marginTop: 8,
     marginBottom: 8,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  cardTitle: { fontWeight: '600', color: '#0F172A' },
-  cardMeta: { color: '#64748B', marginTop: 2, fontSize: 13 },
+  cardMeta: { color: '#64748B', fontSize: 13, lineHeight: 18 },
   empty: { color: '#64748B', marginBottom: 8 },
-  error: { color: '#B91C1C', marginBottom: 8 },
+  error: { color: '#B91C1C', fontSize: 13, marginBottom: 8 },
 });

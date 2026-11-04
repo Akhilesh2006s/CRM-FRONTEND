@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, radii, spacing } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { Card, CardTitle, InfoRow, EmptyState } from '../../ui/Kit';
 import { WebInput, WebButton, WebLabel } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 
@@ -25,23 +26,11 @@ function cell(value: string | number | undefined | null) {
   return String(value);
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.infoRow}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value}</Text>
-    </View>
-  );
-}
-
 export default function WarehouseInventoryItemsScreen({ navigation }: any) {
   const [items, setItems] = useState<WarehouseItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [categoryDraft, setCategoryDraft] = useState('');
-  const [levelDraft, setLevelDraft] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('');
-  const [levelFilter, setLevelFilter] = useState('');
+  const [query, setQuery] = useState('');
 
   const loadData = useCallback(async () => {
     try {
@@ -66,22 +55,17 @@ export default function WarehouseInventoryItemsScreen({ navigation }: any) {
     loadData();
   };
 
-  const onSearch = () => {
-    setCategoryFilter(categoryDraft.trim());
-    setLevelFilter(levelDraft.trim());
-  };
-
   const filtered = useMemo(() => {
-    const lcCategory = categoryFilter.toLowerCase();
-    const lcLevel = levelFilter.toLowerCase();
+    const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (!words.length) return items;
     return items.filter((it) => {
-      const itemLevel = (it.level || it.location || '').toString().toLowerCase();
-      const itemCategory = (it.category || '').toString().toLowerCase();
-      const catOk = lcCategory ? itemCategory.includes(lcCategory) : true;
-      const lvlOk = lcLevel ? itemLevel.includes(lcLevel) : true;
-      return catOk && lvlOk;
+      const text = [it.productName, it.category, it.level || it.location, it.specs, it.subject, it.itemType || it.supplier, it.currentStock]
+        .map((v) => (v === undefined || v === null ? '' : String(v)))
+        .join(' ')
+        .toLowerCase();
+      return words.every((w) => text.includes(w));
     });
-  }, [items, categoryFilter, levelFilter]);
+  }, [items, query]);
 
   return (
     <ScreenShell
@@ -101,54 +85,31 @@ export default function WarehouseInventoryItemsScreen({ navigation }: any) {
         </TouchableOpacity>
       }
     >
-      <PageSection title="Search">
-        <WebLabel>Product Category</WebLabel>
-        <WebInput
-          value={categoryDraft}
-          onChangeText={setCategoryDraft}
-          placeholder="Product Category"
-          style={styles.filterInput}
-        />
-        <WebLabel>Level</WebLabel>
-        <WebInput
-          value={levelDraft}
-          onChangeText={setLevelDraft}
-          placeholder="Level"
-          style={styles.filterInput}
-        />
-        <WebButton title="Search" onPress={onSearch} />
-      </PageSection>
+      <WebInput
+        value={query}
+        onChangeText={setQuery}
+        placeholder="Search product, category, level, vendor…"
+        autoCapitalize="none"
+        autoCorrect={false}
+        style={styles.search}
+      />
 
       {filtered.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyIcon}>📦</Text>
-          <Text style={styles.emptyText}>No inventory items found</Text>
-        </View>
+        <EmptyState icon="📦" title="No inventory items found" />
       ) : (
         filtered.map((item, idx) => (
-          <TouchableOpacity
-            key={item._id}
-            style={styles.card}
-            onPress={() => navigation.navigate('WarehouseInventoryItemEdit', { id: item._id })}
-            activeOpacity={0.75}
-          >
-            <View style={styles.cardHeader}>
-              <View style={styles.cardTitleWrap}>
-                <Text style={styles.serial}>#{idx + 1}</Text>
-                <Text style={styles.itemName}>{item.productName || 'N/A'}</Text>
-              </View>
-              <Ionicons name="pencil-outline" size={18} color={colors.textSecondary} />
-            </View>
-            <InfoRow label="Product Category" value={cell(item.category)} />
+          <Card key={item._id} onPress={() => navigation.navigate('WarehouseInventoryItemEdit', { id: item._id })}>
+            <CardTitle
+              title={`#${idx + 1} ${item.productName || 'N/A'}`}
+              badge={`Qty ${item.currentStock !== undefined && item.currentStock !== null ? String(item.currentStock) : '0'}`}
+              tone={Number(item.currentStock) > 0 ? 'success' : 'neutral'}
+            />
+            <InfoRow label="Category" value={cell(item.category)} />
             <InfoRow label="Level" value={cell(item.level || item.location)} />
             <InfoRow label="Specs" value={cell(item.specs)} />
             <InfoRow label="Subject" value={cell(item.subject)} />
             <InfoRow label="Vendor" value={cell(item.itemType || item.supplier)} />
-            <InfoRow
-              label="Quantity"
-              value={item.currentStock !== undefined && item.currentStock !== null ? String(item.currentStock) : '0'}
-            />
-          </TouchableOpacity>
+          </Card>
         ))
       )}
     </ScreenShell>
@@ -157,34 +118,5 @@ export default function WarehouseInventoryItemsScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   addBtn: { padding: 4 },
-  filterInput: { marginBottom: 8 },
-  emptyContainer: { alignItems: 'center', paddingVertical: 48 },
-  emptyIcon: { fontSize: 48, marginBottom: 12 },
-  emptyText: { ...typography.heading.h3, color: colors.textSecondary },
-  card: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: radii.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  cardTitleWrap: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 8 },
-  serial: { ...typography.body.small, color: colors.textSecondary, minWidth: 28 },
-  itemName: { ...typography.heading.h3, color: colors.textPrimary, flex: 1 },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 6,
-    gap: 12,
-  },
-  infoLabel: { ...typography.body.small, color: colors.textSecondary, flex: 1 },
-  infoValue: { ...typography.body.medium, color: colors.textPrimary, flex: 1, textAlign: 'right' },
+  search: { marginBottom: 12 },
 });

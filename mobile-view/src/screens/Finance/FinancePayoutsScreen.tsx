@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { documentDirectory, downloadAsync, writeAsStringAsync } from 'expo-file-system/legacy';
-import ScreenShell from '../../ui/ScreenShell';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { Card, CardTitle, InfoRow, EmptyState } from '../../ui/Kit';
 import DateField from '../../ui/DateField';
 import { WebButton, WebInput, WebLabel, WebSelect } from '../../ui/WebPrimitives';
 import { apiService, getApiUrl } from '../../services/api';
@@ -279,7 +280,7 @@ export default function FinancePayoutsScreen({ route }: any) {
 
   return (
     <ScreenShell title={copy.title} subtitle={copy.subtitle} refreshing={loading} onRefresh={load}>
-      <View style={styles.card}>
+      <PageSection title="Filters">
         {mode === 'salary-sheet' ? (
           <WebSelect
             label="Payroll month"
@@ -298,17 +299,18 @@ export default function FinancePayoutsScreen({ route }: any) {
         {mode !== 'credit-status' ? <WebSelect label="Bank status" value={status} onValueChange={setStatus} items={statusItems} /> : null}
         {mode !== 'salary-sheet' ? <DateField placeholder="Approved from" value={from} onChange={setFrom} /> : null}
         {mode !== 'salary-sheet' ? <DateField placeholder="Approved to" value={to} onChange={setTo} /> : null}
+        <View style={{ height: 2 }} />
         <WebLabel>Employee</WebLabel>
-        <WebInput value={q} onChangeText={setQ} placeholder="Name or Emp ID" />
+        <WebInput value={q} onChangeText={setQ} placeholder="Search name or Emp ID" autoCorrect={false} />
         <View style={styles.row}>
           <View style={styles.flex}><WebButton title="Refresh" variant="outline" onPress={load} disabled={loading} /></View>
           <View style={styles.flex}><WebButton title="Download Report" variant="outline" onPress={downloadReport} disabled={busy || !data?.items.length} /></View>
         </View>
         {data ? <Text style={styles.muted}>{data.summary.count} item(s) · {money(data.summary.total)}</Text> : null}
-      </View>
+      </PageSection>
 
       {isSheet ? (
-        <View style={styles.card}>
+        <PageSection title="Bank Sheet">
           <DateField placeholder="Payment date *" value={paymentDate} onChange={setPaymentDate} />
           <WebLabel>Narration (Consultancy column) *</WebLabel>
           <WebInput value={narration} onChangeText={setNarration} maxLength={60} />
@@ -320,35 +322,40 @@ export default function FinancePayoutsScreen({ route }: any) {
             loading={busy}
             disabled={!chosen.length}
           />
-        </View>
+        </PageSection>
       ) : null}
 
       {!loading && !data?.items.length ? (
-        <Text style={styles.empty}>
-          {mode === 'credit-status'
-            ? 'No employees are waiting for a credit update. Generate a bank sheet first.'
-            : mode === 'salary-sheet'
-              ? salaryMonths.length
-                ? 'No salaries to pay for this month with these filters.'
-                : 'No finalized payroll yet. HR finalizes the month in Payroll first.'
-              : 'No Finance-approved expenses or advances match these filters.'}
-        </Text>
+        <EmptyState
+          icon="💰"
+          title="Nothing to show"
+          message={
+            mode === 'credit-status'
+              ? 'No employees are waiting for a credit update. Generate a bank sheet first.'
+              : mode === 'salary-sheet'
+                ? salaryMonths.length
+                  ? 'No salaries to pay for this month with these filters.'
+                  : 'No finalized payroll yet. HR finalizes the month in Payroll first.'
+                : 'No Finance-approved expenses or advances match these filters.'
+          }
+        />
       ) : null}
 
       {mode === 'list'
         ? (data?.items || []).map((i) => (
-            <View key={`${i.kind}:${i.id}`} style={styles.card}>
-              <View style={styles.rowBetween}>
-                <Text style={styles.name}>{i.employee?.name || '-'}</Text>
-                <Text style={styles.amount}>{money(i.approvedAmount)}</Text>
-              </View>
-              <Text style={styles.muted}>{[i.employee?.empCode, i.employee?.role, i.employee?.zone].filter(Boolean).join(' · ')}</Text>
-              <Text style={styles.line}>{KIND_LABELS[i.kind]} · {i.label}{i.kind === 'salary' ? '' : ` · ${formatDate(i.date) || '-'}`}</Text>
-              {i.kilometres ? <Text style={styles.muted}>Kilometer: {i.kilometres}</Text> : null}
-              <Text style={styles.muted}>Finance Approved Date: {formatDate(i.approvedAt) || '-'}</Text>
-              <StatusPill status={i.payout.status} />
+            <Card key={`${i.kind}:${i.id}`}>
+              <CardTitle
+                title={i.employee?.name || '-'}
+                subtitle={[i.employee?.empCode, i.employee?.role, i.employee?.zone].filter(Boolean).join(' · ') || undefined}
+                badge={i.payout.status === CREDITED || i.payout.status === NOT_CREDITED ? i.payout.status : 'Pending'}
+                tone={i.payout.status === CREDITED ? 'success' : i.payout.status === NOT_CREDITED ? 'error' : 'neutral'}
+              />
+              <InfoRow label="Amount" value={money(i.approvedAmount)} bold />
+              <InfoRow label={KIND_LABELS[i.kind]} value={`${i.label}${i.kind === 'salary' ? '' : ` · ${formatDate(i.date) || '-'}`}`} />
+              {i.kilometres ? <InfoRow label="Kilometer" value={String(i.kilometres)} /> : null}
+              <InfoRow label="Approved" value={formatDate(i.approvedAt) || '-'} />
               {i.payout.remark ? <Text style={styles.remark}>{i.payout.remark}</Text> : null}
-            </View>
+            </Card>
           ))
         : groups.map((g) => {
             const key = keyOf(g);
@@ -399,37 +406,36 @@ export default function FinancePayoutsScreen({ route }: any) {
           })}
 
       {mode === 'credit-status' && groups.length ? (
-        <View style={styles.card}>
+        <PageSection title="Save">
           <Text style={styles.muted}>{chosen.length} credited · {groups.length - chosen.length} not credited</Text>
           <WebButton title="Update Credit Status" onPress={saveCredit} loading={busy} />
-        </View>
+        </PageSection>
       ) : null}
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: colors.backgroundLight, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md, marginBottom: spacing.md, gap: 6 },
+  card: { backgroundColor: colors.backgroundLight, borderRadius: 14, borderWidth: 1, borderColor: '#EEF2F7', padding: 16, marginBottom: 12, gap: 6 },
   cardOn: { borderColor: colors.primary, borderWidth: 2 },
   cardOff: { opacity: 0.6 },
   row: { flexDirection: 'row', gap: 8 },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   flex: { flex: 1 },
-  name: { fontSize: 15, fontWeight: '700', color: colors.textPrimary, flexShrink: 1 },
+  name: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, flexShrink: 1 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1 },
-  checkbox: { width: 24, height: 24, borderRadius: 5, borderWidth: 2, borderColor: '#4B5563', backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
-  checkboxOn: { backgroundColor: '#059669', borderColor: '#059669' },
-  checkboxOff: { borderColor: '#D1D5DB', backgroundColor: '#F3F4F6' },
+  checkbox: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: colors.textTertiary, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+  checkboxOn: { backgroundColor: colors.success, borderColor: colors.success },
+  checkboxOff: { borderColor: colors.border, backgroundColor: colors.backgroundMuted },
   checkMark: { color: '#FFFFFF', fontSize: 15, fontWeight: '800', lineHeight: 18 },
   amount: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
-  line: { fontSize: 13, color: colors.textPrimary },
-  muted: { fontSize: 12, color: colors.textSecondary },
-  remark: { fontSize: 12, color: '#B91C1C' },
-  ok: { fontSize: 12, color: '#047857', fontWeight: '600' },
-  empty: { textAlign: 'center', color: colors.textSecondary, marginVertical: spacing.lg },
+  line: { fontSize: 14, color: colors.textPrimary },
+  muted: { fontSize: 13, color: colors.textTertiary },
+  remark: { fontSize: 13, color: colors.error },
+  ok: { fontSize: 13, color: colors.success, fontWeight: '600' },
   pills: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  pill: { alignSelf: 'flex-start', fontSize: 11, fontWeight: '700', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, overflow: 'hidden' },
-  pillOk: { backgroundColor: '#D1FAE5', color: '#065F46' },
-  pillBad: { backgroundColor: '#FEE2E2', color: '#991B1B' },
-  pillPending: { backgroundColor: '#E5E7EB', color: '#374151' },
+  pill: { alignSelf: 'flex-start', fontSize: 12, fontWeight: '700', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, overflow: 'hidden' },
+  pillOk: { backgroundColor: '#DCFCE7', color: '#15803D' },
+  pillBad: { backgroundColor: '#FEE2E2', color: '#B91C1C' },
+  pillPending: { backgroundColor: '#F1F5F9', color: '#475569' },
 });

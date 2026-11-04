@@ -3,6 +3,7 @@ import { View, Text, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity
 import { apiService } from '../../services/api';
 import { colors } from '../../theme/colors';
 import ScreenShell from '../../ui/ScreenShell';
+import { Card, CardTitle, InfoRow, toneFor } from '../../ui/Kit';
 import { useAuth } from '../../context/AuthContext';
 import PendingAdvanceApprovalsCard from '../../components/PendingAdvanceApprovalsCard';
 
@@ -61,52 +62,54 @@ export default function ProductManagerScreen({ embedded, managerId, header }: { 
     <ScrollView contentContainerStyle={styles.content}>
       {header}
       <PendingAdvanceApprovalsCard />
-      <Text style={styles.title}>{data.manager?.name || 'Product Manager'}</Text>
-      <Text style={styles.meta}>
-        {(data.products || []).map((item) => item.name).join(', ') || 'No products assigned yet'}
-      </Text>
-      <TouchableOpacity onPress={() => setShowSchools((v) => !v)}>
-        <Text style={styles.section}>
-          Schools ({data.schools?.length || 0}) <Text style={{ color: colors.primary, fontSize: 14 }}>{showSchools ? 'Hide ▲' : 'Show ▼'}</Text>
+      <Card>
+        <CardTitle title={data.manager?.name || 'Product Manager'} subtitle="Product Manager" />
+        <Text style={styles.meta}>
+          {(data.products || []).map((item) => item.name).join(', ') || 'No products assigned yet'}
         </Text>
+      </Card>
+      <TouchableOpacity style={styles.foldRow} onPress={() => setShowSchools((v) => !v)} activeOpacity={0.7}>
+        <Text style={styles.foldTitle}>Schools ({data.schools?.length || 0})</Text>
+        <Text style={styles.foldLink}>{showSchools ? 'Hide ▲' : 'Show ▼'}</Text>
       </TouchableOpacity>
       {(showSchools ? data.schools || [] : []).map((school) => (
-        <View key={`${school.schoolCode}-${school.schoolName}`} style={styles.card}>
-          <Text style={styles.cardTitle}>{school.schoolName}</Text>
-          <Text style={styles.meta}>
-            Zone: {school.zone || '—'} · Cluster: {school.cluster || '—'} · Zonal Manager: {school.zonalManager || '—'}
-          </Text>
-          <Text style={styles.meta}>
-            {(school.products || []).map((item) => `${item.name} (${item.relationship})`).join(', ')}
-          </Text>
-          <Text style={styles.meta}>
-            {school.bdeName || 'No BDE'} · {school.deliveryStatus}
-          </Text>
-        </View>
+        <Card key={`${school.schoolCode}-${school.schoolName}`}>
+          <CardTitle
+            title={school.schoolName}
+            subtitle={school.schoolCode || undefined}
+            badge={school.deliveryStatus || undefined}
+            tone={toneFor(school.deliveryStatus)}
+          />
+          <InfoRow label="Zone" value={school.zone || '—'} />
+          <InfoRow label="Cluster" value={school.cluster || '—'} />
+          <InfoRow label="Zonal Manager" value={school.zonalManager || '—'} />
+          <InfoRow label="BDE" value={school.bdeName || 'No BDE'} />
+          <InfoRow label="Products" value={(school.products || []).map((item) => `${item.name} (${item.relationship})`).join(', ')} />
+        </Card>
       ))}
       <Text style={styles.section}>BDEs ({data.bdes?.length || 0})</Text>
       {(data.bdes || []).map((bde) => (
-        <View key={bde._id} style={styles.card}>
-          <Text style={styles.cardTitle}>{bde.name}</Text>
-          <Text style={styles.meta}>{[bde.email, bde.phone, bde.zone].filter(Boolean).join(' · ')}</Text>
-          <Text style={styles.meta}>{(bde.schools || []).filter(Boolean).join(', ')}</Text>
-        </View>
+        <Card key={bde._id}>
+          <CardTitle title={bde.name} subtitle={bde.zone || undefined} />
+          <InfoRow label="Email" value={bde.email} />
+          <InfoRow label="Phone" value={bde.phone} phone />
+          <InfoRow label="Schools" value={(bde.schools || []).filter(Boolean).join(', ')} />
+        </Card>
       ))}
       <Text style={styles.section}>Delivery ({data.deliveries?.length || 0})</Text>
       {(data.deliveries || []).slice(0, 40).map((row) => (
-        <View key={row.id} style={styles.card}>
-          <Text style={styles.cardTitle}>{row.schoolName}</Text>
-          <Text style={styles.meta}>{(row.products || []).join(', ')} · {row.status}</Text>
-        </View>
+        <Card key={row.id}>
+          <CardTitle title={row.schoolName} badge={row.status || undefined} tone={toneFor(row.status)} />
+          <InfoRow label="Products" value={(row.products || []).join(', ')} />
+        </Card>
       ))}
       <Text style={styles.section}>Trainers</Text>
       {(data.trainers || []).map((trainer) => (
-        <View key={trainer._id} style={styles.card}>
-          <Text style={styles.cardTitle}>{trainer.name}</Text>
-          <Text style={styles.meta}>
-            {trainer.completionRate}% complete · {trainer.completed} done · {trainer.feedbackOnFile} feedback forms
-          </Text>
-        </View>
+        <Card key={trainer._id}>
+          <CardTitle title={trainer.name} badge={`${trainer.completionRate}%`} tone="info" />
+          <InfoRow label="Completed" value={String(trainer.completed)} />
+          <InfoRow label="Feedback forms" value={String(trainer.feedbackOnFile)} />
+        </Card>
       ))}
     </ScrollView>
   );
@@ -117,10 +120,30 @@ export default function ProductManagerScreen({ embedded, managerId, header }: { 
 
 const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 40 },
-  title: { fontSize: 22, fontWeight: '700', color: colors.textPrimary },
-  section: { marginTop: 18, marginBottom: 8, fontWeight: '700', color: colors.textPrimary },
-  card: { backgroundColor: colors.backgroundLight, borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: colors.border },
-  cardTitle: { fontWeight: '600', color: colors.textPrimary },
-  meta: { marginTop: 4, color: colors.textSecondary, fontSize: 13 },
-  error: { color: colors.error, padding: 16 },
+  title: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
+  section: {
+    marginTop: 8,
+    marginBottom: 8,
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  foldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.backgroundLight,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#EEF2F7',
+    paddingHorizontal: 16,
+    minHeight: 48,
+    marginBottom: 12,
+  },
+  foldTitle: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
+  foldLink: { fontSize: 14, fontWeight: '600', color: colors.primaryDark },
+  meta: { color: colors.textTertiary, fontSize: 13, lineHeight: 18 },
+  error: { color: colors.error, padding: 16, fontSize: 14 },
 });

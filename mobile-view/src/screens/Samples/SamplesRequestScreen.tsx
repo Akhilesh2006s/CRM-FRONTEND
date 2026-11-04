@@ -11,8 +11,9 @@ import {
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
-import ScreenShell from '../../ui/ScreenShell';
-import { WebInput, WebSelect } from '../../ui/WebPrimitives';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { Card, CardTitle, InfoRow, EmptyState, SectionTitle, toneFor } from '../../ui/Kit';
+import { WebInput, WebSelect, WebButton, WebLabel } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 
 type ProductSelection = {
@@ -48,7 +49,7 @@ export default function SamplesRequestScreen({ navigation }: any) {
           typeof p === 'string' ? p : p.productName || p.product_name || p.name || ''
         )
         .filter(Boolean);
-      setAvailableProducts([...new Set(names)]);
+      setAvailableProducts([...new Set(names as string[])]);
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to load data');
     } finally {
@@ -116,147 +117,101 @@ export default function SamplesRequestScreen({ navigation }: any) {
 
   return (
     <ScreenShell title="Request Sample Products" subtitle="Request sample products for school" loading={loading}>
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-        {successMessage && (
-          <MessageBanner type="success" message={successMessage} onDismiss={() => setSuccessMessage(null)} />
-        )}
-        {errorMessage && (
-          <MessageBanner type="error" message={errorMessage} onDismiss={() => setErrorMessage(null)} />
-        )}
+      {successMessage && (
+        <MessageBanner type="success" message={successMessage} onDismiss={() => setSuccessMessage(null)} />
+      )}
+      {errorMessage && (
+        <MessageBanner type="error" message={errorMessage} onDismiss={() => setErrorMessage(null)} />
+      )}
 
-        <View style={styles.formCard}>
-          <View style={styles.formSection}>
-            <Text style={styles.label}>Purpose</Text>
-            <WebInput style={styles.input} value={purpose} onChangeText={setPurpose} placeholder="To show school" />
-          </View>
+      <PageSection title="New Request">
+        <WebLabel>Purpose</WebLabel>
+        <WebInput value={purpose} onChangeText={setPurpose} placeholder="To show school" />
 
-          <View style={styles.formSection}>
-            <View style={styles.productsHeader}>
-              <Text style={styles.label}>Products *</Text>
-              <TouchableOpacity style={styles.addButton} onPress={addProduct}>
-                <Text style={styles.addButtonText}>+ Add Product</Text>
-              </TouchableOpacity>
-            </View>
-
-            {products.length === 0 ? (
-              <View style={styles.emptyProducts}>
-                <Text style={styles.emptyProductsText}>No products added. Tap Add Product.</Text>
-              </View>
-            ) : (
-              products.map((product, index) => (
-                <View key={index} style={styles.productRow}>
-                  <View style={styles.productFields}>
-                    {availableProducts.length > 0 ? (
-                      <WebSelect
-                        label="Product Name"
-                        value={product.product_name}
-                        onValueChange={(v) => updateProduct(index, 'product_name', v)}
-                        items={availableProducts.map((name) => ({ label: name, value: name }))}
-                        placeholder="Select product"
-                      />
-                    ) : (
-                      <View style={styles.fieldBlock}>
-                        <Text style={styles.fieldLabel}>Product Name</Text>
-                        <WebInput
-                          style={styles.input}
-                          value={product.product_name}
-                          onChangeText={(v) => updateProduct(index, 'product_name', v)}
-                          placeholder="Product name"
-                        />
-                      </View>
-                    )}
-                    <View style={styles.fieldBlock}>
-                      <Text style={styles.fieldLabel}>Quantity</Text>
-                      <WebInput
-                        style={styles.input}
-                        value={String(product.quantity)}
-                        onChangeText={(v) => updateProduct(index, 'quantity', Math.max(1, Number(v) || 1))}
-                        keyboardType="number-pad"
-                      />
-                    </View>
-                  </View>
-                  <TouchableOpacity onPress={() => removeProduct(index)} style={styles.removeBtn}>
-                    <Text style={styles.removeButton}>×</Text>
-                  </TouchableOpacity>
-                </View>
-              ))
-            )}
-          </View>
-
-          <TouchableOpacity
-            style={[styles.submitButton, (submitting || products.length === 0) && styles.submitDisabled]}
-            onPress={submitRequest}
-            disabled={submitting || products.length === 0}
-          >
-            {submitting ? (
-              <ActivityIndicator color={colors.textLight} />
-            ) : (
-              <Text style={styles.submitButtonText}>Submit Request</Text>
-            )}
+        <View style={styles.productsHeader}>
+          <WebLabel>Products *</WebLabel>
+          <TouchableOpacity style={styles.addButton} onPress={addProduct}>
+            <Text style={styles.addButtonText}>+ Add Product</Text>
           </TouchableOpacity>
         </View>
 
-        <View style={styles.listCard}>
-          <Text style={styles.listTitle}>My Sample Requests</Text>
-          {myRequests.length === 0 ? (
-            <Text style={styles.emptyText}>No sample requests yet</Text>
-          ) : (
-            myRequests.map((request) => (
-              <View key={request._id} style={styles.requestCard}>
-                <View style={styles.requestHeader}>
-                  <Text style={styles.requestCode}>{request.request_code}</Text>
-                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(request.status) + '15' }]}>
-                    <Text style={[styles.statusText, { color: getStatusColor(request.status) }]}>
-                      {request.status || 'Pending'}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={styles.requestPurpose}>{request.purpose}</Text>
-                {request.products?.map((p: any, idx: number) => (
-                  <Text key={idx} style={styles.requestProductItem}>
-                    {p.product_name} — Qty: {p.quantity}
-                  </Text>
-                ))}
-                <Text style={styles.requestDate}>Created: {formatDate(request.createdAt)}</Text>
+        {products.length === 0 ? (
+          <Text style={styles.emptyProductsText}>No products added. Tap Add Product.</Text>
+        ) : (
+          products.map((product, index) => (
+            <View key={index} style={styles.productRow}>
+              <View style={styles.productFields}>
+                {availableProducts.length > 0 ? (
+                  <WebSelect
+                    label="Product Name"
+                    value={product.product_name}
+                    onValueChange={(v) => updateProduct(index, 'product_name', v)}
+                    items={availableProducts.map((name) => ({ label: name, value: name }))}
+                    placeholder="Select product"
+                  />
+                ) : (
+                  <>
+                    <WebLabel>Product Name</WebLabel>
+                    <WebInput
+                      value={product.product_name}
+                      onChangeText={(v) => updateProduct(index, 'product_name', v)}
+                      placeholder="Product name"
+                    />
+                  </>
+                )}
+                <WebLabel>Quantity</WebLabel>
+                <WebInput
+                  style={{ marginBottom: 0 }}
+                  value={String(product.quantity)}
+                  onChangeText={(v) => updateProduct(index, 'quantity', Math.max(1, Number(v) || 1))}
+                  keyboardType="number-pad"
+                />
               </View>
-            ))
-          )}
-        </View>
-      </ScrollView>
+              <TouchableOpacity onPress={() => removeProduct(index)} style={styles.removeBtn} accessibilityLabel="Remove product">
+                <Text style={styles.removeButton}>×</Text>
+              </TouchableOpacity>
+            </View>
+          ))
+        )}
+      </PageSection>
+
+      <WebButton
+        title="Submit Request"
+        onPress={submitRequest}
+        loading={submitting}
+        disabled={submitting || products.length === 0}
+      />
+
+      <SectionTitle>My Sample Requests</SectionTitle>
+      {myRequests.length === 0 ? (
+        <EmptyState icon="🧪" title="No sample requests yet" />
+      ) : (
+        myRequests.map((request) => (
+          <Card key={request._id}>
+            <CardTitle
+              title={request.request_code || 'Request'}
+              subtitle={request.purpose || undefined}
+              badge={request.status || 'Pending'}
+              tone={toneFor(request.status || 'Pending')}
+            />
+            {request.products?.map((p: any, idx: number) => (
+              <InfoRow key={idx} label={p.product_name || 'Product'} value={`Qty ${p.quantity}`} />
+            ))}
+            <InfoRow label="Created" value={formatDate(request.createdAt)} />
+          </Card>
+        ))
+      )}
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { flex: 1 },
-  contentContainer: { padding: 16, paddingBottom: 32 },
-  formCard: { backgroundColor: colors.backgroundLight, borderRadius: 16, padding: 20, marginBottom: 20 },
-  formSection: { marginBottom: 16 },
-  label: { ...typography.body.medium, color: colors.textPrimary, marginBottom: 8, fontWeight: '600' },
-  input: { backgroundColor: colors.background, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: colors.border, color: colors.textPrimary },
-  productsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  addButton: { backgroundColor: colors.primary, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
-  addButtonText: { ...typography.body.small, color: colors.textLight, fontWeight: '600' },
-  emptyProducts: { padding: 16, backgroundColor: colors.background, borderRadius: 12, borderWidth: 1, borderColor: colors.border },
-  emptyProductsText: { ...typography.body.small, color: colors.textSecondary, textAlign: 'center' },
-  productRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 12, padding: 12, backgroundColor: colors.background, borderRadius: 12, borderWidth: 1, borderColor: colors.border },
-  productFields: { flex: 1, gap: 8 },
-  fieldBlock: { marginBottom: 4 },
-  fieldLabel: { ...typography.label.small, color: colors.textSecondary, marginBottom: 4 },
-  removeBtn: { paddingTop: 8 },
-  removeButton: { fontSize: 28, color: colors.error, fontWeight: 'bold' },
-  submitButton: { backgroundColor: colors.primary, padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 8 },
-  submitDisabled: { opacity: 0.5 },
-  submitButtonText: { ...typography.body.medium, color: colors.textLight, fontWeight: '600' },
-  listCard: { backgroundColor: colors.backgroundLight, borderRadius: 16, padding: 20 },
-  listTitle: { ...typography.heading.h3, color: colors.textPrimary, marginBottom: 12 },
-  emptyText: { ...typography.body.medium, color: colors.textSecondary, textAlign: 'center', padding: 16 },
-  requestCard: { backgroundColor: colors.background, borderRadius: 12, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: colors.border },
-  requestHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  requestCode: { ...typography.heading.h4, color: colors.textPrimary },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  statusText: { ...typography.label.small, fontWeight: '600' },
-  requestPurpose: { ...typography.body.medium, color: colors.textPrimary, marginBottom: 6 },
-  requestProductItem: { ...typography.body.small, color: colors.textSecondary },
-  requestDate: { ...typography.body.small, color: colors.textSecondary, marginTop: 8 },
+  productsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  addButton: { borderWidth: 1, borderColor: '#DCE3EC', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
+  addButtonText: { fontSize: 13, color: colors.primary, fontWeight: '600' },
+  emptyProductsText: { fontSize: 13, color: colors.textTertiary, textAlign: 'center', paddingVertical: 12 },
+  productRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 12, padding: 12, backgroundColor: colors.background, borderRadius: 12, borderWidth: 1, borderColor: '#EEF2F7' },
+  productFields: { flex: 1 },
+  removeBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.errorLight, alignItems: 'center', justifyContent: 'center' },
+  removeButton: { fontSize: 18, color: colors.error, fontWeight: '700' },
 });

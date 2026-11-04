@@ -16,7 +16,8 @@ import { phoneDigitsError, sanitizePhoneDigits } from '../../utils/phone';
 import { getCurrentLocation, getTownFromPincode } from '../../services/location';
 import { useAuth } from '../../context/AuthContext';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
-import { WebInput, WebButton, DataTable } from '../../ui/WebPrimitives';
+import { WebInput, WebButton, WebLabel } from '../../ui/WebPrimitives';
+import { colors } from '../../theme/colors';
 import MessageBanner from '../../components/MessageBanner';
 
 const PRODUCTS = [
@@ -300,525 +301,292 @@ export default function DCCaptureScreen({ navigation, route }: any) {
   };
 
   return (
-    <ScreenShell title="D C Capture" loading={loading}>
-      <PageSection title="D C Capture">
-<View style={styles.content}>
-        {successMessage && (
-          <MessageBanner
-            type="success"
-            message={successMessage}
-            actionLabel={dcId ? 'Go Back' : 'View DCs'}
-            onAction={() => (dcId ? navigation.goBack() : navigation.navigate('DCList'))}
-          />
-        )}
-        {errorMessage && (
-          <MessageBanner type="error" message={errorMessage} onDismiss={clearMessages} />
-        )}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.backButton}>← Back</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>DC Capture</Text>
-          <View style={{ width: 60 }} />
-        </View>
+    <ScreenShell title="DC Capture" loading={loading}>
+      {successMessage && (
+        <MessageBanner
+          type="success"
+          message={successMessage}
+          actionLabel={dcId ? 'Go Back' : 'View DCs'}
+          onAction={() => (dcId ? navigation.goBack() : navigation.navigate('DCList'))}
+        />
+      )}
+      {errorMessage && (
+        <MessageBanner type="error" message={errorMessage} onDismiss={clearMessages} />
+      )}
 
-        <View style={styles.section}>
-          <Text style={styles.label}>School Name *</Text>
-          <WebInput
-            style={styles.input}
-            value={schoolName}
-            onChangeText={setSchoolName}
-            placeholder="Enter school name"
-          />
-        </View>
+      <PageSection title="School">
+        <WebLabel>School Name *</WebLabel>
+        <WebInput value={schoolName} onChangeText={setSchoolName} placeholder="Enter school name" />
+        <WebLabel>Contact Person</WebLabel>
+        <WebInput value={contactPerson} onChangeText={setContactPerson} placeholder="Enter contact person name" />
+        <WebLabel>Contact Mobile *</WebLabel>
+        <WebInput
+          value={contactMobile}
+          onChangeText={(text) => setContactMobile(sanitizePhoneDigits(text))}
+          placeholder="10 to 15 digits"
+          keyboardType="phone-pad"
+          maxLength={15}
+        />
+        <WebLabel>Email</WebLabel>
+        <WebInput
+          value={email}
+          onChangeText={setEmail}
+          placeholder="Enter email"
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
+      </PageSection>
 
-        <View style={styles.section}>
-          <Text style={styles.label}>Contact Person</Text>
-          <WebInput
-            style={styles.input}
-            value={contactPerson}
-            onChangeText={setContactPerson}
-            placeholder="Enter contact person name"
-          />
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.label}>Contact Mobile *</Text>
-          <WebInput
-            style={styles.input}
-            value={contactMobile}
-            onChangeText={(text) => setContactMobile(sanitizePhoneDigits(text))}
-            placeholder="10 to 15 digits"
-            keyboardType="phone-pad"
-            maxLength={15}
-          />
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.label}>Email</Text>
-          <WebInput
-            style={styles.input}
-            value={email}
-            onChangeText={setEmail}
-            placeholder="Enter email"
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.label}>Address</Text>
-          <WebInput
-            style={[styles.input, styles.textArea]}
-            value={address}
-            onChangeText={setAddress}
-            placeholder="Enter address"
-            multiline
-            numberOfLines={3}
-          />
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.label}>Pincode</Text>
-          <WebInput
-            style={styles.input}
-            value={pincode}
-            onChangeText={handlePincodeChange}
-            placeholder="Enter 6-digit pincode"
-            keyboardType="numeric"
-            maxLength={6}
-          />
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.label}>Town</Text>
-          <WebInput
-            style={styles.input}
-            value={town}
-            onChangeText={setTown}
-            placeholder="Town name (auto-filled from pincode)"
-          />
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.label}>School Category</Text>
-          <View style={styles.categoryGrid}>
-            {SCHOOL_CATEGORIES.map((cat) => (
-              <TouchableOpacity
-                key={cat}
-                style={[
-                  styles.categoryButton,
-                  schoolCategory === cat && styles.categoryButtonSelected,
-                ]}
-                onPress={() => setSchoolCategory(cat)}
-              >
-                <Text
-                  style={[
-                    styles.categoryButtonText,
-                    schoolCategory === cat && styles.categoryButtonTextSelected,
-                  ]}
-                >
-                  {cat}
-                </Text>
-              </TouchableOpacity>
-            ))}
+      <PageSection title="Address">
+        <WebLabel>Address</WebLabel>
+        <WebInput
+          style={styles.textArea}
+          value={address}
+          onChangeText={setAddress}
+          placeholder="Enter address"
+          multiline
+          numberOfLines={3}
+        />
+        <View style={styles.twoCol}>
+          <View style={styles.flex1}>
+            <WebLabel>Pincode</WebLabel>
+            <WebInput
+              value={pincode}
+              onChangeText={handlePincodeChange}
+              placeholder="6 digits"
+              keyboardType="numeric"
+              maxLength={6}
+            />
+          </View>
+          <View style={styles.flex1}>
+            <WebLabel>Town</WebLabel>
+            <WebInput value={town} onChangeText={setTown} placeholder="Auto from pincode" />
           </View>
         </View>
+      </PageSection>
 
+      <PageSection title="School category">
+        <View style={styles.categoryGrid}>
+          {SCHOOL_CATEGORIES.map((cat) => (
+            <TouchableOpacity
+              key={cat}
+              style={[styles.categoryButton, schoolCategory === cat && styles.categoryButtonSelected]}
+              onPress={() => setSchoolCategory(cat)}
+            >
+              <Text style={[styles.categoryButtonText, schoolCategory === cat && styles.categoryButtonTextSelected]}>
+                {cat}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
         {schoolCategory && (
-          <View style={styles.section}>
-            <Text style={styles.label}>Remarks * (Mandatory for selected category)</Text>
+          <View style={styles.mt12}>
+            <WebLabel>Remarks *</WebLabel>
             <WebInput
-              style={[styles.input, styles.textArea]}
+              style={styles.textArea}
               value={schoolRemarks}
               onChangeText={setSchoolRemarks}
-              placeholder="Enter remarks"
+              placeholder="Required for the selected category"
               multiline
               numberOfLines={4}
             />
           </View>
         )}
+      </PageSection>
 
-        <View style={styles.section}>
-          <Text style={styles.label}>Photo</Text>
-          <TouchableOpacity style={styles.photoButton} onPress={capturePhoto}>
-            {photo ? (
-              <Image source={{ uri: photo }} style={styles.photo} />
-            ) : (
-              <Text style={styles.photoButtonText}>Capture Photo</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.label}>Location *</Text>
-          <TouchableOpacity
-            style={[styles.locationButton, locationData && styles.locationButtonSuccess]}
-            onPress={getLocation}
-            disabled={loading}
-          >
-            <Text style={styles.locationButtonText}>
-              {locationData ? 'Location Captured ✓' : 'Capture Location'}
-            </Text>
-          </TouchableOpacity>
-          {locationData && (
-            <Text style={styles.locationText}>
-              Lat: {locationData.latitude.toFixed(6)}, Lng: {locationData.longitude.toFixed(6)}
-            </Text>
-          )}
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.productsHeader}>
-            <Text style={styles.label}>Products</Text>
-            <TouchableOpacity onPress={addProduct}>
-              <Text style={styles.addButton}>+ Add</Text>
-            </TouchableOpacity>
-          </View>
-
-          {products.map((product, index) => (
-            <View key={product.id} style={styles.productCard}>
-              <View style={styles.productHeader}>
-                <Text style={styles.productNumber}>Product {index + 1}</Text>
-                {products.length > 1 && (
-                  <TouchableOpacity onPress={() => removeProduct(product.id)}>
-                    <Text style={styles.removeButton}>Remove</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              <View style={styles.productRow}>
-                <View style={styles.productField}>
-                  <Text style={styles.fieldLabel}>Product *</Text>
-                  <View style={styles.picker}>
-                    {PRODUCTS.map((p) => (
-                      <TouchableOpacity
-                        key={p}
-                        style={[
-                          styles.pickerOption,
-                          product.product === p && styles.pickerOptionSelected,
-                        ]}
-                        onPress={() => updateProduct(product.id, 'product', p)}
-                      >
-                        <Text
-                          style={[
-                            styles.pickerOptionText,
-                            product.product === p && styles.pickerOptionTextSelected,
-                          ]}
-                        >
-                          {p}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.productRow}>
-                <View style={[styles.productField, { flex: 1, marginRight: 8 }]}>
-                  <Text style={styles.fieldLabel}>Class</Text>
-                  <WebInput
-                    style={styles.input}
-                    value={product.class}
-                    onChangeText={(value) => updateProduct(product.id, 'class', value)}
-                    placeholder="Class"
-                  />
-                </View>
-
-                <View style={[styles.productField, { flex: 1 }]}>
-                  <Text style={styles.fieldLabel}>Category</Text>
-                  <WebInput
-                    style={styles.input}
-                    value={product.category}
-                    onChangeText={(value) => updateProduct(product.id, 'category', value)}
-                    placeholder="Category"
-                  />
-                </View>
-              </View>
-
-              <View style={styles.productRow}>
-                <View style={styles.productField}>
-                  <Text style={styles.fieldLabel}>Series *</Text>
-                  <View style={styles.categoryGrid}>
-                    {PRODUCT_CATEGORIES.map((cat) => (
-                      <TouchableOpacity
-                        key={cat}
-                        style={[
-                          styles.categoryButtonSmall,
-                          product.productCategory === cat && styles.categoryButtonSelected,
-                        ]}
-                        onPress={() => updateProduct(product.id, 'productCategory', cat)}
-                      >
-                        <Text
-                          style={[
-                            styles.categoryButtonTextSmall,
-                            product.productCategory === cat && styles.categoryButtonTextSelected,
-                          ]}
-                        >
-                          {cat}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.productRow}>
-                <View style={[styles.productField, { flex: 1, marginRight: 8 }]}>
-                  <Text style={styles.fieldLabel}>Quantity</Text>
-                  <WebInput
-                    style={styles.input}
-                    value={product.quantity.toString()}
-                    onChangeText={(value) => updateProduct(product.id, 'quantity', parseInt(value) || 0)}
-                    placeholder="0"
-                    keyboardType="numeric"
-                  />
-                </View>
-
-                <View style={[styles.productField, { flex: 1 }]}>
-                  <Text style={styles.fieldLabel}>Strength</Text>
-                  <WebInput
-                    style={styles.input}
-                    value={product.strength.toString()}
-                    onChangeText={(value) => updateProduct(product.id, 'strength', parseInt(value) || 0)}
-                    placeholder="0"
-                    keyboardType="numeric"
-                  />
-                </View>
-              </View>
-            </View>
-          ))}
-        </View>
-
-        <TouchableOpacity
-          style={[styles.submitButton, loading && styles.buttonDisabled]}
-          onPress={handleSubmit}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
+      <PageSection title="Photo & location">
+        <WebLabel>Photo</WebLabel>
+        <TouchableOpacity style={styles.photoButton} onPress={capturePhoto}>
+          {photo ? (
+            <Image source={{ uri: photo }} style={styles.photo} />
           ) : (
-            <Text style={styles.submitButtonText}>Submit DC</Text>
+            <Text style={styles.photoButtonText}>Capture Photo</Text>
           )}
         </TouchableOpacity>
-      </View>
+        <WebLabel>Location *</WebLabel>
+        <TouchableOpacity
+          style={[styles.locationButton, locationData && styles.locationButtonSuccess]}
+          onPress={getLocation}
+          disabled={loading}
+        >
+          <Text style={[styles.locationButtonText, locationData && styles.locationButtonTextSuccess]}>
+            {locationData ? 'Location Captured ✓' : 'Capture Location'}
+          </Text>
+        </TouchableOpacity>
+        {locationData && (
+          <Text style={styles.locationText}>
+            Lat: {locationData.latitude.toFixed(6)}, Lng: {locationData.longitude.toFixed(6)}
+          </Text>
+        )}
       </PageSection>
+
+      <View style={styles.section}>
+        <View style={styles.productsHeader}>
+          <Text style={styles.sectionTitle}>Products</Text>
+          <TouchableOpacity onPress={addProduct} hitSlop={8}>
+            <Text style={styles.addButton}>+ Add</Text>
+          </TouchableOpacity>
+        </View>
+
+        {products.map((product, index) => (
+          <View key={product.id} style={styles.productCard}>
+            <View style={styles.productHeader}>
+              <Text style={styles.productNumber}>Product {index + 1}</Text>
+              {products.length > 1 && (
+                <TouchableOpacity onPress={() => removeProduct(product.id)} hitSlop={8}>
+                  <Text style={styles.removeButton}>Remove</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <WebLabel>Product *</WebLabel>
+            <View style={styles.picker}>
+              {PRODUCTS.map((p) => (
+                <TouchableOpacity
+                  key={p}
+                  style={[styles.pickerOption, product.product === p && styles.pickerOptionSelected]}
+                  onPress={() => updateProduct(product.id, 'product', p)}
+                >
+                  <Text style={[styles.pickerOptionText, product.product === p && styles.pickerOptionTextSelected]}>
+                    {p}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={styles.twoCol}>
+              <View style={styles.flex1}>
+                <WebLabel>Class</WebLabel>
+                <WebInput
+                  value={product.class}
+                  onChangeText={(value) => updateProduct(product.id, 'class', value)}
+                  placeholder="Class"
+                />
+              </View>
+              <View style={styles.flex1}>
+                <WebLabel>Category</WebLabel>
+                <WebInput
+                  value={product.category}
+                  onChangeText={(value) => updateProduct(product.id, 'category', value)}
+                  placeholder="Category"
+                />
+              </View>
+            </View>
+
+            <WebLabel>Series *</WebLabel>
+            <View style={[styles.categoryGrid, styles.mb12]}>
+              {PRODUCT_CATEGORIES.map((cat) => (
+                <TouchableOpacity
+                  key={cat}
+                  style={[styles.categoryButtonSmall, product.productCategory === cat && styles.categoryButtonSelected]}
+                  onPress={() => updateProduct(product.id, 'productCategory', cat)}
+                >
+                  <Text
+                    style={[
+                      styles.categoryButtonTextSmall,
+                      product.productCategory === cat && styles.categoryButtonTextSelected,
+                    ]}
+                  >
+                    {cat}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={styles.twoCol}>
+              <View style={styles.flex1}>
+                <WebLabel>Quantity</WebLabel>
+                <WebInput
+                  value={product.quantity.toString()}
+                  onChangeText={(value) => updateProduct(product.id, 'quantity', parseInt(value) || 0)}
+                  placeholder="0"
+                  keyboardType="numeric"
+                />
+              </View>
+              <View style={styles.flex1}>
+                <WebLabel>Strength</WebLabel>
+                <WebInput
+                  value={product.strength.toString()}
+                  onChangeText={(value) => updateProduct(product.id, 'strength', parseInt(value) || 0)}
+                  placeholder="0"
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
+          </View>
+        ))}
+      </View>
+
+      <WebButton title="Submit DC" onPress={handleSubmit} loading={loading} disabled={loading} />
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  content: {
-    padding: 16,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  backButton: {
-    fontSize: 16,
-    color: '#007AFF',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#333',
-  },
   section: {
-    marginBottom: 24,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
-    color: '#333',
-  },
-  input: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.backgroundLight,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
+    borderColor: '#EEF2F7',
+    padding: 16,
+    marginBottom: 12,
   },
-  textArea: {
-    height: 100,
-    textAlignVertical: 'top',
-  },
-  categoryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  categoryButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    marginRight: 8,
-    marginBottom: 8,
-  },
-  categoryButtonSelected: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
-  },
-  categoryButtonText: {
-    fontSize: 14,
-    color: '#333',
-  },
-  categoryButtonTextSelected: {
-    color: '#fff',
-  },
-  categoryButtonSmall: {
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 6,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    marginRight: 6,
-    marginBottom: 6,
-  },
-  categoryButtonTextSmall: {
-    fontSize: 12,
-    color: '#333',
-  },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
+  twoCol: { flexDirection: 'row', gap: 12 },
+  flex1: { flex: 1 },
+  mt12: { marginTop: 12 },
+  mb12: { marginBottom: 12 },
+  textArea: { minHeight: 96, textAlignVertical: 'top' },
+  categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  categoryButton: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: '#E0F2FE' },
+  categoryButtonSelected: { backgroundColor: '#0284C7' },
+  categoryButtonText: { fontSize: 13, fontWeight: '600', color: '#0369A1' },
+  categoryButtonTextSelected: { color: '#FFFFFF' },
+  categoryButtonSmall: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: '#E0F2FE' },
+  categoryButtonTextSmall: { fontSize: 13, fontWeight: '600', color: '#0369A1' },
   photoButton: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 20,
+    borderStyle: 'dashed',
+    borderColor: '#CBD5E1',
+    borderRadius: 12,
+    padding: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 150,
+    minHeight: 120,
+    marginBottom: 14,
   },
-  photo: {
-    width: '100%',
-    height: 200,
-    borderRadius: 8,
-  },
-  photoButtonText: {
-    color: '#007AFF',
-    fontSize: 16,
-  },
+  photo: { width: '100%', height: 200, borderRadius: 10 },
+  photoButtonText: { color: colors.primaryDark, fontSize: 15, fontWeight: '600' },
   locationButton: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.backgroundLight,
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 16,
+    borderColor: '#DCE3EC',
+    borderRadius: 10,
+    minHeight: 48,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  locationButtonSuccess: {
-    backgroundColor: '#d4edda',
-    borderColor: '#28a745',
-  },
-  locationButtonText: {
-    color: '#007AFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  locationText: {
-    marginTop: 8,
-    fontSize: 12,
-    color: '#666',
-  },
-  productsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  addButton: {
-    color: '#007AFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  locationButtonSuccess: { backgroundColor: colors.successLight, borderColor: colors.success },
+  locationButtonText: { color: colors.primaryDark, fontSize: 15, fontWeight: '600' },
+  locationButtonTextSuccess: { color: '#15803D' },
+  locationText: { marginTop: 8, fontSize: 13, color: colors.textTertiary },
+  productsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  addButton: { color: colors.primaryDark, fontSize: 15, fontWeight: '700' },
   productCard: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 16,
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#EEF2F7',
   },
-  productHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  productNumber: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-  },
-  removeButton: {
-    color: '#dc3545',
-    fontSize: 14,
-  },
-  productRow: {
-    marginBottom: 12,
-  },
-  productField: {
-    marginBottom: 12,
-  },
-  fieldLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 4,
-    color: '#666',
-  },
-  picker: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  pickerOption: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
-    backgroundColor: '#f5f5f5',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    marginRight: 8,
-    marginBottom: 8,
-  },
-  pickerOptionSelected: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
-  },
-  pickerOptionText: {
-    fontSize: 12,
-    color: '#333',
-  },
-  pickerOptionTextSelected: {
-    color: '#fff',
-  },
-  submitButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 32,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  submitButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-  },
+  productHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  productNumber: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
+  removeButton: { color: colors.error, fontSize: 13, fontWeight: '600' },
+  picker: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
+  pickerOption: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, backgroundColor: '#E0F2FE' },
+  pickerOptionSelected: { backgroundColor: '#0284C7' },
+  pickerOptionText: { fontSize: 13, fontWeight: '600', color: '#0369A1' },
+  pickerOptionTextSelected: { color: '#FFFFFF' },
 });
-

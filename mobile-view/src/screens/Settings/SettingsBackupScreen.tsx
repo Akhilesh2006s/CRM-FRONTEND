@@ -81,13 +81,15 @@ export default function SettingsBackupScreen({ navigation }: any) {
   }
 
   if (loading) {
-    return <ScreenShell title="Backup Settings" loading />;
+    return <ScreenShell title="Backup Settings" loading>{null}</ScreenShell>;
   }
 
   return (
     <ScreenShell noScroll title="Backup Settings">
       <View style={styles.page}>
         <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Backup</Text>
           <Text style={styles.label}>Notification Email *</Text>
           <WebInput
             style={styles.input}
@@ -104,6 +106,7 @@ export default function SettingsBackupScreen({ navigation }: any) {
             onChangeText={setSchedule}
             placeholder="e.g. Daily at 10:00 AM"
           />
+          </View>
         </ScrollView>
         <View style={styles.footer}>
           <WebButton
@@ -129,27 +132,26 @@ export default function SettingsBackupScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   page: { flex: 1 },
   scroll: { flex: 1 },
-  content: { padding: 20, gap: 8, paddingBottom: 16 },
-  label: { ...typography.label.medium, color: colors.textPrimary, marginBottom: 6 },
-  input: {
-    ...typography.body.medium,
+  content: { padding: 16, paddingBottom: 16 },
+  section: {
     backgroundColor: colors.backgroundLight,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 14,
-    color: colors.textPrimary,
-    marginBottom: 10,
+    borderColor: '#EEF2F7',
+    padding: 16,
   },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, marginBottom: 12 },
+  label: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 6 },
+  input: {},
   footer: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 28,
-    gap: 10,
+    paddingBottom: 24,
+    gap: 4,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: '#EEF2F7',
     backgroundColor: colors.backgroundLight,
   },
   denied: { flex: 1, padding: 24, justifyContent: 'center', gap: 16 },
-  deniedText: { ...typography.body.medium, color: colors.textSecondary, textAlign: 'center' },
+  deniedText: { fontSize: 15, color: colors.textSecondary, textAlign: 'center' },
 });

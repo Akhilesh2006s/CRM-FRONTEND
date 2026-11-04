@@ -1,5 +1,6 @@
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { TouchableOpacity, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { confirmLogout } from '../utils/confirmLogout';
 
@@ -15,8 +16,10 @@ export default function LogoutButton() {
       onPress={handleLogout}
       style={styles.button}
       activeOpacity={0.7}
+      accessibilityLabel="Sign out"
+      hitSlop={6}
     >
-      <Text style={styles.icon}>🚪</Text>
+      <Ionicons name="log-out-outline" size={20} color="#B91C1C" />
     </TouchableOpacity>
   );
 }
@@ -26,11 +29,8 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: '#FEE2E2',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  icon: {
-    fontSize: 20,
   },
 });

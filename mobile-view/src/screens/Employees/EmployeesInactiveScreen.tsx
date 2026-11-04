@@ -2,9 +2,9 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebInput } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState } from '../../ui/Kit';
 import { apiService } from '../../services/api';
 import { showAlert, showConfirm } from '../../utils/showAlert';
 
@@ -78,13 +78,14 @@ export default function EmployeesInactiveScreen({ navigation }: any) {
     );
   };
 
-  const filtered = items.filter(
-    (e) =>
-      e.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      e.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (e.phone || '').includes(searchQuery) ||
-      (e.mobile || '').includes(searchQuery),
-  );
+  const words = searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const filtered = items.filter((e) => {
+    if (!words.length) return true;
+    const text = [e.name, e.email, e.phone, e.mobile, e.role, e.department, e.zone, reasonLabel(e.inactiveReason)]
+      .map((v) => String(v || '').toLowerCase())
+      .join(' ');
+    return words.every((w) => text.includes(w));
+  });
 
   return (
     <ScreenShell
@@ -99,7 +100,7 @@ export default function EmployeesInactiveScreen({ navigation }: any) {
           style={styles.searchInput}
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholder="Search name/email/phone"
+          placeholder="Search name, email, phone, role, zone…"
         />
         <TouchableOpacity style={styles.refreshButton} onPress={loadData}>
           <Text style={styles.refreshButtonText}>Refresh</Text>
@@ -111,67 +112,35 @@ export default function EmployeesInactiveScreen({ navigation }: any) {
         contentContainerStyle={styles.contentContainer}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
+        <Text style={styles.count}>{filtered.length} employee{filtered.length === 1 ? '' : 's'}</Text>
         {filtered.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>👥</Text>
-            <Text style={styles.emptyText}>No inactive employees found</Text>
-          </View>
+          <EmptyState icon="👥" title="No inactive employees found" message={searchQuery ? 'Try a different search.' : undefined} />
         ) : (
           filtered.map((e) => (
-            <View key={e._id} style={styles.card}>
-              <View style={styles.cardHeader}>
-                <Text style={styles.employeeName}>{e.name}</Text>
-                <View style={[styles.roleBadge, { backgroundColor: colors.textSecondary + '20' }]}>
-                  <Text style={[styles.roleBadgeText, { color: colors.textSecondary }]}>{e.role}</Text>
-                </View>
-              </View>
-              <View style={styles.cardBody}>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Email:</Text>
-                  <Text style={styles.infoValue}>{e.email}</Text>
-                </View>
-                {(e.mobile || e.phone) ? (
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Mobile:</Text>
-                    <Text style={styles.infoValue}>{e.mobile || e.phone}</Text>
-                  </View>
-                ) : null}
-                {e.department ? (
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Department:</Text>
-                    <Text style={styles.infoValue}>{e.department}</Text>
-                  </View>
-                ) : null}
-                {e.zone ? (
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Zone:</Text>
-                    <Text style={styles.infoValue}>{e.zone}</Text>
-                  </View>
-                ) : null}
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Reason:</Text>
-                  <Text style={styles.infoValue}>{reasonLabel(e.inactiveReason)}</Text>
-                </View>
-              </View>
-              <View style={styles.actions}>
+            <Card key={e._id}>
+              <CardTitle title={e.name} badge={e.role} tone="neutral" />
+              <InfoRow label="Email" value={e.email} />
+              <InfoRow label="Mobile" value={e.mobile || e.phone} phone />
+              <InfoRow label="Department" value={e.department} />
+              <InfoRow label="Zone" value={e.zone} />
+              <InfoRow label="Reason" value={reasonLabel(e.inactiveReason)} />
+              <ActionRow>
                 <TouchableOpacity
-                  style={styles.editButton}
+                  style={styles.btn}
                   onPress={() => navigation.navigate('EmployeeEdit', { id: e._id })}
                   disabled={busyId === e._id}
                 >
-                  <Text style={styles.editButtonText}>Edit</Text>
+                  <Text style={styles.btnText}>Edit</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.reactivateButton, busyId === e._id && styles.buttonDisabled]}
+                  style={[styles.btn, styles.btnPrimary, busyId === e._id && styles.buttonDisabled]}
                   onPress={() => reactivate(e._id, e.name)}
                   disabled={busyId === e._id}
                 >
-                  <Text style={styles.reactivateButtonText}>
-                    {busyId === e._id ? 'Working…' : 'Reactivate'}
-                  </Text>
+                  <Text style={styles.btnPrimaryText}>{busyId === e._id ? 'Working…' : 'Reactivate'}</Text>
                 </TouchableOpacity>
-              </View>
-            </View>
+              </ActionRow>
+            </Card>
           ))
         )}
       </ScrollView>
@@ -182,90 +151,37 @@ export default function EmployeesInactiveScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
-    padding: 16,
+    alignItems: 'center',
+    padding: 12,
     gap: 8,
     backgroundColor: colors.backgroundLight,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: '#EEF2F7',
   },
-  searchInput: {
-    flex: 1,
-    ...typography.body.medium,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 12,
-    color: colors.textPrimary,
-  },
+  searchInput: { flex: 1, marginBottom: 0 },
   refreshButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: colors.primary,
+    paddingHorizontal: 14,
+    minHeight: 48,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#DCE3EC',
+    backgroundColor: colors.backgroundLight,
     justifyContent: 'center',
   },
-  refreshButtonText: {
-    ...typography.label.medium,
-    color: colors.textLight,
-    fontWeight: '600',
-  },
+  refreshButtonText: { fontSize: 14, fontWeight: '600', color: colors.primaryDark },
   content: { flex: 1 },
   contentContainer: { padding: 16, paddingBottom: 32 },
-  emptyContainer: {
-    alignItems: 'center',
-    paddingVertical: 60,
-  },
-  emptyIcon: { fontSize: 64, marginBottom: 16 },
-  emptyText: { ...typography.heading.h3, color: colors.textSecondary },
-  card: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    marginBottom: 12,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  employeeName: { ...typography.heading.h3, color: colors.textPrimary, flex: 1 },
-  roleBadge: { borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
-  roleBadgeText: { ...typography.label.small },
-  cardBody: { gap: 8 },
-  infoRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  infoLabel: { ...typography.body.small, color: colors.textSecondary },
-  infoValue: { ...typography.body.medium, color: colors.textPrimary, flex: 1, textAlign: 'right' },
-  actions: {
-    marginTop: 14,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  editButton: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
+  count: { fontSize: 13, color: colors.textTertiary, marginBottom: 8 },
+  btn: {
     paddingHorizontal: 12,
     paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#DCE3EC',
     backgroundColor: colors.backgroundLight,
   },
-  editButtonText: {
-    ...typography.label.medium,
-    color: colors.textPrimary,
-  },
-  reactivateButton: {
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: colors.primary,
-  },
-  reactivateButtonText: {
-    ...typography.label.medium,
-    color: colors.textLight,
-  },
+  btnText: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
+  btnPrimary: { backgroundColor: colors.primaryDark, borderColor: colors.primaryDark },
+  btnPrimaryText: { fontSize: 13, fontWeight: '700', color: colors.primaryForeground },
   buttonDisabled: { opacity: 0.6 },
 });

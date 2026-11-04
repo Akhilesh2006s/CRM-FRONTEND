@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Alert } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
-import ScreenShell, { PageSection } from '../../ui/ScreenShell';
-import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
+import ScreenShell from '../../ui/ScreenShell';
+import { Card } from '../../ui/Kit';
 import { apiService } from '../../services/api';
+import { StatGrid } from '../Reports/ReportKit';
 
 export default function TrainingDashboardScreen({ navigation }: any) {
   const [stats, setStats] = useState<any>({});
@@ -42,63 +43,42 @@ export default function TrainingDashboardScreen({ navigation }: any) {
     loadData();
   };
 
+  const links = [
+    { title: 'View All Trainings', subtitle: 'See complete training list', route: 'TrainingList', icon: 'list-outline' as const },
+    { title: 'Assign New Training', subtitle: 'Schedule a new training', route: 'TrainingAssign', icon: 'add-circle-outline' as const },
+  ];
+
   return (
-    <ScreenShell
-      title="Training Dashboard"
-      loading={loading && !refreshing}
-      refreshing={refreshing}
-      onRefresh={onRefresh}
-    >
-<ScrollView style={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{stats.total || 0}</Text>
-            <Text style={styles.statLabel}>Total Trainings</Text>
+    <ScreenShell title="Training Dashboard" loading={loading && !refreshing} refreshing={refreshing} onRefresh={onRefresh}>
+      <StatGrid
+        items={[
+          { label: 'Total Trainings', value: stats.total || 0, tone: 'slate' },
+          { label: 'Scheduled', value: stats.scheduled || 0, tone: 'blue' },
+          { label: 'Completed', value: stats.completed || 0, tone: 'green' },
+          { label: 'Cancelled', value: stats.cancelled || 0, tone: 'red' },
+        ]}
+      />
+      {links.map((l) => (
+        <Card key={l.route} onPress={() => navigation.navigate(l.route)}>
+          <View style={styles.row}>
+            <View style={styles.iconBox}>
+              <Ionicons name={l.icon} size={22} color={colors.primaryDark} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.title}>{l.title}</Text>
+              <Text style={styles.subtitle}>{l.subtitle}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           </View>
-          <View style={[styles.statCard, { backgroundColor: colors.info + '20' }]}>
-            <Text style={[styles.statValue, { color: colors.info }]}>{stats.scheduled || 0}</Text>
-            <Text style={styles.statLabel}>Scheduled</Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: colors.success + '20' }]}>
-            <Text style={[styles.statValue, { color: colors.success }]}>{stats.completed || 0}</Text>
-            <Text style={styles.statLabel}>Completed</Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: (colors.error || '#ef4444') + '20' }]}>
-            <Text style={[styles.statValue, { color: colors.error || '#ef4444' }]}>{stats.cancelled || 0}</Text>
-            <Text style={styles.statLabel}>Cancelled</Text>
-          </View>
-        </View>
-        <TouchableOpacity style={styles.actionCard} onPress={() => navigation.navigate('TrainingList')}>
-          <Text style={styles.actionCardTitle}>View All Trainings</Text>
-          <Text style={styles.actionCardSubtitle}>See complete training list</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.actionCard} onPress={() => navigation.navigate('TrainingAssign')}>
-          <Text style={styles.actionCardTitle}>Assign New Training</Text>
-          <Text style={styles.actionCardSubtitle}>Schedule a new training</Text>
-        </TouchableOpacity>
-      </ScrollView>
+        </Card>
+      ))}
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
-  loadingText: { marginTop: 12, ...typography.body.medium, color: colors.textSecondary },
-  header: { paddingHorizontal: 20, paddingTop: 50, paddingBottom: 20, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
-  headerContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  backButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  backIcon: { fontSize: 24, color: colors.textLight, fontWeight: 'bold' },
-  headerTitle: { ...typography.heading.h1, color: colors.textLight, flex: 1, textAlign: 'center' },
-  placeholder: { width: 40 },
-  content: { flex: 1, padding: 16 },
-  statsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 20 },
-  statCard: { flex: 1, minWidth: '45%', backgroundColor: colors.backgroundLight, borderRadius: 16, padding: 20, alignItems: 'center' },
-  statValue: { ...typography.heading.h1, color: colors.primary, marginBottom: 8 },
-  statLabel: { ...typography.body.medium, color: colors.textSecondary },
-  actionCard: { backgroundColor: colors.primary, borderRadius: 16, padding: 20, marginBottom: 12 },
-  actionCardTitle: { ...typography.heading.h3, color: colors.textLight, marginBottom: 6 },
-  actionCardSubtitle: { ...typography.body.medium, color: colors.textLight, opacity: 0.9 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  iconBox: { width: 44, height: 44, borderRadius: 12, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
+  title: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
+  subtitle: { fontSize: 13, color: colors.textTertiary, marginTop: 2 },
 });
-
-

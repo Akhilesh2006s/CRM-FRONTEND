@@ -2,7 +2,8 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { View, Text, FlatList, StyleSheet, ActivityIndicator, TextInput, RefreshControl } from 'react-native';
 import { apiService } from '../../services/api';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
-import { WebInput, WebButton, DataTable } from '../../ui/WebPrimitives';
+import { WebInput } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, EmptyState, toneFor } from '../../ui/Kit';
 import { colors } from '../../theme/colors';
 
 type VendorDC = {
@@ -49,44 +50,31 @@ export default function PartnerDCsScreen() {
   }, [dcs, search]);
 
   return (
-    <ScreenShell title="Partner D Cs"
+    <ScreenShell title="My DCs"
       loading={loading}
       refreshing={refreshing}
       onRefresh={() => { setRefreshing(true); load(); }}>
-      <PageSection title="Partner D Cs">
-<Text style={styles.title}>My DCs</Text>
-      <WebInput
-        style={styles.search}
-        placeholder="Search school, code, status..."
-        value={search}
-        onChangeText={setSearch}
-      />
-      <FlatList
-        data={filtered}
-        keyExtractor={(i) => i._id}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
-        ListEmptyComponent={<Text style={styles.empty}>No DCs found</Text>}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <Text style={styles.name}>{item.school?.name}</Text>
-            <Text style={styles.meta}>{item.school?.code} · {item.school?.zone}</Text>
-            <Text style={styles.meta}>Status: {item.status} · Qty: {item.totalQuantity}</Text>
-            <Text style={styles.meta}>₹{item.totalPrice?.toLocaleString?.() ?? item.totalPrice}</Text>
-          </View>
-        )}
-      />
-      </PageSection>
+      <WebInput placeholder="Search school, code, status..." value={search} onChangeText={setSearch} />
+      {filtered.length === 0 ? (
+        <EmptyState icon="📦" title="No DCs found" />
+      ) : (
+        filtered.map((item) => (
+          <Card key={item._id}>
+            <CardTitle
+              title={item.school?.name || '—'}
+              subtitle={[item.school?.code, item.school?.zone].filter(Boolean).join(' · ') || undefined}
+              badge={item.status || undefined}
+              tone={toneFor(item.status)}
+            />
+            <InfoRow label="Quantity" value={String(item.totalQuantity ?? '')} />
+            <InfoRow label="Amount" value={`₹${item.totalPrice?.toLocaleString?.() ?? item.totalPrice}`} bold />
+          </Card>
+        ))
+      )}
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, backgroundColor: colors.background },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  title: { fontSize: 22, fontWeight: '700', marginBottom: 8 },
-  search: { borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, marginBottom: 12 },
-  card: { backgroundColor: colors.backgroundLight, padding: 14, borderRadius: 12, marginBottom: 8 },
-  name: { fontWeight: '600', fontSize: 16 },
-  meta: { color: colors.textSecondary, marginTop: 4 },
   empty: { textAlign: 'center', marginTop: 32, color: colors.textSecondary },
 });

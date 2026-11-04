@@ -430,18 +430,18 @@ export default function SettingsRolesScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  help: { fontSize: 13, color: colors.textSecondary, lineHeight: 18, marginBottom: spacing.md },
+  help: { fontSize: 13, color: colors.accentForeground, backgroundColor: colors.accent, borderRadius: 12, padding: 12, overflow: 'hidden', lineHeight: 18, marginBottom: spacing.md },
   panel: {
     backgroundColor: colors.backgroundLight,
-    borderRadius: radii.lg,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#EEF2F7',
     padding: spacing.md,
     marginBottom: spacing.md,
   },
   empty: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', paddingVertical: spacing.lg },
   roleHead: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: spacing.sm, gap: 8 },
-  roleName: { fontSize: 18, fontWeight: '600', color: colors.textPrimary },
+  roleName: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
   roleSlug: { fontSize: 12, color: colors.textTertiary, marginTop: 2 },
   deleteBtn: {
     flexDirection: 'row',
@@ -456,15 +456,15 @@ const styles = StyleSheet.create({
   deleteText: { color: colors.error, fontWeight: '600', fontSize: 13 },
   group: {
     backgroundColor: colors.backgroundLight,
-    borderRadius: radii.lg,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#EEF2F7',
     marginBottom: spacing.sm,
     overflow: 'hidden',
   },
   groupHead: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12 },
   groupTitle: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
-  groupCount: { fontSize: 12, color: colors.textTertiary, marginTop: 1 },
+  groupCount: { fontSize: 13, color: colors.textTertiary, marginTop: 1 },
   groupAction: { fontSize: 13, fontWeight: '600', color: colors.primaryDark },
   permRow: {
     flexDirection: 'row',
@@ -486,11 +486,11 @@ const styles = StyleSheet.create({
   denied: { alignItems: 'center', paddingVertical: spacing.xl, gap: 12 },
   deniedText: { fontSize: 15, color: colors.textSecondary },
   overlay: { flex: 1, backgroundColor: 'rgba(15,23,42,0.45)', justifyContent: 'center', padding: spacing.md },
-  dialog: { backgroundColor: colors.backgroundLight, borderRadius: radii.lg, padding: spacing.md },
+  dialog: { backgroundColor: colors.backgroundLight, borderRadius: 14, padding: spacing.md },
   dialogTitle: { fontSize: 17, fontWeight: '600', color: colors.textPrimary },
   dialogDesc: { fontSize: 13, color: colors.textSecondary, marginTop: 4, marginBottom: 12 },
   clearClone: { fontSize: 13, color: colors.primaryDark, marginTop: -6, marginBottom: 8 },
-  warn: { fontSize: 12, color: colors.warning, marginBottom: 8 },
+  warn: { fontSize: 13, color: colors.warning, marginBottom: 8 },
   errorText: { color: colors.error, fontSize: 13, marginBottom: 4 },
   actions: { flexDirection: 'row', gap: 10, marginTop: 12 },
 });

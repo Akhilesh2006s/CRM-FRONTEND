@@ -20,6 +20,7 @@ import { apiService, getApiUrl } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState } from '../../ui/Kit';
 import MessageBanner from '../../components/MessageBanner';
 import { colors, radii, spacing } from '../../theme/colors';
 
@@ -213,15 +214,6 @@ function belongsToAssigned(order: DcOrder, assignedIds: string[]) {
   return assignedIds.includes(requestedById) || assignedIds.includes(assignedToId) || assignedIds.includes(employeeId);
 }
 
-function InfoRow({ label, value }: { label: string; value?: string | number | null }) {
-  return (
-    <View style={styles.infoRow}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value === 0 ? '0' : value ? String(value) : '-'}</Text>
-    </View>
-  );
-}
-
 function ReadField({ label, value }: { label: string; value?: string | number | null }) {
   return (
     <View style={styles.readField}>
@@ -272,6 +264,8 @@ export default function ClientsClosedSalesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [draftFilters, setDraftFilters] = useState<Filters>(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState<Filters>(EMPTY_FILTERS);
+  const [query, setQuery] = useState('');
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [banner, setBanner] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [successToast, setSuccessToast] = useState<{ title: string; body: string } | null>(null);
 
@@ -379,9 +373,22 @@ export default function ClientsClosedSalesScreen() {
         to.setHours(23, 59, 59, 999);
         if (created && new Date(created) > to) return false;
       }
+      const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      if (words.length) {
+        const hay = [
+          item.pendingEdit?.school_name, item.school_name, item.schoolName, item.school_code,
+          item.pendingEdit?.contact_mobile, item.contact_mobile, item.pendingEdit?.contact_person,
+          item.pendingEdit?.zone, item.zone, townOf(item), executiveName(item), productsDisplay(item),
+          item.pendingEdit?.school_type, item.school_type,
+        ]
+          .map((v) => String(v ?? ''))
+          .join(' ')
+          .toLowerCase();
+        if (!words.every((w) => hay.includes(w))) return false;
+      }
       return true;
     });
-  }, [items, appliedFilters]);
+  }, [items, appliedFilters, query]);
 
   const zoneOptions = useMemo(() => {
     const set = new Set<string>();
@@ -536,87 +543,81 @@ export default function ClientsClosedSalesScreen() {
         <MessageBanner type={banner.type} message={banner.message} onDismiss={() => setBanner(null)} />
       ) : null}
 
-      <PageSection title="Search">
-        <WebInput
-          placeholder="By School Name"
-          value={draftFilters.schoolName}
-          onChangeText={(schoolName) => setDraftFilters((f) => ({ ...f, schoolName }))}
-        />
-        <WebInput
-          placeholder="By Contact Mobile No"
-          value={draftFilters.mobile}
-          onChangeText={(mobile) => setDraftFilters((f) => ({ ...f, mobile }))}
-          keyboardType="phone-pad"
-        />
-        <DateFilter
-          value={draftFilters.fromDate}
-          onChange={(fromDate) => setDraftFilters((f) => ({ ...f, fromDate }))}
-          placeholder="From date"
-        />
-        <DateFilter
-          value={draftFilters.toDate}
-          onChange={(toDate) => setDraftFilters((f) => ({ ...f, toDate }))}
-          placeholder="To date"
-        />
-        <WebSelect
-          value={draftFilters.zone}
-          onValueChange={(zone) => setDraftFilters((f) => ({ ...f, zone }))}
-          items={zoneOptions}
-          placeholder="Select Zone"
-        />
-        <WebSelect
-          value={draftFilters.executive}
-          onValueChange={(executive) => setDraftFilters((f) => ({ ...f, executive }))}
-          items={executives}
-          placeholder="Select Executive"
-        />
-        <WebInput
-          placeholder="By Town"
-          value={draftFilters.town}
-          onChangeText={(town) => setDraftFilters((f) => ({ ...f, town }))}
-        />
-        <WebButton title="Search" onPress={() => setAppliedFilters(draftFilters)} />
-      </PageSection>
+      <WebInput
+        placeholder="Search school, code, mobile, zone, town, executive…"
+        value={query}
+        onChangeText={setQuery}
+      />
+      <TouchableOpacity onPress={() => setShowMoreFilters((v) => !v)} style={styles.moreToggle}>
+        <Text style={styles.moreToggleText}>{showMoreFilters ? 'Hide filters ⌃' : 'More filters ⌄'}</Text>
+      </TouchableOpacity>
+      {showMoreFilters ? (
+        <PageSection title="Filters">
+          <WebLabel>From / To date</WebLabel>
+          <DateFilter
+            value={draftFilters.fromDate}
+            onChange={(fromDate) => setDraftFilters((f) => ({ ...f, fromDate }))}
+            placeholder="From date"
+          />
+          <DateFilter
+            value={draftFilters.toDate}
+            onChange={(toDate) => setDraftFilters((f) => ({ ...f, toDate }))}
+            placeholder="To date"
+          />
+          <WebSelect
+            label="Zone"
+            value={draftFilters.zone}
+            onValueChange={(zone) => setDraftFilters((f) => ({ ...f, zone }))}
+            items={zoneOptions}
+            placeholder="Select Zone"
+          />
+          <WebSelect
+            label="Executive"
+            value={draftFilters.executive}
+            onValueChange={(executive) => setDraftFilters((f) => ({ ...f, executive }))}
+            items={executives}
+            placeholder="Select Executive"
+          />
+          <WebButton title="Apply filters" onPress={() => setAppliedFilters(draftFilters)} />
+        </PageSection>
+      ) : null}
 
       {listLoading ? (
-        <PageSection title="PO Edit Requests">
-          <Text style={styles.empty}>Loading...</Text>
-        </PageSection>
+        <View style={styles.modalLoading}>
+          <ActivityIndicator color={colors.primary} />
+          <Text style={styles.emptyHint}>Loading...</Text>
+        </View>
       ) : filteredItems.length === 0 ? (
-        <PageSection title="PO Edit Requests">
-          <Text style={styles.empty}>No pending PO edit requests found.</Text>
-          <Text style={styles.emptyHint}>
-            Executives can submit PO edits from their dashboard. Field changes and edited PO PDFs both appear here.
-          </Text>
-        </PageSection>
+        <EmptyState
+          icon="📝"
+          title="No pending PO edit requests found."
+          message="Field changes and edited PO PDFs from executives appear here."
+        />
       ) : (
         filteredItems.map((item, index) => (
-          <View key={item._id} style={styles.card}>
-            <View style={styles.cardTop}>
-              <View style={styles.titleWrap}>
-                <Text style={styles.serial}>S.No {index + 1}</Text>
-                <Text style={styles.schoolName}>{item.pendingEdit?.school_name || item.school_name || item.schoolName || '-'}</Text>
-              </View>
-              <View style={styles.statusBadge}>
-                <Text style={styles.statusBadgeText}>Edit Pending</Text>
-              </View>
-            </View>
+          <Card key={item._id}>
+            <CardTitle
+              title={item.pendingEdit?.school_name || item.school_name || item.schoolName || '-'}
+              subtitle={`S.No ${index + 1}${item.school_code ? ` · ${item.school_code}` : ''}`}
+              badge="Edit Pending"
+              tone="warning"
+            />
             <InfoRow label="Created On" value={formatDate(item.created_at || item.createdAt)} />
             <InfoRow label="School Type" value={item.pendingEdit?.school_type || item.school_type} />
             <InfoRow label="Zone" value={item.pendingEdit?.zone || item.zone} />
             <InfoRow label="Town" value={townOf(item)} />
-            <InfoRow label="School Code" value={item.school_code} />
             <InfoRow label="Executive" value={executiveName(item)} />
-            <InfoRow label="Mobile" value={item.pendingEdit?.contact_mobile || item.contact_mobile} />
+            <InfoRow label="Mobile" value={item.pendingEdit?.contact_mobile || item.contact_mobile} phone />
             <InfoRow label="Products" value={productsDisplay(item)} />
             {hasPendingPoChange(item) || item.pendingEdit?.pod_proof_url ? (
               <InfoRow label="Edited PO" value="PDF attached" />
             ) : null}
-            <TouchableOpacity style={styles.takeAction} onPress={() => openTakeAction(item)} activeOpacity={0.85}>
-              <Text style={styles.takeActionIcon}>✎</Text>
-              <Text style={styles.takeActionText}>Take Action</Text>
-            </TouchableOpacity>
-          </View>
+            <ActionRow>
+              <TouchableOpacity style={styles.takeAction} onPress={() => openTakeAction(item)} activeOpacity={0.85}>
+                <Text style={styles.takeActionText}>Take Action</Text>
+              </TouchableOpacity>
+            </ActionRow>
+          </Card>
         ))
       )}
       </ScrollView>
@@ -834,20 +835,16 @@ const styles = StyleSheet.create({
   infoLabel: { width: 110, fontSize: 13, color: colors.textSecondary, paddingTop: 1 },
   infoValue: { flex: 1, fontSize: 14, color: colors.textPrimary, lineHeight: 20 },
   takeAction: {
-    marginTop: 10,
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
+    flexGrow: 1,
     alignItems: 'center',
-    gap: 6,
-    borderWidth: 1,
-    borderColor: '#FDBA74',
-    backgroundColor: '#fff',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: radii.md,
+    backgroundColor: colors.primaryDark,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
   },
-  takeActionIcon: { fontSize: 14, color: '#C2410C' },
-  takeActionText: { fontSize: 14, fontWeight: '600', color: '#9A3412' },
+  takeActionText: { fontSize: 14, fontWeight: '700', color: colors.primaryForeground },
+  moreToggle: { alignSelf: 'flex-end', paddingVertical: 4, marginTop: -6, marginBottom: 8 },
+  moreToggleText: { fontSize: 13, fontWeight: '600', color: colors.primaryDark },
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.45)',
@@ -877,9 +874,9 @@ const styles = StyleSheet.create({
   modalScroll: { flex: 1 },
   modalScrollContent: { padding: spacing.md, paddingBottom: 24 },
   poBox: {
-    backgroundColor: '#FFF7ED',
+    backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: '#FDBA74',
+    borderColor: colors.border,
     borderRadius: radii.lg,
     padding: spacing.md,
     marginBottom: spacing.md,
@@ -890,16 +887,16 @@ const styles = StyleSheet.create({
   pdfBtn: {
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: '#fff',
-    borderRadius: radii.md,
+    backgroundColor: colors.backgroundLight,
+    borderRadius: 10,
     paddingVertical: 10,
     paddingHorizontal: 12,
     alignItems: 'center',
   },
-  pdfBtnEdited: { borderColor: '#F97316', backgroundColor: '#FFEDD5' },
+  pdfBtnEdited: { borderColor: colors.primaryDark, backgroundColor: colors.accent },
   pdfBtnDisabled: { opacity: 0.55 },
   pdfBtnText: { fontSize: 14, fontWeight: '600', color: colors.primary },
-  pdfBtnEditedText: { color: '#9A3412' },
+  pdfBtnEditedText: { color: colors.primaryDark },
   poReason: { marginTop: 10, fontSize: 13, color: colors.textSecondary, lineHeight: 18 },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, marginTop: 8, marginBottom: 10 },
   savedHint: { fontSize: 12, color: colors.success, marginBottom: 8 },

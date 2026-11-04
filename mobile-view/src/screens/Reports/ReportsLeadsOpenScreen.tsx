@@ -1,20 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  RefreshControl,
-  Alert,
-  TouchableOpacity,
-  ActivityIndicator,
-  Platform,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
-import ScreenShell from '../../ui/ScreenShell';
-import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
+import { Card, CardTitle, Badge, InfoRow, EmptyState, SectionTitle, toneFor, type Tone } from '../../ui/Kit';
+import { StatGrid, rk, matchesWords } from './ReportKit';
 import { apiService } from '../../services/api';
 import { exportLeadsReport } from '../../utils/exportLeadsReport';
 
@@ -40,44 +31,6 @@ type Employee = { _id: string; name?: string };
 
 const CHART_COLORS = ['#3b82f6', '#ef4444', '#f97316', '#10b981', '#8b5cf6'];
 
-const TABLE_COLUMNS = [
-  { key: 'sno', label: 'S.No', width: 56 },
-  { key: 'createdOn', label: 'Created On', width: 190 },
-  { key: 'zone', label: 'Zone', width: 110 },
-  { key: 'assignedTo', label: 'Assigned To', width: 130 },
-  { key: 'priority', label: 'Priority', width: 120 },
-  { key: 'location', label: 'Location', width: 220 },
-  { key: 'schoolName', label: 'School Name', width: 170 },
-  { key: 'contactPerson', label: 'Contact Person', width: 150 },
-  { key: 'decisionMaker', label: 'Decision Maker', width: 140 },
-  { key: 'mobile', label: 'Mobile', width: 130 },
-  { key: 'followUpOn', label: 'Follow-up On', width: 190 },
-  { key: 'schoolStrength', label: 'School Strength', width: 120 },
-  { key: 'status', label: 'Status', width: 110 },
-] as const;
-
-function TableCell({
-  width,
-  children,
-  numberOfLines,
-}: {
-  width: number;
-  children: React.ReactNode;
-  numberOfLines?: number;
-}) {
-  return (
-    <View style={[styles.tableCell, { width }]}>
-      {typeof children === 'string' || typeof children === 'number' ? (
-        <Text style={styles.tableCellText} numberOfLines={numberOfLines ?? 2}>
-          {children}
-        </Text>
-      ) : (
-        children
-      )}
-    </View>
-  );
-}
-
 function getAssignedTo(lead: Lead) {
   return lead.managed_by?.name || lead.assigned_by?.name || lead.createdBy?.name || 'Not Assigned';
 }
@@ -92,28 +45,6 @@ function normalizePriority(priority?: string) {
   return priority.replace(/\s*Lead$/i, '').trim();
 }
 
-function MetricCard({
-  label,
-  value,
-  tint,
-  icon,
-}: {
-  label: string;
-  value: number;
-  tint: string;
-  icon: keyof typeof Ionicons.glyphMap;
-}) {
-  return (
-    <View style={[styles.metricCard, { backgroundColor: tint }]}>
-      <View>
-        <Text style={styles.metricLabel}>{label}</Text>
-        <Text style={styles.metricValue}>{value}</Text>
-      </View>
-      <Ionicons name={icon} size={28} color={colors.textPrimary} />
-    </View>
-  );
-}
-
 function BarChartCard({
   title,
   icon,
@@ -126,10 +57,7 @@ function BarChartCard({
   const max = Math.max(...data.map((d) => d.value), 1);
   return (
     <View style={styles.chartCard}>
-      <View style={styles.chartTitleRow}>
-        <Ionicons name={icon} size={18} color={colors.primary} />
-        <Text style={styles.chartTitle}>{title}</Text>
-      </View>
+      <Text style={styles.chartTitle}>{title}</Text>
       {data.length === 0 ? (
         <Text style={styles.chartEmpty}>No data</Text>
       ) : (
@@ -161,10 +89,7 @@ function PriorityChart({ data }: { data: { name: string; value: number; color: s
   const total = data.reduce((sum, item) => sum + item.value, 0) || 1;
   return (
     <View style={styles.chartCard}>
-      <View style={styles.chartTitleRow}>
-        <Ionicons name="trending-up-outline" size={18} color="#f97316" />
-        <Text style={styles.chartTitle}>Leads by Priority</Text>
-      </View>
+      <Text style={styles.chartTitle}>Leads by Priority</Text>
       {data.map((item) => (
         <View key={item.name} style={styles.priorityRow}>
           <View style={[styles.priorityDot, { backgroundColor: item.color }]} />
@@ -248,7 +173,20 @@ export default function ReportsLeadsOpenScreen() {
     }
     if (contactMobile) filtered = filtered.filter((l) => l.contact_mobile?.includes(contactMobile));
     if (schoolName) {
-      filtered = filtered.filter((l) => l.school_name?.toLowerCase().includes(schoolName.toLowerCase()));
+      filtered = filtered.filter((l) =>
+        matchesWords(schoolName, [
+          l.school_name,
+          l.location,
+          l.contact_person,
+          l.contact_mobile,
+          l.zone,
+          l.status,
+          normalizePriority(l.priority),
+          getAssignedTo(l),
+          formatDate(l.createdAt),
+          l.follow_up_date ? formatDate(l.follow_up_date) : '',
+        ])
+      );
     }
     if (employee) {
       filtered = filtered.filter(
@@ -356,17 +294,9 @@ export default function ReportsLeadsOpenScreen() {
     }
   };
 
-  const priorityBadge = (value?: string) => {
+  const priorityTone = (value?: string): Tone => {
     const p = normalizePriority(value);
-    const style =
-      p === 'Hot'
-        ? styles.badgeHot
-        : p === 'Warm'
-          ? styles.badgeWarm
-          : styles.badgeCold;
-    return (
-      <Text style={[styles.badge, style]}>{p ? `${p} Lead` : '-'}</Text>
-    );
+    return p === 'Hot' ? 'error' : p === 'Warm' ? 'warning' : 'info';
   };
 
   return (
@@ -393,70 +323,50 @@ export default function ReportsLeadsOpenScreen() {
         </TouchableOpacity>
       }
     >
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      >
-        <WebButton
-          title={exporting ? 'Exporting…' : 'Export to Excel'}
-          onPress={handleExport}
-          loading={exporting}
-        />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.metricsRow}>
-          <MetricCard label="Total Leads" value={analytics.summary.total} tint="#dbeafe" icon="trending-up-outline" />
-          <MetricCard label="Hot Leads" value={analytics.summary.hot} tint="#fee2e2" icon="flame-outline" />
-          <MetricCard label="Warm Leads" value={analytics.summary.warm} tint="#ffedd5" icon="thermometer-outline" />
-          <MetricCard label="Zones" value={analytics.summary.zones} tint="#ede9fe" icon="location-outline" />
-          <MetricCard label="Employees" value={analytics.summary.employees} tint="#dcfce7" icon="people-outline" />
-        </ScrollView>
+      <StatGrid
+        items={[
+          { label: 'Total Leads', value: analytics.summary.total, tone: 'blue' },
+          { label: 'Hot Leads', value: analytics.summary.hot, tone: 'red' },
+          { label: 'Warm Leads', value: analytics.summary.warm, tone: 'amber' },
+          { label: 'Zones', value: analytics.summary.zones, tone: 'purple' },
+          { label: 'Employees', value: analytics.summary.employees, tone: 'green' },
+        ]}
+      />
 
-        <BarChartCard title="Leads by Zone" icon="location-outline" data={analytics.leadsByZone} />
-        <PriorityChart data={analytics.leadsByPriority} />
-        <BarChartCard title="Leads by Employee" icon="people-outline" data={analytics.leadsByEmployee} />
+      <BarChartCard title="Leads by Zone" icon="location-outline" data={analytics.leadsByZone} />
+      <PriorityChart data={analytics.leadsByPriority} />
+      <BarChartCard title="Leads by Employee" icon="people-outline" data={analytics.leadsByEmployee} />
 
-        <View style={styles.chartCard}>
-          <View style={styles.chartTitleRow}>
-            <Ionicons name="calendar-outline" size={18} color="#8b5cf6" />
-            <Text style={styles.chartTitle}>Leads Created Over Time (Last 30 Days)</Text>
+      <View style={styles.chartCard}>
+        <Text style={styles.chartTitle}>Leads Created (Last 30 Days)</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={styles.timelineRow}>
+            {analytics.last30Days.map((day) => (
+              <View key={day.label} style={styles.timelineItem}>
+                <View style={[styles.timelineBar, { height: Math.max(day.count * 18, 4) }]} />
+                <Text style={styles.timelineCount}>{day.count || ''}</Text>
+                <Text style={styles.timelineLabel}>{day.label}</Text>
+              </View>
+            ))}
           </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={styles.timelineRow}>
-              {analytics.last30Days.map((day) => (
-                <View key={day.label} style={styles.timelineItem}>
-                  <View style={[styles.timelineBar, { height: Math.max(day.count * 18, 4) }]} />
-                  <Text style={styles.timelineCount}>{day.count || ''}</Text>
-                  <Text style={styles.timelineLabel}>{day.label}</Text>
-                </View>
-              ))}
-            </View>
-          </ScrollView>
-        </View>
+        </ScrollView>
+      </View>
 
-        <View style={styles.filterCard}>
-          <View style={styles.filterGrid}>
+      <PageSection title="Filters">
+        <WebInput value={schoolName} onChangeText={setSchoolName} placeholder="Search school, contact, mobile, location…" />
+        <View style={rk.row2}>
+          <View style={rk.col}>
             <WebSelect
-              label="Select Zone"
+              label="Zone"
               value={zone}
               onValueChange={setZone}
               placeholder="All Zones"
               items={[{ label: 'All Zones', value: '' }, ...zones.map((z) => ({ label: z, value: z }))]}
             />
-            <WebLabel>From Date</WebLabel>
-            <DateField placeholder="From Date" value={fromDate} onChange={setFromDate} />
+          </View>
+          <View style={rk.col}>
             <WebSelect
-              label="Select Employee"
-              value={employee}
-              onValueChange={setEmployee}
-              placeholder="All Employees"
-              items={[
-                { label: 'All Employees', value: '' },
-                ...employees.map((e) => ({ label: e.name || 'Unknown', value: e._id })),
-              ]}
-            />
-            <WebLabel>To Date</WebLabel>
-            <DateField placeholder="To Date" value={toDate} onChange={setToDate} />
-            <WebSelect
-              label="Select Priority"
+              label="Priority"
               value={priority}
               onValueChange={setPriority}
               placeholder="All Priorities"
@@ -467,185 +377,94 @@ export default function ReportsLeadsOpenScreen() {
                 { label: 'Cold', value: 'Cold' },
               ]}
             />
-            <WebLabel>By Contact Mobile</WebLabel>
-            <WebInput
-              value={contactMobile}
-              onChangeText={setContactMobile}
-              placeholder="Enter mobile number"
-              keyboardType="phone-pad"
-            />
-            <WebLabel>By School Name</WebLabel>
-            <WebInput value={schoolName} onChangeText={setSchoolName} placeholder="Enter school name" />
           </View>
-          <WebButton title="Search" onPress={applyFilters} />
         </View>
+        <WebSelect
+          label="Employee"
+          value={employee}
+          onValueChange={setEmployee}
+          placeholder="All Employees"
+          items={[
+            { label: 'All Employees', value: '' },
+            ...employees.map((e) => ({ label: e.name || 'Unknown', value: e._id })),
+          ]}
+        />
+        <DateField placeholder="From Date" value={fromDate} onChange={setFromDate} />
+        <DateField placeholder="To Date" value={toDate} onChange={setToDate} />
+        <View style={rk.btnRow}>
+          <View style={rk.col}>
+            <WebButton title="Search" onPress={applyFilters} />
+          </View>
+          <View style={rk.col}>
+            <WebButton title={exporting ? 'Exporting…' : 'Export Excel'} variant="outline" onPress={handleExport} loading={exporting} />
+          </View>
+        </View>
+      </PageSection>
 
-        <View style={styles.tableCard}>
-          <Text style={styles.totalText}>
-            Total: <Text style={styles.totalCount}>{leads.length}</Text> leads found
-          </Text>
-          {leads.length === 0 ? (
-            <Text style={styles.emptyText}>No leads found.</Text>
-          ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator>
-              <View style={{ width: TABLE_COLUMNS.reduce((sum, col) => sum + col.width, 0) }}>
-                <View style={styles.tableHead}>
-                  {TABLE_COLUMNS.map((col) => (
-                    <View key={col.key} style={[styles.tableHeadCell, { width: col.width }]}>
-                      <Text style={styles.th}>{col.label}</Text>
+      <SectionTitle>{`Open leads (${leads.length})`}</SectionTitle>
+
+      {leads.length === 0 ? (
+        <EmptyState title="No leads found" />
+      ) : (
+        leads.map((lead, index) => {
+          const p = normalizePriority(lead.priority);
+          return (
+            <Card key={lead._id}>
+              <CardTitle
+                title={`${index + 1}. ${lead.school_name || '-'}`}
+                subtitle={lead.location || undefined}
+                badge={lead.status || '-'}
+                tone={toneFor(lead.status)}
+              />
+              {p ? (
+                <InfoRow
+                  label="Priority"
+                  value={
+                    <View style={{ flexDirection: 'row' }}>
+                      <Badge label={`${p} Lead`} tone={priorityTone(lead.priority)} />
                     </View>
-                  ))}
-                </View>
-                {leads.map((lead, index) => (
-                  <View key={lead._id} style={styles.tableRow}>
-                    <TableCell width={TABLE_COLUMNS[0].width}>{index + 1}</TableCell>
-                    <TableCell width={TABLE_COLUMNS[1].width}>{formatDate(lead.createdAt)}</TableCell>
-                    <TableCell width={TABLE_COLUMNS[2].width}>{lead.zone || '-'}</TableCell>
-                    <TableCell width={TABLE_COLUMNS[3].width}>{getAssignedTo(lead)}</TableCell>
-                    <TableCell width={TABLE_COLUMNS[4].width}>{priorityBadge(lead.priority)}</TableCell>
-                    <TableCell width={TABLE_COLUMNS[5].width} numberOfLines={2}>
-                      {lead.location || '-'}
-                    </TableCell>
-                    <TableCell width={TABLE_COLUMNS[6].width} numberOfLines={2}>
-                      {lead.school_name || '-'}
-                    </TableCell>
-                    <TableCell width={TABLE_COLUMNS[7].width} numberOfLines={2}>
-                      {lead.contact_person || '-'}
-                    </TableCell>
-                    <TableCell width={TABLE_COLUMNS[8].width}>-</TableCell>
-                    <TableCell width={TABLE_COLUMNS[9].width}>{lead.contact_mobile || '-'}</TableCell>
-                    <TableCell width={TABLE_COLUMNS[10].width}>
-                      {lead.follow_up_date ? formatDate(lead.follow_up_date) : '-'}
-                    </TableCell>
-                    <TableCell width={TABLE_COLUMNS[11].width}>{lead.strength ?? 0}</TableCell>
-                    <TableCell width={TABLE_COLUMNS[12].width}>{lead.status || '-'}</TableCell>
-                  </View>
-                ))}
-              </View>
-            </ScrollView>
-          )}
-        </View>
-      </ScrollView>
+                  }
+                />
+              ) : null}
+              <InfoRow label="Created on" value={formatDate(lead.createdAt)} />
+              <InfoRow label="Zone" value={lead.zone} />
+              <InfoRow label="Assigned to" value={getAssignedTo(lead)} />
+              <InfoRow label="Contact" value={lead.contact_person} />
+              <InfoRow label="Mobile" value={lead.contact_mobile} phone />
+              <InfoRow label="Follow-up on" value={lead.follow_up_date ? formatDate(lead.follow_up_date) : '-'} />
+              <InfoRow label="Strength" value={String(lead.strength ?? 0)} />
+            </Card>
+          );
+        })
+      )}
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 16, gap: 16, paddingBottom: 32 },
-  metricsRow: { gap: 12, paddingBottom: 4 },
-  metricCard: {
-    width: 150,
-    borderRadius: 14,
-    padding: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  metricLabel: { ...typography.body.small, color: colors.textSecondary, marginBottom: 4 },
-  metricValue: { fontSize: 24, fontWeight: '700', color: colors.textPrimary },
+  exportBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  exportText: { color: colors.primary, fontWeight: '600', fontSize: 13 },
   chartCard: {
     backgroundColor: colors.backgroundLight,
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.border,
-  },
-  chartTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
-  chartTitle: { ...typography.heading.h3, color: colors.textPrimary },
-  chartEmpty: { ...typography.body.medium, color: colors.textSecondary },
-  barRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  barLabel: { width: 90, ...typography.body.small, color: colors.textSecondary },
-  barTrack: {
-    flex: 1,
-    height: 22,
-    backgroundColor: colors.backgroundMuted,
-    borderRadius: 6,
-    overflow: 'hidden',
-  },
-  barFill: { height: '100%', borderRadius: 6 },
-  barValue: { width: 24, textAlign: 'right', ...typography.body.small, color: colors.textPrimary },
-  priorityRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  priorityDot: { width: 12, height: 12, borderRadius: 6 },
-  priorityText: { ...typography.body.medium, color: colors.textPrimary },
-  timelineRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, minHeight: 120 },
-  timelineItem: { alignItems: 'center', width: 42 },
-  timelineBar: { width: 16, backgroundColor: '#8b5cf6', borderRadius: 4, marginBottom: 4 },
-  timelineCount: { ...typography.label.small, color: colors.textSecondary, minHeight: 14 },
-  timelineLabel: { ...typography.label.small, color: colors.textMuted, marginTop: 2, fontSize: 9 },
-  filterCard: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 16,
+    borderColor: '#EEF2F7',
     padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: 8,
+    marginBottom: 12,
   },
-  filterGrid: { gap: 4 },
-  tableCard: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  totalText: { ...typography.body.medium, color: colors.textSecondary, marginBottom: 12 },
-  totalCount: { fontWeight: '700', color: colors.textPrimary },
-  emptyText: { textAlign: 'center', paddingVertical: 24, color: colors.textSecondary },
-  tableHead: {
-    flexDirection: 'row',
-    backgroundColor: colors.tableHeader,
-    borderRadius: 8,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  tableHeadCell: {
-    paddingHorizontal: 8,
-    justifyContent: 'center',
-  },
-  tableRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  th: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.textPrimary,
-  },
-  tableCell: {
-    paddingHorizontal: 8,
-    justifyContent: 'center',
-  },
-  tableCellText: {
-    fontSize: 12,
-    color: colors.textPrimary,
-  },
-  badge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
-    fontSize: 11,
-    overflow: 'hidden',
-  },
-  badgeHot: { backgroundColor: '#fee2e2', color: '#991b1b' },
-  badgeWarm: { backgroundColor: '#ffedd5', color: '#9a3412' },
-  badgeCold: { backgroundColor: '#f1f5f9', color: '#334155' },
-  exportBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-  },
-  exportText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.primary,
-  },
+  chartTitle: { fontSize: 15, fontWeight: '700', color: colors.textPrimary, marginBottom: 8 },
+  chartEmpty: { fontSize: 13, color: colors.textTertiary },
+  barRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
+  barLabel: { width: 96, fontSize: 13, color: colors.textSecondary },
+  barTrack: { flex: 1, height: 8, borderRadius: 999, backgroundColor: colors.backgroundMuted, overflow: 'hidden' },
+  barFill: { height: '100%', borderRadius: 999 },
+  barValue: { width: 32, textAlign: 'right', fontSize: 13, fontWeight: '700', color: colors.textPrimary },
+  priorityRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
+  priorityDot: { width: 10, height: 10, borderRadius: 5 },
+  priorityText: { fontSize: 14, color: colors.textPrimary },
+  timelineRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingTop: 8 },
+  timelineItem: { alignItems: 'center', width: 44 },
+  timelineBar: { width: 14, borderRadius: 4, backgroundColor: colors.primary },
+  timelineCount: { fontSize: 12, fontWeight: '700', color: colors.textPrimary, marginTop: 4 },
+  timelineLabel: { fontSize: 10, color: colors.textTertiary, textAlign: 'center' },
 });

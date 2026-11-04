@@ -1,15 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  RefreshControl,
-  Alert,
-} from 'react-native';
-import { colors, radii, spacing } from '../../theme/colors';
-import ScreenShell from '../../ui/ScreenShell';
-import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
+import { View, Alert } from 'react-native';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, EmptyState, SectionTitle, toneFor } from '../../ui/Kit';
+import { StatGrid, rk } from './ReportKit';
 import { apiService } from '../../services/api';
 import { downloadApiFile } from '../../utils/downloadChangeLogsReport';
 
@@ -164,152 +158,80 @@ export default function ReportsChangeLogsScreen() {
       refreshing={refreshing}
       onRefresh={onRefresh}
     >
-      <ScrollView
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        contentContainerStyle={styles.content}
-      >
-        <WebButton
-          title={exporting ? 'Exporting…' : 'Export to Excel'}
-          onPress={handleExport}
-          loading={exporting}
-        />
-        <View style={styles.kpiRow}>
-          <View style={[styles.kpiCard, styles.kpiBlue]}>
-            <Text style={styles.kpiLabel}>TOTAL ACTIVITIES</Text>
-            <Text style={styles.kpiValue}>{kpis.total}</Text>
-            <Text style={styles.kpiSub}>Recorded</Text>
+      <StatGrid
+        items={[
+          { label: 'Total activities', value: kpis.total, tone: 'blue' },
+          { label: 'Created', value: kpis.createCount, tone: 'green' },
+          { label: 'Updated', value: kpis.updateCount, tone: 'amber' },
+          { label: 'Top modified entity', value: kpis.topEntity, tone: 'slate' },
+        ]}
+      />
+
+      <PageSection title="Filters">
+        <WebInput value={search} onChangeText={setSearch} placeholder="Search summary or user…" />
+        <View style={rk.row2}>
+          <View style={rk.col}>
+            <WebSelect
+              label="Entity"
+              placeholder="All Entities"
+              value={entityType}
+              onValueChange={setEntityType}
+              items={[
+                { label: 'Lead', value: 'Lead' },
+                { label: 'DC', value: 'DC' },
+                { label: 'DcOrder', value: 'DcOrder' },
+                { label: 'Expense', value: 'Expense' },
+                { label: 'Product', value: 'Product' },
+                { label: 'Training', value: 'Training' },
+                { label: 'Service', value: 'Service' },
+                { label: 'ContactQuery', value: 'ContactQuery' },
+              ]}
+            />
           </View>
-          <View style={[styles.kpiCard, styles.kpiGreen]}>
-            <Text style={styles.kpiLabel}>CREATES VS UPDATES</Text>
-            <Text style={styles.kpiValueSmall}>
-              {kpis.createCount} Created • {kpis.updateCount} Updated
-            </Text>
-          </View>
-          <View style={[styles.kpiCard, styles.kpiOrange]}>
-            <Text style={styles.kpiLabel}>TOP MODIFIED ENTITY</Text>
-            <Text style={styles.kpiValue}>{kpis.topEntity}</Text>
+          <View style={rk.col}>
+            <WebSelect
+              label="Action"
+              placeholder="All Actions"
+              value={action}
+              onValueChange={setAction}
+              items={[
+                { label: 'Create', value: 'create' },
+                { label: 'Update', value: 'update' },
+                { label: 'Delete', value: 'delete' },
+              ]}
+            />
           </View>
         </View>
-
-        <View style={styles.filters}>
-          <WebLabel>Entity</WebLabel>
-          <WebSelect
-            placeholder="All Entities"
-            value={entityType}
-            onValueChange={setEntityType}
-            items={[
-              { label: 'Lead', value: 'Lead' },
-              { label: 'DC', value: 'DC' },
-              { label: 'DcOrder', value: 'DcOrder' },
-              { label: 'Expense', value: 'Expense' },
-              { label: 'Product', value: 'Product' },
-              { label: 'Training', value: 'Training' },
-              { label: 'Service', value: 'Service' },
-              { label: 'ContactQuery', value: 'ContactQuery' },
-            ]}
-          />
-          <WebLabel>Action</WebLabel>
-          <WebSelect
-            placeholder="All Actions"
-            value={action}
-            onValueChange={setAction}
-            items={[
-              { label: 'Create', value: 'create' },
-              { label: 'Update', value: 'update' },
-              { label: 'Delete', value: 'delete' },
-            ]}
-          />
-          <WebLabel>From</WebLabel>
-          <DateField placeholder="From" value={fromDate} onChange={setFromDate} />
-          <WebLabel>To</WebLabel>
-          <DateField placeholder="To" value={toDate} onChange={setToDate} />
-          <WebLabel>Search</WebLabel>
-          <WebInput value={search} onChangeText={setSearch} placeholder="Search summary or user..." />
-          <WebButton title="Search" onPress={loadLogs} />
+        <DateField placeholder="From" value={fromDate} onChange={setFromDate} />
+        <DateField placeholder="To" value={toDate} onChange={setToDate} />
+        <View style={rk.btnRow}>
+          <View style={rk.col}>
+            <WebButton title="Search" onPress={loadLogs} />
+          </View>
+          <View style={rk.col}>
+            <WebButton title={exporting ? 'Exporting…' : 'Export Excel'} variant="outline" onPress={handleExport} loading={exporting} />
+          </View>
         </View>
+      </PageSection>
 
-        <View style={styles.tableHeader}>
-          <Text style={styles.tableTitle}>Activity log</Text>
-          <Text style={styles.tableCount}>{kpis.total} records</Text>
-        </View>
+      <SectionTitle>{`Activity log (${kpis.total})`}</SectionTitle>
 
-        {rows.length === 0 && !loading ? (
-          <Text style={styles.empty}>No activity records found.</Text>
-        ) : (
-          rows.map((log) => {
-            const { title, detail } = splitSummary(log.summary);
-            return (
-              <View key={log._id} style={styles.row}>
-                <Text style={styles.when}>{formatWhen(log.createdAt)}</Text>
-                <View style={styles.badges}>
-                  <Text style={[styles.badge, styles.entityBadge]}>{log.entityType || '-'}</Text>
-                  <Text style={[styles.badge, styles.actionBadge]}>
-                    {capitalizeAction(log.action)}
-                  </Text>
-                </View>
-                <Text style={styles.summaryTitle}>{title}</Text>
-                {detail ? <Text style={styles.summarySub}>{detail}</Text> : null}
-                <Text style={styles.fields}>{(log.fields || []).join(' • ') || '-'}</Text>
-                <Text style={styles.performer}>{performedBy(log)}</Text>
-              </View>
-            );
-          })
-        )}
-      </ScrollView>
+      {rows.length === 0 && !loading ? (
+        <EmptyState title="No activity records found" />
+      ) : (
+        rows.map((log) => {
+          const { title, detail } = splitSummary(log.summary);
+          return (
+            <Card key={log._id}>
+              <CardTitle title={title} subtitle={formatWhen(log.createdAt)} badge={capitalizeAction(log.action)} tone={toneFor(log.action === 'delete' ? 'rejected' : log.action === 'create' ? 'completed' : 'pending')} />
+              <InfoRow label="Entity" value={log.entityType} />
+              <InfoRow label="Details" value={detail} />
+              <InfoRow label="Fields" value={(log.fields || []).join(' • ')} />
+              <InfoRow label="By" value={performedBy(log)} bold />
+            </Card>
+          );
+        })
+      )}
     </ScreenShell>
   );
 }
-
-const styles = StyleSheet.create({
-  content: { padding: spacing.md, gap: spacing.md },
-  kpiRow: { gap: spacing.sm },
-  kpiCard: { borderRadius: radii.lg, padding: spacing.md, borderWidth: 1 },
-  kpiBlue: { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' },
-  kpiGreen: { backgroundColor: '#ECFDF5', borderColor: '#BBF7D0' },
-  kpiOrange: { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' },
-  kpiLabel: { fontSize: 11, fontWeight: '700', color: colors.textSecondary },
-  kpiValue: { fontSize: 24, fontWeight: '700', color: colors.textPrimary, marginTop: 4 },
-  kpiValueSmall: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, marginTop: 4 },
-  kpiSub: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-  filters: {
-    gap: spacing.xs,
-    backgroundColor: colors.backgroundLight,
-    padding: spacing.md,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  tableHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  tableTitle: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
-  tableCount: { fontSize: 13, color: colors.textSecondary },
-  empty: { textAlign: 'center', color: colors.textSecondary, paddingVertical: spacing.lg },
-  row: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.lg,
-    padding: spacing.md,
-    gap: 4,
-    backgroundColor: '#fff',
-  },
-  when: { fontSize: 12, color: colors.textSecondary },
-  badges: { flexDirection: 'row', gap: 8, marginVertical: 4 },
-  badge: {
-    fontSize: 11,
-    fontWeight: '600',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
-    overflow: 'hidden',
-  },
-  entityBadge: { backgroundColor: '#EDE9FE', color: '#6D28D9' },
-  actionBadge: {
-    backgroundColor: '#ECFDF5',
-    color: '#047857',
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-  },
-  summaryTitle: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
-  summarySub: { fontSize: 12, color: colors.textSecondary },
-  fields: { fontSize: 12, color: colors.textSecondary },
-  performer: { fontSize: 13, fontWeight: '600', color: colors.textPrimary, marginTop: 4 },
-});

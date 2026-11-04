@@ -129,9 +129,9 @@ export default function DailySelfieCheckInScreen({ onDone, onClose }: { onDone: 
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <View style={styles.header}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.title}>Start Day</Text>
           <Text style={styles.subtitle}>Hi {user?.name || 'there'}, take a selfie to start your day.</Text>
         </View>
@@ -144,74 +144,88 @@ export default function DailySelfieCheckInScreen({ onDone, onClose }: { onDone: 
         )}
       </View>
 
-      <View style={styles.cameraBox}>
-        {photo ? (
-          <Image source={{ uri: photo }} style={styles.camera} />
-        ) : !permission ? (
-          <ActivityIndicator style={styles.camera} />
-        ) : !permission.granted ? (
-          <View style={[styles.camera, styles.center]}>
-            <Text style={styles.muted}>Camera permission is needed for the selfie.</Text>
-            <TouchableOpacity style={styles.secondaryBtn} onPress={requestPermission}>
-              <Text style={styles.secondaryText}>Allow Camera</Text>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Selfie</Text>
+        <View style={styles.cameraBox}>
+          {photo ? (
+            <Image source={{ uri: photo }} style={styles.camera} />
+          ) : !permission ? (
+            <ActivityIndicator style={styles.camera} />
+          ) : !permission.granted ? (
+            <View style={[styles.camera, styles.center]}>
+              <Text style={[styles.muted, { textAlign: 'center' }]}>Camera permission is needed for the selfie.</Text>
+              <TouchableOpacity style={styles.secondaryBtn} onPress={requestPermission}>
+                <Text style={styles.secondaryText}>Allow Camera</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <CameraView ref={cameraRef} style={styles.camera} facing="front" />
+          )}
+        </View>
+        {permission?.granted && (
+          photo ? (
+            <TouchableOpacity style={styles.secondaryBtn} onPress={() => setPhoto(null)}>
+              <Text style={styles.secondaryText}>Retake Selfie</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={styles.primaryBtn} onPress={takeSelfie} disabled={capturing}>
+              {capturing ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Take Selfie</Text>}
+            </TouchableOpacity>
+          )
+        )}
+
+        {!locating && !location ? (
+          <View style={styles.warnRow}>
+            <Text style={[styles.warnText, { flex: 1 }]}>Could not get your location. Turn on GPS, then tap Try again.</Text>
+            <TouchableOpacity style={styles.smallBtn} onPress={locate}>
+              <Text style={styles.secondaryText}>Try again</Text>
             </TouchableOpacity>
           </View>
-        ) : (
-          <CameraView ref={cameraRef} style={styles.camera} facing="front" />
-        )}
+        ) : null}
       </View>
-      {permission?.granted && (
-        photo ? (
-          <TouchableOpacity style={styles.secondaryBtn} onPress={() => setPhoto(null)}>
-            <Text style={styles.secondaryText}>Retake Selfie</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.primaryBtn} onPress={takeSelfie} disabled={capturing}>
-            {capturing ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Take Selfie</Text>}
-          </TouchableOpacity>
-        )
-      )}
 
-      {!locating && !location ? (
-        <View style={styles.row}>
-          <Text style={[styles.muted, { flex: 1 }]}>Could not get your location. Turn on GPS, then tap Try again.</Text>
-          <TouchableOpacity style={styles.smallBtn} onPress={locate}>
-            <Text style={styles.secondaryText}>Try again</Text>
-          </TouchableOpacity>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Details</Text>
+        {needDetails ? (
+          <View style={styles.awayBox}>
+            <Text style={[styles.label, { marginTop: 0 }]}>Where are you starting from? *</Text>
+            <Text style={styles.muted}>You are away from Home 1 and Home 2.</Text>
+            <TextInput
+              style={[styles.input, { marginTop: 8, minHeight: 60 }]}
+              value={startDetails}
+              onChangeText={setStartDetails}
+              placeholder="Hotel name, address or place"
+              placeholderTextColor="#94A3B8"
+              multiline
+            />
+          </View>
+        ) : null}
+
+        <Text style={[styles.label, { marginTop: 0 }]}>Reason</Text>
+        <View style={styles.chips}>
+          {ATTENDANCE_REASONS.map((r) => (
+            <TouchableOpacity
+              key={r.value}
+              style={[styles.chip, attendanceReason === r.value && styles.chipOn]}
+              onPress={() => setAttendanceReason(r.value)}
+            >
+              <Text style={[styles.chipText, attendanceReason === r.value && styles.chipTextOn]}>{r.label}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
-      ) : null}
 
-      {needDetails ? (
-        <>
-          <Text style={styles.label}>Where are you starting from? *</Text>
-          <Text style={styles.muted}>You are away from Home 1 and Home 2.</Text>
-          <TextInput
-            style={[styles.input, { marginTop: 8, minHeight: 60 }]}
-            value={startDetails}
-            onChangeText={setStartDetails}
-            placeholder="Hotel name, address or place"
-            multiline
-          />
-        </>
-      ) : null}
-
-      <Text style={styles.label}>Reason</Text>
-      <View style={styles.chips}>
-        {ATTENDANCE_REASONS.map((r) => (
-          <TouchableOpacity
-            key={r.value}
-            style={[styles.chip, attendanceReason === r.value && styles.chipOn]}
-            onPress={() => setAttendanceReason(r.value)}
-          >
-            <Text style={[styles.chipText, attendanceReason === r.value && styles.chipTextOn]}>{r.label}</Text>
-          </TouchableOpacity>
-        ))}
+        <Text style={styles.label}>Remarks</Text>
+        <TextInput
+          style={[styles.input, { minHeight: 60 }]}
+          value={remarks}
+          onChangeText={setRemarks}
+          placeholder="Optional"
+          placeholderTextColor="#94A3B8"
+          multiline
+        />
       </View>
 
-      <Text style={styles.label}>Remarks</Text>
-      <TextInput style={[styles.input, { minHeight: 60 }]} value={remarks} onChangeText={setRemarks} placeholder="Optional" multiline />
-
-      <TouchableOpacity style={[styles.primaryBtn, { marginTop: 20 }]} onPress={submit} disabled={submitting}>
+      <TouchableOpacity style={[styles.primaryBtn, submitting && { opacity: 0.6 }]} onPress={submit} disabled={submitting}>
         {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Start Day</Text>}
       </TouchableOpacity>
     </ScrollView>
@@ -219,27 +233,65 @@ export default function DailySelfieCheckInScreen({ onDone, onClose }: { onDone: 
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F5F5' },
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
   content: { padding: 16, paddingTop: 48, paddingBottom: 40 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
-  title: { fontSize: 24, fontWeight: '700', color: '#171717' },
-  subtitle: { fontSize: 14, color: '#525252', marginTop: 4, maxWidth: 240 },
-  cameraBox: { borderRadius: 16, overflow: 'hidden', backgroundColor: '#E5E5E5', marginBottom: 12 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 16 },
+  title: { fontSize: 17, fontWeight: '700', color: '#1E293B' },
+  subtitle: { fontSize: 13, color: '#64748B', marginTop: 4 },
+  section: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#EEF2F7',
+    padding: 16,
+    marginBottom: 12,
+  },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#1E293B', marginBottom: 12 },
+  cameraBox: { borderRadius: 12, overflow: 'hidden', backgroundColor: '#E2E8F0', marginBottom: 12 },
   camera: { width: '100%', aspectRatio: 3 / 4 },
   center: { alignItems: 'center', justifyContent: 'center', padding: 16 },
-  muted: { fontSize: 14, color: '#525252', textAlign: 'left' },
-  label: { fontSize: 14, fontWeight: '600', color: '#262626', marginTop: 16, marginBottom: 6 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#D4D4D4', borderRadius: 8, padding: 12, fontSize: 15 },
+  muted: { fontSize: 13, color: '#64748B', textAlign: 'left' },
+  label: { fontSize: 13, fontWeight: '600', color: '#475569', marginTop: 16, marginBottom: 6 },
+  warnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: '#FEF3C7',
+  },
+  warnText: { fontSize: 13, color: '#92400E' },
+  awayBox: { backgroundColor: '#FFFBEB', borderRadius: 10, borderWidth: 1, borderColor: '#FDE68A', padding: 12, marginBottom: 16 },
+  input: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#DCE3EC',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: '#1E293B',
+    textAlignVertical: 'top',
+  },
   inputLocked: { backgroundColor: '#F1F5F9', color: '#334155' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: '#D4D4D4', backgroundColor: '#fff' },
+  chip: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: '#DCE3EC', backgroundColor: '#fff' },
   chipOn: { backgroundColor: '#2563EB', borderColor: '#2563EB' },
-  chipText: { color: '#262626', fontSize: 14 },
-  chipTextOn: { color: '#fff', fontWeight: '600' },
-  primaryBtn: { backgroundColor: '#2563EB', borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
-  primaryText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  secondaryBtn: { borderWidth: 1, borderColor: '#2563EB', borderRadius: 10, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center', marginTop: 8 },
+  chipText: { color: '#1E293B', fontSize: 13, fontWeight: '600' },
+  chipTextOn: { color: '#fff' },
+  primaryBtn: { backgroundColor: '#2563EB', borderRadius: 10, minHeight: 48, justifyContent: 'center', alignItems: 'center' },
+  primaryText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  secondaryBtn: {
+    borderWidth: 1,
+    borderColor: '#2563EB',
+    borderRadius: 10,
+    minHeight: 48,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    marginTop: 8,
+  },
   smallBtn: { borderWidth: 1, borderColor: '#2563EB', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 12 },
   secondaryText: { color: '#2563EB', fontSize: 15, fontWeight: '600' },
 });

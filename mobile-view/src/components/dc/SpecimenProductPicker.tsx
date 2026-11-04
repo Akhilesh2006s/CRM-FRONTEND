@@ -122,7 +122,7 @@ export function specimenChoiceFromRows(rows: Array<Record<string, any>>): { prod
 
 const styles = StyleSheet.create({
   wrap: { gap: 8, marginBottom: 8 },
-  title: { fontSize: 12, fontWeight: '600', color: colors.textSecondary, marginBottom: 4 },
+  title: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 6 },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   setBox: { borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, backgroundColor: colors.backgroundMuted, padding: 8 },
   check: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 },
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
   boxOn: { backgroundColor: colors.primary, borderColor: colors.primary },
   tick: { color: '#fff', fontSize: 12, fontWeight: '700' },
   checkLabel: { fontSize: 14, color: colors.textPrimary },
-  note: { fontSize: 12, color: colors.textTertiary },
+  note: { fontSize: 13, color: colors.textTertiary },
 });
 
 export default SpecimenProductPicker;

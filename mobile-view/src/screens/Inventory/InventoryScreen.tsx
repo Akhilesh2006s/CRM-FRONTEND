@@ -1,68 +1,36 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-} from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
-import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
 import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
+
+const LINKS = [
+  { label: 'Warehouse Inventory', route: 'WarehouseInventoryItems' },
+  { label: 'Employee Returns', route: 'ReturnsEmployee' },
+  { label: 'Warehouse Returns', route: 'ReturnsWarehouse' },
+];
 
 export default function InventoryScreen({ navigation }: any) {
   return (
-    <ScreenShell
-      title="Stock Returns"
-    >
-<ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Choose a section:</Text>
+    <ScreenShell title="Stock Returns">
+      <PageSection title="Choose a section">
+        {LINKS.map((l, i) => (
           <TouchableOpacity
-            style={styles.linkItem}
-            onPress={() => navigation.navigate('WarehouseInventoryItems')}
+            key={l.route}
+            style={[styles.linkItem, i === LINKS.length - 1 && styles.linkLast]}
+            onPress={() => navigation.navigate(l.route)}
           >
-            <Text style={styles.linkText}>Warehouse Inventory</Text>
-            <Text style={styles.linkArrow}>→</Text>
+            <Text style={styles.linkText}>{l.label}</Text>
+            <Text style={styles.linkArrow}>›</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.linkItem}
-            onPress={() => navigation.navigate('ReturnsEmployee')}
-          >
-            <Text style={styles.linkText}>Employee Returns</Text>
-            <Text style={styles.linkArrow}>→</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.linkItem}
-            onPress={() => navigation.navigate('ReturnsWarehouse')}
-          >
-            <Text style={styles.linkText}>Warehouse Returns</Text>
-            <Text style={styles.linkArrow}>→</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+        ))}
+      </PageSection>
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: { paddingHorizontal: 20, paddingTop: 50, paddingBottom: 20, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
-  headerContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  backButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  backIcon: { fontSize: 24, color: colors.textLight, fontWeight: 'bold' },
-  headerTitleContainer: { flex: 1, alignItems: 'center' },
-  headerTitle: { ...typography.heading.h1, color: colors.textLight, marginBottom: 4 },
-  headerSubtitle: { ...typography.body.small, color: colors.textLight + 'CC' },
-  placeholder: { width: 40 },
-  content: { flex: 1 },
-  contentContainer: { padding: 16, paddingBottom: 32 },
-  card: { backgroundColor: colors.backgroundLight, borderRadius: 16, padding: 20, shadowColor: colors.shadowDark, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 3 },
-  cardTitle: { ...typography.body.medium, color: colors.textPrimary, marginBottom: 16 },
-  linkItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
-  linkText: { ...typography.body.medium, color: colors.primary },
-  linkArrow: { ...typography.body.medium, color: colors.primary },
+  linkItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
+  linkLast: { borderBottomWidth: 0 },
+  linkText: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
+  linkArrow: { fontSize: 20, color: colors.textMuted },
 });
-
-

@@ -76,12 +76,12 @@ export default function HierarchyAssignScreen({ navigation }: { navigation: any 
         <Text style={styles.meta}>{item.email}</Text>
         <Text style={styles.meta}>{meta(item)}</Text>
         <View style={styles.row}>
-          <TouchableOpacity onPress={() => dashboard(item)}>
-            <Text style={styles.link}>Dashboard</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => onAssign(item)}>
-            <Text style={styles.link}>Assign</Text>
-          </TouchableOpacity>
+          <View style={{ flex: 1 }}>
+            <WebButton title="Dashboard" variant="outline" onPress={() => dashboard(item)} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <WebButton title="Assign" onPress={() => onAssign(item)} />
+          </View>
         </View>
       </View>
     ));
@@ -191,22 +191,39 @@ export default function HierarchyAssignScreen({ navigation }: { navigation: any 
 }
 
 const styles = StyleSheet.create({
-  help: { color: '#64748B', marginBottom: 12 },
-  section: { marginTop: 16, marginBottom: 8, fontSize: 16, fontWeight: '700', color: '#0F172A' },
+  help: {
+    color: colors.accentForeground,
+    fontSize: 13,
+    lineHeight: 18,
+    backgroundColor: colors.accent,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  section: {
+    marginTop: 8,
+    marginBottom: 8,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 12,
-    marginBottom: 8,
+    borderColor: '#EEF2F7',
+    padding: 16,
+    marginBottom: 12,
   },
   cardOn: { borderColor: '#2563EB', backgroundColor: '#EFF6FF' },
-  name: { fontWeight: '600', color: '#0F172A' },
-  meta: { color: '#64748B', marginTop: 2 },
-  taken: { color: '#B45309', marginTop: 2, fontSize: 12 },
-  row: { flexDirection: 'row', gap: 16, marginTop: 8 },
-  link: { color: '#1D4ED8', fontWeight: '600' },
-  error: { color: '#B91C1C', marginBottom: 8 },
-  modal: { padding: 16, backgroundColor: colors.background || '#F8FAFC' },
+  name: { fontSize: 16, fontWeight: '700', color: '#1E293B' },
+  meta: { color: '#64748B', fontSize: 13, marginTop: 2 },
+  taken: { color: '#B45309', marginTop: 4, fontSize: 13 },
+  row: { flexDirection: 'row', gap: 8, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#EEF2F7' },
+  link: { color: '#2563EB', fontSize: 14, fontWeight: '600' },
+  error: { color: '#B91C1C', fontSize: 13, marginBottom: 8 },
+  modal: { padding: 16, paddingTop: 52, paddingBottom: 40, backgroundColor: colors.background || '#F8FAFC' },
 });

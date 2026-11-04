@@ -13,7 +13,9 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { apiService } from '../../services/api';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
-import { WebInput, WebButton, DataTable } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, ChipRow, EmptyState, toneFor } from '../../ui/Kit';
+import { WebInput, WebButton, WebLabel } from '../../ui/WebPrimitives';
+import { colors } from '../../theme/colors';
 import MessageBanner from '../../components/MessageBanner';
 
 import DateField from '../../ui/DateField';
@@ -100,54 +102,41 @@ export default function PaymentListScreen({ navigation }: any) {
   const paymentMethods = ['Cash', 'Cheque', 'Online Transfer', 'UPI', 'Other'];
 
   return (
-    <ScreenShell title="Payment List"
-      loading={loading}>
-      <PageSection title="Payment List">
-<View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backButton}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Payments</Text>
-        <TouchableOpacity onPress={() => setShowAddModal(true)}>
+    <ScreenShell
+      title="Payment List"
+      loading={loading}
+      onRefresh={loadPayments}
+      headerRight={
+        <TouchableOpacity onPress={() => setShowAddModal(true)} hitSlop={8} accessibilityLabel="Add payment">
           <Text style={styles.addButton}>+ Add</Text>
         </TouchableOpacity>
-      </View>
-
-      {loading ? (
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
-        </View>
+      }
+    >
+      {successMessage && (
+        <MessageBanner type="success" message={successMessage} onDismiss={clearMessages} />
+      )}
+      {errorMessage && !showAddModal && (
+        <MessageBanner type="error" message={errorMessage} onDismiss={clearMessages} />
+      )}
+      {!Array.isArray(payments) || payments.length === 0 ? (
+        <EmptyState icon="💳" title="No payments found" />
       ) : (
-        <ScrollView style={styles.content}>
-          {successMessage && (
-            <MessageBanner type="success" message={successMessage} onDismiss={clearMessages} />
-          )}
-          {errorMessage && (
-            <MessageBanner type="error" message={errorMessage} onDismiss={clearMessages} />
-          )}
-          {payments.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No payments found</Text>
-            </View>
-          ) : (
-            payments.map((payment) => (
-              <View key={payment._id} style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <Text style={styles.cardTitle}>{payment.customerName || 'N/A'}</Text>
-                  <Text style={styles.amount}>₹{payment.amount?.toFixed(2) || '0.00'}</Text>
-                </View>
-                <Text style={styles.cardSubtitle}>School Code: {payment.schoolCode || 'N/A'}</Text>
-                <Text style={styles.cardSubtitle}>Method: {payment.paymentMethod || 'N/A'}</Text>
-                <Text style={styles.cardSubtitle}>
-                  Date: {payment.paymentDate ? new Date(payment.paymentDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'N/A'}
-                </Text>
-                <Text style={[styles.status, { color: payment.status === 'Approved' ? '#28a745' : '#ffc107' }]}>
-                  {payment.status || 'Pending'}
-                </Text>
-              </View>
-            ))
-          )}
-        </ScrollView>
+        payments.map((payment) => (
+          <Card key={payment._id}>
+            <CardTitle
+              title={payment.customerName || 'N/A'}
+              subtitle={payment.schoolCode || undefined}
+              badge={payment.status || 'Pending'}
+              tone={toneFor(payment.status || 'Pending')}
+            />
+            <InfoRow label="Amount" value={<Text style={styles.amount}>₹{payment.amount?.toFixed(2) || '0.00'}</Text>} />
+            <InfoRow label="Method" value={payment.paymentMethod || 'N/A'} />
+            <InfoRow
+              label="Date"
+              value={payment.paymentDate ? new Date(payment.paymentDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'N/A'}
+            />
+          </Card>
+        ))
       )}
 
       <Modal
@@ -156,289 +145,73 @@ export default function PaymentListScreen({ navigation }: any) {
         presentationStyle="pageSheet"
         onRequestClose={() => setShowAddModal(false)}
       >
-        <ScrollView style={styles.modalContainer}>
+        <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Add Payment</Text>
-            <TouchableOpacity onPress={() => setShowAddModal(false)}>
-              <Text style={styles.closeButton}>✕</Text>
+            <TouchableOpacity onPress={() => setShowAddModal(false)} hitSlop={8}>
+              <Text style={styles.closeButton}>Close</Text>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.modalContent}>
+          <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
             {errorMessage && showAddModal && (
               <MessageBanner type="error" message={errorMessage} onDismiss={clearMessages} />
             )}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>School Code *</Text>
-              <WebInput
-                style={styles.input}
-                placeholder="Enter school code"
-                value={schoolCode}
-                onChangeText={setSchoolCode}
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Customer Name *</Text>
-              <WebInput
-                style={styles.input}
-                placeholder="Enter customer name"
-                value={customerName}
-                onChangeText={setCustomerName}
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Mobile Number</Text>
-              <WebInput
-                style={styles.input}
-                placeholder="Enter mobile number"
-                value={mobileNumber}
-                onChangeText={setMobileNumber}
-                keyboardType="phone-pad"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Amount *</Text>
-              <WebInput
-                style={styles.input}
-                placeholder="Enter amount"
-                value={amount}
-                onChangeText={setAmount}
-                keyboardType="decimal-pad"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Payment Method *</Text>
+            <PageSection title="Payment">
+              <WebLabel>School Code *</WebLabel>
+              <WebInput placeholder="Enter school code" value={schoolCode} onChangeText={setSchoolCode} />
+              <WebLabel>Customer Name *</WebLabel>
+              <WebInput placeholder="Enter customer name" value={customerName} onChangeText={setCustomerName} />
+              <WebLabel>Mobile Number</WebLabel>
+              <WebInput placeholder="Enter mobile number" value={mobileNumber} onChangeText={setMobileNumber} keyboardType="phone-pad" />
+              <WebLabel>Amount *</WebLabel>
+              <WebInput placeholder="Enter amount" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" />
+              <WebLabel>Payment Method *</WebLabel>
               <View style={styles.methodGrid}>
-                {paymentMethods.map((method) => (
-                  <TouchableOpacity
-                    key={method}
-                    style={[
-                      styles.methodButton,
-                      paymentMethod === method && styles.methodButtonSelected,
-                    ]}
-                    onPress={() => setPaymentMethod(method)}
-                  >
-                    <Text
-                      style={[
-                        styles.methodButtonText,
-                        paymentMethod === method && styles.methodButtonTextSelected,
-                      ]}
-                    >
-                      {method}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                <ChipRow
+                  items={paymentMethods.map((m) => ({ key: m, label: m }))}
+                  value={paymentMethod}
+                  onChange={setPaymentMethod}
+                />
               </View>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Payment Date</Text>
+              <WebLabel>Payment Date</WebLabel>
               <DateField placeholder="Payment Date" value={paymentDate} onChange={setPaymentDate} />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Remarks</Text>
+              <WebLabel>Remarks</WebLabel>
               <WebInput
-                style={[styles.input, styles.textArea]}
+                style={styles.textArea}
                 placeholder="Optional remarks"
                 value={remarks}
                 onChangeText={setRemarks}
                 multiline
                 numberOfLines={3}
               />
-            </View>
-
-            <TouchableOpacity
-              style={[styles.submitButton, submitting && styles.buttonDisabled]}
-              onPress={handleSubmit}
-              disabled={submitting}
-            >
-              {submitting ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.submitButtonText}>Submit Payment</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
+            </PageSection>
+            <WebButton title="Submit Payment" onPress={handleSubmit} loading={submitting} disabled={submitting} />
+          </ScrollView>
+        </View>
       </Modal>
-      </PageSection>
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    paddingTop: 60,
-    backgroundColor: '#007AFF',
-  },
-  backButton: {
-    color: '#fff',
-    fontSize: 16,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  addButton: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  content: {
-    flex: 1,
-    padding: 20,
-  },
-  emptyContainer: {
-    padding: 40,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#666',
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    flex: 1,
-  },
-  amount: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#28a745',
-  },
-  cardSubtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
-  },
-  status: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginTop: 8,
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
+  addButton: { fontSize: 15, fontWeight: '700', color: colors.primary },
+  amount: { fontSize: 15, fontWeight: '700', color: colors.success },
+  modalContainer: { flex: 1, backgroundColor: colors.background },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
-    paddingTop: 60,
-    backgroundColor: '#007AFF',
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  closeButton: {
-    fontSize: 24,
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  modalContent: {
-    padding: 20,
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
-    color: '#333',
-  },
-  input: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 16,
-    fontSize: 16,
-  },
-  textArea: {
-    height: 80,
-    textAlignVertical: 'top',
-  },
-  methodGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  methodButton: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    marginRight: 8,
-    marginBottom: 8,
+    paddingTop: 48,
+    paddingBottom: 12,
+    backgroundColor: colors.backgroundLight,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEF2F7',
   },
-  methodButtonSelected: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
-  },
-  methodButtonText: {
-    fontSize: 14,
-    color: '#333',
-  },
-  methodButtonTextSelected: {
-    color: '#fff',
-  },
-  submitButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  submitButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-  },
+  modalTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
+  closeButton: { fontSize: 15, color: colors.primary, fontWeight: '600' },
+  modalContent: { padding: 16, paddingBottom: 32 },
+  textArea: { minHeight: 80, textAlignVertical: 'top' },
+  methodGrid: { marginTop: -12, marginBottom: 14 },
 });
-

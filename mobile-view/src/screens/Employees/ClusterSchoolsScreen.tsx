@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Alert, ActivityIndicator, Linking, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { apiService } from '../../services/api';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebSelect } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, EmptyState, SectionTitle } from '../../ui/Kit';
 import { useAuth } from '../../context/AuthContext';
 import { getRoleFlags } from '../../utils/roles';
-import { colors, radii, spacing } from '../../theme/colors';
+import { colors, spacing } from '../../theme/colors';
 
 type Zone = { _id: string; name: string };
 type Cluster = { _id: string; name: string };
@@ -159,7 +160,7 @@ export default function ClusterSchoolsScreen({ navigation, route }: any) {
         />
       </PageSection>
 
-      {!clusterId ? <Text style={styles.info}>Select a cluster to see its schools.</Text> : null}
+      {!clusterId ? <EmptyState icon="🗂️" title="Select a cluster" message="Pick a zone and cluster to see its schools." /> : null}
       {clusterId && loadingSchools ? (
         <View style={styles.loadingRow}>
           <ActivityIndicator color={colors.primary} />
@@ -167,27 +168,19 @@ export default function ClusterSchoolsScreen({ navigation, route }: any) {
         </View>
       ) : null}
       {clusterId && loaded && !loadingSchools && schools.length === 0 ? (
-        <Text style={styles.info}>No schools under {clusterName}.</Text>
+        <EmptyState title={`No schools under ${clusterName}.`} />
       ) : null}
 
       {clusterId && !loadingSchools && schools.length > 0 ? (
         <View>
-          <Text style={styles.count}>
-            {schools.length} school{schools.length === 1 ? '' : 's'} in {clusterName}
-            {zoneName ? ` · ${zoneName}` : ''}
-          </Text>
+          <SectionTitle>{`${schools.length} school${schools.length === 1 ? '' : 's'} in ${clusterName}${zoneName ? ` · ${zoneName}` : ''}`}</SectionTitle>
           {schools.map((s) => (
-            <View key={s._id} style={styles.card}>
-              <Text style={styles.cardTitle}>{s.schoolName || '—'}</Text>
-              <Field label="School code" value={s.schoolCode} />
-              <Field label="Contact" value={s.contactName} />
-              <Field
-                label="Mobile"
-                value={s.mobileNumber}
-                onPress={s.mobileNumber ? () => Linking.openURL(`tel:${s.mobileNumber}`) : undefined}
-              />
-              <Field label="Location" value={s.location} />
-            </View>
+            <Card key={s._id}>
+              <CardTitle title={s.schoolName || '—'} subtitle={s.schoolCode} />
+              <InfoRow label="Contact" value={s.contactName} />
+              <InfoRow label="Mobile" value={s.mobileNumber} phone />
+              <InfoRow label="Location" value={s.location} />
+            </Card>
           ))}
         </View>
       ) : null}
@@ -195,31 +188,7 @@ export default function ClusterSchoolsScreen({ navigation, route }: any) {
   );
 }
 
-function Field({ label, value, onPress }: { label: string; value?: string; onPress?: () => void }) {
-  const text = <Text style={[styles.fieldValue, onPress && styles.fieldLink]}>{value || '—'}</Text>;
-  return (
-    <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      {onPress ? <TouchableOpacity onPress={onPress}>{text}</TouchableOpacity> : text}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   info: { fontSize: 14, color: colors.textSecondary, paddingVertical: spacing.sm },
-  loadingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  count: { fontSize: 14, color: colors.textSecondary, marginBottom: spacing.sm },
-  card: {
-    backgroundColor: colors.backgroundLight,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  cardTitle: { fontSize: 15, fontWeight: '600', color: colors.textPrimary, marginBottom: spacing.sm },
-  field: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3, gap: spacing.sm },
-  fieldLabel: { fontSize: 13, color: colors.textSecondary },
-  fieldValue: { fontSize: 13, color: colors.textPrimary, flexShrink: 1, textAlign: 'right' },
-  fieldLink: { color: colors.primaryDark, fontWeight: '600' },
+  loadingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: 16 },
 });

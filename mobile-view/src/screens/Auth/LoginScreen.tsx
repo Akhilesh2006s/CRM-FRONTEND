@@ -191,12 +191,7 @@ export default function LoginScreen() {
                   disabled={loading}
                   accessibilityRole="button"
                 >
-                  <LinearGradient
-                    colors={gradients.primary}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.buttonGradient}
-                  >
+                  <View style={styles.buttonGradient}>
                     {loading ? (
                       <ActivityIndicator color="#fff" />
                     ) : (
@@ -205,7 +200,7 @@ export default function LoginScreen() {
                         <Text style={styles.buttonText}>Sign In</Text>
                       </View>
                     )}
-                  </LinearGradient>
+                  </View>
                 </Pressable>
               </View>
             </View>
@@ -228,13 +223,13 @@ export default function LoginScreen() {
                   autoCapitalize="none"
                 />
                 <Pressable style={styles.button} onPress={requestOtp} disabled={forgotLoading}>
-                  <LinearGradient colors={gradients.primary} style={styles.buttonGradient}>
+                  <View style={styles.buttonGradient}>
                     {forgotLoading ? (
                       <ActivityIndicator color="#fff" />
                     ) : (
                       <Text style={styles.buttonText}>Send OTP</Text>
                     )}
-                  </LinearGradient>
+                  </View>
                 </Pressable>
               </>
             ) : (
@@ -256,13 +251,13 @@ export default function LoginScreen() {
                   secureTextEntry
                 />
                 <Pressable style={[styles.button, { marginTop: 12 }]} onPress={submitReset} disabled={forgotLoading}>
-                  <LinearGradient colors={gradients.primary} style={styles.buttonGradient}>
+                  <View style={styles.buttonGradient}>
                     {forgotLoading ? (
                       <ActivityIndicator color="#fff" />
                     ) : (
                       <Text style={styles.buttonText}>Reset password</Text>
                     )}
-                  </LinearGradient>
+                  </View>
                 </Pressable>
                 <Pressable onPress={() => setForgotStep('request')} style={{ marginTop: 12 }}>
                   <Text style={styles.forgotText}>Back</Text>
@@ -286,7 +281,7 @@ const styles = StyleSheet.create({
   },
   overlay: {
     flex: 1,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.background,
   },
   keyboardView: {
     flex: 1,
@@ -294,41 +289,41 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: 24,
+    padding: 16,
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 24,
   },
   logoImage: {
-    width: 280,
-    height: 120,
-    marginBottom: 20,
-  },
-  title: {
-    ...typography.display.medium,
-    color: colors.textPrimary,
+    width: 220,
+    height: 96,
     marginBottom: 8,
   },
+  title: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
   subtitle: {
-    ...typography.body.large,
+    fontSize: 15,
     color: colors.textSecondary,
     fontWeight: '500',
   },
   card: {
     backgroundColor: colors.backgroundLight,
-    borderRadius: 24,
-    padding: 28,
-    shadowColor: colors.shadowDark,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 8,
+    borderRadius: 14,
+    padding: 20,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 2,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#EEF2F7',
   },
   welcomeHeader: {
-    marginBottom: 28,
+    marginBottom: 20,
     alignItems: 'center',
   },
   welcomeIconWrap: {
@@ -341,65 +336,67 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   welcomeText: {
-    ...typography.heading.h1,
+    fontSize: 17,
+    fontWeight: '700',
     color: colors.textPrimary,
-    marginBottom: 8,
+    marginBottom: 4,
     textAlign: 'center',
   },
   welcomeSubtext: {
-    ...typography.body.medium,
-    color: colors.textSecondary,
+    fontSize: 13,
+    color: colors.textTertiary,
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 18,
   },
   form: {
     width: '100%',
   },
   inputContainer: {
-    marginBottom: 18,
+    marginBottom: 16,
   },
   labelRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   inputLabel: {
-    ...typography.label.medium,
-    color: colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textSecondary,
     marginLeft: 6,
   },
   input: {
-    backgroundColor: colors.backgroundMuted,
-    borderRadius: 12,
-    padding: 16,
-    ...typography.body.large,
+    backgroundColor: colors.backgroundLight,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minHeight: 48,
+    fontSize: 15,
     color: colors.textPrimary,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#DCE3EC',
   },
   forgotLink: {
     alignSelf: 'flex-end',
     marginBottom: 8,
+    paddingVertical: 4,
   },
   forgotText: {
-    ...typography.body.medium,
-    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.primaryDark,
   },
   button: {
-    borderRadius: 12,
+    borderRadius: 10,
     overflow: 'hidden',
     marginTop: 8,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 5,
-    cursor: 'pointer',
   },
   buttonGradient: {
-    padding: 16,
+    minHeight: 48,
+    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.primaryDark,
   },
   buttonContent: {
     flexDirection: 'row',
@@ -411,32 +408,33 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
-    letterSpacing: 0.5,
     marginLeft: 8,
   },
   errorText: {
-    ...typography.body.medium,
+    fontSize: 13,
     color: colors.error,
     backgroundColor: colors.errorLight,
     borderRadius: 10,
     padding: 12,
     marginBottom: 14,
+    overflow: 'hidden',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(15,23,42,0.45)',
     justifyContent: 'center',
-    padding: 24,
+    padding: 16,
   },
   modalCard: {
     backgroundColor: colors.backgroundLight,
-    borderRadius: 16,
+    borderRadius: 14,
     padding: 20,
   },
   modalTitle: {
-    ...typography.heading.h2,
+    fontSize: 17,
+    fontWeight: '700',
     color: colors.textPrimary,
     marginBottom: 16,
   },

@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Platform, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
-import ScreenShell from '../../ui/ScreenShell';
-import { WebButton, WebInput, WebLabel, WebSelect } from '../../ui/WebPrimitives';
+import { Alert, Platform, View } from 'react-native';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { Card, CardTitle, InfoRow, EmptyState, SectionTitle, toneFor } from '../../ui/Kit';
+import { StatGrid, rk, matchesWords } from './ReportKit';
+import { WebButton, WebInput, WebSelect } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 import { downloadDcReport } from '../../utils/downloadDcReport';
 
@@ -22,15 +22,6 @@ const dateRanges = ['all', 'today', 'week', 'month'];
 const displayStatus = (status?: string) => !status ? 'Pending' : status.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 const formatDate = (value?: string) => value ? new Date(value).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
 const number = (value?: number) => Number(value || 0).toLocaleString('en-IN');
-
-function Detail({ label, value, emphasis }: { label: string; value: React.ReactNode; emphasis?: boolean }) {
-  return <View style={styles.detail}><Text style={styles.detailLabel}>{label}</Text><Text style={[styles.detailValue, emphasis && styles.detailValueStrong]} numberOfLines={2}>{value || '—'}</Text></View>;
-}
-
-function Metric({ label, value, tone, wide = false }: { label: string; value: string; tone: string; wide?: boolean }) {
-  const toneStyle: any = styles[`metric${tone[0].toUpperCase()}${tone.slice(1)}` as keyof typeof styles];
-  return <View style={[styles.metric, toneStyle, wide && styles.metricWide]}><Text style={styles.metricLabel}>{label}</Text><Text style={styles.metricValue}>{value}</Text></View>;
-}
 
 export default function ReportsDCScreen() {
   const [items, setItems] = useState<DcItem[]>([]);
@@ -65,7 +56,7 @@ export default function ReportsDCScreen() {
     return items.filter((dc) => {
       const dateValue = dc.dcDate || dc.createdAt; const date = dateValue ? new Date(dateValue) : undefined;
       const inRange = !date || dateFilter === 'all' || (dateFilter === 'today' ? date >= today : date >= new Date(today.getTime() - (dateFilter === 'week' ? 7 : 30) * 86400000));
-      const matchesSearch = !term || [dc.customerName, dc.customerPhone, dc.product, dc.dcOrderId?.school_name, dc.dcOrderId?.contact_mobile, dc.dcOrderId?.dc_code, dc.lrNo].some((value) => value?.toLowerCase().includes(term));
+      const matchesSearch = !term || matchesWords(term, [dc.customerName, dc.customerPhone, dc.customerAddress, dc.product, dc.status && displayStatus(dc.status), dc.employeeId?.name, dc.dcOrderId?.school_name, dc.dcOrderId?.contact_mobile, dc.dcOrderId?.location, dc.dcOrderId?.zone, dc.dcOrderId?.dc_code, dc.lrNo, formatDate(dc.dcDate || dc.createdAt)]);
       return (statusFilter === 'all' || dc.status === statusFilter) && inRange && matchesSearch;
     });
   }, [items, statusFilter, dateFilter, search]);
@@ -85,48 +76,44 @@ export default function ReportsDCScreen() {
     } catch (error: any) { Alert.alert('Export failed', error.message || 'Failed to export DC report'); } finally { setExporting(false); }
   };
 
-  return <ScreenShell title="DC Report" loading={loading && !refreshing} refreshing={refreshing} onRefresh={onRefresh}>
-    <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-      <Text style={styles.subtitle}>View and manage delivery challans</Text>
-      <WebButton title={exporting ? 'Exporting…' : 'Export to Excel'} onPress={handleExport} loading={exporting} />
-      <View style={styles.metricsGrid}>
-        <Metric label="Total DCs" value={number(summary.total)} tone="blue" /><Metric label="Completed" value={number(summary.completed)} tone="green" />
-        <Metric label="Pending" value={number(summary.pending)} tone="yellow" /><Metric label="On Hold" value={number(summary.hold)} tone="red" />
-        <Metric label="Total Quantity" value={number(summary.quantity)} tone="purple" wide /><Metric label="Total Value" value={`₹${number(summary.value)}`} tone="sky" wide />
+  return <ScreenShell title="DC Report" subtitle="View and manage delivery challans" loading={loading && !refreshing} refreshing={refreshing} onRefresh={onRefresh}>
+    <StatGrid items={[
+      { label: 'Total DCs', value: number(summary.total), tone: 'blue' },
+      { label: 'Completed', value: number(summary.completed), tone: 'green' },
+      { label: 'Pending', value: number(summary.pending), tone: 'amber' },
+      { label: 'On Hold', value: number(summary.hold), tone: 'red' },
+      { label: 'Total Quantity', value: number(summary.quantity), tone: 'purple' },
+      { label: 'Total Value', value: `₹${number(summary.value)}`, tone: 'slate' },
+    ]} />
+    <PageSection title="Filters">
+      <WebInput value={search} onChangeText={setSearch} placeholder="Search school, contact, code, product, LR No" />
+      <View style={rk.row2}>
+        <View style={rk.col}><WebSelect label="Status" value={statusFilter} onValueChange={setStatusFilter} items={statuses.map((status) => ({ label: status === 'all' ? 'All Status' : displayStatus(status), value: status }))} /></View>
+        <View style={rk.col}><WebSelect label="Time" value={dateFilter} onValueChange={setDateFilter} items={dateRanges.map((range) => ({ label: range === 'all' ? 'All Time' : range === 'week' ? 'Last 7 Days' : range === 'month' ? 'Last 30 Days' : 'Today', value: range }))} /></View>
       </View>
-      <View style={styles.filterCard}>
-        <WebLabel>Search DCs</WebLabel><WebInput value={search} onChangeText={setSearch} placeholder="School, contact, code, product, or LR No" />
-        <WebLabel>Status</WebLabel><WebSelect value={statusFilter} onValueChange={setStatusFilter} items={statuses.map((status) => ({ label: status === 'all' ? 'All Status' : displayStatus(status), value: status }))} />
-        <WebLabel>Time</WebLabel><WebSelect value={dateFilter} onValueChange={setDateFilter} items={dateRanges.map((range) => ({ label: range === 'all' ? 'All Time' : range === 'week' ? 'Last 7 Days' : range === 'month' ? 'Last 30 Days' : 'Today', value: range }))} />
-        <WebLabel>DC From</WebLabel><DateField placeholder="DC From" value={fromDate} onChange={setFromDate} />
-        <WebLabel>DC To</WebLabel><DateField placeholder="DC To" value={toDate} onChange={setToDate} />
-        <WebButton title="Search" onPress={loadDc} loading={loading} />
+      <DateField placeholder="DC From" value={fromDate} onChange={setFromDate} />
+      <DateField placeholder="DC To" value={toDate} onChange={setToDate} />
+      <View style={rk.btnRow}>
+        <View style={rk.col}><WebButton title="Search" onPress={loadDc} loading={loading} /></View>
+        <View style={rk.col}><WebButton title={exporting ? 'Exporting…' : 'Export Excel'} variant="outline" onPress={handleExport} loading={exporting} /></View>
       </View>
-      <Text style={styles.sectionTitle}>Delivery Challans ({filtered.length})</Text>
-      {filtered.length === 0 ? <View style={styles.empty}><Text style={styles.emptyText}>No DC records found</Text></View> : filtered.map((dc, index) => {
-        const school = dc.dcOrderId?.school_name || dc.customerName || 'DC'; const contact = dc.dcOrderId?.contact_mobile || dc.customerPhone; const location = dc.dcOrderId?.location || dc.dcOrderId?.zone || dc.customerAddress;
-        return <View key={dc._id} style={styles.card}>
-          <View style={styles.cardHeader}><View style={styles.titleWrap}><Text style={styles.serial}>#{index + 1}</Text><Text style={styles.dcTitle}>{school}</Text></View><Text style={[styles.badge, dc.status === 'completed' && styles.badgeCompleted, dc.status === 'hold' && styles.badgeHold]}>{displayStatus(dc.status)}</Text></View>
-          <View style={styles.detailsGrid}>
-            <Detail label="DC Code" value={dc.dcOrderId?.dc_code} emphasis /><Detail label="DC Date" value={formatDate(dc.dcDate || dc.createdAt)} />
-            <Detail label="Contact" value={contact} /><Detail label="Location" value={location} />
-            <Detail label="Product" value={dc.product} emphasis /><Detail label="Employee" value={dc.employeeId?.name} />
-            <Detail label="Requested Qty" value={number(dc.requestedQuantity)} /><Detail label="Available Qty" value={number(dc.availableQuantity)} />
-            <Detail label="Deliverable Qty" value={number(dc.deliverableQuantity)} emphasis /><Detail label="LR No" value={dc.lrNo} />
-          </View>
-        </View>;
-      })}
-    </ScrollView>
+    </PageSection>
+    <SectionTitle>{`Delivery Challans (${filtered.length})`}</SectionTitle>
+    {filtered.length === 0 ? <EmptyState title="No DC records found" /> : filtered.map((dc, index) => {
+      const school = dc.dcOrderId?.school_name || dc.customerName || 'DC'; const contact = dc.dcOrderId?.contact_mobile || dc.customerPhone; const location = dc.dcOrderId?.location || dc.dcOrderId?.zone || dc.customerAddress;
+      return <Card key={dc._id}>
+        <CardTitle title={`${index + 1}. ${school}`} badge={displayStatus(dc.status)} tone={toneFor(dc.status === 'hold' ? 'hold' : dc.status === 'completed' ? 'completed' : 'pending')} />
+        <InfoRow label="DC Code" value={dc.dcOrderId?.dc_code} bold />
+        <InfoRow label="DC Date" value={formatDate(dc.dcDate || dc.createdAt)} />
+        <InfoRow label="Contact" value={contact} phone />
+        <InfoRow label="Location" value={location} />
+        <InfoRow label="Product" value={dc.product} bold />
+        <InfoRow label="Employee" value={dc.employeeId?.name} />
+        <InfoRow label="Requested Qty" value={number(dc.requestedQuantity)} />
+        <InfoRow label="Available Qty" value={number(dc.availableQuantity)} />
+        <InfoRow label="Deliverable Qty" value={number(dc.deliverableQuantity)} bold />
+        <InfoRow label="LR No" value={dc.lrNo} />
+      </Card>;
+    })}
   </ScreenShell>;
 }
-
-const styles = StyleSheet.create({
-  content: { flex: 1 }, contentContainer: { padding: 16, paddingBottom: 32 }, subtitle: { ...typography.body.medium, color: colors.textSecondary, marginBottom: 12 },
-  metricsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginVertical: 16 }, metric: { width: '48%', padding: 14, borderRadius: 12, borderWidth: 1 }, metricWide: { width: '100%' },
-  metricBlue: { backgroundColor: '#eaf0ff', borderColor: '#c9d6ff' }, metricGreen: { backgroundColor: '#ecfdf3', borderColor: '#bbf7d0' }, metricYellow: { backgroundColor: '#fffbeb', borderColor: '#fde68a' }, metricRed: { backgroundColor: '#fef2f2', borderColor: '#fecaca' }, metricPurple: { backgroundColor: '#faf5ff', borderColor: '#e9d5ff' }, metricSky: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' },
-  metricLabel: { ...typography.label.medium, color: colors.textSecondary }, metricValue: { ...typography.heading.h3, color: colors.textPrimary, marginTop: 4 },
-  filterCard: { backgroundColor: colors.backgroundLight, borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: 14, gap: 8, marginBottom: 18 }, sectionTitle: { ...typography.heading.h3, color: colors.textPrimary, marginBottom: 12 }, empty: { padding: 30, alignItems: 'center' }, emptyText: { ...typography.body.medium, color: colors.textSecondary },
-  card: { backgroundColor: colors.backgroundLight, borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: 14, marginBottom: 12 }, cardHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start', marginBottom: 12 }, titleWrap: { flex: 1, flexDirection: 'row', gap: 8, alignItems: 'center' }, serial: { ...typography.label.small, color: colors.textSecondary }, dcTitle: { ...typography.heading.h3, color: colors.textPrimary, flex: 1 },
-  badge: { ...typography.label.small, color: '#475569', backgroundColor: '#f1f5f9', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, overflow: 'hidden' }, badgeCompleted: { color: '#15803d', backgroundColor: '#dcfce7' }, badgeHold: { color: '#b91c1c', backgroundColor: '#fee2e2' },
-  detailsGrid: { flexDirection: 'row', flexWrap: 'wrap', borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 8 }, detail: { width: '50%', paddingVertical: 7, paddingRight: 8 }, detailLabel: { ...typography.label.small, color: colors.textSecondary }, detailValue: { ...typography.body.medium, color: colors.textPrimary, marginTop: 2 }, detailValueStrong: { fontWeight: '700' },
-});

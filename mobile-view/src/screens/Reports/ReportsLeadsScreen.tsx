@@ -1,9 +1,9 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import ScreenShell from '../../ui/ScreenShell';
+import { Card } from '../../ui/Kit';
 import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
 
 const cards = [
   {
@@ -31,73 +31,29 @@ const cards = [
 
 export default function ReportsLeadsScreen({ navigation }: any) {
   return (
-    <ScreenShell title="Leads Reports" subtitle="Select a report type to view detailed lead information">
-      <ScrollView contentContainerStyle={styles.content}>
-        {cards.map((card) => (
-          <View key={card.title} style={styles.card}>
-            <View style={[styles.iconBox, { backgroundColor: card.iconBg }]}>
-              <Ionicons name={card.icon} size={24} color="#FFFFFF" />
+    <ScreenShell title="Leads Reports" subtitle="Pick a report to view lead details">
+      {cards.map((card) => (
+        <Card key={card.title} onPress={() => navigation.navigate(card.route)}>
+          <View style={styles.row}>
+            <View style={[styles.iconBox, { backgroundColor: `${card.iconBg}1A` }]}>
+              <Ionicons name={card.icon} size={22} color={card.iconBg} />
             </View>
-            <Text style={styles.cardTitle}>{card.title}</Text>
-            <Text style={styles.cardDescription}>{card.description}</Text>
-            <TouchableOpacity
-              style={styles.button}
-              onPress={() => navigation.navigate(card.route)}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.buttonText}>View Report</Text>
-            </TouchableOpacity>
+            <View style={styles.textWrap}>
+              <Text style={styles.cardTitle}>{card.title}</Text>
+              <Text style={styles.cardDescription}>{card.description}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           </View>
-        ))}
-      </ScrollView>
+        </Card>
+      ))}
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  content: {
-    padding: 20,
-    gap: 16,
-  },
-  card: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: colors.shadowDark,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  iconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  cardTitle: {
-    ...typography.heading.h3,
-    color: colors.textPrimary,
-    marginBottom: 8,
-  },
-  cardDescription: {
-    ...typography.body.medium,
-    color: colors.textSecondary,
-    marginBottom: 20,
-  },
-  button: {
-    backgroundColor: '#2563eb',
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  buttonText: {
-    ...typography.body.medium,
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  iconBox: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  textWrap: { flex: 1 },
+  cardTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
+  cardDescription: { fontSize: 13, color: colors.textTertiary, marginTop: 2 },
 });

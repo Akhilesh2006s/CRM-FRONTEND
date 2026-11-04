@@ -1,18 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  RefreshControl,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
-import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
-import ScreenShell, { PageSection } from '../../ui/ScreenShell';
-import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
+import { View, Alert } from 'react-native';
+import ScreenShell from '../../ui/ScreenShell';
+import { Card, CardTitle, InfoRow, ChipRow, EmptyState, toneFor } from '../../ui/Kit';
 import { apiService } from '../../services/api';
 
 export default function TrainingTrainerMyScreen({ navigation }: any) {
@@ -53,78 +42,35 @@ export default function TrainingTrainerMyScreen({ navigation }: any) {
   const dateKey = activeTab === 'training' ? 'trainingDate' : 'serviceDate';
 
   return (
-    <ScreenShell
-      title="My Trainings & Services"
-      loading={loading && !refreshing}
-      refreshing={refreshing}
-      onRefresh={onRefresh}
-    >
-<View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'training' && styles.tabActive]}
-          onPress={() => setActiveTab('training')}
-        >
-          <Text style={[styles.tabText, activeTab === 'training' && styles.tabTextActive]}>Trainings</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'service' && styles.tabActive]}
-          onPress={() => setActiveTab('service')}
-        >
-          <Text style={[styles.tabText, activeTab === 'service' && styles.tabTextActive]}>Services</Text>
-        </TouchableOpacity>
+    <ScreenShell title="My Trainings & Services" loading={loading && !refreshing} refreshing={refreshing} onRefresh={onRefresh}>
+      <View style={{ marginTop: -12, marginBottom: 12 }}>
+        <ChipRow
+          items={[
+            { key: 'training', label: 'Trainings' },
+            { key: 'service', label: 'Services' },
+          ]}
+          value={activeTab}
+          onChange={(k) => setActiveTab(k as 'training' | 'service')}
+        />
       </View>
-      <ScrollView
-        style={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      >
-        {items.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>🎓</Text>
-            <Text style={styles.emptyText}>No {activeTab === 'training' ? 'trainings' : 'services'} found</Text>
-          </View>
-        ) : (
-          items.map((item) => (
-            <View key={item._id} style={styles.card}>
-              <Text style={styles.cardTitle}>{item.schoolName || item.school_name || '-'}</Text>
-              <Text style={styles.cardSubtitle}>{item.subject || item.subject || '-'}</Text>
-              <Text style={styles.cardDate}>
-                {item[dateKey] ? new Date(item[dateKey]).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}
-              </Text>
-            </View>
-          ))
-        )}
-      </ScrollView>
+      {items.length === 0 ? (
+        <EmptyState icon="🎓" title={`No ${activeTab === 'training' ? 'trainings' : 'services'} found`} />
+      ) : (
+        items.map((item) => (
+          <Card key={item._id}>
+            <CardTitle title={item.schoolName || item.school_name || '-'} badge={item.status} tone={toneFor(item.status)} />
+            <InfoRow label="Subject" value={item.subject} />
+            <InfoRow
+              label="Date"
+              value={
+                item[dateKey]
+                  ? new Date(item[dateKey]).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                  : '-'
+              }
+            />
+          </Card>
+        ))
+      )}
     </ScreenShell>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { paddingHorizontal: 20, paddingTop: 50, paddingBottom: 20, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
-  headerContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  backButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  backIcon: { fontSize: 24, color: colors.textLight, fontWeight: 'bold' },
-  headerTitle: { ...typography.heading.h1, color: colors.textLight, flex: 1, textAlign: 'center' },
-  placeholder: { width: 40 },
-  tabContainer: { flexDirection: 'row', padding: 16, gap: 8 },
-  tab: { flex: 1, padding: 12, borderRadius: 12, backgroundColor: colors.backgroundLight, alignItems: 'center' },
-  tabActive: { backgroundColor: colors.primary },
-  tabText: { ...typography.body.medium, color: colors.textSecondary },
-  tabTextActive: { color: colors.textLight, fontWeight: '600' },
-  content: { flex: 1, padding: 16 },
-  emptyContainer: { alignItems: 'center', paddingVertical: 48 },
-  emptyIcon: { fontSize: 48, marginBottom: 16 },
-  emptyText: { ...typography.body.medium, color: colors.textSecondary },
-  card: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  cardTitle: { ...typography.heading.h3, color: colors.textPrimary, marginBottom: 4 },
-  cardSubtitle: { ...typography.body.small, color: colors.textSecondary },
-  cardDate: { ...typography.body.small, color: colors.primary, marginTop: 8 },
-});

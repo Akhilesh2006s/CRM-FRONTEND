@@ -10,9 +10,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
-import ScreenShell from '../../ui/ScreenShell';
-import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebButton, WebSelect } from '../../ui/WebPrimitives';
+import { Card, InfoRow, EmptyState, SectionTitle } from '../../ui/Kit';
+import { rk } from './ReportKit';
 import { apiService } from '../../services/api';
 import { downloadExpensesReport } from '../../utils/downloadExpensesReport';
 import {
@@ -85,15 +86,6 @@ function formatExpDate(dateString?: string) {
   const date = new Date(dateString);
   if (Number.isNaN(date.getTime())) return '-';
   return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.infoRow}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value}</Text>
-    </View>
-  );
 }
 
 export default function ReportsExpensesScreen() {
@@ -203,51 +195,56 @@ export default function ReportsExpensesScreen() {
         keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <WebButton
-          title={exporting ? 'Exporting…' : 'Export to Excel'}
-          onPress={handleExport}
-          loading={exporting}
-        />
-
-        <View style={styles.filterCard}>
-          <WebLabel>Zone</WebLabel>
+        <PageSection title="Filters">
+          <View style={rk.row2}>
+            <View style={rk.col}>
+              <WebSelect
+                label="Zone"
+                placeholder="All Zones"
+                value={filters.zone}
+                onValueChange={(v) => setFilters((f) => ({ ...f, zone: v }))}
+                items={zones.map((z) => ({ label: z, value: z }))}
+              />
+            </View>
+            <View style={rk.col}>
+              <WebSelect
+                label="Status"
+                placeholder="All Status"
+                value={filters.status}
+                onValueChange={(v) => setFilters((f) => ({ ...f, status: v }))}
+                items={[
+                  { label: 'Pending at first level', value: 'Pending' },
+                  { label: 'Pending at Finance', value: 'finance' },
+                  { label: 'Approved', value: 'Approved' },
+                  { label: 'Rejected', value: 'Rejected' },
+                  { label: 'Sent back for correction', value: 'Needs Correction' },
+                ]}
+              />
+            </View>
+          </View>
           <WebSelect
-            placeholder="All Zones"
-            value={filters.zone}
-            onValueChange={(v) => setFilters((f) => ({ ...f, zone: v }))}
-            items={zones.map((z) => ({ label: z, value: z }))}
-          />
-          <WebLabel>Employee</WebLabel>
-          <WebSelect
+            label="Employee"
             placeholder="All Employees"
             value={filters.employeeId}
             onValueChange={(v) => setFilters((f) => ({ ...f, employeeId: v }))}
             items={employees.map((e) => ({ label: e.name, value: e._id }))}
           />
-          <WebLabel>Status</WebLabel>
-          <WebSelect
-            placeholder="All Status"
-            value={filters.status}
-            onValueChange={(v) => setFilters((f) => ({ ...f, status: v }))}
-            items={[
-              { label: 'Pending at first level', value: 'Pending' },
-              { label: 'Pending at Finance', value: 'finance' },
-              { label: 'Approved', value: 'Approved' },
-              { label: 'Rejected', value: 'Rejected' },
-              { label: 'Sent back for correction', value: 'Needs Correction' },
-            ]}
-          />
-          <WebLabel>From Date</WebLabel>
           <DateField placeholder="From Date" value={filters.fromDate} onChange={(v) => setFilters((f) => ({ ...f, fromDate: v }))} />
-          <WebLabel>To Date</WebLabel>
           <DateField placeholder="To Date" value={filters.toDate} onChange={(v) => setFilters((f) => ({ ...f, toDate: v }))} />
-          <WebButton title="Search" onPress={onSearch} />
-        </View>
+          <View style={rk.btnRow}>
+            <View style={rk.col}>
+              <WebButton title="Search" onPress={onSearch} />
+            </View>
+            <View style={rk.col}>
+              <WebButton title={exporting ? 'Exporting…' : 'Export Excel'} variant="outline" onPress={handleExport} loading={exporting} />
+            </View>
+          </View>
+        </PageSection>
+
+        <SectionTitle>{`Expenses (${expenses.length})`}</SectionTitle>
 
         {expenses.length === 0 ? (
-          <View style={styles.emptyBox}>
-            <Text style={styles.emptyText}>No expenses found</Text>
-          </View>
+          <EmptyState title="No expenses found" />
         ) : (
           expenses.map((expense, index) => {
             const badge = expenseStatusColor(expense.status || '');
@@ -256,38 +253,40 @@ export default function ReportsExpensesScreen() {
               (expense.employee || expense.employeeId || expense.trainerId)?.name || '-';
             const expenseAmount = Number(expense.employeeAmount ?? expense.amount ?? 0);
             return (
-              <View key={expense._id} style={styles.card}>
+              <Card key={expense._id}>
                 <View style={styles.cardTop}>
-                  <Text style={styles.expNo}>#{expNo}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.expNo}>{`${index + 1}. #${expNo}`}</Text>
+                    {employeeName !== '-' ? <Text style={styles.sub}>{employeeName}</Text> : null}
+                  </View>
                   <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
-                    <Text style={[styles.statusBadgeText, { color: badge.text }]}>
+                    <Text style={[styles.statusBadgeText, { color: badge.text }]} numberOfLines={1}>
                       {expense.statusText || expenseStatusText(expense)}
                     </Text>
                   </View>
                 </View>
-                <InfoRow label="S.No" value={String(index + 1)} />
-                <InfoRow label="Created On" value={formatCreatedOn(expense.createdAt)} />
+                <InfoRow label="Amount" value={`₹${expenseAmount.toFixed(2)}`} bold />
                 <InfoRow label="Exp Date" value={formatExpDate(expense.date)} />
-                <InfoRow label="Employee Name" value={employeeName} />
+                <InfoRow label="Created On" value={formatCreatedOn(expense.createdAt)} />
                 <InfoRow label="Kilometer" value={expense.kilometres ? String(expense.kilometres) : '-'} />
-                <InfoRow label="Expense Amount" value={expenseAmount.toFixed(2)} />
-                <InfoRow label="1st Level Approver" value={firstLevelApprovedBy(expense)?.name || '-'} />
+                <InfoRow label="1st Approver" value={firstLevelApprovedBy(expense)?.name || '-'} />
                 <InfoRow
-                  label="1st Level Amount"
+                  label="1st Amount"
                   value={typeof expense.firstLevelApprovedAmount === 'number' ? expense.firstLevelApprovedAmount.toFixed(2) : '-'}
                 />
                 <InfoRow
-                  label="1st Level Remarks"
+                  label="1st Remarks"
                   value={firstLevelApprovedBy(expense) ? expense.managerRemarks || '-' : '-'}
                 />
                 <InfoRow label="Finance Approver" value={expense.status === 'Approved' ? expense.approvedBy?.name || '-' : '-'} />
                 <InfoRow
                   label="Final Amount"
                   value={expense.status === 'Approved' && typeof expense.approvedAmount === 'number' ? expense.approvedAmount.toFixed(2) : '-'}
+                  bold
                 />
-                <InfoRow label="Finance Approved Date" value={expense.financeApprovedAt ? formatExpDate(expense.financeApprovedAt) : '-'} />
+                <InfoRow label="Finance Date" value={expense.financeApprovedAt ? formatExpDate(expense.financeApprovedAt) : '-'} />
                 <InfoRow label="Finance Remarks" value={expense.financeRemarks || '-'} />
-              </View>
+              </Card>
             );
           })
         )}
@@ -298,66 +297,12 @@ export default function ReportsExpensesScreen() {
 
 const styles = StyleSheet.create({
   content: { flex: 1 },
-  contentContainer: { padding: 16, paddingBottom: 32, gap: 12 },
+  contentContainer: { padding: 16, paddingBottom: 32 },
   headerExport: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   headerExportText: { color: colors.primary, fontWeight: '600', fontSize: 13 },
-  filterCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
-    gap: 6,
-  },
-  emptyBox: {
-    paddingVertical: 48,
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  emptyText: { ...typography.body.medium, color: colors.textSecondary },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
-  },
-  cardTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-    gap: 8,
-  },
-  expNo: {
-    ...typography.heading.h3,
-    color: colors.textPrimary,
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  statusBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  infoRow: {
-    flexDirection: 'row',
-    marginBottom: 6,
-    gap: 8,
-  },
-  infoLabel: {
-    width: 130,
-    ...typography.body.small,
-    color: colors.textSecondary,
-  },
-  infoValue: {
-    flex: 1,
-    ...typography.body.medium,
-    color: colors.textPrimary,
-  },
+  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10, gap: 8 },
+  expNo: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
+  sub: { fontSize: 13, color: colors.textTertiary, marginTop: 2 },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, maxWidth: 170 },
+  statusBadgeText: { fontSize: 12, fontWeight: '700' },
 });

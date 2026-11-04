@@ -12,7 +12,9 @@ import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
 import ScreenShell from '../../ui/ScreenShell';
-import { WebInput, WebSelect } from '../../ui/WebPrimitives';
+import { PageSection } from '../../ui/ScreenShell';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState, SectionTitle, toneFor } from '../../ui/Kit';
+import { WebInput, WebSelect, WebButton, WebLabel } from '../../ui/WebPrimitives';
 import { useAuth } from '../../context/AuthContext';
 
 import DateField from '../../ui/DateField';
@@ -187,218 +189,110 @@ export default function WarehouseSearchDCScreen({ navigation }: any) {
   if (!isAdmin) {
     return (
       <ScreenShell title="Search DC">
-        <Text style={styles.errorText}>Access denied. Admin only.</Text>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backBtnText}>Go Back</Text>
-        </TouchableOpacity>
+        <EmptyState icon="🔒" title="Access denied" message="Admin only." />
+        <WebButton title="Go Back" variant="outline" onPress={() => navigation.goBack()} />
       </ScreenShell>
     );
   }
 
   return (
-    <ScreenShell title="Search DC" loading={loading && !searching}>
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-        <Text style={styles.subtitle}>Search and filter Delivery Challans</Text>
+    <ScreenShell title="Search DC" subtitle="Search and filter Delivery Challans" loading={loading && !searching}>
+      <PageSection title="Filters">
+        <WebSelect
+          label="School"
+          value={selectedSchool}
+          onValueChange={setSelectedSchool}
+          placeholder="Select school (optional)"
+          items={toSelectItems(schools)}
+        />
 
-        <View style={styles.filterCard}>
-          <WebSelect
-            label="School"
-            value={selectedSchool}
-            onValueChange={setSelectedSchool}
-            placeholder="Select school (optional)"
-            items={toSelectItems(schools)}
-          />
-
-          <View style={styles.fieldContainer}>
-            <Text style={styles.label}>Date</Text>
-            <DateField placeholder="Date" value={selectedDate} onChange={setSelectedDate} />
-          </View>
-
-          <WebSelect
-            label="Product"
-            value={selectedProduct}
-            onValueChange={setSelectedProduct}
-            placeholder="Select product (optional)"
-            items={toSelectItems(products)}
-          />
-
-          <WebSelect
-            label="Status"
-            value={selectedStatus}
-            onValueChange={setSelectedStatus}
-            placeholder="Select status (optional)"
-            items={DC_STATUSES.map((s) => ({ label: formatStatus(s), value: s }))}
-          />
-
-          <WebSelect
-            label="DC Category"
-            value={selectedDCCategory}
-            onValueChange={setSelectedDCCategory}
-            placeholder="Select DC category (optional)"
-            items={toSelectItems(dcCategories)}
-          />
-
-          <WebSelect
-            label="Zone"
-            value={selectedZone}
-            onValueChange={setSelectedZone}
-            placeholder="Select zone (optional)"
-            items={toSelectItems(zones)}
-          />
-
-          <View style={styles.buttonRow}>
-            <TouchableOpacity
-              style={[styles.searchButton, (searching || loading) && styles.buttonDisabled]}
-              onPress={handleSearch}
-              disabled={searching || loading}
-            >
-              {searching ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.searchButtonText}>Search</Text>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.clearButton, (searching || loading) && styles.buttonDisabled]}
-              onPress={clearFilters}
-              disabled={searching || loading}
-            >
-              <Text style={styles.clearButtonText}>Clear All</Text>
-            </TouchableOpacity>
-          </View>
+        <View style={styles.fieldContainer}>
+          <WebLabel>Date</WebLabel>
+          <DateField placeholder="Date" value={selectedDate} onChange={setSelectedDate} />
         </View>
 
-        <View style={styles.resultsHeader}>
-          <Text style={styles.resultsTitle}>Search Results ({dcs.length})</Text>
-        </View>
+        <WebSelect
+          label="Product"
+          value={selectedProduct}
+          onValueChange={setSelectedProduct}
+          placeholder="Select product (optional)"
+          items={toSelectItems(products)}
+        />
 
-        {(loading || searching) && (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator size="small" color={colors.primary} />
-            <Text style={styles.loadingText}>{searching ? 'Searching…' : 'Loading DCs…'}</Text>
+        <WebSelect
+          label="Status"
+          value={selectedStatus}
+          onValueChange={setSelectedStatus}
+          placeholder="Select status (optional)"
+          items={DC_STATUSES.map((s) => ({ label: formatStatus(s), value: s }))}
+        />
+
+        <WebSelect
+          label="DC Category"
+          value={selectedDCCategory}
+          onValueChange={setSelectedDCCategory}
+          placeholder="Select DC category (optional)"
+          items={toSelectItems(dcCategories)}
+        />
+
+        <WebSelect
+          label="Zone"
+          value={selectedZone}
+          onValueChange={setSelectedZone}
+          placeholder="Select zone (optional)"
+          items={toSelectItems(zones)}
+        />
+
+        <View style={styles.buttonRow}>
+          <View style={{ flex: 1 }}>
+            <WebButton title="Search" onPress={handleSearch} loading={searching} disabled={searching || loading} />
           </View>
-        )}
+          <View style={{ flex: 1 }}>
+            <WebButton title="Clear All" variant="outline" onPress={clearFilters} disabled={searching || loading} />
+          </View>
+        </View>
+      </PageSection>
 
-        {!loading && !searching && dcs.length === 0 && (
-          <Text style={styles.emptyText}>No DCs found. Try adjusting your filters.</Text>
-        )}
+      <SectionTitle>{`Search Results (${dcs.length})`}</SectionTitle>
 
-        {!loading &&
-          !searching &&
-          dcs.map((dc, idx) => (
-            <View key={dc._id} style={styles.resultCard}>
-              <View style={styles.resultTop}>
-                <Text style={styles.resultIndex}>#{idx + 1}</Text>
-                <Text style={styles.dcNumber}>{getDCNumber(dc)}</Text>
-              </View>
-              <InfoRow label="DC Date" value={formatDate(dc.dcDate || dc.createdAt)} />
-              <InfoRow label="School" value={getSchoolName(dc)} />
-              <InfoRow label="Zone" value={getZone(dc)} />
-              <InfoRow label="DC Category" value={cell(dc.dcCategory)} />
-              <InfoRow label="Status" value={formatStatus(dc.status)} />
-              <InfoRow label="Total Items" value={String(getTotalItems(dc))} />
-              <InfoRow label="Created By" value={getCreatedBy(dc)} />
-              <TouchableOpacity
-                style={styles.viewButton}
+      {(loading || searching) && (
+        <View style={styles.loadingBox}>
+          <ActivityIndicator size="small" color={colors.primary} />
+          <Text style={styles.loadingText}>{searching ? 'Searching…' : 'Loading DCs…'}</Text>
+        </View>
+      )}
+
+      {!loading && !searching && dcs.length === 0 && (
+        <EmptyState icon="🔍" title="No DCs found" message="Try adjusting your filters." />
+      )}
+
+      {!loading &&
+        !searching &&
+        dcs.map((dc, idx) => (
+          <Card key={dc._id}>
+            <CardTitle title={`#${idx + 1} ${getDCNumber(dc)}`} badge={formatStatus(dc.status)} tone={toneFor(dc.status)} />
+            <InfoRow label="DC Date" value={formatDate(dc.dcDate || dc.createdAt)} />
+            <InfoRow label="School" value={getSchoolName(dc)} />
+            <InfoRow label="Zone" value={getZone(dc)} />
+            <InfoRow label="DC Category" value={cell(dc.dcCategory)} />
+            <InfoRow label="Total Items" value={String(getTotalItems(dc))} />
+            <InfoRow label="Created By" value={getCreatedBy(dc)} />
+            <ActionRow>
+              <WebButton
+                title="View DC"
+                variant="outline"
                 onPress={() => navigation.navigate('WarehouseDCAtWarehouseDetail', { id: dc._id })}
-              >
-                <Text style={styles.viewButtonText}>View DC</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-      </ScrollView>
+              />
+            </ActionRow>
+          </Card>
+        ))}
     </ScreenShell>
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.infoRow}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  content: { flex: 1 },
-  contentContainer: { padding: 16, paddingBottom: 40 },
-  subtitle: { ...typography.body.small, color: colors.textSecondary, marginBottom: 16 },
-  filterCard: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    marginBottom: 16,
-  },
-  fieldContainer: { marginBottom: 12 },
-  label: { ...typography.label.medium, color: colors.textPrimary, marginBottom: 8 },
-  input: {
-    ...typography.body.medium,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 12,
-    color: colors.textPrimary,
-  },
-  buttonRow: { flexDirection: 'row', gap: 12, marginTop: 4 },
-  searchButton: {
-    flex: 1,
-    backgroundColor: colors.primary,
-    padding: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  searchButtonText: { color: '#fff', fontWeight: '600', fontSize: 16 },
-  clearButton: {
-    flex: 1,
-    backgroundColor: colors.background,
-    padding: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  clearButtonText: { color: colors.textPrimary, fontWeight: '600' },
-  buttonDisabled: { opacity: 0.6 },
-  resultsHeader: {
-    paddingVertical: 12,
-    paddingHorizontal: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    marginBottom: 12,
-  },
-  resultsTitle: { ...typography.label.large, color: colors.textPrimary, fontWeight: '600' },
-  loadingBox: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 20 },
-  loadingText: { ...typography.body.medium, color: colors.textSecondary },
-  emptyText: { ...typography.body.medium, color: colors.textSecondary, textAlign: 'center', paddingVertical: 24 },
-  resultCard: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    marginBottom: 12,
-  },
-  resultTop: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  resultIndex: { ...typography.label.small, color: colors.textSecondary },
-  dcNumber: { ...typography.label.large, color: colors.textPrimary, fontWeight: '600' },
-  infoRow: { flexDirection: 'row', marginBottom: 6 },
-  infoLabel: { ...typography.body.small, color: colors.textSecondary, width: 110 },
-  infoValue: { ...typography.body.small, color: colors.textPrimary, flex: 1 },
-  viewButton: {
-    marginTop: 10,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    backgroundColor: colors.background,
-  },
-  viewButtonText: { ...typography.label.medium, color: colors.textPrimary, fontWeight: '600' },
-  errorText: { color: colors.error || '#ef4444', textAlign: 'center', padding: 24 },
-  backBtn: { alignSelf: 'center', marginTop: 16, padding: 12, backgroundColor: colors.primary, borderRadius: 12 },
-  backBtnText: { color: '#fff', fontWeight: '600' },
+  fieldContainer: { marginBottom: 14 },
+  buttonRow: { flexDirection: 'row', gap: 12 },
+  loadingBox: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 16 },
+  loadingText: { fontSize: 14, color: colors.textSecondary },
 });

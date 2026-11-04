@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl, A
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { Card, CardTitle, InfoRow, EmptyState } from '../../ui/Kit';
 import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 import { type ApprovalExpense, type ExpensePerson, firstLevelApprovedBy } from '../../lib/expenseApproval';
@@ -95,135 +96,83 @@ export default function ExpenseFinancePendingScreen({ navigation }: any) {
       refreshing={refreshing}
       onRefresh={onRefresh}
     >
-<ScrollView
-        style={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        contentContainerStyle={{ paddingBottom: 20 }}
-      >
-        <View style={styles.filterCard}>
-          <Text style={styles.filterLabel}>Employee</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterOptions}>
-            <TouchableOpacity
-              style={[styles.filterChip, filters.employeeId === 'all' && styles.filterChipSelected]}
-              onPress={() => setFilters((f) => ({ ...f, employeeId: 'all' }))}
-            >
-              <Text style={[styles.filterChipText, filters.employeeId === 'all' && styles.filterChipTextSelected]}>All</Text>
-            </TouchableOpacity>
-            {employees.map((emp) => (
-              <TouchableOpacity
-                key={emp._id}
-                style={[styles.filterChip, filters.employeeId === emp._id && styles.filterChipSelected]}
-                onPress={() => setFilters((f) => ({ ...f, employeeId: emp._id }))}
-              >
-                <Text style={[styles.filterChipText, filters.employeeId === emp._id && styles.filterChipTextSelected]}>{emp.name}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-          <Text style={[styles.filterLabel, { marginTop: 12 }]}>Trainer</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterOptions}>
-            <TouchableOpacity
-              style={[styles.filterChip, filters.trainerId === 'all' && styles.filterChipSelected]}
-              onPress={() => setFilters((f) => ({ ...f, trainerId: 'all' }))}
-            >
-              <Text style={[styles.filterChipText, filters.trainerId === 'all' && styles.filterChipTextSelected]}>All</Text>
-            </TouchableOpacity>
-            {trainers.map((trainer) => (
-              <TouchableOpacity
-                key={trainer._id}
-                style={[styles.filterChip, filters.trainerId === trainer._id && styles.filterChipSelected]}
-                onPress={() => setFilters((f) => ({ ...f, trainerId: trainer._id }))}
-              >
-                <Text style={[styles.filterChipText, filters.trainerId === trainer._id && styles.filterChipTextSelected]}>{trainer.name}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-          <TouchableOpacity style={styles.searchButton} onPress={handleSearch}>
-            <Text style={styles.searchButtonText}>Search</Text>
+<PageSection title="Filters">
+        <WebLabel>Employee</WebLabel>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterOptions}>
+          <TouchableOpacity
+            style={[styles.filterChip, filters.employeeId === 'all' && styles.filterChipSelected]}
+            onPress={() => setFilters((f) => ({ ...f, employeeId: 'all' }))}
+          >
+            <Text style={[styles.filterChipText, filters.employeeId === 'all' && styles.filterChipTextSelected]}>All</Text>
           </TouchableOpacity>
-        </View>
-
-        {expenses.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>📄</Text>
-            <Text style={styles.emptyText}>No finance approved expenses found</Text>
-          </View>
-        ) : (
-          expenses.map((expense) => (
-            <TouchableOpacity key={expense._id} style={styles.card} onPress={() => navigation.navigate('ExpenseDetail', { id: expense._id })} activeOpacity={0.7}>
-              <View style={styles.cardHeader}>
-                <Text style={styles.expenseTitle}>{expense.title || 'Expense'}</Text>
-                <Text style={styles.amountText}>₹{money(expense.approvedAmount)}</Text>
-              </View>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Employee:</Text>
-                <Text style={styles.infoValue}>{(expense.employee || expense.employeeId || expense.trainerId)?.name || 'Unknown'}</Text>
-              </View>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Category:</Text>
-                <Text style={styles.infoValue}>{expense.category || 'General'}</Text>
-              </View>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Raised:</Text>
-                <Text style={styles.infoValue}>{formatDate(expense.createdAt)}</Text>
-              </View>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Claimed:</Text>
-                <Text style={styles.infoValue}>₹{money(expense.employeeAmount ?? expense.amount)}</Text>
-              </View>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>First level:</Text>
-                <Text style={styles.infoValue}>
-                  {firstLevelApprovedBy(expense)?.name || '-'} · ₹{money(expense.firstLevelApprovedAmount)}
-                </Text>
-              </View>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Finance:</Text>
-                <Text style={styles.infoValue}>{expense.approvedBy?.name || '-'}</Text>
-              </View>
-              {expense.financeRemarks ? (
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Finance remarks:</Text>
-                  <Text style={styles.infoValue}>{expense.financeRemarks}</Text>
-                </View>
-              ) : null}
+          {employees.map((emp) => (
+            <TouchableOpacity
+              key={emp._id}
+              style={[styles.filterChip, filters.employeeId === emp._id && styles.filterChipSelected]}
+              onPress={() => setFilters((f) => ({ ...f, employeeId: emp._id }))}
+            >
+              <Text style={[styles.filterChipText, filters.employeeId === emp._id && styles.filterChipTextSelected]}>{emp.name}</Text>
             </TouchableOpacity>
-          ))
-        )}
-      </ScrollView>
+          ))}
+        </ScrollView>
+        <WebLabel>Trainer</WebLabel>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterOptions}>
+          <TouchableOpacity
+            style={[styles.filterChip, filters.trainerId === 'all' && styles.filterChipSelected]}
+            onPress={() => setFilters((f) => ({ ...f, trainerId: 'all' }))}
+          >
+            <Text style={[styles.filterChipText, filters.trainerId === 'all' && styles.filterChipTextSelected]}>All</Text>
+          </TouchableOpacity>
+          {trainers.map((trainer) => (
+            <TouchableOpacity
+              key={trainer._id}
+              style={[styles.filterChip, filters.trainerId === trainer._id && styles.filterChipSelected]}
+              onPress={() => setFilters((f) => ({ ...f, trainerId: trainer._id }))}
+            >
+              <Text style={[styles.filterChipText, filters.trainerId === trainer._id && styles.filterChipTextSelected]}>{trainer.name}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+        <WebButton title="Search" onPress={handleSearch} />
+      </PageSection>
+
+      {expenses.length === 0 ? (
+        <EmptyState icon="📄" title="No finance approved expenses found" />
+      ) : (
+        expenses.map((expense) => (
+          <Card key={expense._id} onPress={() => navigation.navigate('ExpenseDetail', { id: expense._id })}>
+            <CardTitle
+              title={expense.title || 'Expense'}
+              subtitle={`₹${money(expense.approvedAmount)} approved`}
+              badge="Finance approved"
+              tone="success"
+            />
+            <InfoRow label="Employee" value={(expense.employee || expense.employeeId || expense.trainerId)?.name || 'Unknown'} />
+            <InfoRow label="Category" value={expense.category || 'General'} />
+            <InfoRow label="Raised" value={formatDate(expense.createdAt)} />
+            <InfoRow label="Claimed" value={`₹${money(expense.employeeAmount ?? expense.amount)}`} />
+            <InfoRow label="First level" value={`${firstLevelApprovedBy(expense)?.name || '-'} · ₹${money(expense.firstLevelApprovedAmount)}`} />
+            <InfoRow label="Finance" value={expense.approvedBy?.name || '-'} />
+            <InfoRow label="Finance remarks" value={expense.financeRemarks} />
+          </Card>
+        ))
+      )}
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
-  loadingText: { marginTop: 12, ...typography.body.medium, color: colors.textSecondary },
-  header: { paddingHorizontal: 20, paddingTop: 50, paddingBottom: 20, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
-  headerContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  backButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  backIcon: { fontSize: 24, color: colors.textLight, fontWeight: 'bold' },
-  headerTitle: { ...typography.heading.h1, color: colors.textLight, flex: 1, textAlign: 'center' },
-  placeholder: { width: 40 },
-  content: { flex: 1, padding: 16 },
-  filterCard: { backgroundColor: colors.backgroundLight, borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: colors.border },
-  filterLabel: { ...typography.label.medium, color: colors.textPrimary },
-  filterOptions: { marginTop: 8 },
-  filterChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: colors.border, marginRight: 8, marginBottom: 8 },
-  filterChipSelected: { borderColor: colors.primary, backgroundColor: colors.primary + '20' },
-  filterChipText: { ...typography.body.medium, color: colors.textPrimary },
-  filterChipTextSelected: { color: colors.primary, fontWeight: '600' },
-  searchButton: { marginTop: 12, paddingVertical: 12, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center' },
-  searchButtonText: { ...typography.label.medium, color: colors.textLight, fontWeight: '600' },
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60 },
-  emptyIcon: { fontSize: 64, marginBottom: 16 },
-  emptyText: { ...typography.heading.h3, color: colors.textSecondary },
-  card: { backgroundColor: colors.backgroundLight, borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: colors.border, shadowColor: colors.shadowDark, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  expenseTitle: { ...typography.heading.h3, color: colors.textPrimary, flex: 1 },
-  amountText: { ...typography.heading.h3, color: colors.primary, marginLeft: 8 },
-  infoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  infoLabel: { ...typography.body.medium, color: colors.textSecondary },
-  infoValue: { ...typography.body.medium, color: colors.textPrimary, flex: 1, marginLeft: 8, textAlign: 'right' },
+  filterOptions: { marginBottom: 12 },
+  filterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#DCE3EC',
+    backgroundColor: colors.backgroundLight,
+    marginRight: 8,
+  },
+  filterChipSelected: { borderColor: colors.primaryDark, backgroundColor: colors.primaryDark },
+  filterChipText: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
+  filterChipTextSelected: { color: '#FFFFFF' },
 });
-
-

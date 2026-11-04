@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, radii, spacing } from '../../theme/colors';
+import { colors, spacing } from '../../theme/colors';
 import ScreenShell from '../../ui/ScreenShell';
-import { WebButton } from '../../ui/WebPrimitives';
+import { WebButton, WebInput } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState } from '../../ui/Kit';
 import MessageBanner from '../../components/MessageBanner';
 import { apiService } from '../../services/api';
 
@@ -70,6 +71,7 @@ export default function EmployeeHistoryScreen() {
   const [error, setError] = useState('');
   const [selected, setSelected] = useState<ArchiveRow | null>(null);
   const [loadingDetail, setLoadingDetail] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -101,10 +103,19 @@ export default function EmployeeHistoryScreen() {
 
   const fmtDate = (d?: string) => (d ? new Date(d).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : '—');
 
+  const words = searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const filtered = rows.filter((row) => {
+    if (!words.length) return true;
+    const text = [row.previousName, row.email, row.yearlySalary, row.monthlyTakeHome, fmtDate(row.archivedAt)]
+      .map((v) => String(v ?? '').toLowerCase())
+      .join(' ');
+    return words.every((w) => text.includes(w));
+  });
+
   return (
     <ScreenShell
-      title="Employee History"
-      subtitle="Archived personal records kept for audit"
+      title="Employee History\"
+      subtitle="Archived records kept for audit (not shown on login)"
       loading={loading && !refreshing}
       refreshing={refreshing}
       onRefresh={() => {
@@ -112,39 +123,35 @@ export default function EmployeeHistoryScreen() {
         load();
       }}
     >
-      <Text style={styles.help}>Archived personal records kept for audit. They are not shown on the employee login.</Text>
       {error ? <MessageBanner type="error" message={error} onDismiss={() => setError('')} /> : null}
-      {!loading && rows.length === 0 ? <Text style={styles.empty}>No archived employee records.</Text> : null}
+      <WebInput
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+        placeholder="Search name, login, date…"
+      />
+      {!loading && filtered.length === 0 ? (
+        <EmptyState icon="🗂️" title="No archived employee records" message={searchQuery ? 'Try a different search.' : undefined} />
+      ) : null}
 
-      {rows.map((row) => (
-        <View key={row._id} style={styles.card}>
-          <Text style={styles.name}>{row.previousName || '—'}</Text>
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>Login</Text>
-            <Text style={styles.rowValue}>{row.email || '—'}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>Yearly salary</Text>
-            <Text style={styles.rowValue}>{row.yearlySalary ?? '—'}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>Take-home</Text>
-            <Text style={styles.rowValue}>{row.monthlyTakeHome ?? '—'}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>Archived</Text>
-            <Text style={styles.rowValue}>{fmtDate(row.archivedAt)}</Text>
-          </View>
-          <View style={{ marginTop: 10 }}>
-            <WebButton
-              title="View complete details"
-              variant="outline"
-              onPress={() => void showDetails(row._id)}
-              disabled={!!loadingDetail}
-              loading={loadingDetail === row._id}
-            />
-          </View>
-        </View>
+      {filtered.map((row) => (
+        <Card key={row._id}>
+          <CardTitle title={row.previousName || '—'} badge="Archived" tone="neutral" />
+          <InfoRow label="Login" value={row.email} />
+          <InfoRow label="Yearly salary" value={row.yearlySalary == null ? undefined : String(row.yearlySalary)} />
+          <InfoRow label="Take-home" value={row.monthlyTakeHome == null ? undefined : String(row.monthlyTakeHome)} />
+          <InfoRow label="Archived" value={fmtDate(row.archivedAt)} />
+          <ActionRow>
+            <View style={{ flex: 1 }}>
+              <WebButton
+                title="View complete details"
+                variant="outline"
+                onPress={() => void showDetails(row._id)}
+                disabled={!!loadingDetail}
+                loading={loadingDetail === row._id}
+              />
+            </View>
+          </ActionRow>
+        </Card>
       ))}
 
       <Modal visible={!!selected} animationType="slide" onRequestClose={() => setSelected(null)}>
@@ -168,20 +175,6 @@ export default function EmployeeHistoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  help: { fontSize: 13, color: colors.textSecondary, marginBottom: spacing.sm },
-  empty: { textAlign: 'center', color: colors.textSecondary, paddingVertical: 32 },
-  card: {
-    backgroundColor: colors.backgroundLight,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.lg,
-    padding: 12,
-    marginBottom: 10,
-  },
-  name: { fontSize: 15, fontWeight: '600', color: colors.textPrimary, marginBottom: 6 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, paddingVertical: 3 },
-  rowLabel: { fontSize: 13, color: colors.textMuted },
-  rowValue: { fontSize: 13, color: colors.textPrimary, flexShrink: 1, textAlign: 'right' },
   modalRoot: { flex: 1, backgroundColor: colors.background },
   modalHeader: {
     flexDirection: 'row',
@@ -194,22 +187,22 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
     backgroundColor: colors.backgroundLight,
   },
-  modalTitle: { fontSize: 17, fontWeight: '600', color: colors.textPrimary },
-  modalSub: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  modalTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
+  modalSub: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
   field: {
     backgroundColor: colors.backgroundLight,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radii.sm,
-    padding: 8,
+    borderRadius: 10,
+    padding: 10,
   },
-  fieldLabel: { fontSize: 11, fontWeight: '600', color: colors.textMuted },
+  fieldLabel: { fontSize: 12, fontWeight: '600', color: colors.textMuted },
   arrayItem: {
     backgroundColor: colors.backgroundMuted,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radii.sm,
-    padding: 6,
+    borderRadius: 10,
+    padding: 8,
   },
   value: { fontSize: 13, color: colors.textPrimary },
   muted: { fontSize: 13, color: colors.textMuted },

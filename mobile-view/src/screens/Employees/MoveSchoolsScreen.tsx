@@ -6,7 +6,7 @@ import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
 import { useAuth } from '../../context/AuthContext';
 import { getRoleFlags } from '../../utils/roles';
-import { colors, radii, spacing } from '../../theme/colors';
+import { colors, spacing } from '../../theme/colors';
 
 type Zone = { _id: string; name: string };
 type Cluster = { _id: string; name: string };
@@ -296,7 +296,7 @@ export default function MoveSchoolsScreen({ navigation }: any) {
                 return (
                   <TouchableOpacity
                     key={s._id}
-                    style={[styles.row, i === schools.length - 1 && styles.rowLast]}
+                    style={[styles.row, checked && styles.rowChecked, i === schools.length - 1 && styles.rowLast]}
                     onPress={() => toggleSchool(s._id)}
                     activeOpacity={0.7}
                   >
@@ -333,28 +333,29 @@ export default function MoveSchoolsScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  link: { color: colors.primaryDark, fontSize: 14, fontWeight: '600', paddingVertical: spacing.xs },
-  warn: { color: colors.error, fontSize: 13 },
+  link: { color: colors.primaryDark, fontSize: 14, fontWeight: '600', paddingVertical: 8 },
+  warn: { color: colors.error, fontSize: 13, marginTop: 4 },
   list: {
-    marginTop: spacing.md,
+    marginTop: 12,
     backgroundColor: colors.backgroundLight,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.md,
+    borderColor: '#EEF2F7',
+    borderRadius: 12,
     overflow: 'hidden',
   },
-  empty: { padding: spacing.md, fontSize: 13, color: colors.textSecondary },
+  empty: { padding: spacing.md, fontSize: 13, color: colors.textSecondary, textAlign: 'center' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
+    gap: 12,
+    paddingHorizontal: 12,
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
   },
+  rowChecked: { backgroundColor: colors.accent },
   rowLast: { borderBottomWidth: 0 },
   rowBody: { flex: 1 },
-  rowTitle: { fontSize: 14, color: colors.textPrimary, fontWeight: '500' },
-  rowMeta: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+  rowTitle: { fontSize: 15, color: colors.textPrimary, fontWeight: '600' },
+  rowMeta: { fontSize: 13, color: colors.textTertiary, marginTop: 2 },
 });

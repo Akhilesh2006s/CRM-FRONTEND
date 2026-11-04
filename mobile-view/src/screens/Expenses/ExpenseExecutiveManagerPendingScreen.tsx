@@ -4,6 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { apiService } from '../../services/api';
 import { colors, radii } from '../../theme/colors';
 import ScreenShell from '../../ui/ScreenShell';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState } from '../../ui/Kit';
 import { WebSelect } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 import { navigateRoot } from '../../navigation/navigationRef';
@@ -133,56 +134,63 @@ export default function ExpenseExecutiveManagerPendingScreen({ navigation, route
       {error ? <MessageBanner type="error" message={error} onDismiss={() => setError(null)} /> : null}
 
       {expenses.length === 0 ? (
-        <Text style={styles.empty}>
-          {tab === 'decided'
-            ? 'You have not approved or rejected any expenses yet.'
-            : employees.length === 0
-              ? 'No employees assigned to you. Please contact an administrator.'
-              : 'No expenses are awaiting your approval'}
-        </Text>
+        <EmptyState
+          icon="🧾"
+          title={tab === 'decided' ? 'Nothing decided yet' : 'Nothing to approve'}
+          message={
+            tab === 'decided'
+              ? 'You have not approved or rejected any expenses yet.'
+              : employees.length === 0
+                ? 'No employees assigned to you. Please contact an administrator.'
+                : 'No expenses are awaiting your approval'
+          }
+        />
       ) : tab === 'decided' ? (
         expenses.map((exp, i) => {
           const c = expenseStatusColor(exp.status);
           return (
-            <View key={exp._id} style={styles.card}>
+            <Card key={exp._id}>
               <View style={styles.rowBetween}>
-                <Text style={styles.cardTitle}>
-                  {i + 1}. {getEmployee(exp)?.name || '-'}
-                </Text>
-                <Text style={styles.meta}>{exp.date ? new Date(exp.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.cardTitle}>
+                    {i + 1}. {getEmployee(exp)?.name || '-'}
+                  </Text>
+                  <Text style={styles.meta}>{getExpenseType(exp.category)}</Text>
+                </View>
+                <View style={[styles.badge, { backgroundColor: c.bg }]}>
+                  <Text style={[styles.badgeText, { color: c.text }]} numberOfLines={1}>
+                    {expenseStatusText(exp)}
+                  </Text>
+                </View>
               </View>
-              <Text style={styles.meta}>Type: {getExpenseType(exp.category)}</Text>
-              <View style={styles.rowBetween}>
-                <Text style={styles.meta}>Claimed: {Number(exp.employeeAmount ?? exp.amount).toFixed(2)}</Text>
-                <Text style={styles.metaStrong}>
-                  Approved:{' '}
-                  {exp.status === 'Rejected' ? '-' : Number(exp.firstLevelApprovedAmount ?? exp.approvedAmount ?? 0).toFixed(2)}
-                </Text>
-              </View>
-              <View style={[styles.badge, { backgroundColor: c.bg }]}>
-                <Text style={[styles.badgeText, { color: c.text }]}>{expenseStatusText(exp)}</Text>
-              </View>
-              <Text style={styles.meta}>Your remarks: {exp.managerRemarks || exp.rejectionReason || '-'}</Text>
-            </View>
+              <InfoRow
+                label="Date"
+                value={exp.date ? new Date(exp.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}
+              />
+              <InfoRow label="Claimed" value={Number(exp.employeeAmount ?? exp.amount).toFixed(2)} />
+              <InfoRow
+                label="Approved"
+                bold
+                value={exp.status === 'Rejected' ? '—' : Number(exp.firstLevelApprovedAmount ?? exp.approvedAmount ?? 0).toFixed(2)}
+              />
+              <InfoRow label="Your remarks" value={exp.managerRemarks || exp.rejectionReason || '-'} />
+            </Card>
           );
         })
       ) : (
         expenses.map((exp, i) => (
-          <TouchableOpacity key={exp._id} style={styles.card} onPress={() => openReview(exp)} activeOpacity={0.8}>
-            <View style={styles.rowBetween}>
-              <Text style={styles.cardTitle}>
-                {i + 1}. {getEmployee(exp)?.name || '-'}
-              </Text>
-              <Text style={styles.metaStrong}>{Number(exp.amount).toFixed(2)}</Text>
-            </View>
-            <Text style={styles.meta}>Raised: {formatDateTime(exp.createdAt)}</Text>
-            <Text style={styles.meta}>
-              Type: {getExpenseType(exp.category)} · Pending month: {getPendingMonth(exp)}
-            </Text>
-            <View style={styles.reviewBtn}>
-              <Text style={styles.reviewBtnText}>Review & Approve</Text>
-            </View>
-          </TouchableOpacity>
+          <Card key={exp._id} onPress={() => openReview(exp)}>
+            <CardTitle title={`${i + 1}. ${getEmployee(exp)?.name || '-'}`} badge="Pending" tone="warning" />
+            <InfoRow label="Amount" value={Number(exp.amount).toFixed(2)} bold />
+            <InfoRow label="Type" value={getExpenseType(exp.category)} />
+            <InfoRow label="Raised" value={formatDateTime(exp.createdAt)} />
+            <InfoRow label="Pending month" value={getPendingMonth(exp)} />
+            <ActionRow>
+              <View style={styles.reviewBtn}>
+                <Text style={styles.reviewBtnText}>Review & Approve</Text>
+              </View>
+            </ActionRow>
+          </Card>
         ))
       )}
     </ScreenShell>
@@ -194,39 +202,30 @@ const styles = StyleSheet.create({
   tabBtn: {
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: radii.md,
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#DCE3EC',
     backgroundColor: colors.backgroundLight,
   },
-  tabBtnActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  tabBtnActive: { backgroundColor: colors.primaryDark, borderColor: colors.primaryDark },
   tabText: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
   tabTextActive: { color: colors.primaryForeground },
-  hint: { fontSize: 12, color: colors.textSecondary, marginTop: -4, marginBottom: 12 },
-  warnHint: { fontSize: 12, color: colors.warning, marginTop: -4, marginBottom: 12 },
-  card: {
-    backgroundColor: colors.backgroundLight,
-    padding: 14,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 10,
-    gap: 4,
-  },
-  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
-  cardTitle: { fontWeight: '600', fontSize: 15, color: colors.textPrimary, flexShrink: 1 },
-  meta: { color: colors.textSecondary, fontSize: 13 },
+  hint: { fontSize: 13, color: colors.textTertiary, marginTop: -4, marginBottom: 12 },
+  warnHint: { fontSize: 13, color: '#B45309', marginTop: -4, marginBottom: 12 },
+  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 8 },
+  cardTitle: { fontWeight: '700', fontSize: 16, color: colors.textPrimary, flexShrink: 1 },
+  meta: { color: colors.textTertiary, fontSize: 13, marginTop: 2 },
   metaStrong: { color: colors.textPrimary, fontSize: 14, fontWeight: '600' },
-  badge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: radii.sm, marginVertical: 4 },
-  badgeText: { fontSize: 12, fontWeight: '500' },
+  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, maxWidth: 160 },
+  badgeText: { fontSize: 12, fontWeight: '700' },
   reviewBtn: {
-    alignSelf: 'flex-start',
-    marginTop: 8,
+    flex: 1,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: colors.success,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: radii.md,
+    borderRadius: 10,
   },
-  reviewBtnText: { color: '#fff', fontWeight: '600', fontSize: 13 },
+  reviewBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   empty: { textAlign: 'center', color: colors.textSecondary, marginTop: 40 },
 });

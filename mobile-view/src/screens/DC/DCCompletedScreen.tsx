@@ -9,16 +9,15 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  RefreshControl,
   Alert,
   ActivityIndicator,
   Modal,
-  Platform,
 } from 'react-native';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
-import ScreenShell, { PageSection } from '../../ui/ScreenShell';
-import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
+import ScreenShell from '../../ui/ScreenShell';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState } from '../../ui/Kit';
+import { Act } from '../../components/dc/DcUi';
 import { apiService, getApiUrl } from '../../services/api';
 
 // WebView for PDF/document display (like navbar iframe)
@@ -212,67 +211,26 @@ export default function DCCompletedScreen({ navigation }: any) {
       refreshing={refreshing}
       onRefresh={onRefresh}
     >
-<ScrollView style={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-        {dcs.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>✅</Text>
-            <Text style={styles.emptyText}>No completed DCs found</Text>
-          </View>
-        ) : (
-          dcs.map((dc) => (
-            <View key={dc._id} style={styles.card}>
-              <View style={styles.cardHeader}>
-                <Text style={styles.customerName}>{getCustomerName(dc)}</Text>
-                <View style={[styles.statusBadge, { backgroundColor: colors.success + '20' }]}>
-                  <Text style={[styles.statusBadgeText, { color: colors.success }]}>Completed</Text>
-                </View>
-              </View>
-              <View style={styles.cardBody}>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Product:</Text>
-                  <Text style={styles.infoValue}>{getProduct(dc)}</Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Quantity:</Text>
-                  <Text style={styles.infoValue}>{dc.requestedQuantity ?? dc.deliverableQuantity ?? '-'}</Text>
-                </View>
-                {(dc.dcDate || dc.completedAt) && (
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>DC Date:</Text>
-                    <Text style={styles.infoValue}>{formatDate(dc.dcDate || dc.completedAt)}</Text>
-                  </View>
-                )}
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Zone:</Text>
-                  <Text style={styles.infoValue}>{getZone(dc)}</Text>
-                </View>
-                {dc.employeeId && typeof dc.employeeId === 'object' && dc.employeeId.name && (
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Employee:</Text>
-                    <Text style={styles.infoValue}>{dc.employeeId.name}</Text>
-                  </View>
-                )}
-              </View>
-              <View style={styles.buttonRow}>
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.viewPdfButton]}
-                  onPress={() => openViewPdf(dc)}
-                  disabled={!!openingPdfId}
-                >
-                  {openingPdfId === dc._id ? <ActivityIndicator size="small" color={colors.textLight} /> : <Text style={styles.actionButtonText}>View PDF</Text>}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.stockReturnsButton]}
-                  onPress={() => openStockReturns(dc)}
-                  disabled={returnsLoading}
-                >
-                  <Text style={styles.actionButtonText}>Stock Returns</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))
-        )}
-      </ScrollView>
+{dcs.length === 0 ? (
+        <EmptyState icon="✅" title="No completed DCs found" message="Pull down to refresh." />
+      ) : (
+        dcs.map((dc) => (
+          <Card key={dc._id}>
+            <CardTitle title={getCustomerName(dc)} subtitle={`DC ${getDCNumber(dc)}`} badge="Completed" tone="success" />
+            <InfoRow label="Product" value={getProduct(dc)} />
+            <InfoRow label="Quantity" value={String(dc.requestedQuantity ?? dc.deliverableQuantity ?? '-')} />
+            {(dc.dcDate || dc.completedAt) ? <InfoRow label="DC date" value={formatDate(dc.dcDate || dc.completedAt)} /> : null}
+            <InfoRow label="Zone" value={getZone(dc)} />
+            {dc.employeeId && typeof dc.employeeId === 'object' && dc.employeeId.name ? (
+              <InfoRow label="Employee" value={dc.employeeId.name} />
+            ) : null}
+            <ActionRow>
+              <Act title="View PDF" onPress={() => openViewPdf(dc)} disabled={!!openingPdfId} loading={openingPdfId === dc._id} />
+              <Act title="Stock Returns" variant="outline" onPress={() => openStockReturns(dc)} disabled={returnsLoading} />
+            </ActionRow>
+          </Card>
+        ))
+      )}
 
       {/* PDF / Document modal - same as navbar "View PDF" dialog */}
       <Modal visible={pdfModalVisible} animationType="slide" transparent>
@@ -299,7 +257,7 @@ export default function DCCompletedScreen({ navigation }: any) {
                       <Text style={styles.pdfLoadingText}>Loading document...</Text>
                     </View>
                   )}
-                  onError={(syntheticEvent) => {
+                  onError={(syntheticEvent: any) => {
                     const { nativeEvent } = syntheticEvent;
                     console.warn('WebView PDF error:', nativeEvent);
                   }}
@@ -410,10 +368,10 @@ const styles = StyleSheet.create({
   viewPdfButton: { backgroundColor: colors.primary },
   stockReturnsButton: { backgroundColor: colors.info || '#0ea5e9' },
   actionButtonText: { ...typography.label.small, color: colors.textLight, fontWeight: '600' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 16 },
-  modalContent: { backgroundColor: colors.backgroundLight, borderRadius: 16, maxHeight: '90%', overflow: 'hidden' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(15,23,42,0.5)', justifyContent: 'center', padding: 16 },
+  modalContent: { backgroundColor: colors.backgroundLight, borderRadius: 14, maxHeight: '90%', overflow: 'hidden' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
-  modalTitle: { ...typography.heading.h3, color: colors.textPrimary, flex: 1 },
+  modalTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary, flex: 1 },
   modalClose: { padding: 8 },
   modalCloseText: { ...typography.label.medium, color: colors.primary, fontWeight: '600' },
   pdfContainer: { height: 400, padding: 8 },
@@ -427,11 +385,11 @@ const styles = StyleSheet.create({
   returnsLoadingText: { marginTop: 8, ...typography.body.small, color: colors.textSecondary },
   returnsEmpty: { padding: 40, alignItems: 'center' },
   returnsEmptyText: { ...typography.body.medium, color: colors.textSecondary },
-  returnCard: { backgroundColor: colors.background, borderRadius: 12, padding: 12, marginBottom: 10 },
+  returnCard: { backgroundColor: colors.background, borderRadius: 12, borderWidth: 1, borderColor: '#EEF2F7', padding: 12, marginBottom: 10 },
   returnCardTitle: { ...typography.label.medium, color: colors.textPrimary },
   returnCardDate: { ...typography.body.small, color: colors.textSecondary },
   returnCardStatus: { ...typography.body.small, color: colors.textSecondary, marginTop: 4 },
   returnDocRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
-  viewDocButton: { backgroundColor: colors.primary, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
+  viewDocButton: { backgroundColor: colors.primaryDark, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
   viewDocButtonText: { ...typography.label.small, color: colors.textLight },
 });

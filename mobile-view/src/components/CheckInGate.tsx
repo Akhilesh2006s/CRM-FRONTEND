@@ -124,10 +124,10 @@ export default function CheckInGate({ children }: { children: React.ReactNode })
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: '#F9FAFB' },
+  page: { flex: 1, backgroundColor: '#F8FAFC' },
   content: { padding: 16, paddingTop: 56 },
   header: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 16, gap: 8 },
-  title: { fontSize: 22, fontWeight: '700', color: '#171717' },
-  subtitle: { fontSize: 14, color: '#525252', marginTop: 4 },
-  more: { color: '#6B7280', textAlign: 'center' },
+  title: { fontSize: 17, fontWeight: '700', color: '#1E293B' },
+  subtitle: { fontSize: 13, color: '#64748B', marginTop: 4, lineHeight: 18 },
+  more: { color: '#64748B', fontSize: 13, textAlign: 'center' },
 });

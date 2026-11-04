@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Refres
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { Card, CardTitle, InfoRow, ChipRow, EmptyState, toneFor } from '../../ui/Kit';
 import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 
@@ -63,113 +64,49 @@ export default function PaymentTransactionReportScreen({ navigation }: any) {
   const totalAmount = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
 
   return (
-    <ScreenShell
-      title="Transaction Report"
-      loading={loading && !refreshing}
-      refreshing={refreshing}
-      onRefresh={onRefresh}
-    >
-<View style={styles.filterContainer}>
-        <DateField placeholder="Start date" value={filters.startDate} onChange={(text: string) => setFilters((f) => ({ ...f, startDate: text }))} style={styles.filterInput} />
-        <DateField placeholder="End date" value={filters.endDate} onChange={(text: string) => setFilters((f) => ({ ...f, endDate: text }))} style={styles.filterInput} />
-        <View style={styles.filterTabs}>
-          <TouchableOpacity style={[styles.filterTab, filters.status === 'all' && styles.filterTabActive]} onPress={() => setFilters((f) => ({ ...f, status: 'all' }))}>
-            <Text style={[styles.filterTabText, filters.status === 'all' && styles.filterTabTextActive]}>All</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.filterTab, filters.status === 'Approved' && styles.filterTabActive]} onPress={() => setFilters((f) => ({ ...f, status: 'Approved' }))}>
-            <Text style={[styles.filterTabText, filters.status === 'Approved' && styles.filterTabTextActive]}>Approved</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.filterTab, filters.status === 'Pending' && styles.filterTabActive]} onPress={() => setFilters((f) => ({ ...f, status: 'Pending' }))}>
-            <Text style={[styles.filterTabText, filters.status === 'Pending' && styles.filterTabTextActive]}>Pending</Text>
-          </TouchableOpacity>
-        </View>
-        <TouchableOpacity style={styles.searchButton} onPress={loadData}>
-          <Text style={styles.searchButtonText}>Apply Filters</Text>
-        </TouchableOpacity>
-      </View>
+    <ScreenShell title="Transaction Report" loading={loading && !refreshing} refreshing={refreshing} onRefresh={onRefresh}>
+      <PageSection title="Filters">
+        <DateField placeholder="Start date" value={filters.startDate} onChange={(text: string) => setFilters((f) => ({ ...f, startDate: text }))} />
+        <DateField placeholder="End date" value={filters.endDate} onChange={(text: string) => setFilters((f) => ({ ...f, endDate: text }))} />
+        <ChipRow
+          items={[
+            { key: 'all', label: 'All' },
+            { key: 'Approved', label: 'Approved' },
+            { key: 'Pending', label: 'Pending' },
+          ]}
+          value={filters.status}
+          onChange={(k) => setFilters((f) => ({ ...f, status: k }))}
+        />
+        <View style={{ height: 12 }} />
+        <WebButton title="Apply Filters" onPress={loadData} />
+      </PageSection>
       {totalAmount > 0 && (
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Total Amount:</Text>
-          <Text style={styles.summaryAmount}>{formatAmount(totalAmount)}</Text>
-          <Text style={styles.summaryCount}>{payments.length} transactions</Text>
-        </View>
+        <Card>
+          <InfoRow label="Total Amount" value={<Text style={styles.summaryAmount}>{formatAmount(totalAmount)}</Text>} />
+          <InfoRow label="Transactions" value={String(payments.length)} />
+        </Card>
       )}
-      <ScrollView style={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-        {payments.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>📊</Text>
-            <Text style={styles.emptyText}>No transactions found</Text>
-          </View>
-        ) : (
-          payments.map((payment) => (
-            <View key={payment._id} style={styles.card}>
-              <View style={styles.cardHeader}>
-                <Text style={styles.customerName}>{payment.customerName || 'N/A'}</Text>
-                <View style={[styles.statusBadge, { backgroundColor: (payment.status === 'Approved' ? colors.success : payment.status === 'Pending' ? colors.warning : colors.textSecondary) + '20' }]}>
-                  <Text style={[styles.statusBadgeText, { color: payment.status === 'Approved' ? colors.success : payment.status === 'Pending' ? colors.warning : colors.textSecondary }]}>
-                    {payment.status || 'Pending'}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.cardBody}>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Amount:</Text>
-                  <Text style={[styles.infoValue, styles.amountText]}>{formatAmount(payment.amount)}</Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Date:</Text>
-                  <Text style={styles.infoValue}>{formatDate(payment.paymentDate)}</Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Method:</Text>
-                  <Text style={styles.infoValue}>{payment.paymentMethod || '-'}</Text>
-                </View>
-              </View>
-            </View>
-          ))
-        )}
-      </ScrollView>
+      {payments.length === 0 ? (
+        <EmptyState icon="📊" title="No transactions found" />
+      ) : (
+        payments.map((payment) => (
+          <Card key={payment._id}>
+            <CardTitle
+              title={payment.customerName || 'N/A'}
+              badge={payment.status || 'Pending'}
+              tone={toneFor(payment.status || 'Pending')}
+            />
+            <InfoRow label="Amount" value={<Text style={styles.amountText}>{formatAmount(payment.amount)}</Text>} />
+            <InfoRow label="Date" value={formatDate(payment.paymentDate)} />
+            <InfoRow label="Method" value={payment.paymentMethod || '-'} />
+          </Card>
+        ))
+      )}
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
-  loadingText: { marginTop: 12, ...typography.body.medium, color: colors.textSecondary },
-  header: { paddingHorizontal: 20, paddingTop: 50, paddingBottom: 20, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
-  headerContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  backButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  backIcon: { fontSize: 24, color: colors.textLight, fontWeight: 'bold' },
-  headerTitle: { ...typography.heading.h1, color: colors.textLight, flex: 1, textAlign: 'center' },
-  placeholder: { width: 40 },
-  filterContainer: { backgroundColor: colors.backgroundLight, padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
-  filterInput: { ...typography.body.medium, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, color: colors.textPrimary, marginBottom: 12 },
-  filterTabs: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  filterTab: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: colors.background },
-  filterTabActive: { backgroundColor: colors.primary },
-  filterTabText: { ...typography.label.medium, color: colors.textSecondary },
-  filterTabTextActive: { color: colors.textLight, fontWeight: '600' },
-  searchButton: { paddingVertical: 12, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center' },
-  searchButtonText: { ...typography.label.medium, color: colors.textLight, fontWeight: '600' },
-  summaryCard: { backgroundColor: colors.primary, margin: 16, borderRadius: 16, padding: 20, alignItems: 'center' },
-  summaryLabel: { ...typography.body.medium, color: colors.textLight, opacity: 0.9, marginBottom: 8 },
-  summaryAmount: { ...typography.heading.h1, color: colors.textLight, fontWeight: 'bold', marginBottom: 4 },
-  summaryCount: { ...typography.body.medium, color: colors.textLight, opacity: 0.9 },
-  content: { flex: 1, padding: 16 },
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60 },
-  emptyIcon: { fontSize: 64, marginBottom: 16 },
-  emptyText: { ...typography.heading.h3, color: colors.textSecondary },
-  card: { backgroundColor: colors.backgroundLight, borderRadius: 16, padding: 16, marginBottom: 12, shadowColor: colors.shadowDark, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 3 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  customerName: { ...typography.heading.h3, color: colors.textPrimary, flex: 1 },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  statusBadgeText: { ...typography.label.small, fontWeight: '600' },
-  cardBody: { marginBottom: 12 },
-  infoRow: { flexDirection: 'row', marginBottom: 6 },
-  infoLabel: { ...typography.body.medium, color: colors.textSecondary, width: 100 },
-  infoValue: { ...typography.body.medium, color: colors.textPrimary, flex: 1 },
-  amountText: { ...typography.heading.h3, color: colors.success, fontWeight: '600' },
+  summaryAmount: { fontSize: 17, color: colors.primaryDark, fontWeight: '700' },
+  amountText: { fontSize: 15, color: colors.success, fontWeight: '700' },
 });
-
-

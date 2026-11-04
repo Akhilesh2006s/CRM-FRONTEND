@@ -2,10 +2,10 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebInput } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState } from '../../ui/Kit';
 import { useAuth } from '../../context/AuthContext';
 import { showAlert, showConfirm } from '../../utils/showAlert';
 
@@ -19,15 +19,6 @@ interface Employee {
   department?: string;
   zone?: string;
   cluster?: string;
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.infoRow}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value}</Text>
-    </View>
-  );
 }
 
 export default function EmployeesActiveScreen({ navigation }: any) {
@@ -127,13 +118,14 @@ export default function EmployeesActiveScreen({ navigation }: any) {
   const isHrExecutive = user?.role === 'HR Executive';
   // Only Admin / Super Admin may clear a mobile device binding (backend route rule).
   const canResetDevice = user?.role === 'Admin' || user?.role === 'Super Admin';
-  const filtered = items.filter(
-    (e) =>
-      e.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      e.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (e.phone || '').includes(searchQuery) ||
-      (e.zone || '').toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  const words = searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const filtered = items.filter((e) => {
+    if (!words.length) return true;
+    const text = [e.name, e.email, e.phone, e.mobile, e.role, e.department, e.zone, e.cluster]
+      .map((v) => String(v || '').toLowerCase())
+      .join(' ');
+    return words.every((w) => text.includes(w));
+  });
 
   return (
     <ScreenShell
@@ -148,7 +140,7 @@ export default function EmployeesActiveScreen({ navigation }: any) {
           style={styles.searchInput}
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholder="Search name/email/company number"
+          placeholder="Search name, email, phone, role, zone…"
         />
         <TouchableOpacity style={styles.refreshButton} onPress={loadData}>
           <Text style={styles.refreshButtonText}>Refresh</Text>
@@ -160,78 +152,64 @@ export default function EmployeesActiveScreen({ navigation }: any) {
         contentContainerStyle={styles.contentContainer}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
+        <Text style={styles.count}>{filtered.length} employee{filtered.length === 1 ? '' : 's'}</Text>
         {filtered.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>👥</Text>
-            <Text style={styles.emptyText}>No active employees found</Text>
-          </View>
+          <EmptyState icon="👥" title="No active employees found" message={searchQuery ? 'Try a different search.' : undefined} />
         ) : (
           filtered.map((e) => (
-            <View key={e._id} style={styles.card}>
-              <View style={styles.cardHeader}>
-                <Text style={styles.employeeName} numberOfLines={2}>
-                  {e.name}
-                </Text>
-                <View style={styles.roleBadge}>
-                  <Text style={styles.roleBadgeText}>{e.role}</Text>
-                </View>
-              </View>
+            <Card key={e._id}>
+              <CardTitle title={e.name} badge={e.role} tone="info" />
+              <InfoRow label="Email" value={e.email} />
+              <InfoRow label="Contact No" value={e.phone && e.phone !== '0' ? e.phone : ''} phone />
+              <InfoRow label="Department" value={e.department} />
+              <InfoRow label="Zone" value={e.zone} />
+              <InfoRow label="Cluster" value={e.cluster} />
 
-              <View style={styles.cardBody}>
-                <InfoRow label="Email" value={e.email || '-'} />
-                <InfoRow label="Company Contact No" value={(e.phone && e.phone !== '0') ? e.phone : '-'} />
-                <InfoRow label="Role" value={e.role || '-'} />
-                <InfoRow label="Department" value={e.department || '-'} />
-                <InfoRow label="Cluster" value={e.cluster || '-'} />
-              </View>
-
-              <View style={styles.actions}>
+              <ActionRow>
                 <TouchableOpacity
-                  style={styles.viewButton}
+                  style={[styles.btn, styles.btnPrimary]}
                   onPress={() => navigation.navigate('EmployeeDetails', { id: e._id })}
                 >
-                  <Text style={styles.viewButtonText}>View Details</Text>
+                  <Text style={styles.btnPrimaryText}>View Details</Text>
                 </TouchableOpacity>
-              </View>
-              {!isCoordinator && (
-                <View style={styles.actions}>
-                  {!isHrExecutive ? (
-                    <TouchableOpacity
-                      style={styles.editButton}
-                      onPress={() => navigation.navigate('EmployeeEdit', { id: e._id })}
-                      disabled={busyId === e._id}
-                    >
-                      <Text style={styles.editButtonText}>Edit</Text>
-                    </TouchableOpacity>
-                  ) : null}
+                {!isCoordinator && !isHrExecutive ? (
                   <TouchableOpacity
-                    style={styles.resetButton}
+                    style={styles.btn}
+                    onPress={() => navigation.navigate('EmployeeEdit', { id: e._id })}
+                    disabled={busyId === e._id}
+                  >
+                    <Text style={styles.btnText}>Edit</Text>
+                  </TouchableOpacity>
+                ) : null}
+                {!isCoordinator ? (
+                  <TouchableOpacity
+                    style={styles.btn}
                     onPress={() => resetPassword(e._id, e.name)}
                     disabled={busyId === e._id}
                   >
-                    <Text style={styles.resetButtonText}>Reset Password</Text>
+                    <Text style={styles.btnText}>Reset Password</Text>
                   </TouchableOpacity>
-                  {canResetDevice ? (
-                    <TouchableOpacity
-                      style={styles.resetButton}
-                      onPress={() => resetDevice(e._id, e.name)}
-                      disabled={busyId === e._id}
-                    >
-                      <Text style={styles.resetButtonText}>Reset Device</Text>
-                    </TouchableOpacity>
-                  ) : null}
+                ) : null}
+                {!isCoordinator && canResetDevice ? (
                   <TouchableOpacity
-                    style={[styles.deactivateButton, busyId === e._id && styles.buttonDisabled]}
+                    style={styles.btn}
+                    onPress={() => resetDevice(e._id, e.name)}
+                    disabled={busyId === e._id}
+                  >
+                    <Text style={styles.btnText}>Reset Device</Text>
+                  </TouchableOpacity>
+                ) : null}
+                {!isCoordinator ? (
+                  <TouchableOpacity
+                    style={[styles.btn, styles.btnWarn, busyId === e._id && styles.buttonDisabled]}
                     onPress={() => deactivate(e._id, e.name)}
                     disabled={busyId === e._id}
                   >
-                    <Text style={styles.deactivateButtonText}>
-                      {busyId === e._id ? 'Working…' : 'Deactivate'}
-                    </Text>
+                    <Text style={styles.btnWarnText}>{busyId === e._id ? 'Working…' : 'Deactivate'}</Text>
                   </TouchableOpacity>
-                </View>
-              )}
-            </View>
+                ) : null}
+              </ActionRow>
+            </Card>
           ))
         )}
       </ScrollView>
@@ -242,144 +220,39 @@ export default function EmployeesActiveScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
-    padding: 16,
+    alignItems: 'center',
+    padding: 12,
     gap: 8,
     backgroundColor: colors.backgroundLight,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: '#EEF2F7',
   },
-  searchInput: {
-    flex: 1,
-    ...typography.body.medium,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 12,
-    color: colors.textPrimary,
-  },
+  searchInput: { flex: 1, marginBottom: 0 },
   refreshButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: colors.primary,
+    paddingHorizontal: 14,
+    minHeight: 48,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#DCE3EC',
+    backgroundColor: colors.backgroundLight,
     justifyContent: 'center',
   },
-  refreshButtonText: {
-    ...typography.label.medium,
-    color: colors.textLight,
-    fontWeight: '600',
-  },
+  refreshButtonText: { fontSize: 14, fontWeight: '600', color: colors.primaryDark },
   content: { flex: 1 },
   contentContainer: { padding: 16, paddingBottom: 32 },
-  emptyContainer: {
-    alignItems: 'center',
-    paddingVertical: 60,
-  },
-  emptyIcon: { fontSize: 64, marginBottom: 16 },
-  emptyText: { ...typography.heading.h3, color: colors.textSecondary },
-  card: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    marginBottom: 12,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 10,
-    marginBottom: 12,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
-  },
-  employeeName: {
-    ...typography.heading.h3,
-    color: colors.textPrimary,
-    flex: 1,
-  },
-  roleBadge: {
-    backgroundColor: colors.infoLight,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    maxWidth: 140,
-  },
-  roleBadgeText: {
-    ...typography.label.small,
-    color: colors.info,
-  },
-  cardBody: { gap: 8 },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  infoLabel: {
-    ...typography.body.small,
-    color: colors.textMuted,
-    minWidth: 90,
-  },
-  infoValue: {
-    ...typography.body.medium,
-    color: colors.textPrimary,
-    flex: 1,
-    textAlign: 'right',
-  },
-  actions: {
-    marginTop: 14,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  viewButton: {
-    borderRadius: 8,
+  count: { fontSize: 13, color: colors.textTertiary, marginBottom: 8 },
+  btn: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: colors.primary,
-  },
-  viewButtonText: {
-    ...typography.label.medium,
-    color: colors.textLight,
-    fontWeight: '600',
-  },
-  editButton: {
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderColor: '#DCE3EC',
     backgroundColor: colors.backgroundLight,
   },
-  editButtonText: {
-    ...typography.label.medium,
-    color: colors.textPrimary,
-  },
-  resetButton: {
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: colors.backgroundMuted,
-  },
-  resetButtonText: {
-    ...typography.label.medium,
-    color: colors.textPrimary,
-  },
-  deactivateButton: {
-    borderWidth: 1,
-    borderColor: '#F2C46D',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: colors.backgroundLight,
-  },
-  deactivateButtonText: {
-    ...typography.label.medium,
-    color: '#B45309',
-  },
+  btnText: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
+  btnPrimary: { backgroundColor: colors.primaryDark, borderColor: colors.primaryDark },
+  btnPrimaryText: { fontSize: 13, fontWeight: '700', color: colors.primaryForeground },
+  btnWarn: { borderColor: '#F2C46D' },
+  btnWarnText: { fontSize: 13, fontWeight: '600', color: '#B45309' },
   buttonDisabled: { opacity: 0.6 },
 });

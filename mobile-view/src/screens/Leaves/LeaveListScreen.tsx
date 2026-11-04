@@ -5,15 +5,14 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
-  ActivityIndicator,
   Modal,
-  TextInput,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { apiService } from '../../services/api';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
-import { WebInput, WebButton, DataTable } from '../../ui/WebPrimitives';
+import { WebInput, WebButton, WebLabel } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, EmptyState, toneFor } from '../../ui/Kit';
+import { colors } from '../../theme/colors';
 import MessageBanner from '../../components/MessageBanner';
 import {
   LEAVE_TYPE_OPTIONS,
@@ -137,58 +136,36 @@ export default function LeaveListScreen({ navigation }: any) {
     }
   };
 
+  const fmt = (v?: string) =>
+    v ? new Date(v).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'N/A';
+
   return (
-    <ScreenShell title="Leave List"
-      loading={loading}>
-      <PageSection title="Leave List">
-<View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backButton}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>My Leaves</Text>
-        <TouchableOpacity onPress={() => setShowAddModal(true)}>
+    <ScreenShell
+      title="My Leaves"
+      loading={loading}
+      headerRight={
+        <TouchableOpacity style={styles.addBtn} onPress={() => setShowAddModal(true)} hitSlop={8}>
           <Text style={styles.addButton}>+ Add</Text>
         </TouchableOpacity>
-      </View>
-
-      {loading ? (
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
-        </View>
+      }
+    >
+      {successMessage && <MessageBanner type="success" message={successMessage} onDismiss={clearMessages} />}
+      {leaves.length === 0 ? (
+        <EmptyState icon="🗓️" title="No leave requests" message="Tap + Add to request a leave." />
       ) : (
-        <ScrollView style={styles.content}>
-          {successMessage && (
-            <MessageBanner type="success" message={successMessage} onDismiss={clearMessages} />
-          )}
-          {leaves.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No leave requests found</Text>
-            </View>
-          ) : (
-            leaves.map((leave) => (
-              <View key={leave._id} style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <Text style={styles.cardTitle}>{leaveTypeLabel(leave.leaveType)}</Text>
-                  <Text style={[styles.status, { color: getStatusColor(leave.status) }]}>
-                    {leave.status || 'Pending'}
-                  </Text>
-                </View>
-                <Text style={styles.cardSubtitle}>
-                  {leaveDayTypeLabel(leave)} · {formatLeaveDays(leaveDayCount(leave))}
-                </Text>
-                <Text style={styles.cardSubtitle}>
-                  From: {leave.startDate ? new Date(leave.startDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'N/A'}
-                </Text>
-                <Text style={styles.cardSubtitle}>
-                  To: {leave.endDate ? new Date(leave.endDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'N/A'}
-                </Text>
-                {leave.reason && (
-                  <Text style={styles.cardSubtitle}>Reason: {leave.reason}</Text>
-                )}
-              </View>
-            ))
-          )}
-        </ScrollView>
+        leaves.map((leave) => (
+          <Card key={leave._id}>
+            <CardTitle
+              title={leaveTypeLabel(leave.leaveType)}
+              subtitle={`${leaveDayTypeLabel(leave)} · ${formatLeaveDays(leaveDayCount(leave))}`}
+              badge={leave.status || 'Pending'}
+              tone={toneFor(leave.status || 'Pending')}
+            />
+            <InfoRow label="From" value={fmt(leave.startDate)} />
+            <InfoRow label="To" value={fmt(leave.endDate)} />
+            <InfoRow label="Reason" value={leave.reason} />
+          </Card>
+        ))
       )}
 
       <Modal
@@ -197,45 +174,35 @@ export default function LeaveListScreen({ navigation }: any) {
         presentationStyle="pageSheet"
         onRequestClose={() => setShowAddModal(false)}
       >
-        <ScrollView style={styles.modalContainer}>
+        <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Request Leave</Text>
-            <TouchableOpacity onPress={() => setShowAddModal(false)}>
+            <TouchableOpacity onPress={() => setShowAddModal(false)} hitSlop={10}>
               <Text style={styles.closeButton}>✕</Text>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.modalContent}>
+          <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
             {errorMessage && showAddModal && (
               <MessageBanner type="error" message={errorMessage} onDismiss={clearMessages} />
             )}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Leave Type *</Text>
+            <PageSection title="Leave type">
+              <WebLabel>Leave Type *</WebLabel>
               <View style={styles.typeGrid}>
                 {leaveTypes.map((type) => (
                   <TouchableOpacity
                     key={type.value}
-                    style={[
-                      styles.typeButton,
-                      leaveType === type.value && styles.typeButtonSelected,
-                    ]}
+                    style={[styles.typeButton, leaveType === type.value && styles.typeButtonSelected]}
                     onPress={() => setLeaveType(type.value)}
                   >
-                    <Text
-                      style={[
-                        styles.typeButtonText,
-                        leaveType === type.value && styles.typeButtonTextSelected,
-                      ]}
-                    >
+                    <Text style={[styles.typeButtonText, leaveType === type.value && styles.typeButtonTextSelected]}>
                       {type.label}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
-            </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Leave Duration *</Text>
+              <WebLabel>Leave Duration *</WebLabel>
               <View style={styles.typeGrid}>
                 {LEAVE_DAY_TYPES.map((t) => (
                   <TouchableOpacity
@@ -249,238 +216,93 @@ export default function LeaveListScreen({ navigation }: any) {
                   </TouchableOpacity>
                 ))}
               </View>
-            </View>
 
-            {isHalfDay && (
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Which half *</Text>
-                <View style={styles.typeGrid}>
-                  {HALF_DAY_SESSIONS.map((s) => (
-                    <TouchableOpacity
-                      key={s}
-                      style={[styles.typeButton, halfDaySession === s && styles.typeButtonSelected]}
-                      onPress={() => setHalfDaySession(s)}
-                    >
-                      <Text style={[styles.typeButtonText, halfDaySession === s && styles.typeButtonTextSelected]}>
-                        {s}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            )}
+              {isHalfDay && (
+                <>
+                  <WebLabel>Which half *</WebLabel>
+                  <View style={styles.typeGrid}>
+                    {HALF_DAY_SESSIONS.map((s) => (
+                      <TouchableOpacity
+                        key={s}
+                        style={[styles.typeButton, halfDaySession === s && styles.typeButtonSelected]}
+                        onPress={() => setHalfDaySession(s)}
+                      >
+                        <Text style={[styles.typeButtonText, halfDaySession === s && styles.typeButtonTextSelected]}>{s}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </>
+              )}
+            </PageSection>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>{isHalfDay ? 'Leave Date *' : 'Start Date *'}</Text>
+            <PageSection title="Dates">
+              <WebLabel>{isHalfDay ? 'Leave Date *' : 'Start Date *'}</WebLabel>
               <DateField placeholder={isHalfDay ? 'Leave Date *' : 'Start Date *'} value={startDate} onChange={setStartDate} />
-            </View>
 
-            {!isHalfDay && (
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>End Date *</Text>
-                <DateField placeholder="End Date *" value={endDate} onChange={setEndDate} />
-              </View>
-            )}
+              {!isHalfDay && (
+                <View style={{ marginTop: 12 }}>
+                  <WebLabel>End Date *</WebLabel>
+                  <DateField placeholder="End Date *" value={endDate} onChange={setEndDate} />
+                </View>
+              )}
 
-            {startDate && effectiveEndDate ? (
-              <Text style={styles.label}>
-                Total: {formatLeaveDays(leaveDayCount({ dayType, startDate, endDate: effectiveEndDate }))}
-              </Text>
-            ) : null}
+              {startDate && effectiveEndDate ? (
+                <Text style={styles.total}>
+                  Total: {formatLeaveDays(leaveDayCount({ dayType, startDate, endDate: effectiveEndDate }))}
+                </Text>
+              ) : null}
+            </PageSection>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Reason *</Text>
+            <PageSection title="Reason">
+              <WebLabel>Reason *</WebLabel>
               <WebInput
-                style={[styles.input, styles.textArea]}
+                style={styles.textArea}
                 placeholder="Enter reason for leave"
                 value={reason}
                 onChangeText={setReason}
                 multiline
                 numberOfLines={4}
               />
-            </View>
+            </PageSection>
 
-            <TouchableOpacity
-              style={[styles.submitButton, submitting && styles.buttonDisabled]}
-              onPress={handleSubmit}
-              disabled={submitting}
-            >
-              {submitting ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.submitButtonText}>Submit Leave Request</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
+            <WebButton title="Submit Leave Request" onPress={handleSubmit} loading={submitting} disabled={submitting} />
+          </ScrollView>
+        </View>
       </Modal>
-      </PageSection>
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    paddingTop: 60,
-    backgroundColor: '#007AFF',
-  },
-  backButton: {
-    color: '#fff',
-    fontSize: 16,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  addButton: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  content: {
-    flex: 1,
-    padding: 20,
-  },
-  emptyContainer: {
-    padding: 40,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#666',
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    flex: 1,
-  },
-  cardSubtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
-  },
-  status: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
+  addBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: colors.accent },
+  addButton: { color: colors.primaryDark, fontSize: 14, fontWeight: '700' },
+  modalContainer: { flex: 1, backgroundColor: colors.background },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
-    paddingTop: 60,
-    backgroundColor: '#007AFF',
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  closeButton: {
-    fontSize: 24,
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  modalContent: {
-    padding: 20,
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
-    color: '#333',
-  },
-  input: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 16,
-    fontSize: 16,
-  },
-  textArea: {
-    height: 100,
-    textAlignVertical: 'top',
-  },
-  typeGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  typeButton: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: '#fff',
+    paddingTop: 20,
+    paddingBottom: 14,
+    backgroundColor: colors.backgroundLight,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEF2F7',
+  },
+  modalTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
+  closeButton: { fontSize: 18, color: colors.textTertiary, fontWeight: '700' },
+  modalContent: { padding: 16, paddingBottom: 40 },
+  textArea: { height: 100, textAlignVertical: 'top' },
+  total: { marginTop: 12, fontSize: 14, fontWeight: '700', color: colors.primaryDark },
+  typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
+  typeButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: colors.backgroundLight,
     borderWidth: 1,
-    borderColor: '#ddd',
-    marginRight: 8,
-    marginBottom: 8,
+    borderColor: '#DCE3EC',
   },
-  typeButtonSelected: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
-  },
-  typeButtonText: {
-    fontSize: 14,
-    color: '#333',
-  },
-  typeButtonTextSelected: {
-    color: '#fff',
-  },
-  submitButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  submitButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-  },
+  typeButtonSelected: { backgroundColor: colors.primaryDark, borderColor: colors.primaryDark },
+  typeButtonText: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+  typeButtonTextSelected: { color: '#FFFFFF' },
 });
-

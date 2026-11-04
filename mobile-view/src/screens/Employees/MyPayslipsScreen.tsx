@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, radii, spacing } from '../../theme/colors';
+import { colors, spacing } from '../../theme/colors';
 import ScreenShell from '../../ui/ScreenShell';
+import { WebButton } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState } from '../../ui/Kit';
 import MessageBanner from '../../components/MessageBanner';
 import { ExpenseBillModal } from '../../components/expenses/ExpenseBillViewer';
 import { apiService } from '../../services/api';
@@ -72,24 +74,25 @@ export default function MyPayslipsScreen() {
       }}
     >
       {error ? <MessageBanner type="error" message={error} onDismiss={() => setError('')} /> : null}
-      {!error && rows.length === 0 ? <Text style={styles.empty}>No pay slips yet.</Text> : null}
+      {!error && rows.length === 0 ? <EmptyState icon="🧾" title="No pay slips yet." /> : null}
       {rows.map((row) => (
-        <View key={row.month} style={styles.card}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.month}>{row.month}</Text>
-            <Text style={styles.meta}>Yearly salary: {rupees(row.yearlySalary)}</Text>
-            <Text style={styles.meta}>Monthly take-home: {rupees(row.monthlyTakeHome)}</Text>
-          </View>
-          {row.pdfUrl ? (
-            <TouchableOpacity style={styles.btn} onPress={() => setPdf({ url: row.pdfUrl!, title: `Pay slip ${row.month}` })}>
-              <Text style={styles.btnText}>View PDF</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity style={styles.btn} onPress={() => openGenerated(row.month)} disabled={opening === row.month}>
-              <Text style={styles.btnText}>{opening === row.month ? 'Opening…' : 'View'}</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        <Card key={row.month}>
+          <CardTitle title={row.month} />
+          <InfoRow label="Yearly salary" value={rupees(row.yearlySalary)} />
+          <InfoRow label="Take-home" value={rupees(row.monthlyTakeHome)} bold />
+          <ActionRow>
+            {row.pdfUrl ? (
+              <WebButton title="View PDF" variant="outline" onPress={() => setPdf({ url: row.pdfUrl!, title: `Pay slip ${row.month}` })} />
+            ) : (
+              <WebButton
+                title={opening === row.month ? 'Opening…' : 'View'}
+                variant="outline"
+                onPress={() => openGenerated(row.month)}
+                disabled={opening === row.month}
+              />
+            )}
+          </ActionRow>
+        </Card>
       ))}
 
       <ExpenseBillModal url={pdf?.url} title={pdf?.title} visible={!!pdf} onClose={() => setPdf(null)} />
@@ -125,21 +128,6 @@ export default function MyPayslipsScreen() {
 
 const styles = StyleSheet.create({
   empty: { textAlign: 'center', color: colors.textSecondary, paddingVertical: 32 },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: colors.backgroundLight,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    padding: 12,
-    marginBottom: 8,
-  },
-  month: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
-  meta: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
-  btn: { borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, paddingHorizontal: 12, paddingVertical: 8 },
-  btnText: { fontSize: 13, fontWeight: '600', color: colors.primary },
   modalRoot: { flex: 1, backgroundColor: colors.backgroundLight },
   modalHeader: {
     flexDirection: 'row',
@@ -151,5 +139,5 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  modalTitle: { fontSize: 18, fontWeight: '600', color: colors.textPrimary },
+  modalTitle: { fontSize: 17, fontWeight: '600', color: colors.textPrimary },
 });

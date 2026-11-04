@@ -16,7 +16,7 @@ import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
 import { phoneDigitsError, sanitizePhoneDigits } from '../../utils/phone';
 import { useAuth } from '../../context/AuthContext';
-import ScreenShell from '../../ui/ScreenShell';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 import {
@@ -538,7 +538,9 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
           <MessageBanner type="error" message={errorMessage} onDismiss={clearMessages} />
         )}
 
-        <Text style={styles.mandatoryNote}>Fields marked with * are mandatory.</Text>
+        <Text style={styles.mandatoryNote}>Fields marked * are required.</Text>
+
+        <PageSection title="School">
 
         {isSuperAdmin ? (
           <WebSelect
@@ -580,6 +582,9 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
           items={SCHOOL_TYPE_OPTIONS}
         />
 
+        </PageSection>
+
+        <PageSection title="Contact">
         <FormField
           label="School contact person *"
           value={form.contact_person}
@@ -634,6 +639,9 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
           placeholder="e.g. Accountant"
         />
 
+        </PageSection>
+
+        <PageSection title="Address">
         <FormField
           label="Pincode *"
           value={form.pincode}
@@ -701,6 +709,9 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
           />
         </View>
 
+        </PageSection>
+
+        <PageSection title="School details">
         <FormField
           label="Average School Fee *"
           value={form.average_fee}
@@ -773,8 +784,10 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
           />
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Products * (all required — cannot deselect)</Text>
+        </PageSection>
+
+        <PageSection title="Products *">
+          <Text style={styles.hint}>Pick a status for each. Hot / Warm need Strength, Price and Chance %.</Text>
           {loadingProducts ? (
             <ActivityIndicator color={colors.primary} style={{ marginVertical: 12 }} />
           ) : products.length === 0 ? (
@@ -841,10 +854,9 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
               );
             })
           )}
-          <Text style={styles.hint}>
-            All products are required. Choose a status for each. Strength, Unit Price, and Chance % are required only for Hot and Warm.
-          </Text>
-        </View>
+        </PageSection>
+
+        <PageSection title="Follow-up">
 
 
         <FormField
@@ -934,6 +946,8 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
           </Modal>
         )}
 
+        </PageSection>
+
         <WebButton
           title={submitting ? 'Creating...' : 'Create New School Lead'}
           onPress={handleSubmit}
@@ -980,29 +994,13 @@ function FormField({
 
 const styles = StyleSheet.create({
   content: { flex: 1 },
-  contentContainer: { padding: 20, paddingBottom: 48 },
-  mandatoryNote: {
-    ...typography.body.small,
-    color: colors.textSecondary,
-    marginBottom: 16,
-  },
-  fieldContainer: { marginBottom: 16 },
-  label: {
-    ...typography.label.medium,
-    color: colors.textPrimary,
-    marginBottom: 8,
-  },
-  input: {
-    ...typography.body.medium,
-    backgroundColor: colors.backgroundLight,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 14,
-    color: colors.textPrimary,
-  },
-  inputDisabled: { backgroundColor: colors.background, opacity: 0.7 },
-  textAreaContainer: { marginBottom: 16 },
+  contentContainer: { paddingBottom: 32 },
+  mandatoryNote: { fontSize: 13, color: colors.textTertiary, marginBottom: 12 },
+  fieldContainer: { marginBottom: 2 },
+  label: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 6 },
+  input: {},
+  inputDisabled: { backgroundColor: colors.backgroundMuted, color: colors.textTertiary },
+  textAreaContainer: { marginBottom: 2 },
   textArea: {
     minHeight: 88,
     textAlignVertical: 'top',
@@ -1017,11 +1015,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginLeft: 8,
   },
-  hint: {
-    ...typography.body.small,
-    color: colors.textSecondary,
-    marginBottom: 12,
-  },
+  hint: { fontSize: 13, color: colors.textTertiary, marginTop: -6, marginBottom: 12 },
   pincodeError: {
     ...typography.body.small,
     color: colors.error || '#DC2626',
@@ -1040,7 +1034,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
     marginBottom: 10,
-    backgroundColor: colors.backgroundLight,
+    backgroundColor: colors.background,
   },
   productHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   checkbox: {
@@ -1058,19 +1052,21 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
   },
   checkboxMark: { color: '#fff', fontSize: 14, fontWeight: '700' },
-  productName: { ...typography.body.medium, fontWeight: '600', flex: 1 },
-  productFields: { gap: 4 },
+  productName: { fontSize: 15, fontWeight: '700', color: colors.textPrimary, flex: 1 },
+  productFields: {},
   dateTouchable: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: colors.backgroundLight,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 14,
+    borderColor: '#DCE3EC',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    minHeight: 48,
+    marginBottom: 14,
   },
-  dateText: { ...typography.body.medium, color: colors.textPrimary },
+  dateText: { fontSize: 15, color: colors.textPrimary },
   datePlaceholder: { color: colors.textMuted },
   calendarIcon: { fontSize: 18 },
   dateOverlay: {

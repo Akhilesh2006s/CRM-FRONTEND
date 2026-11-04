@@ -1,8 +1,8 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { colors, radii } from '../../theme/colors';
-import { typography } from '../../theme/typography';
+import { colors } from '../../theme/colors';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState } from '../../ui/Kit';
 import ScreenShell from '../../ui/ScreenShell';
 import MessageBanner from '../../components/MessageBanner';
 import { apiService } from '../../services/api';
@@ -81,49 +81,39 @@ export default function LeavesPendingScreen() {
         loadData();
       }}
     >
-      <Text style={styles.intro}>
-        Each leave needs two approvals: BDE — Zonal Manager + HR Manager; Trainer — Product Head + HR Manager; other
-        roles — Admin + HR Manager. Any rejection rejects the leave.
-      </Text>
+      <View style={styles.intro}>
+        <Text style={styles.introText}>
+          Each leave needs two approvals: BDE — Zonal Manager + HR Manager; Trainer — Product Head + HR Manager; other
+          roles — Admin + HR Manager. Any rejection rejects the leave.
+        </Text>
+      </View>
       {loadError ? <MessageBanner type="error" message={loadError} onDismiss={() => setLoadError(null)} /> : null}
 
       {leaves.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No pending leaves</Text>
-        </View>
+        <EmptyState icon="✅" title="No pending leaves" message="All caught up." />
       ) : (
         leaves.map((leave) => (
-          <View key={leave._id} style={[styles.card, leave.canDecide && styles.cardActionable]}>
-            <View style={styles.cardHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.employeeName}>{employeeName(leave)}</Text>
-                <Text style={styles.code}>
-                  {formatEmployeeCode(typeof leave.employeeId === 'object' && leave.employeeId ? leave.employeeId.empCode : undefined)}
-                </Text>
-              </View>
-              <Text style={styles.leaveType}>
-                {leaveTypeLabel(leave.leaveType)} · {leaveDayTypeLabel(leave)} · {formatLeaveDays(leaveDayCount(leave))}
-              </Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>From:</Text>
-              <Text style={styles.infoValue}>{formatDate(leave.startDate)}</Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>To:</Text>
-              <Text style={styles.infoValue}>{formatDate(leave.endDate)}</Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Reason:</Text>
-              <Text style={styles.infoValue}>{leave.reason || '-'}</Text>
-            </View>
+          <Card key={leave._id} style={leave.canDecide ? styles.cardActionable : undefined}>
+            <CardTitle
+              title={employeeName(leave)}
+              subtitle={formatEmployeeCode(typeof leave.employeeId === 'object' && leave.employeeId ? leave.employeeId.empCode : undefined)}
+              badge={leave.canDecide ? 'Your action' : 'Pending'}
+              tone={leave.canDecide ? 'info' : 'warning'}
+            />
+            <InfoRow label="Leave" value={`${leaveTypeLabel(leave.leaveType)} · ${leaveDayTypeLabel(leave)}`} />
+            <InfoRow label="Days" value={formatLeaveDays(leaveDayCount(leave))} />
+            <InfoRow label="From" value={formatDate(leave.startDate)} />
+            <InfoRow label="To" value={formatDate(leave.endDate)} />
+            <InfoRow label="Reason" value={leave.reason || '-'} />
             <View style={styles.section}>
               <LeaveApprovalStatus leave={leave} />
             </View>
-            <View style={styles.footer}>
-              <LeaveDecisionActions leave={leave} isOwn={isOwnLeave(leave)} onDone={loadData} />
-            </View>
-          </View>
+            <ActionRow>
+              <View style={{ flex: 1 }}>
+                <LeaveDecisionActions leave={leave} isOwn={isOwnLeave(leave)} onDone={loadData} />
+              </View>
+            </ActionRow>
+          </Card>
         ))
       )}
     </ScreenShell>
@@ -131,26 +121,8 @@ export default function LeavesPendingScreen() {
 }
 
 const styles = StyleSheet.create({
-  intro: { fontSize: 13, color: colors.textSecondary, lineHeight: 18, marginBottom: 12 },
-  emptyContainer: { alignItems: 'center', paddingVertical: 60 },
-  emptyText: { ...typography.heading.h3, color: colors.textSecondary },
-  card: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    marginBottom: 12,
-  },
+  intro: { backgroundColor: colors.accent, borderRadius: 12, padding: 12, marginBottom: 12 },
+  introText: { fontSize: 13, color: colors.accentForeground, lineHeight: 18 },
   cardActionable: { borderColor: colors.primaryLight },
-  // Name on its own line so long names are not squeezed into a narrow column.
-  cardHeader: { marginBottom: 10, gap: 4 },
-  employeeName: { ...typography.heading.h3, color: colors.textPrimary },
-  code: { fontSize: 12, color: colors.textSecondary },
-  leaveType: { ...typography.body.medium, color: colors.textSecondary },
-  infoRow: { flexDirection: 'row', marginBottom: 4 },
-  infoLabel: { ...typography.body.medium, color: colors.textSecondary, width: 70 },
-  infoValue: { ...typography.body.medium, color: colors.textPrimary, flex: 1 },
   section: { marginTop: 8 },
-  footer: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border },
 });

@@ -23,8 +23,9 @@ import { apiService } from '../../services/api';
 import { phoneDigitsError, sanitizePhoneDigits } from '../../utils/phone';
 import { useAuth } from '../../context/AuthContext';
 import { navigateRoot } from '../../navigation/navigationRef';
-import ScreenShell from '../../ui/ScreenShell';
-import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
+import { InfoRow, EmptyState } from '../../ui/Kit';
 import MessageBanner from '../../components/MessageBanner';
 import { useDcCatalog } from '../../hooks/useDcCatalog';
 import { DcCategoryPicker } from '../../components/dc/DcCategoryPicker';
@@ -136,7 +137,7 @@ function DateField({
   if (Platform.OS === 'web') {
     return (
       <View style={styles.fieldContainer}>
-        <Text style={styles.label}>{label}</Text>
+        <WebLabel>{label}</WebLabel>
         {React.createElement('input', {
           type: 'date',
           value: value || '',
@@ -163,7 +164,7 @@ function DateField({
 
   return (
     <View style={styles.fieldContainer}>
-      <Text style={styles.label}>{label}</Text>
+      <WebLabel>{label}</WebLabel>
       <TouchableOpacity style={styles.dateTouchable} onPress={() => setShowPicker(true)} activeOpacity={0.7}>
         <Text style={[styles.dateText, !value && styles.placeholderText]}>{ymdToDmy(value) || 'Tap to pick date'}</Text>
         <Text style={styles.calendarIcon}>📅</Text>
@@ -396,11 +397,12 @@ function CreateSaleForm({ navigation }: { navigation: any }) {
   return (
     <ScreenShell
       title="Create Deal (Sale)"
-      subtitle="Creating a deal automatically generates a DC. Submit PO from My DCs."
+      subtitle="A DC is created automatically with the deal."
     >
       {error ? <MessageBanner type="error" message={error} onDismiss={() => setError(null)} /> : null}
       {success ? <MessageBanner type="success" message={success} onDismiss={() => setSuccess(null)} /> : null}
 
+      <PageSection title="School">
       <WebInput
         placeholder="School name *"
         value={form.school_name}
@@ -420,6 +422,9 @@ function CreateSaleForm({ navigation }: { navigation: any }) {
         items={SCHOOL_TYPES}
         placeholder="Select Type"
       />
+      </PageSection>
+
+      <PageSection title="Contacts">
       <WebInput
         placeholder="Contact person *"
         value={form.contact_person}
@@ -461,8 +466,10 @@ function CreateSaleForm({ navigation }: { navigation: any }) {
         style={{ minHeight: 72 }}
       />
 
-      <Text style={styles.sectionTitle}>Products *</Text>
-      <Text style={styles.mandatoryNote}>Check products to enter Price, Quantity, and Strength.</Text>
+      </PageSection>
+
+      <PageSection title="Products *">
+      <Text style={styles.mandatoryNote}>Tick a product to enter price, quantity and strength.</Text>
       {products.length === 0 ? (
         <Text style={styles.mandatoryNote}>No products found. Add products in Settings first.</Text>
       ) : (
@@ -480,7 +487,7 @@ function CreateSaleForm({ navigation }: { navigation: any }) {
             {product.checked ? (
               <View style={styles.productFields}>
                 <View style={styles.productField}>
-                  <Text style={styles.label}>Price (₹)</Text>
+                  <WebLabel>Price (₹)</WebLabel>
                   <WebInput
                     placeholder="0"
                     value={product.price ? String(product.price) : ''}
@@ -489,7 +496,7 @@ function CreateSaleForm({ navigation }: { navigation: any }) {
                   />
                 </View>
                 <View style={styles.productField}>
-                  <Text style={styles.label}>Quantity</Text>
+                  <WebLabel>Quantity</WebLabel>
                   <WebInput
                     placeholder="1"
                     value={String(product.quantity || '')}
@@ -498,7 +505,7 @@ function CreateSaleForm({ navigation }: { navigation: any }) {
                   />
                 </View>
                 <View style={styles.productField}>
-                  <Text style={styles.label}>Strength</Text>
+                  <WebLabel>Strength</WebLabel>
                   <WebInput
                     placeholder="0"
                     value={product.strength ? String(product.strength) : ''}
@@ -512,6 +519,9 @@ function CreateSaleForm({ navigation }: { navigation: any }) {
         ))
       )}
 
+      </PageSection>
+
+      <PageSection title="Deal details">
       <WebSelect
         label="Lead Status"
         value={form.lead_status}
@@ -567,6 +577,8 @@ function CreateSaleForm({ navigation }: { navigation: any }) {
         multiline
         style={{ minHeight: 72 }}
       />
+      </PageSection>
+
       <WebButton
         title={submitting ? 'Creating Deal...' : 'Create Deal'}
         onPress={onSubmit}
@@ -1126,12 +1138,7 @@ function RaiseDCForm({
   };
 
   if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading...</Text>
-      </View>
-    );
+    return <ScreenShell title={isUpdateMode ? 'Update DC' : 'Raise DC'} loading>{null}</ScreenShell>;
   }
 
   if (!deal && !loading) {
@@ -1140,9 +1147,7 @@ function RaiseDCForm({
       title={isUpdateMode ? 'Update DC' : 'Raise DC'}
       loading={loading}
     >
-<View style={styles.errorBlock}>
-          <Text style={styles.errorText}>{errorMessage || 'Deal not found'}</Text>
-        </View>
+      <EmptyState icon="⚠️" title="Deal not found" message={errorMessage || undefined} />
     </ScreenShell>
   );
   }
@@ -1163,21 +1168,17 @@ function RaiseDCForm({
 
         {/* Lead Information */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Lead Information</Text>
-          <FormField label="School Type" value={deal?.school_type || '-'} editable={false} />
-          <FormField label="School Name" value={deal?.school_name || '-'} editable={false} />
-          <FormField
-            label="School Code"
-            value={deal?.school_code || deal?.dc_code || '-'}
-            editable={false}
-          />
-          <FormField label="Contact Person Name" value={deal?.contact_person || '-'} editable={false} />
-          <FormField label="Contact Mobile" value={deal?.contact_mobile || '-'} editable={false} />
+          <Text style={styles.sectionTitle}>School</Text>
+          <InfoRow label="School name" value={deal?.school_name || '-'} bold />
+          <InfoRow label="School code" value={deal?.school_code || deal?.dc_code || '-'} />
+          <InfoRow label="School type" value={deal?.school_type || '-'} />
+          <InfoRow label="Contact" value={deal?.contact_person || '-'} />
+          <InfoRow label="Mobile" value={deal?.contact_mobile || '-'} phone />
           {assignedToName ? (
-            <FormField label="Assigned To" value={assignedToName} editable={false} />
+            <InfoRow label="Assigned to" value={assignedToName} />
           ) : (
             <View style={styles.fieldContainer}>
-              <Text style={styles.label}>Assigned To *</Text>
+              <WebLabel>Assigned To *</WebLabel>
               <View style={styles.pickerWrap}>
                 <Picker
                   selectedValue={selectedEmployeeId}
@@ -1196,17 +1197,12 @@ function RaiseDCForm({
 
         {/* More Information */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>More Information</Text>
-          <FormField label="Town" value={getTown() || '-'} editable={false} />
-          <FormField
-            label="Address"
-            value={deal?.address || deal?.location || '-'}
-            editable={false}
-            multiline
-          />
-          <FormField label="Zone" value={deal?.zone || '-'} editable={false} />
-          <FormField label="Cluster" value={deal?.cluster || '-'} editable={false} />
-          <FormField label="Remarks" value={deal?.remarks || '-'} editable={false} multiline />
+          <Text style={styles.sectionTitle}>Location</Text>
+          <InfoRow label="Town" value={getTown() || '-'} />
+          <InfoRow label="Address" value={deal?.address || deal?.location || '-'} />
+          <InfoRow label="Zone" value={deal?.zone || '-'} />
+          <InfoRow label="Cluster" value={deal?.cluster || '-'} />
+          <InfoRow label="Remarks" value={deal?.remarks || '-'} />
         </View>
 
         {!isUpdateMode ? (
@@ -1234,7 +1230,7 @@ function RaiseDCForm({
           <View style={styles.sectionTitleRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.sectionTitle}>Products & Quantities</Text>
-              <Text style={styles.sectionSubtitle}>Product details and quantities</Text>
+              <Text style={styles.sectionSubtitle}>Scroll sideways to see all columns.</Text>
             </View>
             <TouchableOpacity style={styles.addProductBtn} onPress={addProductRow}>
               <Text style={styles.addProductBtnText}>+ Add</Text>
@@ -1444,7 +1440,7 @@ function RaiseDCForm({
             minimumDate={startOfToday()}
           />
           <View style={styles.fieldContainer}>
-            <Text style={styles.label}>DC Category *</Text>
+            <WebLabel>DC Category *</WebLabel>
             <View style={styles.pickerWrap}>
               <Picker selectedValue={dcCategory} onValueChange={setDcCategory} style={styles.picker}>
                 <Picker.Item label="Select DC Category *" value="" />
@@ -1473,60 +1469,44 @@ function RaiseDCForm({
 
         {/* Buttons */}
         {isUpdateMode ? (
-          <View style={styles.updateActions}>
-            <TouchableOpacity
-              style={styles.updateSecondaryBtn}
-              onPress={handlePrint}
-              disabled={submitting || saving}
-            >
-              <Text style={styles.updateSecondaryBtnText}>Print</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.updateSecondaryBtn}
-              onPress={handleSaveDC}
-              disabled={submitting || saving}
-            >
-              <Text style={styles.updateSecondaryBtnText}>{saving ? 'Saving…' : 'Save'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.updateSubmitBtn, (submitting || saving) && styles.submitButtonDisabled]}
+          <View>
+            <WebButton
+              title={submitting ? 'Submitting…' : 'Submit to Senior Coordinator'}
               onPress={handleSubmitToSeniorCoordinator}
               disabled={submitting || saving}
-            >
-              <Text style={styles.updateSubmitBtnText} numberOfLines={1}>
-                {submitting ? 'Submitting…' : 'Submit to Senior Coordinator'}
-              </Text>
-            </TouchableOpacity>
+            />
+            <View style={styles.buttonRow}>
+              <View style={styles.btnCell}>
+                <WebButton title={saving ? 'Saving…' : 'Save'} variant="outline" onPress={handleSaveDC} disabled={submitting || saving} />
+              </View>
+              <View style={styles.btnCell}>
+                <WebButton title="Print" variant="outline" onPress={handlePrint} disabled={submitting || saving} />
+              </View>
+            </View>
           </View>
         ) : (
-          <View style={styles.buttonRow}>
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={() => navigation.goBack()}
-              disabled={submitting || requesting}
-            >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
+          <View>
             {canRequestDC && deal?.status !== 'dc_requested' && deal?.status !== 'dc_accepted' ? (
-              <TouchableOpacity
-                style={[styles.submitButton, (requesting || submitting) && styles.submitButtonDisabled]}
+              <WebButton
+                title={requesting ? 'Submitting…' : 'Raise DC'}
                 onPress={handleRequestDC}
                 disabled={requesting || submitting}
-              >
-                <Text style={styles.submitButtonText} numberOfLines={2}>
-                  {requesting ? 'Submitting…' : 'Raise DC'}
-                </Text>
-              </TouchableOpacity>
+              />
             ) : null}
             {canApproveDC ? (
-              <TouchableOpacity
-                style={[styles.acceptButton, (requesting || submitting) && styles.submitButtonDisabled]}
+              <WebButton
+                title={submitting ? 'Accepting…' : 'Accept'}
+                variant="success"
                 onPress={handleSubmitToSeniorCoordinator}
                 disabled={requesting || submitting}
-              >
-                <Text style={styles.acceptButtonText}>{submitting ? 'Accepting…' : 'Accept'}</Text>
-              </TouchableOpacity>
+              />
             ) : null}
+            <WebButton
+              title="Cancel"
+              variant="outline"
+              onPress={() => navigation.goBack()}
+              disabled={submitting || requesting}
+            />
           </View>
         )}
       </ScrollView>
@@ -1555,7 +1535,7 @@ function FormField({
 }) {
   return (
     <View style={styles.fieldContainer}>
-      <Text style={styles.label}>{label}</Text>
+      <WebLabel>{label}</WebLabel>
       <WebInput
         style={[styles.input, !editable && styles.inputDisabled, multiline && styles.inputMultiline]}
         value={value}
@@ -1581,45 +1561,51 @@ const styles = StyleSheet.create({
   backIcon: { fontSize: 24, color: colors.textLight, fontWeight: 'bold' },
   headerTitle: { ...typography.heading.h1, color: colors.textLight, flex: 1, textAlign: 'center' },
   content: { flex: 1 },
-  contentContainer: { padding: 20, paddingBottom: 40 },
+  contentContainer: { padding: 16, paddingBottom: 32 },
   errorBlock: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  errorText: { ...typography.body.medium, color: colors.error },
-  mandatoryNote: { ...typography.body.small, color: colors.textSecondary, marginBottom: 16 },
-  section: { marginBottom: 24 },
-  sectionTitle: { ...typography.heading.h3, color: colors.textPrimary, marginBottom: 4 },
-  sectionSubtitle: { ...typography.body.small, color: colors.textSecondary, marginBottom: 0 },
+  errorText: { fontSize: 13, color: colors.error, marginTop: -8, marginBottom: 12 },
+  mandatoryNote: { fontSize: 13, color: colors.textTertiary, marginBottom: 12 },
+  section: {
+    backgroundColor: colors.backgroundLight,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#EEF2F7',
+    padding: 16,
+    marginBottom: 12,
+  },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, marginBottom: 8 },
+  sectionSubtitle: { fontSize: 13, color: colors.textTertiary, marginTop: -4 },
   sectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   fieldContainer: { marginBottom: 14 },
-  label: { ...typography.label.medium, color: colors.textPrimary, marginBottom: 6 },
-  input: { ...typography.body.medium, backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, color: colors.textPrimary },
-  inputDisabled: { backgroundColor: colors.background, opacity: 0.8 },
+  input: { fontSize: 15, backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: '#DCE3EC', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, minHeight: 48, color: colors.textPrimary, marginBottom: 0 },
+  inputDisabled: { backgroundColor: colors.backgroundMuted, opacity: 0.8 },
   inputMultiline: { minHeight: 88, textAlignVertical: 'top' },
-  pickerWrap: { borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.backgroundLight },
+  pickerWrap: { borderWidth: 1, borderColor: '#DCE3EC', borderRadius: 10, backgroundColor: colors.backgroundLight, overflow: 'hidden' },
   picker: { height: 48 },
-  dateTouchable: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12 },
-  dateText: { ...typography.body.medium, color: colors.textPrimary },
-  placeholderText: { color: colors.textSecondary },
+  dateTouchable: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: '#DCE3EC', borderRadius: 10, paddingHorizontal: 14, minHeight: 48 },
+  dateText: { fontSize: 15, color: colors.textPrimary },
+  placeholderText: { color: colors.textMuted },
   calendarIcon: { fontSize: 18 },
   datePickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
   datePickerBox: { backgroundColor: colors.backgroundLight, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: Platform.OS === 'ios' ? 24 : 16 },
   datePickerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
-  datePickerTitle: { ...typography.heading.h3, color: colors.textPrimary },
-  doneText: { ...typography.label.medium, color: colors.primary, fontWeight: '600' },
-  tableScroll: { marginHorizontal: -20 },
+  datePickerTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
+  doneText: { fontSize: 15, color: colors.primaryDark, fontWeight: '600' },
+  tableScroll: { marginHorizontal: -16 },
   tableWrap: { minWidth: 980, paddingRight: 16 },
   tableWrapEditable: { minWidth: 1080 },
   tableHeader: {
     flexDirection: 'row',
-    backgroundColor: '#F8FAFC',
-    paddingVertical: 12,
+    backgroundColor: colors.backgroundMuted,
+    paddingVertical: 10,
     paddingHorizontal: 8,
-    borderBottomWidth: 2,
-    borderBottomColor: '#CBD5E1',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
     alignItems: 'center',
   },
   th: {
     ...typography.label.small,
-    color: '#1E3A5F',
+    color: colors.textTertiary,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.3,
@@ -1665,7 +1651,7 @@ const styles = StyleSheet.create({
   cellInput: {
     backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#DCE3EC',
     borderRadius: 8,
     paddingVertical: 6,
     paddingHorizontal: 8,
@@ -1683,13 +1669,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   addProductBtn: {
-    backgroundColor: colors.primary,
-    borderRadius: 8,
+    backgroundColor: colors.primaryDark,
+    borderRadius: 10,
     paddingVertical: 8,
     paddingHorizontal: 12,
   },
   addProductBtnText: {
-    ...typography.label.medium,
+    fontSize: 14,
     color: colors.textLight,
     fontWeight: '600',
   },
@@ -1709,9 +1695,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 8,
-    backgroundColor: '#E2E8F0',
-    borderTopWidth: 2,
-    borderTopColor: '#94A3B8',
+    backgroundColor: colors.backgroundMuted,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
   },
   footerLeadingSpacer: { width: 652 },
   footerLeadingSpacerEditable: { width: 652 },
@@ -1731,7 +1717,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   footerTrailingSpacer: { flex: 1 },
-  buttonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 24 },
+  buttonRow: { flexDirection: 'row', gap: 12 },
+  btnCell: { flex: 1 },
   updateActions: {
     marginTop: 24,
     flexDirection: 'row',
@@ -1819,26 +1806,26 @@ const styles = StyleSheet.create({
   },
   saleProductRow: {
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#EEF2F7',
     borderRadius: 12,
     padding: 12,
-    marginBottom: 10,
-    backgroundColor: colors.backgroundLight,
+    marginBottom: 8,
+    backgroundColor: colors.background,
   },
   checkRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   checkbox: {
     width: 22,
     height: 22,
-    borderRadius: 4,
+    borderRadius: 6,
     borderWidth: 2,
-    borderColor: colors.border,
+    borderColor: '#CBD5E1',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.backgroundLight,
   },
-  checkboxOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  checkboxOn: { backgroundColor: colors.primaryDark, borderColor: colors.primaryDark },
   checkboxMark: { color: '#fff', fontSize: 14, fontWeight: '700' },
-  productName: { ...typography.body.medium, fontWeight: '600', color: colors.textPrimary, flex: 1 },
-  productFields: { marginTop: 10, gap: 4 },
+  productName: { fontSize: 15, fontWeight: '600', color: colors.textPrimary, flex: 1 },
+  productFields: { marginTop: 12, flexDirection: 'row', gap: 8 },
   productField: { flex: 1 },
 });

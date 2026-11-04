@@ -1,18 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  RefreshControl,
-  Alert,
-  ActivityIndicator,
-  Platform,
-} from 'react-native';
+import { View, Text, StyleSheet, Alert, ActivityIndicator, Platform } from 'react-native';
 import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
-import ScreenShell from '../../ui/ScreenShell';
-import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState, SectionTitle } from '../../ui/Kit';
+import { StatGrid, rk, matchesWords } from './ReportKit';
 import { apiService } from '../../services/api';
 import { exportEmployeeTrackingReport } from '../../utils/exportEmployeeTrackingReport';
 
@@ -167,12 +159,18 @@ export default function ReportsEmployeeTrackScreen() {
     const query = search.trim().toLowerCase();
 
     if (query) {
-      filtered = filtered.filter((rec) => {
-        const name = rec.employeeName?.toLowerCase() || '';
-        const mobile = rec.mobileNo || '';
-        const email = rec.email?.toLowerCase() || '';
-        return name.includes(query) || mobile.includes(query) || email.includes(query);
-      });
+      filtered = filtered.filter((rec) =>
+        matchesWords(query, [
+          rec.employeeName,
+          rec.mobileNo,
+          rec.email,
+          rec.zone,
+          rec.lastLocation,
+          getLiveStatus(rec.lastUsed),
+          formatActivityTimestamp(rec.started),
+          formatActivityTimestamp(rec.lastUsed),
+        ])
+      );
     }
 
     if (zone) {
@@ -225,183 +223,82 @@ export default function ReportsEmployeeTrackScreen() {
       refreshing={refreshing}
       onRefresh={onRefresh}
     >
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      >
-        <WebButton
-          title={exporting ? 'Exporting…' : 'Export to Excel'}
-          onPress={handleExport}
-          loading={exporting}
+      <StatGrid
+        items={[
+          { label: 'Field Executives', value: summary.fieldExecutives, tone: 'blue' },
+          { label: 'Total GPS Logs', value: summary.totalGpsLogs, tone: 'green' },
+          { label: 'Zone Coverage', value: summary.zoneCoverage, tone: 'purple' },
+        ]}
+      />
+
+      <PageSection title="Filters">
+        <WebInput placeholder="Search employee, mobile, zone, location…" value={search} onChangeText={setSearch} />
+        <WebSelect
+          label="Zone"
+          value={zone}
+          onValueChange={setZone}
+          placeholder="All Zones"
+          items={[{ label: 'All Zones', value: '' }, ...zones.map((z) => ({ label: z, value: z }))]}
         />
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.kpiRow}>
-          <View style={styles.kpiCard}>
-            <Text style={styles.kpiLabel}>Field Executives</Text>
-            <Text style={styles.kpiValue}>{summary.fieldExecutives}</Text>
+        <DateField placeholder="Started" value={startedDate} onChange={setStartedDate} />
+        <DateField placeholder="Last Used" value={lastUsedDate} onChange={setLastUsedDate} />
+        <View style={rk.btnRow}>
+          <View style={rk.col}>
+            <WebButton title="Search" onPress={applyFilters} />
           </View>
-          <View style={styles.kpiCard}>
-            <Text style={styles.kpiLabel}>Total GPS Logs</Text>
-            <Text style={styles.kpiValue}>{summary.totalGpsLogs}</Text>
+          <View style={rk.col}>
+            <WebButton title={exporting ? 'Exporting…' : 'Export Excel'} variant="outline" onPress={handleExport} loading={exporting} />
           </View>
-          <View style={styles.kpiCard}>
-            <Text style={styles.kpiLabel}>Zone Coverage</Text>
-            <Text style={styles.kpiValue}>{summary.zoneCoverage}</Text>
-          </View>
-        </ScrollView>
-
-        <View style={styles.filters}>
-          <WebInput
-            placeholder="Search for Employee or Mobile"
-            value={search}
-            onChangeText={setSearch}
-          />
-          <WebSelect
-            label="Zone"
-            value={zone}
-            onValueChange={setZone}
-            placeholder="All Zones"
-            items={[{ label: 'All Zones', value: '' }, ...zones.map((z) => ({ label: z, value: z }))]}
-          />
-          <WebLabel>Started</WebLabel>
-          <DateField placeholder="Started" value={startedDate} onChange={setStartedDate} />
-          <WebLabel>Last Used</WebLabel>
-          <DateField placeholder="Last Used" value={lastUsedDate} onChange={setLastUsedDate} />
-          <WebButton title="Search" onPress={applyFilters} />
         </View>
+      </PageSection>
 
-        <View style={styles.logHeader}>
-          <Text style={styles.logTitle}>Tracking log</Text>
-          <Text style={styles.logCount}>{records.length} employees found</Text>
-        </View>
+      <SectionTitle>{`Tracking log (${records.length})`}</SectionTitle>
 
-        {loading ? (
-          <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
-        ) : records.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>🛰️</Text>
-            <Text style={styles.emptyText}>No tracking data found</Text>
-          </View>
-        ) : (
-          records.map((rec, index) => {
-            const liveStatus = getLiveStatus(rec.lastUsed);
-            const logPct = Math.round(((rec.logCount || 0) / maxLogCount) * 100);
-            return (
-              <View key={rec._id} style={styles.card}>
-                <View style={styles.cardTop}>
-                  <Text style={styles.indexText}>#{index + 1}</Text>
-                  <Text
-                    style={[
-                      styles.statusBadge,
-                      liveStatus === 'Active Today' ? styles.statusActive : styles.statusIdle,
-                    ]}
-                  >
-                    {liveStatus}
-                  </Text>
-                </View>
-                <Text style={styles.employeeName}>{rec.employeeName}</Text>
-                <Text style={styles.contactText}>{rec.mobileNo || rec.email || '-'}</Text>
-                <Text style={styles.zoneBadge}>{rec.zone || '-'}</Text>
-                <Text style={styles.infoLine}>First Check-in: {formatActivityTimestamp(rec.started)}</Text>
-                <Text style={styles.infoLine}>Last Active: {formatActivityTimestamp(rec.lastUsed)}</Text>
-                <Text style={styles.infoLine}>Last Location: {rec.lastLocation || 'N/A'}</Text>
-                <View style={styles.logRow}>
-                  <Text style={styles.logCountBadge}>{rec.logCount || 0}</Text>
-                  <View style={styles.logBarTrack}>
-                    <View style={[styles.logBarFill, { width: `${logPct}%` }]} />
+      {loading ? (
+        <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
+      ) : records.length === 0 ? (
+        <EmptyState icon="🛰️" title="No tracking data found" />
+      ) : (
+        records.map((rec, index) => {
+          const liveStatus = getLiveStatus(rec.lastUsed);
+          const logPct = Math.round(((rec.logCount || 0) / maxLogCount) * 100);
+          return (
+            <Card key={rec._id}>
+              <CardTitle
+                title={`${index + 1}. ${rec.employeeName}`}
+                subtitle={rec.mobileNo || rec.email || undefined}
+                badge={liveStatus}
+                tone={liveStatus === 'Active Today' ? 'success' : 'neutral'}
+              />
+              <InfoRow label="Zone" value={rec.zone} />
+              <InfoRow label="First check-in" value={formatActivityTimestamp(rec.started)} />
+              <InfoRow label="Last active" value={formatActivityTimestamp(rec.lastUsed)} />
+              <InfoRow label="Last location" value={rec.lastLocation || 'N/A'} />
+              <InfoRow
+                label="GPS logs"
+                value={
+                  <View style={styles.logRow}>
+                    <Text style={styles.logCount}>{rec.logCount || 0}</Text>
+                    <View style={styles.logBarTrack}>
+                      <View style={[styles.logBarFill, { width: `${logPct}%` }]} />
+                    </View>
                   </View>
-                </View>
-                <WebButton title="View route" onPress={() => viewRoute(rec)} />
-              </View>
-            );
-          })
-        )}
-      </ScrollView>
+                }
+              />
+              <ActionRow>
+                <WebButton title="View route" variant="outline" onPress={() => viewRoute(rec)} />
+              </ActionRow>
+            </Card>
+          );
+        })
+      )}
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollContent: { paddingBottom: 24 },
-  kpiRow: { paddingHorizontal: 16, gap: 10, marginTop: 12 },
-  kpiCard: {
-    width: 150,
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.backgroundLight,
-  },
-  kpiLabel: { ...typography.label.small, color: colors.textSecondary, textTransform: 'uppercase' },
-  kpiValue: { ...typography.heading.h3, color: colors.textPrimary, marginTop: 4 },
-  filters: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    padding: 16,
-    gap: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.backgroundLight,
-  },
-  logHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  logTitle: { ...typography.heading.h3, color: colors.textPrimary },
-  logCount: { ...typography.body.medium, color: colors.textSecondary },
-  emptyContainer: { alignItems: 'center', marginTop: 60, paddingHorizontal: 16 },
-  emptyIcon: { fontSize: 64, marginBottom: 12 },
-  emptyText: { ...typography.heading.h3, color: colors.textSecondary },
-  card: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    marginHorizontal: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  cardTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  indexText: { ...typography.label.medium, color: colors.textSecondary },
-  statusBadge: {
-    ...typography.label.small,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
-    overflow: 'hidden',
-  },
-  statusActive: { backgroundColor: '#d1fae5', color: '#047857' },
-  statusIdle: { backgroundColor: '#f1f5f9', color: '#64748b' },
-  employeeName: { ...typography.heading.h3, color: colors.textPrimary },
-  contactText: { ...typography.body.medium, color: colors.textSecondary, marginTop: 2 },
-  zoneBadge: {
-    ...typography.label.small,
-    alignSelf: 'flex-start',
-    marginTop: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: '#f1f5f9',
-    color: '#475569',
-  },
-  infoLine: { ...typography.body.medium, color: colors.textSecondary, marginTop: 4 },
-  logRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 },
-  logCountBadge: {
-    ...typography.label.small,
-    minWidth: 28,
-    textAlign: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: '#dbeafe',
-    color: '#1d4ed8',
-    fontWeight: '700',
-  },
-  logBarTrack: { flex: 1, height: 6, borderRadius: 999, backgroundColor: '#f1f5f9', overflow: 'hidden' },
+  logRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  logCount: { fontSize: 14, fontWeight: '700', color: colors.textPrimary, minWidth: 28 },
+  logBarTrack: { flex: 1, height: 6, borderRadius: 999, backgroundColor: colors.backgroundMuted, overflow: 'hidden' },
   logBarFill: { height: '100%', backgroundColor: colors.primary, borderRadius: 999 },
 });

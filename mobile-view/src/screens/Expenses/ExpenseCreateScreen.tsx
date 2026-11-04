@@ -292,6 +292,8 @@ export default function ExpenseCreateScreen({ navigation }: any) {
         >
           {errorMessage && <MessageBanner type="error" message={errorMessage} onDismiss={() => setErrorMessage(null)} />}
 
+          <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Expense</Text>
           <WebSelect
             label="Type *"
             value={form.type}
@@ -313,6 +315,7 @@ export default function ExpenseCreateScreen({ navigation }: any) {
           />
 
           {!isStay && <DateInput field="date" label="Date *" />}
+          </View>
 
           {isTravelType && (
             <View style={styles.sectionCard}>
@@ -367,6 +370,8 @@ export default function ExpenseCreateScreen({ navigation }: any) {
             </View>
           )}
 
+          <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Amount & bill</Text>
           <View style={styles.fieldContainer}>
             <Text style={styles.label}>Amount *</Text>
             <WebInput
@@ -423,6 +428,7 @@ export default function ExpenseCreateScreen({ navigation }: any) {
             ) : null}
             {errorText('bill')}
             <Text style={styles.hint}>Accepted formats: JPG, PNG, PDF (Max 5MB)</Text>
+          </View>
           </View>
         </ScrollView>
 
@@ -549,66 +555,78 @@ function FormField({
 const styles = StyleSheet.create({
   page: { flex: 1, minHeight: 0 },
   content: { flex: 1, minHeight: 0 },
-  contentContainer: { padding: 20, paddingBottom: 24, flexGrow: 1 },
+  contentContainer: { padding: 16, paddingBottom: 24, flexGrow: 1 },
   footer: {
     flexShrink: 0,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 28,
-    gap: 10,
+    paddingBottom: 24,
+    gap: 4,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: '#EEF2F7',
     backgroundColor: colors.backgroundLight,
   },
   fieldContainer: { marginBottom: 14 },
-  label: { ...typography.label.medium, color: colors.textPrimary, marginBottom: 6 },
+  label: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 6 },
   input: {
     backgroundColor: colors.backgroundLight,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 12,
+    borderColor: '#DCE3EC',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minHeight: 48,
+    fontSize: 15,
     color: colors.textPrimary,
     marginBottom: 0,
   },
   inputLocked: { backgroundColor: colors.backgroundMuted, fontWeight: '600' },
   inputError: { borderColor: colors.error },
-  fieldError: { fontSize: 12, color: colors.error, marginTop: 4 },
+  fieldError: { fontSize: 13, color: colors.error, marginTop: 4 },
   textArea: { minHeight: 70, textAlignVertical: 'top' },
-  hint: { ...typography.body.small, color: colors.textSecondary, marginTop: 6 },
+  hint: { fontSize: 13, color: colors.textTertiary, marginTop: 6 },
   dateTouchable: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: colors.backgroundLight,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 14,
+    borderColor: '#DCE3EC',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    minHeight: 48,
   },
-  dateText: { ...typography.body.medium, color: colors.textPrimary },
-  datePlaceholder: { color: colors.textSecondary },
+  dateText: { fontSize: 15, color: colors.textPrimary },
+  datePlaceholder: { color: colors.textMuted },
   sectionCard: {
-    marginBottom: 16,
-    padding: 14,
-    borderRadius: 12,
+    marginBottom: 12,
+    padding: 16,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#BFDBFE',
-    backgroundColor: '#EFF6FF',
+    borderColor: '#EEF2F7',
+    backgroundColor: colors.backgroundLight,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 1,
   },
-  sectionAmber: { borderColor: '#FDE68A', backgroundColor: '#FFFBEB' },
-  sectionTitle: { ...typography.heading.h4, color: colors.textPrimary, marginBottom: 12 },
+  sectionAmber: { borderLeftWidth: 3, borderLeftColor: '#F59E0B' },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, marginBottom: 12 },
   uploadRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   uploadButton: {
     flexGrow: 1,
-    padding: 12,
-    borderRadius: 12,
+    minHeight: 48,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.backgroundLight,
+    borderStyle: 'dashed',
+    borderColor: '#93C5FD',
+    backgroundColor: colors.accent,
     alignItems: 'center',
   },
-  uploadButtonText: { ...typography.body.medium, color: colors.primary },
+  uploadButtonText: { fontSize: 14, fontWeight: '600', color: colors.primaryDark },
   fileRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, gap: 8 },
   fileName: { flex: 1, fontSize: 13, color: colors.textPrimary },
   removeText: { color: colors.error, fontWeight: '600', fontSize: 13 },
@@ -626,6 +644,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  datePickerTitle: { ...typography.heading.h3, color: colors.textPrimary },
-  doneText: { color: colors.primary, fontWeight: '600' },
+  datePickerTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
+  doneText: { color: colors.primaryDark, fontWeight: '700', fontSize: 15 },
 });

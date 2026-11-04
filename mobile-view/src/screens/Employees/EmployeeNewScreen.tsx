@@ -1,11 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
-import ScreenShell from '../../ui/ScreenShell';
-import { WebInput, WebSelect } from '../../ui/WebPrimitives';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebSelect, WebLabel, WebButton } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import EmployeeTaggingPicker, { supportsEmployeeTagging } from '../../components/EmployeeTaggingPicker';
@@ -504,8 +503,8 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
 
   const UploadRow = ({ label, url, kind, uploadKey, onUrl }: { label: string; url: string; kind: UploadKind; uploadKey: string; onUrl: (u: string) => void }) => (
     <View style={styles.fieldContainer}>
-      <Text style={styles.label}>{label}</Text>
-      <TouchableOpacity style={styles.uploadButton} onPress={() => uploadPdf(kind, uploadKey, onUrl)} disabled={!!uploading}>
+      <WebLabel>{label}</WebLabel>
+      <TouchableOpacity style={[styles.uploadButton, !!url && styles.uploadButtonDone]} onPress={() => uploadPdf(kind, uploadKey, onUrl)} disabled={!!uploading}>
         <Text style={styles.uploadButtonText} numberOfLines={1}>
           {uploading === uploadKey
             ? 'Uploading…'
@@ -544,7 +543,6 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
       <ScrollView ref={scrollRef} style={styles.content} contentContainerStyle={styles.contentContainer} keyboardShouldPersistTaps="handled">
         {successMessage ? (
           <View style={styles.successBanner}>
-            <Text style={styles.successIcon}>✓</Text>
             <Text style={styles.successText}>{successMessage}</Text>
             <TouchableOpacity
               style={styles.viewEmployeesButton}
@@ -562,7 +560,6 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
         ) : null}
         {errorMessage ? (
           <View style={styles.errorBanner}>
-            <Text style={styles.errorIcon}>!</Text>
             <Text style={styles.errorText}>{errorMessage}</Text>
             <TouchableOpacity onPress={clearMessages} style={styles.dismissError}>
               <Text style={styles.dismissErrorText}>Dismiss</Text>
@@ -570,240 +567,237 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
           </View>
         ) : null}
 
-        <Text style={styles.sectionTitle}>Personal Data</Text>
-        <FormField label="First Name *" value={form.firstName} onChangeText={(t: string) => setForm((f) => ({ ...f, firstName: t }))} placeholder="First Name" />
-        <FormField label="Last Name" value={form.lastName} onChangeText={(t: string) => setForm((f) => ({ ...f, lastName: t }))} placeholder="Last Name" />
-        <FormField label="Emp ID / Code" value={form.empCode} onChangeText={(t: string) => setForm((f) => ({ ...f, empCode: t }))} placeholder="Auto-assigned if left blank" />
-        <FormField label="Email Id *" value={form.email} onChangeText={(t: string) => setForm((f) => ({ ...f, email: t }))} placeholder="Email" keyboardType="email-address" />
-        <FormField label="Company contact number *" value={form.phone} onChangeText={(v: string) => setForm((f) => ({ ...f, phone: sanitizeDigits(v) }))} placeholder="10 to 15 digits" keyboardType="phone-pad" maxLength={15} />
-        <FormField label="Personal mobile *" value={form.mobile} onChangeText={(v: string) => setForm((f) => ({ ...f, mobile: sanitizeDigits(v) }))} placeholder="10 to 15 digits" keyboardType="phone-pad" maxLength={15} />
-        <DateField placeholder="Date of birth *" value={form.dateOfBirth} onChange={(t: string) => setForm((f) => ({ ...f, dateOfBirth: t.trim() }))} />
-        <DateField placeholder="Date of joining *" value={form.dateOfJoining} onChange={(t: string) => setForm((f) => ({ ...f, dateOfJoining: t.trim() }))} />
-        <FormField label="CTC (₹ per year) *" value={form.yearlySalary} onChangeText={(t: string) => setForm((f) => ({ ...f, yearlySalary: t.replace(/[^\d.]/g, '') }))} placeholder="e.g. 300000" keyboardType="decimal-pad" />
-        {Number(form.yearlySalary) > 0 ? (
-          <Text style={styles.lookupText}>₹{Math.round(Number(form.yearlySalary) / 12).toLocaleString('en-IN')} per month</Text>
-        ) : null}
-        <FormField label="Monthly take-home (₹)" value={form.monthlyTakeHome} onChangeText={(t: string) => setForm((f) => ({ ...f, monthlyTakeHome: t.replace(/[^\d.]/g, '') }))} placeholder="Optional" keyboardType="decimal-pad" />
-
-        <View style={styles.fieldContainer}>
-          <Text style={styles.label}>Is any relative / friend working in the company? *</Text>
-          <View style={styles.roleContainer}>
-            {[
-              { label: 'Yes', value: true },
-              { label: 'No', value: false },
-            ].map((opt) => (
-              <TouchableOpacity
-                key={opt.label}
-                style={[styles.roleOption, form.hasEmployeeRelationship === opt.value && styles.roleOptionSelected]}
-                onPress={() =>
-                  setForm((f) => ({
-                    ...f,
-                    hasEmployeeRelationship: opt.value,
-                    ...(opt.value ? {} : { employeeRelationshipDetails: { fullName: '', relationship: '', department: '', designation: '' } }),
-                  }))
-                }
-              >
-                <Text style={[styles.roleOptionText, form.hasEmployeeRelationship === opt.value && styles.roleOptionTextSelected]}>{opt.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-        {form.hasEmployeeRelationship ? (
-          <>
-            {(['fullName', 'relationship', 'department', 'designation'] as const).map((key) => (
-              <FormField
-                key={key}
-                label={`${{ fullName: 'Full name', relationship: 'Relationship', department: 'Department', designation: 'Designation' }[key]} *`}
-                value={form.employeeRelationshipDetails[key]}
-                onChangeText={(t: string) =>
-                  setForm((f) => ({ ...f, employeeRelationshipDetails: { ...f.employeeRelationshipDetails, [key]: t } }))
-                }
-              />
-            ))}
-          </>
-        ) : null}
-
-        <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Bank Details</Text>
-        <FormField label="Account holder name" value={form.bankAccountHolderName} onChangeText={(t: string) => setForm((f) => ({ ...f, bankAccountHolderName: t }))} placeholder="As in the bank account" />
-        <FormField label="Bank account number" value={form.bankAccountNumber} onChangeText={(t: string) => setForm((f) => ({ ...f, bankAccountNumber: t.replace(/\D/g, '') }))} placeholder="6 to 20 digits" keyboardType="number-pad" maxLength={20} />
-        <FormField label="IFSC" value={form.bankIfsc} onChangeText={(t: string) => setForm((f) => ({ ...f, bankIfsc: t.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() }))} placeholder="e.g. SBIN0001234" maxLength={11} />
-        <FormField label="Bank name" value={form.bankName} onChangeText={(t: string) => setForm((f) => ({ ...f, bankName: t }))} placeholder="e.g. State Bank of India" />
-        <FormField label="Branch" value={form.bankBranch} onChangeText={(t: string) => setForm((f) => ({ ...f, bankBranch: t }))} placeholder="Branch name" />
-        <UploadRow
-          label="Bank passbook / cancelled cheque (PDF or photo)"
-          url={form.bankPassbookUrl}
-          kind="passbook"
-          uploadKey="passbook"
-          onUrl={(u) => setForm((f) => ({ ...f, bankPassbookUrl: u }))}
-        />
-        <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Address & KYC</Text>
-        <View style={styles.textAreaContainer}>
-          <Text style={styles.label}>Permanent address *</Text>
-          <WebInput
-            style={styles.textArea}
-            value={form.permanentAddress}
-            onChangeText={(t: string) => setForm((f) => ({ ...f, permanentAddress: t }))}
-            placeholder="Permanent address"
-            multiline
-            numberOfLines={3}
-          />
-        </View>
-        <Check checked={sameAsPermanent} label="Temporary address same as permanent" onPress={() => setSameAsPermanent((v) => !v)} />
-        <View style={styles.textAreaContainer}>
-          <Text style={styles.label}>Temporary address *</Text>
-          <WebInput
-            style={styles.textArea}
-            value={sameAsPermanent ? form.permanentAddress : form.temporaryAddress}
-            editable={!sameAsPermanent}
-            onChangeText={(t: string) => setForm((f) => ({ ...f, temporaryAddress: t }))}
-            placeholder="Temporary address"
-            multiline
-            numberOfLines={3}
-          />
-        </View>
-        <UploadRow label="Aadhaar upload * (PDF)" url={form.aadhaarUrl} kind="aadhaar" uploadKey="aadhaar" onUrl={(u) => setForm((f) => ({ ...f, aadhaarUrl: u }))} />
-        <UploadRow label="Location upload * (PDF)" url={form.locationPhotoUrl} kind="location" uploadKey="location" onUrl={(u) => setForm((f) => ({ ...f, locationPhotoUrl: u }))} />
-        <UploadRow label="Passport size photo * (PDF)" url={form.passportPhotoUrl} kind="passport" uploadKey="passport" onUrl={(u) => setForm((f) => ({ ...f, passportPhotoUrl: u }))} />
-
-        {[0, 1].map((idx) => (
-          <View key={idx} style={styles.refCard}>
-            <Text style={styles.refTitle}>Reference {idx + 1}</Text>
-            <WebSelect
-              label="Relationship *"
-              value={form.references[idx].relation}
-              placeholder="Select relationship"
-              onValueChange={(v) => setReference(idx, { relation: v })}
-              items={REFERENCE_RELATIONS.map((r) => ({ label: r, value: r }))}
-            />
-            <FormField label="Name *" value={form.references[idx].name} onChangeText={(t: string) => setReference(idx, { name: t })} />
-            <FormField label="Mobile *" value={form.references[idx].mobile} onChangeText={(t: string) => setReference(idx, { mobile: sanitizeDigits(t) })} keyboardType="phone-pad" maxLength={15} />
-            <UploadRow
-              label="Aadhaar upload * (PDF)"
-              url={form.references[idx].aadhaarUrl}
-              kind="reference-aadhaar"
-              uploadKey={`ref-${idx}`}
-              onUrl={(u) => setReference(idx, { aadhaarUrl: u })}
-            />
-          </View>
-        ))}
-
-        <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Location & User Type</Text>
-        <FormField label="Pincode *" value={form.pincode} onChangeText={handlePincodeChange} placeholder="6-digit pincode" keyboardType="number-pad" />
-        {loadingPincode ? <Text style={styles.lookupText}>Looking up location…</Text> : null}
-        <FormField label="State" value={form.state} onChangeText={(t: string) => setForm((f) => ({ ...f, state: t }))} placeholder="Employee State" />
-        <FormField label="District" value={form.district} onChangeText={(t: string) => setForm((f) => ({ ...f, district: t }))} placeholder="Employee District" />
-        <FormField label="City" value={form.city} onChangeText={(t: string) => setForm((f) => ({ ...f, city: t }))} placeholder="City" />
-
-        <WebSelect
-          label="User Type *"
-          value={form.role}
-          onValueChange={(role) => {
-            if (!role) return;
-            if (role !== 'Manager') setProductId('');
-            setForm((f) => {
-              const single = isSingleZoneRole(role);
-              const nextZones = !roleUsesZones(role) ? [] : single ? (f.zone ? [f.zone] : []) : f.zones;
-              return {
-                ...f,
-                role,
-                zones: nextZones,
-                zone: roleUsesZones(role) ? nextZones[0] || '' : '',
-                cluster: single ? f.cluster : '',
-                trainerProducts: role === 'Trainer' ? f.trainerProducts : [],
-                verticalManagerId: role === 'Trainer' ? f.verticalManagerId : '',
-                taggedEmployeeIds: supportsEmployeeTagging(role) ? f.taggedEmployeeIds : [],
-              };
-            });
-          }}
-          items={ROLE_OPTIONS}
-        />
-        {form.role === 'Office Team' ? (
-          <FormField label="Designation *" value={form.designation} onChangeText={(t: string) => setForm((f) => ({ ...f, designation: t }))} placeholder="Enter designation" />
-        ) : null}
-
-        {!usesZones ? null : singleZone ? (
-          <>
-            <WebSelect
-              label="BDE Zone *"
-              value={form.zone}
-              onValueChange={(zone) => setForm((f) => ({ ...f, zone, zones: zone ? [zone] : [], cluster: '' }))}
-              placeholder="Select Zone"
-              items={zones.map((zone) => ({ label: zone, value: zone }))}
-            />
-            <WebSelect
-              label="Cluster *"
-              value={form.cluster}
-              onValueChange={(cluster) => setForm((f) => ({ ...f, cluster }))}
-              placeholder={!form.zone ? 'Select zone first' : clustersForZone.length === 0 ? 'No clusters linked to this zone' : 'Select Employee Cluster'}
-              disabled={!form.zone || clustersForZone.length === 0}
-              items={clustersForZone.map((cluster) => ({ label: cluster, value: cluster }))}
-            />
-          </>
-        ) : (
+        <PageSection title="Personal">
+          <FormField label="First Name *" value={form.firstName} onChangeText={(t: string) => setForm((f) => ({ ...f, firstName: t }))} placeholder="First Name" />
+          <FormField label="Last Name" value={form.lastName} onChangeText={(t: string) => setForm((f) => ({ ...f, lastName: t }))} placeholder="Last Name" />
+          <FormField label="Emp ID / Code" value={form.empCode} onChangeText={(t: string) => setForm((f) => ({ ...f, empCode: t }))} placeholder="Auto-assigned if left blank" />
           <View style={styles.fieldContainer}>
-            <Text style={styles.label}>{form.role === 'Executive Manager' ? 'Zones (optional)' : 'Zones *'}</Text>
-            <View style={styles.listBox}>
-              {zones.length === 0 ? <Text style={styles.lookupText}>No zones configured.</Text> : null}
-              {zones.map((z) => (
-                <Check
-                  key={z}
-                  checked={form.zones.includes(z)}
-                  label={z}
+            <WebLabel>Date of birth *</WebLabel>
+            <DateField placeholder="Date of birth *" value={form.dateOfBirth} onChange={(t: string) => setForm((f) => ({ ...f, dateOfBirth: t.trim() }))} />
+          </View>
+          <View style={styles.fieldContainer}>
+            <WebLabel>Date of joining *</WebLabel>
+            <DateField placeholder="Date of joining *" value={form.dateOfJoining} onChange={(t: string) => setForm((f) => ({ ...f, dateOfJoining: t.trim() }))} />
+          </View>
+
+          <View style={styles.fieldContainer}>
+            <WebLabel>Any relative / friend working in the company? *</WebLabel>
+            <View style={styles.roleContainer}>
+              {[
+                { label: 'Yes', value: true },
+                { label: 'No', value: false },
+              ].map((opt) => (
+                <TouchableOpacity
+                  key={opt.label}
+                  style={[styles.roleOption, form.hasEmployeeRelationship === opt.value && styles.roleOptionSelected]}
                   onPress={() =>
-                    setForm((f) => {
-                      const next = toggleIn(f.zones, z);
-                      return { ...f, zones: next, zone: next[0] || '' };
-                    })
+                    setForm((f) => ({
+                      ...f,
+                      hasEmployeeRelationship: opt.value,
+                      ...(opt.value ? {} : { employeeRelationshipDetails: { fullName: '', relationship: '', department: '', designation: '' } }),
+                    }))
                   }
-                />
+                >
+                  <Text style={[styles.roleOptionText, form.hasEmployeeRelationship === opt.value && styles.roleOptionTextSelected]}>{opt.label}</Text>
+                </TouchableOpacity>
               ))}
             </View>
           </View>
-        )}
+          {form.hasEmployeeRelationship ? (
+            <>
+              {(['fullName', 'relationship', 'department', 'designation'] as const).map((key) => (
+                <FormField
+                  key={key}
+                  label={`${{ fullName: 'Full name', relationship: 'Relationship', department: 'Department', designation: 'Designation' }[key]} *`}
+                  value={form.employeeRelationshipDetails[key]}
+                  onChangeText={(t: string) =>
+                    setForm((f) => ({ ...f, employeeRelationshipDetails: { ...f.employeeRelationshipDetails, [key]: t } }))
+                  }
+                />
+              ))}
+            </>
+          ) : null}
+        </PageSection>
 
-        {form.role === 'Manager' ? (
+        <PageSection title="Contact">
+          <FormField label="Email Id *" value={form.email} onChangeText={(t: string) => setForm((f) => ({ ...f, email: t }))} placeholder="Email" keyboardType="email-address" />
+          <FormField label="Company contact number *" value={form.phone} onChangeText={(v: string) => setForm((f) => ({ ...f, phone: sanitizeDigits(v) }))} placeholder="10 to 15 digits" keyboardType="phone-pad" maxLength={15} />
+          <FormField label="Personal mobile *" value={form.mobile} onChangeText={(v: string) => setForm((f) => ({ ...f, mobile: sanitizeDigits(v) }))} placeholder="10 to 15 digits" keyboardType="phone-pad" maxLength={15} />
+        </PageSection>
+
+        <PageSection title="Address" description="Pincode fills city, district, state and zone.">
+          <FormField label="Pincode *" value={form.pincode} onChangeText={handlePincodeChange} placeholder="6-digit pincode" keyboardType="number-pad" />
+          {loadingPincode ? <Text style={styles.lookupText}>Looking up location…</Text> : null}
+          <FormField label="City" value={form.city} onChangeText={(t: string) => setForm((f) => ({ ...f, city: t }))} placeholder="City" />
+          <FormField label="District" value={form.district} onChangeText={(t: string) => setForm((f) => ({ ...f, district: t }))} placeholder="Employee District" />
+          <FormField label="State" value={form.state} onChangeText={(t: string) => setForm((f) => ({ ...f, state: t }))} placeholder="Employee State" />
+          <View style={styles.fieldContainer}>
+            <WebLabel>Permanent address *</WebLabel>
+            <WebInput
+              style={styles.textArea}
+              value={form.permanentAddress}
+              onChangeText={(t: string) => setForm((f) => ({ ...f, permanentAddress: t }))}
+              placeholder="Permanent address"
+              multiline
+              numberOfLines={3}
+            />
+          </View>
+          <Check checked={sameAsPermanent} label="Temporary address same as permanent" onPress={() => setSameAsPermanent((v) => !v)} />
+          <View style={[styles.fieldContainer, { marginTop: 8 }]}>
+            <WebLabel>Temporary address *</WebLabel>
+            <WebInput
+              style={[styles.textArea, sameAsPermanent && styles.textAreaDisabled]}
+              value={sameAsPermanent ? form.permanentAddress : form.temporaryAddress}
+              editable={!sameAsPermanent}
+              onChangeText={(t: string) => setForm((f) => ({ ...f, temporaryAddress: t }))}
+              placeholder="Temporary address"
+              multiline
+              numberOfLines={3}
+            />
+          </View>
+        </PageSection>
+
+        <PageSection title="Documents" description="PDF files only.">
+          <UploadRow label="Aadhaar *" url={form.aadhaarUrl} kind="aadhaar" uploadKey="aadhaar" onUrl={(u) => setForm((f) => ({ ...f, aadhaarUrl: u }))} />
+          <UploadRow label="Location *" url={form.locationPhotoUrl} kind="location" uploadKey="location" onUrl={(u) => setForm((f) => ({ ...f, locationPhotoUrl: u }))} />
+          <UploadRow label="Passport size photo *" url={form.passportPhotoUrl} kind="passport" uploadKey="passport" onUrl={(u) => setForm((f) => ({ ...f, passportPhotoUrl: u }))} />
+        </PageSection>
+
+        <PageSection title="References" description="Two family contacts, each with an Aadhaar PDF.">
+          {[0, 1].map((idx) => (
+            <View key={idx} style={styles.refCard}>
+              <Text style={styles.refTitle}>Reference {idx + 1}</Text>
+              <WebSelect
+                label="Relationship *"
+                value={form.references[idx].relation}
+                placeholder="Select relationship"
+                onValueChange={(v) => setReference(idx, { relation: v })}
+                items={REFERENCE_RELATIONS.map((r) => ({ label: r, value: r }))}
+              />
+              <FormField label="Name *" value={form.references[idx].name} onChangeText={(t: string) => setReference(idx, { name: t })} />
+              <FormField label="Mobile *" value={form.references[idx].mobile} onChangeText={(t: string) => setReference(idx, { mobile: sanitizeDigits(t) })} keyboardType="phone-pad" maxLength={15} />
+              <UploadRow
+                label="Aadhaar * (PDF)"
+                url={form.references[idx].aadhaarUrl}
+                kind="reference-aadhaar"
+                uploadKey={`ref-${idx}`}
+                onUrl={(u) => setReference(idx, { aadhaarUrl: u })}
+              />
+            </View>
+          ))}
+        </PageSection>
+
+        <PageSection title="Job">
           <WebSelect
-            label="Product *"
-            value={productId}
-            onValueChange={setProductId}
-            placeholder="Select product"
-            items={products.map((p) => ({ label: p.productName, value: p._id }))}
+            label="User Type *"
+            value={form.role}
+            onValueChange={(role) => {
+              if (!role) return;
+              if (role !== 'Manager') setProductId('');
+              setForm((f) => {
+                const single = isSingleZoneRole(role);
+                const nextZones = !roleUsesZones(role) ? [] : single ? (f.zone ? [f.zone] : []) : f.zones;
+                return {
+                  ...f,
+                  role,
+                  zones: nextZones,
+                  zone: roleUsesZones(role) ? nextZones[0] || '' : '',
+                  cluster: single ? f.cluster : '',
+                  trainerProducts: role === 'Trainer' ? f.trainerProducts : [],
+                  verticalManagerId: role === 'Trainer' ? f.verticalManagerId : '',
+                  taggedEmployeeIds: supportsEmployeeTagging(role) ? f.taggedEmployeeIds : [],
+                };
+              });
+            }}
+            items={ROLE_OPTIONS}
           />
-        ) : null}
+          {form.role === 'Office Team' ? (
+            <FormField label="Designation *" value={form.designation} onChangeText={(t: string) => setForm((f) => ({ ...f, designation: t }))} placeholder="Enter designation" />
+          ) : null}
 
-        {form.role === 'Trainer' ? (
-          <>
+          {!usesZones ? null : singleZone ? (
+            <>
+              <WebSelect
+                label="BDE Zone *"
+                value={form.zone}
+                onValueChange={(zone) => setForm((f) => ({ ...f, zone, zones: zone ? [zone] : [], cluster: '' }))}
+                placeholder="Select Zone"
+                items={zones.map((zone) => ({ label: zone, value: zone }))}
+              />
+              <WebSelect
+                label="Cluster *"
+                value={form.cluster}
+                onValueChange={(cluster) => setForm((f) => ({ ...f, cluster }))}
+                placeholder={!form.zone ? 'Select zone first' : clustersForZone.length === 0 ? 'No clusters linked to this zone' : 'Select Employee Cluster'}
+                disabled={!form.zone || clustersForZone.length === 0}
+                items={clustersForZone.map((cluster) => ({ label: cluster, value: cluster }))}
+              />
+            </>
+          ) : (
             <View style={styles.fieldContainer}>
-              <Text style={styles.label}>Trainer products *</Text>
+              <WebLabel>{form.role === 'Executive Manager' ? 'Zones (optional)' : 'Zones *'}</WebLabel>
               <View style={styles.listBox}>
-                {products.map((p) => (
+                {zones.length === 0 ? <Text style={styles.helper}>No zones configured.</Text> : null}
+                {zones.map((z) => (
                   <Check
-                    key={p._id}
-                    checked={form.trainerProducts.includes(p.productName)}
-                    label={p.productName}
-                    onPress={() => setForm((f) => ({ ...f, trainerProducts: toggleIn(f.trainerProducts, p.productName), verticalManagerId: '' }))}
+                    key={z}
+                    checked={form.zones.includes(z)}
+                    label={z}
+                    onPress={() =>
+                      setForm((f) => {
+                        const next = toggleIn(f.zones, z);
+                        return { ...f, zones: next, zone: next[0] || '' };
+                      })
+                    }
                   />
                 ))}
               </View>
             </View>
+          )}
+
+          {form.role === 'Manager' ? (
             <WebSelect
-              label="Product Head *"
-              value={form.verticalManagerId}
-              onValueChange={(v) => setForm((f) => ({ ...f, verticalManagerId: v }))}
-              placeholder={eligibleProductHeads.length ? 'Select Product Head' : 'No Product Head owns all selected products'}
-              items={eligibleProductHeads.map((h) => ({ label: h.name, value: h._id }))}
+              label="Product *"
+              value={productId}
+              onValueChange={setProductId}
+              placeholder="Select product"
+              items={products.map((p) => ({ label: p.productName, value: p._id }))}
             />
-          </>
-        ) : null}
+          ) : null}
 
-        <EmployeeTaggingPicker
-          role={form.role}
-          selectedIds={form.taggedEmployeeIds}
-          onChange={(taggedEmployeeIds) => setForm((f) => ({ ...f, taggedEmployeeIds }))}
-        />
+          {form.role === 'Trainer' ? (
+            <>
+              <View style={styles.fieldContainer}>
+                <WebLabel>Trainer products *</WebLabel>
+                <View style={styles.listBox}>
+                  {products.map((p) => (
+                    <Check
+                      key={p._id}
+                      checked={form.trainerProducts.includes(p.productName)}
+                      label={p.productName}
+                      onPress={() => setForm((f) => ({ ...f, trainerProducts: toggleIn(f.trainerProducts, p.productName), verticalManagerId: '' }))}
+                    />
+                  ))}
+                </View>
+              </View>
+              <WebSelect
+                label="Product Head *"
+                value={form.verticalManagerId}
+                onValueChange={(v) => setForm((f) => ({ ...f, verticalManagerId: v }))}
+                placeholder={eligibleProductHeads.length ? 'Select Product Head' : 'No Product Head owns all selected products'}
+                items={eligibleProductHeads.map((h) => ({ label: h.name, value: h._id }))}
+              />
+            </>
+          ) : null}
 
-        <View style={styles.fieldContainer}>
-          <Text style={styles.label}>Onboarding checklist * (select at least two)</Text>
+          <EmployeeTaggingPicker
+            role={form.role}
+            selectedIds={form.taggedEmployeeIds}
+            onChange={(taggedEmployeeIds) => setForm((f) => ({ ...f, taggedEmployeeIds }))}
+          />
+        </PageSection>
+
+        <PageSection title="Onboarding" description="Select at least two items.">
           <View style={styles.listBox}>
             {ONBOARDING_ITEMS.map((item) => (
               <Check
@@ -814,22 +808,49 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
               />
             ))}
           </View>
-        </View>
-        {form.onboardingChecklist.includes('Others') ? (
-          <FormField label="Other onboarding note" value={form.onboardingOtherNote} onChangeText={(t: string) => setForm((f) => ({ ...f, onboardingOtherNote: t }))} />
-        ) : null}
+          {form.onboardingChecklist.includes('Others') ? (
+            <View style={{ marginTop: 12 }}>
+              <FormField label="Other onboarding note" value={form.onboardingOtherNote} onChangeText={(t: string) => setForm((f) => ({ ...f, onboardingOtherNote: t }))} />
+            </View>
+          ) : null}
+        </PageSection>
+
+        <PageSection title="Salary">
+          <FormField label="CTC (₹ per year) *" value={form.yearlySalary} onChangeText={(t: string) => setForm((f) => ({ ...f, yearlySalary: t.replace(/[^\d.]/g, '') }))} placeholder="e.g. 300000" keyboardType="decimal-pad" />
+          {Number(form.yearlySalary) > 0 ? (
+            <Text style={styles.lookupText}>₹{Math.round(Number(form.yearlySalary) / 12).toLocaleString('en-IN')} per month</Text>
+          ) : null}
+          <FormField label="Monthly take-home (₹)" value={form.monthlyTakeHome} onChangeText={(t: string) => setForm((f) => ({ ...f, monthlyTakeHome: t.replace(/[^\d.]/g, '') }))} placeholder="Optional" keyboardType="decimal-pad" />
+        </PageSection>
+
+        <PageSection title="Bank">
+          <FormField label="Account holder name" value={form.bankAccountHolderName} onChangeText={(t: string) => setForm((f) => ({ ...f, bankAccountHolderName: t }))} placeholder="As in the bank account" />
+          <FormField label="Bank account number" value={form.bankAccountNumber} onChangeText={(t: string) => setForm((f) => ({ ...f, bankAccountNumber: t.replace(/\D/g, '') }))} placeholder="6 to 20 digits" keyboardType="number-pad" maxLength={20} />
+          <FormField label="IFSC" value={form.bankIfsc} onChangeText={(t: string) => setForm((f) => ({ ...f, bankIfsc: t.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() }))} placeholder="e.g. SBIN0001234" maxLength={11} />
+          <FormField label="Bank name" value={form.bankName} onChangeText={(t: string) => setForm((f) => ({ ...f, bankName: t }))} placeholder="e.g. State Bank of India" />
+          <FormField label="Branch" value={form.bankBranch} onChangeText={(t: string) => setForm((f) => ({ ...f, bankBranch: t }))} placeholder="Branch name" />
+          <UploadRow
+            label="Passbook / cancelled cheque (PDF or photo)"
+            url={form.bankPassbookUrl}
+            kind="passbook"
+            uploadKey="passbook"
+            onUrl={(u) => setForm((f) => ({ ...f, bankPassbookUrl: u }))}
+          />
+        </PageSection>
 
         {!isEdit ? (
-          <FormField label="Password" value={form.password} onChangeText={(t: string) => setForm((f) => ({ ...f, password: t }))} placeholder="Default password if left blank" secureTextEntry />
+          <PageSection title="Login">
+            <FormField label="Password" value={form.password} onChangeText={(t: string) => setForm((f) => ({ ...f, password: t }))} placeholder="Default password if left blank" secureTextEntry />
+          </PageSection>
         ) : null}
-        <TouchableOpacity style={[styles.submitButton, (submitting || !!uploading) && styles.submitButtonDisabled]} onPress={handleSubmit} disabled={submitting || !!uploading}>
-          {submitting ? <ActivityIndicator color={colors.textLight} /> : <Text style={styles.submitButtonText}>{isEdit ? 'Save Changes' : 'Submit'}</Text>}
-        </TouchableOpacity>
-        {isEdit ? (
-          <TouchableOpacity style={styles.cancelButton} onPress={() => navigation.goBack()} disabled={submitting}>
-            <Text style={styles.cancelText}>Cancel</Text>
-          </TouchableOpacity>
-        ) : null}
+
+        <WebButton
+          title={isEdit ? 'Save Changes' : 'Submit'}
+          onPress={handleSubmit}
+          disabled={submitting || !!uploading}
+          loading={submitting}
+        />
+        {isEdit ? <WebButton title="Cancel" variant="outline" onPress={() => navigation.goBack()} disabled={submitting} /> : null}
       </ScrollView>
     </ScreenShell>
   );
@@ -838,7 +859,7 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
 function FormField({ label, value, onChangeText, placeholder, keyboardType, secureTextEntry, maxLength }: any) {
   return (
     <View style={styles.fieldContainer}>
-      <Text style={styles.label}>{label}</Text>
+      <WebLabel>{label}</WebLabel>
       <WebInput
         style={styles.input}
         value={value}
@@ -854,41 +875,34 @@ function FormField({ label, value, onChangeText, placeholder, keyboardType, secu
 
 const styles = StyleSheet.create({
   content: { flex: 1 },
-  contentContainer: { padding: 20, paddingBottom: 40 },
-  sectionTitle: { ...typography.heading.h3, color: colors.textPrimary, marginBottom: 16, marginTop: 8 },
-  fieldContainer: { marginBottom: 16 },
-  label: { ...typography.label.medium, color: colors.textPrimary, marginBottom: 8 },
-  input: { ...typography.body.medium, backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 14, color: colors.textPrimary, marginBottom: 0 },
-  textAreaContainer: { marginBottom: 16 },
-  textArea: { ...typography.body.medium, backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 14, color: colors.textPrimary, minHeight: 80, textAlignVertical: 'top', marginBottom: 0 },
+  contentContainer: { padding: 16, paddingBottom: 32 },
+  fieldContainer: { marginBottom: 12 },
+  input: { marginBottom: 0 },
+  textArea: { minHeight: 80, textAlignVertical: 'top', marginBottom: 0 },
+  textAreaDisabled: { backgroundColor: colors.backgroundMuted, color: colors.textTertiary },
   roleContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  roleOption: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border },
-  roleOptionSelected: { backgroundColor: colors.primary + '20', borderColor: colors.primary },
-  roleOptionText: { ...typography.body.medium, color: colors.textPrimary },
-  roleOptionTextSelected: { color: colors.primary, fontWeight: '600' },
-  uploadButton: { padding: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundLight, alignItems: 'center' },
-  uploadButtonText: { ...typography.body.medium, color: colors.primary },
+  roleOption: { minWidth: 72, alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: '#DCE3EC' },
+  roleOptionSelected: { backgroundColor: colors.accent, borderColor: colors.primary },
+  roleOptionText: { fontSize: 14, color: colors.textPrimary },
+  roleOptionTextSelected: { color: colors.primaryDark, fontWeight: '700' },
+  uploadButton: { paddingHorizontal: 14, paddingVertical: 12, minHeight: 48, justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderStyle: 'dashed', borderColor: '#BFD3EE', backgroundColor: colors.accent, alignItems: 'center' },
+  uploadButtonDone: { borderStyle: 'solid', borderColor: '#BBF7D0', backgroundColor: colors.successLight },
+  uploadButtonText: { fontSize: 14, fontWeight: '600', color: colors.primaryDark },
   viewDocLink: { marginTop: 6, alignSelf: 'flex-start' },
-  viewDocLinkText: { ...typography.body.small, color: colors.primary, textDecorationLine: 'underline' },
-  cancelButton: { marginTop: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundLight, padding: 16, borderRadius: 12, alignItems: 'center' },
-  cancelText: { color: colors.textPrimary, fontWeight: '600' },
-  refCard: { borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, marginBottom: 16, backgroundColor: colors.backgroundMuted },
-  refTitle: { ...typography.label.medium, color: colors.textPrimary, marginBottom: 8, fontWeight: '600' },
-  listBox: { borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 8, backgroundColor: colors.backgroundLight },
-  checkRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },
-  checkLabel: { ...typography.body.medium, color: colors.textPrimary, flex: 1 },
-  successBanner: { backgroundColor: '#D1FAE5', borderRadius: 12, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: '#10B981' },
-  successIcon: { fontSize: 24, color: '#10B981', marginBottom: 8, fontWeight: 'bold' },
-  successText: { ...typography.body.medium, color: '#065F46', fontWeight: '600', marginBottom: 12 },
-  viewEmployeesButton: { alignSelf: 'flex-start', backgroundColor: '#10B981', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8 },
-  viewEmployeesButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
-  errorBanner: { backgroundColor: '#FEE2E2', borderRadius: 12, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: '#EF4444' },
-  errorIcon: { fontSize: 24, color: '#EF4444', marginBottom: 8, fontWeight: 'bold' },
-  errorText: { ...typography.body.medium, color: '#991B1B', marginBottom: 12 },
+  viewDocLinkText: { fontSize: 13, color: colors.primaryDark, textDecorationLine: 'underline' },
+  refCard: { borderWidth: 1, borderColor: '#EEF2F7', borderRadius: 12, padding: 12, marginBottom: 12, backgroundColor: colors.background },
+  refTitle: { fontSize: 14, color: colors.textPrimary, marginBottom: 8, fontWeight: '700' },
+  listBox: { borderWidth: 1, borderColor: '#DCE3EC', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 4, backgroundColor: colors.backgroundLight },
+  checkRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
+  checkLabel: { fontSize: 14, color: colors.textPrimary, flex: 1 },
+  helper: { fontSize: 13, color: colors.textTertiary, paddingVertical: 8 },
+  successBanner: { backgroundColor: colors.successLight, borderRadius: 12, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#BBF7D0' },
+  successText: { fontSize: 14, color: '#15803D', fontWeight: '600', marginBottom: 12 },
+  viewEmployeesButton: { alignSelf: 'flex-start', backgroundColor: colors.success, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
+  viewEmployeesButtonText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  errorBanner: { backgroundColor: colors.errorLight, borderRadius: 12, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#FECACA' },
+  errorText: { fontSize: 14, color: '#B91C1C', marginBottom: 8 },
   dismissError: { alignSelf: 'flex-start' },
-  dismissErrorText: { color: '#EF4444', fontWeight: '600', fontSize: 14 },
-  lookupText: { ...typography.body.small, color: colors.textSecondary, marginTop: -8, marginBottom: 12 },
-  submitButton: { marginTop: 24, borderRadius: 12, backgroundColor: colors.primary, paddingVertical: 16, alignItems: 'center' },
-  submitButtonDisabled: { opacity: 0.6 },
-  submitButtonText: { ...typography.label.large, color: colors.textLight, fontWeight: '600' },
+  dismissErrorText: { color: colors.error, fontWeight: '700', fontSize: 13 },
+  lookupText: { fontSize: 13, color: colors.textTertiary, marginTop: -4, marginBottom: 12 },
 });

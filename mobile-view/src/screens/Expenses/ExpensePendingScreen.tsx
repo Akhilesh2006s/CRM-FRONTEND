@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import ScreenShell from '../../ui/ScreenShell';
+import { EmptyState } from '../../ui/Kit';
 import { WebButton, WebSelect } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -175,7 +176,7 @@ export default function ExpensePendingScreen({ navigation }: any) {
         keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <Text style={styles.pageHint}>
+        <Text style={styles.pageHint} numberOfLines={2}>
           {isFinance
             ? 'Expenses approved at first level and awaiting your final approval.'
             : 'Expenses awaiting your approval. Open one to review it, then approve or reject it on the review page.'}
@@ -197,9 +198,7 @@ export default function ExpensePendingScreen({ navigation }: any) {
         </View>
 
         {expenses.length === 0 ? (
-          <View style={styles.emptyBox}>
-            <Text style={styles.emptyText}>No expenses are awaiting your approval.</Text>
-          </View>
+          <EmptyState icon="✅" title="Nothing to approve" message="No expenses are awaiting your approval." />
         ) : (
           expenses.map((expense, index) => {
             const badge = expenseStatusColor(expense.status);
@@ -235,82 +234,39 @@ export default function ExpensePendingScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   content: { flex: 1 },
-  pageHint: { fontSize: 13, color: colors.textSecondary },
+  pageHint: { fontSize: 13, color: colors.textTertiary, lineHeight: 18 },
   contentContainer: { padding: 16, paddingBottom: 32, gap: 12 },
   filterCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
-    gap: 10,
+    borderColor: '#EEF2F7',
+    padding: 16,
+    gap: 4,
   },
-  emptyBox: {
-    paddingVertical: 48,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  emptyText: { ...typography.body.medium, color: colors.textSecondary, textAlign: 'center' },
-  emptyHint: {
-    marginTop: 6,
-    fontSize: 12,
-    color: '#94A3B8',
-    textAlign: 'center',
-  },
+  emptyBox: { paddingVertical: 48, alignItems: 'center' },
+  emptyText: { fontSize: 14, color: colors.textSecondary, textAlign: 'center' },
+  emptyHint: { marginTop: 6, fontSize: 13, color: '#94A3B8', textAlign: 'center' },
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
+    borderColor: '#EEF2F7',
+    padding: 16,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 1,
   },
-  cardTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  employeeName: {
-    ...typography.heading.h3,
-    color: colors.textPrimary,
-    flex: 1,
-  },
-  amount: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.textPrimary,
-  },
-  statusBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    marginBottom: 10,
-  },
-  statusBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  infoRow: {
-    flexDirection: 'row',
-    marginBottom: 6,
-    gap: 8,
-  },
-  infoLabel: {
-    width: 120,
-    ...typography.body.small,
-    color: colors.textSecondary,
-  },
-  infoValue: {
-    flex: 1,
-    ...typography.body.medium,
-    color: colors.textPrimary,
-  },
+  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 8 },
+  employeeName: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, flex: 1 },
+  amount: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
+  statusBadge: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, marginBottom: 10 },
+  statusBadgeText: { fontSize: 12, fontWeight: '700' },
+  infoRow: { flexDirection: 'row', paddingVertical: 4, gap: 8 },
+  infoLabel: { width: 120, fontSize: 13, color: colors.textTertiary },
+  infoValue: { flex: 1, fontSize: 14, color: colors.textPrimary },
   actions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -318,7 +274,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: '#EEF2F7',
   },
   editBtn: {
     flexDirection: 'row',
@@ -326,21 +282,22 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 8,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#FDBA74',
     backgroundColor: '#FFF7ED',
   },
-  editBtnText: { color: '#EA580C', fontWeight: '700', fontSize: 13 },
+  editBtnText: { color: '#EA580C', fontWeight: '700', fontSize: 14 },
   approveBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
+    justifyContent: 'center',
+    gap: 6,
+    minHeight: 44,
+    borderRadius: 10,
     backgroundColor: '#16A34A',
   },
   approveBtnDisabled: { opacity: 0.6 },
-  approveBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
+  approveBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 15 },
 });

@@ -4,11 +4,12 @@
  * stores the request on the order and moves the order to dc_requested so it appears in Closed Sales.
  */
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
-import ScreenShell from '../../ui/ScreenShell';
-import { WebInput } from '../../ui/WebPrimitives';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebButton, WebLabel } from '../../ui/WebPrimitives';
+import { InfoRow } from '../../ui/Kit';
+import { ui } from '../../components/dc/DcUi';
 import { apiService } from '../../services/api';
 import { isTransportComplete, TRANSPORT_REQUIRED_MESSAGE } from '../../utils/dcTransport';
 import { showAlert } from '../../utils/showAlert';
@@ -161,54 +162,44 @@ export default function DCTermWiseRequestDCScreen({ navigation, route }: any) {
   };
 
   if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading...</Text>
-      </View>
-    );
+    return <ScreenShell title="Request DC" loading>{null}</ScreenShell>;
   }
 
   if (!dc) return null;
 
   const grandTotal = rowsTotal(productRows);
+  const req = (v: string) => (String(v || '').trim() ? v : 'Not set');
 
   return (
-    <ScreenShell title={`Request DC - ${form.school_name || dc.customerName || 'Client'}`}>
-      <Text style={styles.subtitle}>Review PO details and request Delivery Challan. All fields are read-only except Strength.</Text>
+    <ScreenShell title="Request DC" subtitle={form.school_name || dc.customerName || 'Client'}>
+      <Text style={ui.hint}>Only Strength can be changed here.</Text>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>School / Client</Text>
-        <ReadOnlyField label="School Name" value={form.school_name} />
-        <ReadOnlyField label="School Type" value={form.school_type} />
-        <ReadOnlyField label="Contact Person" value={form.contact_person} />
-        <ReadOnlyField label="Contact Mobile" value={form.contact_mobile} />
-        <ReadOnlyField label="Contact Person 2" value={form.contact_person2} />
-        <ReadOnlyField label="Contact Mobile 2" value={form.contact_mobile2} />
-        <ReadOnlyField label="Email" value={form.email} />
-        <ReadOnlyField label="Location" value={form.location} />
-        <ReadOnlyField label="Zone" value={form.zone} />
-        <ReadOnlyField label="Address" value={form.address} />
-      </View>
+      <PageSection title="School / Client">
+        <InfoRow label="School name" value={form.school_name} bold />
+        <InfoRow label="School type" value={form.school_type} />
+        <InfoRow label="Contact" value={form.contact_person} />
+        <InfoRow label="Mobile" value={form.contact_mobile} phone />
+        <InfoRow label="Contact 2" value={form.contact_person2} />
+        <InfoRow label="Mobile 2" value={form.contact_mobile2} phone />
+        <InfoRow label="Email" value={form.email} />
+        <InfoRow label="Location" value={form.location} />
+        <InfoRow label="Zone" value={form.zone} />
+        <InfoRow label="Address" value={form.address} />
+        <InfoRow label="Remarks" value={form.remarks} />
+        <InfoRow label="PO photo" value={form.pod_proof_url} />
+        <InfoRow label="Total amount" value={`₹${(Number(form.total_amount) || 0).toFixed(2)}`} bold />
+      </PageSection>
 
-      <View style={styles.section}>
-        <ReadOnlyField label="Remarks" value={form.remarks} />
-        <ReadOnlyField label="PO Photo URL" value={form.pod_proof_url} />
-        <ReadOnlyField label="Total Amount" value={`₹${(Number(form.total_amount) || 0).toFixed(2)}`} />
-      </View>
+      <PageSection title="Transport">
+        <InfoRow label="Name *" value={req(form.transport_name)} />
+        <InfoRow label="Transport to" value={transportToLabel(form)} />
+        <InfoRow label="Location *" value={req(form.transport_location)} />
+        <InfoRow label="Landmark" value={form.transportation_landmark} />
+        <InfoRow label="Pincode *" value={req(form.pincode)} />
+      </PageSection>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Transport Details</Text>
-        <ReadOnlyField label="Transport Name *" value={form.transport_name} />
-        <ReadOnlyField label="Transport To" value={transportToLabel(form)} />
-        <ReadOnlyField label="Transport Location *" value={form.transport_location} />
-        <ReadOnlyField label="Transportation Landmark" value={form.transportation_landmark} />
-        <ReadOnlyField label="Pincode *" value={form.pincode} />
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Products</Text>
-        {productRows.length === 0 ? <Text style={styles.muted}>No Term-Wise products on this DC.</Text> : null}
+      <PageSection title="Products">
+        {productRows.length === 0 ? <Text style={ui.muted}>No Term-Wise products on this DC.</Text> : null}
         {productRows.map((row) => {
           const lineTotal = (row.quantity || 0) * (row.unit_price || 0);
           return (
@@ -221,7 +212,7 @@ export default function DCTermWiseRequestDCScreen({ navigation, route }: any) {
               </Text>
               <View style={styles.inline}>
                 <View style={styles.cell}>
-                  <Text style={styles.label}>Strength</Text>
+                  <WebLabel>Strength *</WebLabel>
                   <WebInput
                     value={String(row.quantity)}
                     keyboardType="number-pad"
@@ -230,7 +221,7 @@ export default function DCTermWiseRequestDCScreen({ navigation, route }: any) {
                   />
                 </View>
                 <View style={styles.cell}>
-                  <Text style={styles.label}>Unit Price</Text>
+                  <WebLabel>Unit price</WebLabel>
                   <Text style={styles.readOnlyValue}>{row.unit_price}</Text>
                 </View>
               </View>
@@ -239,79 +230,30 @@ export default function DCTermWiseRequestDCScreen({ navigation, route }: any) {
           );
         })}
         <View style={styles.tableFooter}>
-          <Text style={styles.footerLabel}>Grand Total:</Text>
+          <Text style={styles.footerLabel}>Grand total</Text>
           <Text style={styles.footerValue}>₹{grandTotal.toFixed(2)}</Text>
         </View>
-      </View>
+      </PageSection>
 
       <View style={styles.buttonRow}>
-        <TouchableOpacity style={styles.cancelButton} onPress={() => navigation.goBack()} disabled={submitting}>
-          <Text style={styles.cancelButtonText}>Cancel</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.requestButton, submitting && styles.buttonDisabled]}
-          onPress={handleRequest}
-          disabled={submitting}
-        >
-          {submitting ? (
-            <ActivityIndicator size="small" color={colors.textLight} />
-          ) : (
-            <Text style={styles.requestButtonText}>Request</Text>
-          )}
-        </TouchableOpacity>
+        <View style={styles.cell}><WebButton title="Cancel" variant="outline" onPress={() => navigation.goBack()} disabled={submitting} /></View>
+        <View style={styles.cell}><WebButton title="Request DC" onPress={handleRequest} loading={submitting} disabled={submitting} /></View>
       </View>
     </ScreenShell>
   );
 }
 
-function ReadOnlyField({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
-      <Text style={styles.readOnlyValue}>{value || '-'}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { marginTop: 12, ...typography.body.medium, color: colors.textSecondary },
-  subtitle: { ...typography.body.small, color: colors.textSecondary, marginBottom: 16 },
-  section: {
-    marginBottom: 16,
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-  },
-  sectionTitle: { ...typography.heading.h4, color: colors.textPrimary, marginBottom: 12 },
-  field: { marginBottom: 12 },
-  label: { ...typography.label.small, color: colors.textSecondary, marginBottom: 4 },
-  readOnlyValue: { ...typography.body.medium, color: colors.textPrimary, backgroundColor: colors.backgroundDark, padding: 12, borderRadius: 8 },
-  muted: { ...typography.body.small, color: colors.textSecondary, marginBottom: 8 },
-  productCard: { borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, marginBottom: 10 },
-  productName: { ...typography.body.medium, fontWeight: '600', color: colors.textPrimary },
-  productMeta: { ...typography.body.small, color: colors.textSecondary, marginTop: 2, marginBottom: 8 },
-  inline: { flexDirection: 'row', gap: 10 },
+  readOnlyValue: { fontSize: 15, color: colors.textPrimary, backgroundColor: colors.backgroundMuted, paddingHorizontal: 14, paddingVertical: 13, borderRadius: 10, minHeight: 48 },
+  productCard: { borderWidth: 1, borderColor: '#EEF2F7', borderRadius: 12, padding: 12, marginBottom: 10, backgroundColor: colors.background },
+  productName: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
+  productMeta: { fontSize: 13, color: colors.textTertiary, marginTop: 2, marginBottom: 8 },
+  inline: { flexDirection: 'row', gap: 12 },
   cell: { flex: 1 },
   strengthInput: { marginBottom: 0 },
-  lineTotal: { ...typography.body.small, fontWeight: '600', color: colors.textPrimary, textAlign: 'right', marginTop: 8 },
-  tableFooter: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    gap: 8,
-  },
-  footerLabel: { ...typography.body.medium, fontWeight: '600', color: colors.textPrimary },
-  footerValue: { ...typography.body.medium, fontWeight: '700', color: colors.primary },
-  buttonRow: { flexDirection: 'row', gap: 12, marginTop: 8 },
-  cancelButton: { flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
-  cancelButtonText: { ...typography.label.medium, color: colors.textPrimary, fontWeight: '600' },
-  requestButton: { flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', minHeight: 48 },
-  requestButtonText: { ...typography.label.medium, color: colors.textLight, fontWeight: '600' },
-  buttonDisabled: { opacity: 0.7 },
+  lineTotal: { fontSize: 13, fontWeight: '600', color: colors.textPrimary, textAlign: 'right', marginTop: 8 },
+  tableFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, borderTopWidth: 1, borderTopColor: '#EEF2F7', marginTop: 4 },
+  footerLabel: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
+  footerValue: { fontSize: 17, fontWeight: '700', color: colors.primaryDark },
+  buttonRow: { flexDirection: 'row', gap: 12, marginTop: 4 },
 });

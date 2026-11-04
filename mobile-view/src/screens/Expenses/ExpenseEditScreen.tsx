@@ -84,7 +84,7 @@ export default function ExpenseEditScreen({ navigation, route }: any) {
       title="Edit Expense"
       loading={loading}
     >
-<ScrollView style={styles.content} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+<PageSection title="Expense">
         <FormField label="Title *" value={form.title} onChangeText={(text: string) => setForm((f) => ({ ...f, title: text }))} />
         <FormField
           label="Amount *"
@@ -93,7 +93,9 @@ export default function ExpenseEditScreen({ navigation, route }: any) {
           keyboardType="decimal-pad"
         />
         <FormField label="Category *" value={form.category} onChangeText={(text: string) => setForm((f) => ({ ...f, category: text }))} />
+        <Text style={styles.label}>Date *</Text>
         <DateField placeholder="Date *" value={form.date} onChange={(text: string) => setForm((f) => ({ ...f, date: text }))} />
+        <View style={{ height: 14 }} />
         <FormField
           label="Pending Month"
           value={form.pendingMonth}
@@ -109,9 +111,8 @@ export default function ExpenseEditScreen({ navigation, route }: any) {
             placeholder="Enter description" multiline
           />
         </View>
-        <TouchableOpacity style={[styles.submitButton, submitting && styles.submitButtonDisabled]} onPress={handleSubmit} disabled={submitting}>
-          </TouchableOpacity>
-      </ScrollView>
+      </PageSection>
+      <WebButton title={submitting ? 'Saving…' : 'Save Changes'} onPress={handleSubmit} loading={submitting} disabled={submitting} />
     </ScreenShell>
   );
 }
@@ -131,23 +132,21 @@ function FormField({ label, value, onChangeText, placeholder, keyboardType }: an
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
-  loadingText: { marginTop: 12, ...typography.body.medium, color: colors.textSecondary },
-  header: { paddingHorizontal: 20, paddingTop: 50, paddingBottom: 20, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
-  headerContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  backButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  backIcon: { fontSize: 24, color: colors.textLight, fontWeight: 'bold' },
-  headerTitle: { ...typography.heading.h1, color: colors.textLight, flex: 1, textAlign: 'center' },
-  placeholder: { width: 40 },
   content: { flex: 1 },
-  fieldContainer: { marginBottom: 16 },
-  label: { ...typography.label.medium, color: colors.textPrimary, marginBottom: 8 },
-  input: { ...typography.body.medium, backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 14, color: colors.textPrimary },
-  submitButton: { marginTop: 24, borderRadius: 12, overflow: 'hidden' },
-  submitButtonDisabled: { opacity: 0.6 },
-  submitButtonGradient: { paddingVertical: 16, alignItems: 'center' },
-  submitButtonText: { ...typography.label.large, color: colors.textLight, fontWeight: '600' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
+  loadingText: { marginTop: 12, fontSize: 14, color: colors.textSecondary },
+  fieldContainer: { marginBottom: 14 },
+  label: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 6 },
+  input: {
+    backgroundColor: colors.backgroundLight,
+    borderWidth: 1,
+    borderColor: '#DCE3EC',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minHeight: 48,
+    fontSize: 15,
+    color: colors.textPrimary,
+    marginBottom: 0,
+  },
 });
-
-

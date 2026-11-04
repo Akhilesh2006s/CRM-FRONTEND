@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radii, spacing } from '../../theme/colors';
 import ScreenShell from '../../ui/ScreenShell';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState, SectionTitle } from '../../ui/Kit';
 import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 import { apiService } from '../../services/api';
@@ -189,6 +190,7 @@ export default function ExpenseApproversScreen() {
       {message ? <MessageBanner type={message.type} message={message.text} onDismiss={() => setMessage(null)} /> : null}
 
       <View style={styles.card}>
+        <Text style={styles.cardHeading}>Assign approver</Text>
         <WebSelect label="Route expenses of" value={scope} onValueChange={(v) => setScope((v || 'employee') as Scope)} items={scopeOptions} />
         <WebSelect
           label="To approver"
@@ -270,23 +272,31 @@ export default function ExpenseApproversScreen() {
         </View>
       </View>
 
-      <Text style={styles.sectionTitle}>Approver tags</Text>
+      <SectionTitle>Approver tags</SectionTitle>
       {tags.length === 0 ? (
-        <Text style={styles.empty}>No approver tags. Default routing applies to everyone.</Text>
+        <EmptyState icon="🏷️" title="No approver tags" message="Default routing applies to everyone." />
       ) : (
         tags.map((tag) => (
-          <View key={tag._id} style={styles.tagCard}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.tagTarget}>{targetLabel(tag)}</Text>
-              <Text style={styles.tagMeta}>First-level approver: {personLabel(tag.approverId)}</Text>
-              <Text style={styles.tagMeta}>
-                Assigned by {tag.createdBy?.name || '-'} on {new Date(tag.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-              </Text>
-            </View>
-            <TouchableOpacity onPress={() => handleRemove(tag)} hitSlop={10} accessibilityLabel={`Remove approver tag for ${targetLabel(tag)}`}>
-              <Ionicons name="trash-outline" size={20} color={colors.error} />
-            </TouchableOpacity>
-          </View>
+          <Card key={tag._id}>
+            <CardTitle title={targetLabel(tag)} />
+            <InfoRow label="Approver" value={personLabel(tag.approverId)} />
+            <InfoRow label="Assigned by" value={tag.createdBy?.name || '-'} />
+            <InfoRow
+              label="On"
+              value={new Date(tag.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+            />
+            <ActionRow>
+              <TouchableOpacity
+                style={styles.removeBtn}
+                onPress={() => handleRemove(tag)}
+                hitSlop={10}
+                accessibilityLabel={`Remove approver tag for ${targetLabel(tag)}`}
+              >
+                <Ionicons name="trash-outline" size={16} color={colors.error} />
+                <Text style={styles.removeText}>Remove</Text>
+              </TouchableOpacity>
+            </ActionRow>
+          </Card>
         ))
       )}
     </ScreenShell>
@@ -294,44 +304,51 @@ export default function ExpenseApproversScreen() {
 }
 
 const styles = StyleSheet.create({
-  intro: { fontSize: 13, color: colors.textSecondary, lineHeight: 18, marginBottom: spacing.md },
+  intro: {
+    fontSize: 13,
+    color: colors.accentForeground,
+    lineHeight: 18,
+    backgroundColor: colors.accent,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
   card: {
     backgroundColor: colors.backgroundLight,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
+    borderColor: '#EEF2F7',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 16,
   },
+  cardHeading: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, marginBottom: 12 },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  label: { fontSize: 13, fontWeight: '500', color: colors.textPrimary },
-  link: { fontSize: 12, color: colors.primary },
-  employeeList: { maxHeight: 280, borderWidth: 1, borderColor: colors.border, borderRadius: radii.md },
+  label: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
+  link: { fontSize: 13, fontWeight: '600', color: colors.primaryDark },
+  employeeList: { maxHeight: 280, borderWidth: 1, borderColor: '#DCE3EC', borderRadius: 10 },
   employeeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
   },
   employeeName: { fontSize: 14, color: colors.textPrimary },
-  employeeMeta: { fontSize: 12, color: colors.textSecondary },
+  employeeMeta: { fontSize: 13, color: colors.textTertiary },
   emptySmall: { padding: 12, fontSize: 13, color: colors.textSecondary },
-  sectionTitle: { fontSize: 16, fontWeight: '600', color: colors.textPrimary, marginBottom: 8 },
-  empty: { textAlign: 'center', color: colors.textSecondary, paddingVertical: 24 },
-  tagCard: {
+  removeBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    backgroundColor: colors.backgroundLight,
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.lg,
-    padding: 12,
-    marginBottom: 8,
+    borderColor: '#FECACA',
+    backgroundColor: '#FEF2F2',
   },
-  tagTarget: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
-  tagMeta: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+  removeText: { fontSize: 14, fontWeight: '600', color: colors.error },
 });

@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, StyleSheet, Alert } from 'react-native';
+import { View, Text, StyleSheet, Alert, TouchableOpacity } from 'react-native';
 import { apiService } from '../../services/api';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
-import { WebInput, WebButton, WebSelect, DataTable } from '../../ui/WebPrimitives';
-import { spacing } from '../../theme/colors';
+import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
+import { colors, spacing } from '../../theme/colors';
 
 type Zone = { _id?: string; name: string };
 type Cluster = { _id?: string; name: string };
@@ -230,22 +230,29 @@ export default function EmployeesZonesScreen() {
       }}
     >
       <PageSection title="Add Zone">
+        <WebLabel>Zone name *</WebLabel>
         <WebInput placeholder="Enter zone" value={zoneName} onChangeText={setZoneName} />
         <View style={styles.row}>
-          <WebButton title={savingZone ? 'Saving…' : 'Add Zone'} onPress={onAddZone} loading={savingZone} />
+          <View style={styles.grow}>
+            <WebButton title={savingZone ? 'Saving…' : 'Add Zone'} onPress={onAddZone} loading={savingZone} />
+          </View>
           <WebButton title="Refresh" variant="outline" onPress={loadAll} />
         </View>
-        <DataTable
-          columns={['Zone', 'Action']}
-          rows={zones.map((z) => [
-            z.name,
-            z._id ? (
-              <WebButton key={z._id} title="Delete" variant="destructive" onPress={() => onDeleteZone(z._id)} />
-            ) : (
-              ''
-            ),
-          ])}
-        />
+        {zones.length === 0 ? (
+          <Text style={styles.empty}>No zones yet.</Text>
+        ) : (
+          <View style={styles.list}>
+            {zones.map((z, i) => (
+              <ListRow
+                key={z._id || `${z.name}-${i}`}
+                title={z.name}
+                last={i === zones.length - 1}
+                actionLabel={z._id ? 'Delete' : undefined}
+                onAction={() => onDeleteZone(z._id)}
+              />
+            ))}
+          </View>
+        )}
       </PageSection>
 
       <PageSection
@@ -273,18 +280,18 @@ export default function EmployeesZonesScreen() {
           disabled={clusters.length === 0}
         />
         {pairs.length > 0 && (
-          <DataTable
-            columns={['Zone', 'Cluster', 'Action']}
-            rows={pairs.map((p) => [
-              p.zone,
-              p.cluster,
-              p._id ? (
-                <WebButton key={p._id} title="Remove" variant="destructive" onPress={() => onDeletePair(p._id)} />
-              ) : (
-                ''
-              ),
-            ])}
-          />
+          <View style={styles.list}>
+            {pairs.map((p, i) => (
+              <ListRow
+                key={p._id || `${p.zone}-${p.cluster}-${i}`}
+                title={p.cluster}
+                meta={`Zone: ${p.zone}`}
+                last={i === pairs.length - 1}
+                actionLabel={p._id ? 'Remove' : undefined}
+                onAction={() => onDeletePair(p._id)}
+              />
+            ))}
+          </View>
         )}
       </PageSection>
 
@@ -292,6 +299,7 @@ export default function EmployeesZonesScreen() {
         title="Pincode mappings"
         description="Map pincode to city, district, state, zone, and cluster for automatic fill on Add Employee."
       >
+        <WebLabel>Pincode *</WebLabel>
         <WebInput
           placeholder="6-digit pincode"
           value={pincodeForm.pincode}
@@ -300,21 +308,24 @@ export default function EmployeesZonesScreen() {
           maxLength={6}
         />
         <WebSelect
-          label="Zone"
+          label="Zone *"
           value={pincodeForm.zoneId}
           onValueChange={(v) => setPincodeForm((f) => ({ ...f, zoneId: v, clusterId: '' }))}
           placeholder="Select zone"
           items={zones.filter((z) => z._id).map((z) => ({ label: z.name, value: z._id! }))}
         />
         <WebSelect
-          label="Cluster"
+          label="Cluster *"
           value={pincodeForm.clusterId}
           onValueChange={(v) => setPincodeForm((f) => ({ ...f, clusterId: v }))}
           placeholder="Select cluster"
           items={clustersForPincodeZone.filter((c) => c._id).map((c) => ({ label: c.name, value: c._id! }))}
         />
+        <WebLabel>City</WebLabel>
         <WebInput placeholder="City" value={pincodeForm.city} onChangeText={(t) => setPincodeForm((f) => ({ ...f, city: t }))} />
+        <WebLabel>District</WebLabel>
         <WebInput placeholder="District" value={pincodeForm.district} onChangeText={(t) => setPincodeForm((f) => ({ ...f, district: t }))} />
+        <WebLabel>State</WebLabel>
         <WebInput placeholder="State" value={pincodeForm.state} onChangeText={(t) => setPincodeForm((f) => ({ ...f, state: t }))} />
         <WebButton
           title={savingPincode ? 'Saving…' : 'Save pincode mapping'}
@@ -322,25 +333,71 @@ export default function EmployeesZonesScreen() {
           loading={savingPincode || loadingPincode}
         />
         {mappings.length > 0 && (
-          <DataTable
-            columns={['Pincode', 'Zone', 'Cluster', '']}
-            rows={mappings.map((m) => [
-              m.pincode,
-              m.zone,
-              m.cluster,
-              m._id ? (
-                <WebButton key={m._id} title="Delete" variant="destructive" onPress={() => onDeleteMapping(m._id)} />
-              ) : (
-                ''
-              ),
-            ])}
-          />
+          <View style={styles.list}>
+            {mappings.map((m, i) => (
+              <ListRow
+                key={m._id || `${m.pincode}-${i}`}
+                title={m.pincode}
+                meta={[m.zone, m.cluster, m.city].filter(Boolean).join(' · ')}
+                last={i === mappings.length - 1}
+                actionLabel={m._id ? 'Delete' : undefined}
+                onAction={() => onDeleteMapping(m._id)}
+              />
+            ))}
+          </View>
         )}
       </PageSection>
     </ScreenShell>
   );
 }
 
+/** One compact line in a list: title + small meta on the left, delete/remove on the right. */
+function ListRow({
+  title,
+  meta,
+  last,
+  actionLabel,
+  onAction,
+}: {
+  title: string;
+  meta?: string;
+  last?: boolean;
+  actionLabel?: string;
+  onAction: () => void;
+}) {
+  return (
+    <View style={[styles.listRow, last && styles.listRowLast]}>
+      <View style={styles.grow}>
+        <Text style={styles.listTitle}>{title}</Text>
+        {meta ? <Text style={styles.listMeta}>{meta}</Text> : null}
+      </View>
+      {actionLabel ? (
+        <TouchableOpacity onPress={onAction} style={styles.dangerBtn} hitSlop={6}>
+          <Text style={styles.dangerText}>{actionLabel}</Text>
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
+  grow: { flex: 1 },
+  empty: { fontSize: 13, color: colors.textTertiary, textAlign: 'center', paddingVertical: 12 },
+  list: { marginTop: 12, borderWidth: 1, borderColor: '#EEF2F7', borderRadius: 12, overflow: 'hidden' },
+  listRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+    backgroundColor: colors.backgroundLight,
+  },
+  listRowLast: { borderBottomWidth: 0 },
+  listTitle: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
+  listMeta: { fontSize: 13, color: colors.textTertiary, marginTop: 2 },
+  dangerBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: colors.errorLight },
+  dangerText: { fontSize: 13, fontWeight: '700', color: colors.error },
 });

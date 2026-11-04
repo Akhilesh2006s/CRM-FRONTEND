@@ -1,20 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  RefreshControl,
-  Alert,
-  TouchableOpacity,
-  ActivityIndicator,
-  Platform,
-} from 'react-native';
+import { View, Text, StyleSheet, Alert, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
-import ScreenShell from '../../ui/ScreenShell';
-import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
+import { Card, CardTitle, Badge, InfoRow, ActionRow, EmptyState, SectionTitle, type Tone } from '../../ui/Kit';
+import { StatGrid, rk, matchesWords } from './ReportKit';
 import { apiService } from '../../services/api';
 import { exportLeadsReport } from '../../utils/exportLeadsReport';
 
@@ -51,28 +42,6 @@ function formatDateTime(dateStr?: string) {
   return new Date(dateStr).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
 }
 
-function MetricCard({
-  label,
-  value,
-  tint,
-  icon,
-}: {
-  label: string;
-  value: string | number;
-  tint: string;
-  icon: keyof typeof Ionicons.glyphMap;
-}) {
-  return (
-    <View style={[styles.metricCard, { backgroundColor: tint }]}>
-      <View>
-        <Text style={styles.metricLabel}>{label}</Text>
-        <Text style={styles.metricValue}>{value}</Text>
-      </View>
-      <Ionicons name={icon} size={26} color={colors.textPrimary} />
-    </View>
-  );
-}
-
 function BarChartCard({
   title,
   icon,
@@ -85,10 +54,7 @@ function BarChartCard({
   const max = Math.max(...data.map((d) => d.value), 1);
   return (
     <View style={styles.chartCard}>
-      <View style={styles.chartTitleRow}>
-        <Ionicons name={icon} size={18} color={colors.primary} />
-        <Text style={styles.chartTitle}>{title}</Text>
-      </View>
+      <Text style={styles.chartTitle}>{title}</Text>
       {data.map((item, index) => (
         <View key={item.name} style={styles.barRow}>
           <Text style={styles.barLabel} numberOfLines={1}>
@@ -155,7 +121,18 @@ export default function ReportsLeadsClosedScreen({ navigation }: any) {
     if (zone) filtered = filtered.filter((l) => l.zone?.toLowerCase().includes(zone.toLowerCase()));
     if (contactMobile) filtered = filtered.filter((l) => l.contact_mobile?.includes(contactMobile));
     if (schoolName) {
-      filtered = filtered.filter((l) => l.school_name?.toLowerCase().includes(schoolName.toLowerCase()));
+      filtered = filtered.filter((l) =>
+        matchesWords(schoolName, [
+          l.school_name,
+          l.location,
+          l.contact_person,
+          l.contact_mobile,
+          l.zone,
+          normalizePriority(l.priority),
+          getAssignedTo(l),
+          formatDateTime(l.updatedAt || l.createdAt),
+        ])
+      );
     }
     filtered.sort((a, b) => {
       const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -237,216 +214,89 @@ export default function ReportsLeadsClosedScreen({ navigation }: any) {
         </TouchableOpacity>
       }
     >
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      >
-        <WebButton title={exporting ? 'Exporting…' : 'Export to Excel'} onPress={handleExport} loading={exporting} />
+      <StatGrid
+        items={[
+          { label: 'Total Closed', value: analytics.summary.total, tone: 'green' },
+          { label: 'Hot Leads', value: analytics.summary.hot, tone: 'red' },
+          { label: 'Warm Leads', value: analytics.summary.warm, tone: 'amber' },
+          { label: 'Zones', value: analytics.summary.zones, tone: 'purple' },
+          { label: 'Employees', value: analytics.summary.employees, tone: 'blue' },
+          { label: 'Total Strength', value: analytics.summary.strength, tone: 'slate' },
+        ]}
+      />
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.metricsRow}>
-          <MetricCard label="Total Closed" value={analytics.summary.total} tint="#dcfce7" icon="checkmark-circle-outline" />
-          <MetricCard label="Hot Leads" value={analytics.summary.hot} tint="#fee2e2" icon="flame-outline" />
-          <MetricCard label="Warm Leads" value={analytics.summary.warm} tint="#ffedd5" icon="thermometer-outline" />
-          <MetricCard label="Zones" value={analytics.summary.zones} tint="#ede9fe" icon="location-outline" />
-          <MetricCard label="Employees" value={analytics.summary.employees} tint="#dbeafe" icon="people-outline" />
-          <MetricCard label="Total Strength" value={analytics.summary.strength} tint="#fef9c3" icon="ribbon-outline" />
-        </ScrollView>
+      <BarChartCard title="Closed Leads by Zone" icon="location-outline" data={analytics.leadsByZone} />
+      <BarChartCard title="Closed Leads by Employee" icon="people-outline" data={analytics.leadsByEmployee} />
 
-        <BarChartCard title="Closed Leads by Zone" icon="location-outline" data={analytics.leadsByZone} />
-        <BarChartCard title="Closed Leads by Employee" icon="people-outline" data={analytics.leadsByEmployee} />
-
-        <View style={styles.filterCard}>
-          <WebSelect
-            label="Zone"
-            value={zone}
-            onValueChange={setZone}
-            placeholder="All Zones"
-            items={[{ label: 'All Zones', value: '' }, ...zones.map((z) => ({ label: z, value: z }))]}
-          />
-          <WebLabel>School Name</WebLabel>
-          <WebInput value={schoolName} onChangeText={setSchoolName} placeholder="Search school..." />
-          <WebLabel>Contact Mobile</WebLabel>
-          <WebInput
-            value={contactMobile}
-            onChangeText={setContactMobile}
-            placeholder="Search mobile..."
-            keyboardType="phone-pad"
-          />
-          <WebButton title="Search" onPress={applyFilters} />
+      <PageSection title="Filters">
+        <WebInput value={schoolName} onChangeText={setSchoolName} placeholder="Search school, contact, mobile, location…" />
+        <WebSelect
+          label="Zone"
+          value={zone}
+          onValueChange={setZone}
+          placeholder="All Zones"
+          items={[{ label: 'All Zones', value: '' }, ...zones.map((z) => ({ label: z, value: z }))]}
+        />
+        <View style={rk.btnRow}>
+          <View style={rk.col}>
+            <WebButton title="Search" onPress={applyFilters} />
+          </View>
+          <View style={rk.col}>
+            <WebButton title={exporting ? 'Exporting…' : 'Export Excel'} variant="outline" onPress={handleExport} loading={exporting} />
+          </View>
         </View>
+      </PageSection>
 
-        {leads.length === 0 ? (
-          <Text style={styles.emptyText}>No closed leads found.</Text>
-        ) : (
-          leads.map((lead) => (
-            <View key={lead._id} style={styles.leadCard}>
-              <View style={styles.leadHeader}>
-                <View style={styles.leadHeaderLeft}>
-                  <Text style={styles.schoolName}>{lead.school_name || 'Unnamed School'}</Text>
-                  {lead.location ? (
-                    <View style={styles.locationRow}>
-                      <Ionicons name="location-outline" size={14} color="#ea580c" />
-                      <Text style={styles.locationText}>{lead.location}</Text>
-                    </View>
-                  ) : null}
+      <SectionTitle>{`Closed leads (${leads.length})`}</SectionTitle>
+
+      {leads.length === 0 ? (
+        <EmptyState title="No closed leads found" />
+      ) : (
+        leads.map((lead) => (
+          <Card key={lead._id}>
+            <CardTitle title={lead.school_name || 'Unnamed School'} subtitle={lead.location || undefined} badge="Closed" tone="success" />
+            <InfoRow label="Contact" value={lead.contact_person} />
+            <InfoRow label="Mobile" value={lead.contact_mobile} phone />
+            <InfoRow
+              label="Lead status"
+              value={
+                <View style={{ flexDirection: 'row' }}>
+                  <Badge label={normalizePriority(lead.priority)} tone={priorityTone(lead.priority)} />
                 </View>
-                <Text style={styles.closedBadge}>Closed</Text>
-              </View>
-
-              <View style={styles.contactRow}>
-                <Text style={styles.infoText}>
-                  Contact: <Text style={styles.infoValue}>{lead.contact_person || '-'}</Text>
-                </Text>
-                <Text style={styles.infoText}>
-                  Mobile: <Text style={styles.infoValue}>{lead.contact_mobile || '-'}</Text>
-                </Text>
-              </View>
-
-              <View style={styles.statusRow}>
-                <Text style={styles.infoText}>Lead Status: </Text>
-                <Text style={styles.priorityBadge}>{normalizePriority(lead.priority)}</Text>
-              </View>
-              <Text style={styles.infoText}>
-                Closed On: <Text style={styles.infoValue}>{closedOn(lead)}</Text>
-              </Text>
-
-              <View style={styles.actionsRow}>
-                <TouchableOpacity
-                  style={styles.editBtn}
-                  onPress={() => navigation.navigate('LeadEdit', { id: lead._id })}
-                >
-                  <Ionicons name="create-outline" size={16} color="#b45309" />
-                  <Text style={styles.editBtnText}>Edit Details</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.viewBtn}
-                  onPress={() => navigation.navigate('LeadEdit', { id: lead._id })}
-                >
-                  <Ionicons name="time-outline" size={16} color="#2563eb" />
-                  <Text style={styles.viewBtnText}>View Details</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))
-        )}
-      </ScrollView>
+              }
+            />
+            <InfoRow label="Closed on" value={closedOn(lead)} />
+            <ActionRow>
+              <WebButton title="Edit Details" variant="outline" onPress={() => navigation.navigate('LeadEdit', { id: lead._id })} />
+              <WebButton title="View Details" variant="outline" onPress={() => navigation.navigate('LeadEdit', { id: lead._id })} />
+            </ActionRow>
+          </Card>
+        ))
+      )}
     </ScreenShell>
   );
 }
 
+function priorityTone(priority?: string): Tone {
+  const p = normalizePriority(priority).toLowerCase();
+  return p === 'hot' ? 'error' : p === 'warm' ? 'warning' : 'info';
+}
+
 const styles = StyleSheet.create({
-  content: { padding: 16, gap: 16, paddingBottom: 32 },
-  metricsRow: { gap: 12 },
-  metricCard: {
-    width: 150,
-    borderRadius: 14,
-    padding: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  metricLabel: { ...typography.body.small, color: colors.textSecondary, marginBottom: 4 },
-  metricValue: { fontSize: 22, fontWeight: '700', color: colors.textPrimary },
+  exportBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  exportText: { color: colors.primary, fontWeight: '600', fontSize: 13 },
   chartCard: {
     backgroundColor: colors.backgroundLight,
-    borderRadius: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#EEF2F7',
     padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
+    marginBottom: 12,
   },
-  chartTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
-  chartTitle: { ...typography.heading.h3, color: colors.textPrimary },
-  barRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  barLabel: { width: 90, ...typography.body.small, color: colors.textSecondary },
-  barTrack: {
-    flex: 1,
-    height: 22,
-    backgroundColor: colors.backgroundMuted,
-    borderRadius: 6,
-    overflow: 'hidden',
-  },
-  barFill: { height: '100%', borderRadius: 6 },
-  barValue: { width: 24, textAlign: 'right', ...typography.body.small, color: colors.textPrimary },
-  filterCard: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: 4,
-  },
-  emptyText: { textAlign: 'center', paddingVertical: 24, color: colors.textSecondary },
-  leadCard: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: 10,
-  },
-  leadHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  leadHeaderLeft: { flex: 1, paddingRight: 8 },
-  schoolName: { fontSize: 18, fontWeight: '700', color: '#ea580c', marginBottom: 4 },
-  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  locationText: { ...typography.body.small, color: colors.textSecondary, flex: 1 },
-  closedBadge: {
-    backgroundColor: '#dcfce7',
-    color: '#166534',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    fontSize: 11,
-    fontWeight: '600',
-    overflow: 'hidden',
-  },
-  contactRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  infoText: { ...typography.body.medium, color: colors.textSecondary },
-  infoValue: { color: colors.textPrimary, fontWeight: '500' },
-  priorityBadge: {
-    backgroundColor: '#ffedd5',
-    color: '#9a3412',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-    fontSize: 11,
-    fontWeight: '600',
-    overflow: 'hidden',
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    paddingTop: 12,
-    marginTop: 4,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  editBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#fffbeb',
-    borderWidth: 1,
-    borderColor: '#fde68a',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  editBtnText: { color: '#b45309', fontWeight: '600', fontSize: 13 },
-  viewBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#eff6ff',
-    borderWidth: 1,
-    borderColor: '#bfdbfe',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  viewBtnText: { color: '#2563eb', fontWeight: '600', fontSize: 13 },
-  exportBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 6 },
-  exportText: { fontSize: 12, fontWeight: '600', color: colors.primary },
+  chartTitle: { fontSize: 15, fontWeight: '700', color: colors.textPrimary, marginBottom: 8 },
+  barRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
+  barLabel: { width: 96, fontSize: 13, color: colors.textSecondary },
+  barTrack: { flex: 1, height: 8, borderRadius: 999, backgroundColor: colors.backgroundMuted, overflow: 'hidden' },
+  barFill: { height: '100%', borderRadius: 999 },
+  barValue: { width: 32, textAlign: 'right', fontSize: 13, fontWeight: '700', color: colors.textPrimary },
 });

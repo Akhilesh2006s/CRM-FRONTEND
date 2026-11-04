@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Text } from 'react-native';
+import { Text, View, StyleSheet } from 'react-native';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
-import { WebButton, DataTable } from '../../ui/WebPrimitives';
+import { WebButton } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, EmptyState, SectionTitle, toneFor } from '../../ui/Kit';
+import { colors } from '../../theme/colors';
 import { navigateRoot } from '../../navigation/navigationRef';
 import { approvalHistory, expenseStatusText, firstLevelAmount } from '../../lib/expenseApproval';
 
@@ -53,30 +55,50 @@ export default function ExpenseDetailScreen({ route }: any) {
   return (
     <ScreenShell title="Expense details" loading={loading} subtitle={expense ? undefined : 'Not found'}>
       {!expense && !loading ? (
-        <PageSection title="Expense">
-          <Text>Expense not found</Text>
-        </PageSection>
-      ) : (
-        <PageSection title="Expense details">
-          <DataTable
-            columns={['Field', 'Value']}
-            rows={fields.map(([k, v]) => [k, v])}
-          />
-          <DataTable
-            columns={['Stage', 'By', 'When', 'Amount', 'Remarks']}
-            rows={history.map((h) => [
-              h.step,
-              h.by?.name ? `${h.by.name}${h.by.role ? ` (${h.by.role})` : ''}` : '—',
-              h.at ? new Date(h.at).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : '—',
-              money(h.amount),
-              h.remarks || '—',
-            ])}
-          />
+        <EmptyState icon="🧾" title="Expense not found" />
+      ) : expense ? (
+        <>
+          <Card>
+            <CardTitle
+              title={expense.title || expense.category || 'Expense'}
+              subtitle={money(expense.employeeAmount ?? expense.amount)}
+              badge={expenseStatusText(expense)}
+              tone={toneFor(expense.status)}
+            />
+            {fields.map(([k, v]) => (
+              <InfoRow key={k} label={k} value={v} />
+            ))}
+          </Card>
+          {history.length ? (
+            <>
+              <SectionTitle>Approval history</SectionTitle>
+              <Card>
+                {history.map((h, i) => (
+                  <View key={i} style={[styles.historyRow, i === history.length - 1 && styles.historyLast]}>
+                    <Text style={styles.historyStep}>{h.step}</Text>
+                    <InfoRow label="By" value={h.by?.name ? `${h.by.name}${h.by.role ? ` (${h.by.role})` : ''}` : '—'} />
+                    <InfoRow
+                      label="When"
+                      value={h.at ? new Date(h.at).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : '—'}
+                    />
+                    <InfoRow label="Amount" value={money(h.amount)} />
+                    <InfoRow label="Remarks" value={h.remarks || '—'} />
+                  </View>
+                ))}
+              </Card>
+            </>
+          ) : null}
           {canResubmit && (
             <WebButton title="Resubmit expense" onPress={() => navigateRoot('ExpenseResubmit', { id })} />
           )}
-        </PageSection>
-      )}
+        </>
+      ) : null}
     </ScreenShell>
   );
 }
+
+const styles = StyleSheet.create({
+  historyRow: { paddingBottom: 10, marginBottom: 10, borderBottomWidth: 1, borderBottomColor: '#EEF2F7' },
+  historyLast: { paddingBottom: 0, marginBottom: 0, borderBottomWidth: 0 },
+  historyStep: { fontSize: 15, fontWeight: '700', color: colors.textPrimary, marginBottom: 4 },
+});

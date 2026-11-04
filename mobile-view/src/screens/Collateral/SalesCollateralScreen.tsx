@@ -7,6 +7,7 @@ import { apiService, getApiUrl } from '../../services/api';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
+import { Card, Badge, ActionRow, EmptyState } from '../../ui/Kit';
 import { useAuth } from '../../context/AuthContext';
 import { getRoleFlags } from '../../utils/roles';
 import { showConfirm } from '../../utils/showAlert';
@@ -173,7 +174,7 @@ export default function SalesCollateralScreen() {
 
       {canManage ? (
       <PageSection title="Upload brochure / video">
-        <WebLabel>Title</WebLabel>
+        <WebLabel>Title *</WebLabel>
         <WebInput value={title} onChangeText={setTitle} />
         <WebButton title={file ? `File: ${file.name}` : 'Choose File (PDF / image / PPT / video)'} variant="outline" onPress={pickFile} />
         {file ? <WebButton title="Remove file" variant="outline" onPress={() => setFile(null)} /> : null}
@@ -196,12 +197,12 @@ export default function SalesCollateralScreen() {
       {loading ? (
         <Text style={styles.empty}>Loading…</Text>
       ) : items.length === 0 ? (
-        <Text style={styles.empty}>No collateral yet.</Text>
+        <EmptyState icon="📁" title="No collateral yet" />
       ) : (
         items.map((item) => {
           const active = item.isActive !== false;
           return (
-            <View key={item._id} style={[styles.card, !active && styles.cardInactive]}>
+            <Card key={item._id} style={!active ? styles.cardInactive : undefined}>
               <TouchableOpacity style={styles.cardMain} onPress={() => open(item)} activeOpacity={0.75}>
                 <View style={styles.iconBox}>
                   <Ionicons name={TYPE_ICONS[item.type] || 'document-outline'} size={22} color={colors.primary} />
@@ -217,29 +218,21 @@ export default function SalesCollateralScreen() {
                     {item.url}
                   </Text>
                 </View>
-                <View style={[styles.badge, { backgroundColor: active ? colors.successLight : colors.backgroundMuted }]}>
-                  <Text style={[styles.badgeText, { color: active ? colors.success : colors.textTertiary }]}>
-                    {active ? 'Active' : 'Inactive'}
-                  </Text>
-                </View>
+                <Badge label={active ? 'Active' : 'Inactive'} tone={active ? 'success' : 'neutral'} />
               </TouchableOpacity>
-              <View style={styles.actions}>
-                <View style={{ flex: 1 }}>
-                  <WebButton title="Open" onPress={() => open(item)} />
-                </View>
+              <ActionRow>
+                <WebButton title="Open" onPress={() => open(item)} />
                 {canManage ? (
-                  <View style={{ flex: 1 }}>
-                    <WebButton
-                      title={active ? 'Deactivate' : 'Activate'}
-                      variant={active ? 'destructive' : 'outline'}
-                      loading={busyId === item._id}
-                      disabled={busyId !== null}
-                      onPress={() => toggleActive(item)}
-                    />
-                  </View>
+                  <WebButton
+                    title={active ? 'Deactivate' : 'Activate'}
+                    variant={active ? 'destructive' : 'outline'}
+                    loading={busyId === item._id}
+                    disabled={busyId !== null}
+                    onPress={() => toggleActive(item)}
+                  />
                 ) : null}
-              </View>
-            </View>
+              </ActionRow>
+            </Card>
           );
         })
       )}
@@ -267,10 +260,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cardTitle: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
-  meta: { fontSize: 12, color: colors.textTertiary, marginTop: 2, textTransform: 'capitalize' },
+  cardTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
+  meta: { fontSize: 13, color: colors.textTertiary, marginTop: 2, textTransform: 'capitalize' },
   desc: { fontSize: 13, color: colors.textSecondary, marginTop: 4 },
-  url: { fontSize: 12, color: colors.primaryDark, marginTop: 4 },
+  url: { fontSize: 13, color: colors.primaryDark, marginTop: 4 },
   badge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999 },
   badgeText: { fontSize: 12, fontWeight: '600' },
   actions: { flexDirection: 'row', gap: 10, marginTop: 12 },

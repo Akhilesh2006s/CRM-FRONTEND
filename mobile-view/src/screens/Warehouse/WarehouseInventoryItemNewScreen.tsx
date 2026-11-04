@@ -11,8 +11,8 @@ import {
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
-import ScreenShell from '../../ui/ScreenShell';
-import { WebInput, WebSelect } from '../../ui/WebPrimitives';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebSelect, WebButton, WebLabel } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 import {
   getCatalogProductNames,
@@ -152,21 +152,11 @@ export default function WarehouseInventoryItemNewScreen({ navigation }: any) {
 
   const productNames = getCatalogProductNames(products);
 
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading products...</Text>
-      </View>
-    );
-  }
 
   return (
     <ScreenShell title="Add Item Details" loading={loading}>
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-        <Text style={styles.subtitle}>
-          Fields come from Product Master for the selected product.
-        </Text>
+      <PageSection title="Item Details">
+        <Text style={styles.helper}>Fields come from Product Master for the selected product.</Text>
 
         {successMessage && (
           <MessageBanner
@@ -232,14 +222,8 @@ export default function WarehouseInventoryItemNewScreen({ navigation }: any) {
           />
         )}
 
-        <View style={styles.fieldContainer}>
-          <Text style={styles.label}>Vendor</Text>
-          <WebInput
-            style={[styles.input, styles.readOnlyInput]}
-            value={FIXED_VENDOR}
-            editable={false}
-          />
-        </View>
+        <WebLabel>Vendor</WebLabel>
+        <WebInput style={styles.readOnlyInput} value={FIXED_VENDOR} editable={false} />
 
         <FormField
           label="Quantity *"
@@ -249,74 +233,22 @@ export default function WarehouseInventoryItemNewScreen({ navigation }: any) {
           keyboardType="decimal-pad"
         />
 
-        <TouchableOpacity
-          style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
-          onPress={handleSubmit}
-          disabled={submitting}
-        >
-          <View style={styles.submitButtonGradient}>
-            <Text style={styles.submitButtonText}>{submitting ? 'Adding…' : 'Add Item'}</Text>
-          </View>
-        </TouchableOpacity>
-      </ScrollView>
+      </PageSection>
+      <WebButton title={submitting ? 'Adding…' : 'Add Item'} onPress={handleSubmit} loading={submitting} disabled={submitting} />
     </ScreenShell>
   );
 }
 
-function FormField({ label, value, onChangeText, placeholder, keyboardType }: any) {
+function FormField({ label, value, onChangeText, placeholder, keyboardType }: { label: string; value: string; onChangeText: (v: string) => void; placeholder?: string; keyboardType?: any }) {
   return (
-    <View style={styles.fieldContainer}>
-      <Text style={styles.label}>{label}</Text>
-      <WebInput
-        style={styles.input}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        keyboardType={keyboardType}
-      />
+    <View>
+      <WebLabel>{label}</WebLabel>
+      <WebInput value={value} onChangeText={onChangeText} placeholder={placeholder} keyboardType={keyboardType} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.background,
-  },
-  loadingText: { marginTop: 12, ...typography.body.medium, color: colors.textSecondary },
-  content: { flex: 1 },
-  contentContainer: { padding: 20, paddingBottom: 40 },
-  subtitle: {
-    ...typography.body.small,
-    color: colors.textSecondary,
-    marginBottom: 16,
-  },
-  fieldContainer: { marginBottom: 16 },
-  label: { ...typography.label.medium, color: colors.textPrimary, marginBottom: 8 },
-  input: {
-    ...typography.body.medium,
-    backgroundColor: colors.backgroundLight,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 14,
-    color: colors.textPrimary,
-  },
-  readOnlyInput: {
-    backgroundColor: colors.background,
-    color: colors.textSecondary,
-  },
-  submitButton: {
-    marginTop: 24,
-    borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: colors.primary,
-    alignSelf: 'flex-start',
-    minWidth: 120,
-  },
-  submitButtonDisabled: { opacity: 0.6 },
-  submitButtonGradient: { paddingVertical: 16, paddingHorizontal: 24, alignItems: 'center' },
-  submitButtonText: { ...typography.label.large, color: colors.textLight, fontWeight: '600' },
+  helper: { fontSize: 13, color: colors.textTertiary, marginBottom: 12 },
+  readOnlyInput: { backgroundColor: colors.backgroundMuted, color: colors.textSecondary },
 });

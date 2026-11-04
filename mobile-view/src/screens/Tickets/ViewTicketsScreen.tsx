@@ -4,12 +4,13 @@
  * Optional route param `view`: 'all' | 'solved' | 'pending'.
  */
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Modal, ActivityIndicator } from 'react-native';
 import { colors } from '../../theme/colors';
 import { apiService } from '../../services/api';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebLabel } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
+import { Card, CardTitle, InfoRow, ChipRow, ActionRow, EmptyState } from '../../ui/Kit';
 import { fmtTicketDate, personDesignation, personName, ticketStatusLabel, type Ticket } from './ticketHelpers';
 
 export type TicketsView = 'all' | 'solved' | 'pending';
@@ -31,6 +32,29 @@ export default function ViewTicketsScreen({ route }: any) {
   const [resolveId, setResolveId] = useState<string | null>(null);
   const [resolutionNote, setResolutionNote] = useState('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [search, setSearch] = useState('');
+
+  /** Every word typed must appear somewhere on the ticket card. */
+  const words = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const shown = words.length
+    ? items.filter((item) => {
+        const text = [
+          personName(item.raisedBy),
+          personDesignation(item.raisedBy),
+          item.subject,
+          item.description,
+          item.schoolName,
+          item.schoolCode,
+          item.resolutionNote,
+          ticketStatusLabel(item.status),
+          fmtTicketDate(item.createdAt),
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return words.every((w) => text.includes(w));
+      })
+    : items;
 
   const load = useCallback(async () => {
     try {
@@ -69,7 +93,7 @@ export default function ViewTicketsScreen({ route }: any) {
   return (
     <ScreenShell
       title="View Tickets"
-      subtitle="Tickets raised by employees of every designation."
+      subtitle="Tickets raised by all employees."
       loading={loading && !refreshing}
       refreshing={refreshing}
       onRefresh={() => {
@@ -77,59 +101,57 @@ export default function ViewTicketsScreen({ route }: any) {
         load();
       }}
     >
-      <View style={styles.tabs}>
-        {VIEWS.map((v) => {
-          const active = v.view === view;
-          return (
-            <TouchableOpacity key={v.view} style={[styles.tab, active && styles.tabActive]} onPress={() => setView(v.view)}>
-              <Text style={[styles.tabText, active && styles.tabTextActive]}>{v.label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+      <ChipRow
+        items={VIEWS.map((v) => ({ key: v.view, label: v.label }))}
+        value={view}
+        onChange={(k) => setView(k as TicketsView)}
+      />
+      <WebInput
+        value={search}
+        onChangeText={setSearch}
+        placeholder="Search name, subject, school, code…"
+        style={styles.search}
+      />
 
       {message ? <MessageBanner type={message.type} message={message.text} onDismiss={() => setMessage(null)} /> : null}
 
-      {items.length === 0 ? (
-        <Text style={styles.empty}>No {current.label.toLowerCase()}</Text>
+      {shown.length === 0 ? (
+        <EmptyState
+          icon="🎫"
+          title={items.length === 0 ? `No ${current.label.toLowerCase()}` : 'No matching tickets'}
+          message={items.length === 0 ? undefined : 'Try different search words.'}
+        />
       ) : (
-        items.map((item) => {
-          const solved = item.status === 'Resolved';
-          return (
-            <View key={item._id} style={styles.card}>
-              <View style={styles.cardTop}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.raiser}>{personName(item.raisedBy)}</Text>
-                  <Text style={styles.designation}>{personDesignation(item.raisedBy)}</Text>
-                </View>
-                <View style={[styles.badge, solved ? styles.badgeSolved : styles.badgePending]}>
-                  <Text style={[styles.badgeText, { color: solved ? colors.success : colors.warning }]}>
-                    {ticketStatusLabel(item.status)}
-                  </Text>
-                </View>
-              </View>
-              <Text style={styles.subject}>{item.subject}</Text>
-              <Text style={styles.desc}>{item.description}</Text>
-              {item.resolutionNote ? <Text style={styles.note}>Note: {item.resolutionNote}</Text> : null}
-              <Text style={styles.meta}>
-                {item.schoolName || '—'}
-                {item.schoolCode ? ` (${item.schoolCode})` : ''} · Raised {fmtTicketDate(item.createdAt)}
-              </Text>
-              {item.status === 'Open' ? (
-                <View style={{ marginTop: 8 }}>
-                  <WebButton
-                    title="Mark solved"
-                    disabled={acting}
-                    onPress={() => {
-                      setResolveId(item._id);
-                      setResolutionNote('');
-                    }}
-                  />
-                </View>
-              ) : null}
-            </View>
-          );
-        })
+        shown.map((item) => (
+          <Card key={item._id}>
+            <CardTitle
+              title={item.subject}
+              subtitle={`${personName(item.raisedBy)} · ${personDesignation(item.raisedBy)}`}
+              badge={ticketStatusLabel(item.status)}
+              tone={item.status === 'Resolved' ? 'success' : 'warning'}
+            />
+            {item.description ? <Text style={styles.desc}>{item.description}</Text> : null}
+            <InfoRow
+              label="School"
+              value={item.schoolName ? `${item.schoolName}${item.schoolCode ? ` (${item.schoolCode})` : ''}` : item.schoolCode || ''}
+            />
+            <InfoRow label="Raised on" value={fmtTicketDate(item.createdAt)} />
+            <InfoRow label="Note" value={item.resolutionNote || ''} />
+            {item.status === 'Open' ? (
+              <ActionRow>
+                <WebButton
+                  title="Mark solved"
+                  variant="success"
+                  disabled={acting}
+                  onPress={() => {
+                    setResolveId(item._id);
+                    setResolutionNote('');
+                  }}
+                />
+              </ActionRow>
+            ) : null}
+          </Card>
+        ))
       )}
 
       <Modal visible={Boolean(resolveId)} transparent animationType="fade" onRequestClose={() => setResolveId(null)}>
@@ -165,27 +187,11 @@ export default function ViewTicketsScreen({ route }: any) {
 }
 
 const styles = StyleSheet.create({
-  tabs: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-  tab: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundLight },
-  tabActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  tabText: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
-  tabTextActive: { color: colors.primaryForeground },
-  empty: { textAlign: 'center', color: colors.textSecondary, paddingVertical: 24 },
-  card: { backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, marginBottom: 10 },
-  cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 6 },
-  raiser: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
-  designation: { fontSize: 12, color: colors.textTertiary },
-  badge: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
-  badgeSolved: { backgroundColor: colors.successLight },
-  badgePending: { backgroundColor: colors.warningLight },
-  badgeText: { fontSize: 12, fontWeight: '600' },
-  subject: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
-  desc: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
-  note: { fontSize: 12, color: colors.textTertiary, marginTop: 4 },
-  meta: { fontSize: 12, color: colors.textTertiary, marginTop: 6 },
-  overlay: { flex: 1, backgroundColor: 'rgba(15,23,42,0.45)', justifyContent: 'center', padding: 20 },
+  search: { marginTop: 12, marginBottom: 12 },
+  desc: { fontSize: 14, color: colors.textSecondary, marginBottom: 8, lineHeight: 20 },
+  overlay: { flex: 1, backgroundColor: 'rgba(15,23,42,0.45)', justifyContent: 'center', padding: 16 },
   modal: { backgroundColor: colors.backgroundLight, borderRadius: 14, padding: 16 },
-  modalTitle: { fontSize: 17, fontWeight: '600', color: colors.textPrimary, marginBottom: 12 },
+  modalTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary, marginBottom: 12 },
   textArea: { minHeight: 80, textAlignVertical: 'top' },
   modalBtns: { flexDirection: 'row', gap: 8, marginTop: 4 },
 });

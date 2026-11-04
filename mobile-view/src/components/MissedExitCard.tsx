@@ -95,15 +95,15 @@ export default function MissedExitCard({
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#FDE68A', padding: 14, marginBottom: 12 },
-  title: { fontSize: 16, fontWeight: '700', color: '#111827' },
-  meta: { fontSize: 13, color: '#6B7280', marginTop: 2, marginBottom: 8 },
-  label: { fontSize: 13, fontWeight: '600', color: '#374151', marginTop: 8, marginBottom: 4 },
-  input: { borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, padding: 10, minHeight: 44, color: '#111827', justifyContent: 'center' },
-  value: { color: '#111827', fontSize: 15 },
-  placeholder: { color: '#9CA3AF', fontSize: 15 },
+  card: { backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: '#FDE68A', padding: 16, marginBottom: 12 },
+  title: { fontSize: 16, fontWeight: '700', color: '#1E293B' },
+  meta: { fontSize: 13, color: '#64748B', marginTop: 2, marginBottom: 8 },
+  label: { fontSize: 13, fontWeight: '600', color: '#475569', marginTop: 8, marginBottom: 6 },
+  input: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#DCE3EC', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, minHeight: 48, color: '#1E293B', fontSize: 15, justifyContent: 'center' },
+  value: { color: '#1E293B', fontSize: 15 },
+  placeholder: { color: '#94A3B8', fontSize: 15 },
   link: { color: '#2563EB', fontWeight: '600', textAlign: 'right', padding: 8 },
-  error: { color: '#B91C1C', marginTop: 8 },
-  button: { backgroundColor: '#2563EB', borderRadius: 8, paddingVertical: 12, alignItems: 'center', marginTop: 12 },
+  error: { color: '#B91C1C', fontSize: 13, marginTop: 8 },
+  button: { backgroundColor: '#2563EB', borderRadius: 10, minHeight: 48, justifyContent: 'center', alignItems: 'center', marginTop: 12 },
   buttonText: { color: '#fff', fontWeight: '700', fontSize: 15 },
 });

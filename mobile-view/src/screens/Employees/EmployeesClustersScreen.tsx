@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, Alert } from 'react-native';
 import { apiService } from '../../services/api';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
-import { WebInput, WebButton, DataTable } from '../../ui/WebPrimitives';
-import { spacing } from '../../theme/colors';
+import { WebInput, WebButton, WebLabel } from '../../ui/WebPrimitives';
+import { Card, CardTitle, ActionRow, EmptyState, SectionTitle } from '../../ui/Kit';
 
 type Cluster = { _id?: string; name: string };
 
@@ -82,27 +82,36 @@ export default function EmployeesClustersScreen() {
       }}
     >
       <PageSection title="Add Cluster">
+        <WebLabel>Cluster name *</WebLabel>
         <WebInput placeholder="Enter cluster" value={name} onChangeText={setName} />
         <View style={styles.row}>
-          <WebButton title={saving ? 'Saving…' : 'Add Cluster'} onPress={onAdd} loading={saving} />
+          <View style={styles.grow}>
+            <WebButton title={saving ? 'Saving…' : 'Add Cluster'} onPress={onAdd} loading={saving} />
+          </View>
           <WebButton title="Refresh" variant="outline" onPress={load} />
         </View>
-        <DataTable
-          columns={['Cluster', 'Action']}
-          rows={clusters.map((c) => [
-            c.name,
-            c._id ? (
-              <WebButton key={c._id} title="Delete" variant="destructive" onPress={() => onDelete(c._id)} />
-            ) : (
-              ''
-            ),
-          ])}
-        />
       </PageSection>
+
+      <SectionTitle>{`Clusters (${clusters.length})`}</SectionTitle>
+      {clusters.length === 0 ? (
+        <EmptyState title="No clusters yet" message="Add a cluster above." />
+      ) : (
+        clusters.map((c, i) => (
+          <Card key={c._id || `${c.name}-${i}`}>
+            <CardTitle title={c.name} />
+            {c._id ? (
+              <ActionRow>
+                <WebButton title="Delete" variant="destructive" onPress={() => onDelete(c._id)} />
+              </ActionRow>
+            ) : null}
+          </Card>
+        ))
+      )}
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', gap: spacing.sm },
+  row: { flexDirection: 'row', gap: 8 },
+  grow: { flex: 1 },
 });

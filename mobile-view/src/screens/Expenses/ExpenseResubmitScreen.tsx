@@ -12,7 +12,7 @@ import {
 import { apiService } from '../../services/api';
 import { colors } from '../../theme/colors';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
-import { WebInput, WebButton, DataTable } from '../../ui/WebPrimitives';
+import { WebInput, WebButton, WebLabel } from '../../ui/WebPrimitives';
 import { navigateRoot } from '../../navigation/navigationRef';
 import DateField from '../../ui/DateField';
 
@@ -61,33 +61,23 @@ export default function ExpenseResubmitScreen({ route }: any) {
   };
 
   return (
-    <ScreenShell title="Expense Resubmit" loading={loading}>
-      <PageSection title="Expense Resubmit">
-<Text style={styles.title}>Resubmit expense</Text>
-      <Text style={styles.label}>Category</Text>
-      <WebInput style={styles.input} value={category} onChangeText={setCategory} />
-      <Text style={styles.label}>Amount</Text>
-      <WebInput style={styles.input} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" />
-      <Text style={styles.label}>Date</Text>
-      <DateField placeholder="Date" value={date} onChange={setDate} />
-      <Text style={styles.label}>Remarks</Text>
-      <WebInput style={[styles.input, styles.area]} value={employeeRemarks} onChangeText={setEmployeeRemarks} multiline />
-      <TouchableOpacity style={styles.btn} onPress={submit} disabled={submitting}>
-        {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Resubmit</Text>}
-      </TouchableOpacity>
+    <ScreenShell title="Resubmit Expense" loading={loading}>
+      <PageSection title="Expense" description="Fix the details and send it again.">
+        <WebLabel>Category</WebLabel>
+        <WebInput value={category} onChangeText={setCategory} />
+        <WebLabel>Amount</WebLabel>
+        <WebInput value={amount} onChangeText={setAmount} keyboardType="decimal-pad" />
+        <WebLabel>Date</WebLabel>
+        <DateField placeholder="Date" value={date} onChange={setDate} />
+        <View style={{ height: 12 }} />
+        <WebLabel>Remarks</WebLabel>
+        <WebInput style={styles.area} value={employeeRemarks} onChangeText={setEmployeeRemarks} multiline />
       </PageSection>
+      <WebButton title="Resubmit" onPress={submit} loading={submitting} disabled={submitting} />
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  content: { padding: 16 },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  title: { fontSize: 22, fontWeight: '700', marginBottom: 16 },
-  label: { marginTop: 12, marginBottom: 4, color: colors.textSecondary },
-  input: { borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12 },
   area: { minHeight: 80, textAlignVertical: 'top' },
-  btn: { marginTop: 24, backgroundColor: colors.primary, padding: 16, borderRadius: 12, alignItems: 'center' },
-  btnText: { color: '#fff', fontWeight: '600' },
 });

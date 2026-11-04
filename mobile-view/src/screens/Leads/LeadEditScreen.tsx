@@ -14,7 +14,7 @@ import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
 import { phoneDigitsError, sanitizePhoneDigits } from '../../utils/phone';
-import ScreenShell from '../../ui/ScreenShell';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 import { useAuth } from '../../context/AuthContext';
@@ -576,6 +576,9 @@ export default function LeadEditScreen({ navigation, route }: any) {
           />
         )}
 
+        <Text style={styles.mandatoryNote}>Fields marked * are required.</Text>
+
+        <PageSection title="School">
         {isSuperAdmin ? (
           <WebSelect
             label="Assign to (BDE)"
@@ -596,6 +599,9 @@ export default function LeadEditScreen({ navigation, route }: any) {
           onValueChange={(v) => setForm((f) => ({ ...f, school_type: v }))}
           items={SCHOOL_TYPE_OPTIONS}
         />
+        </PageSection>
+
+        <PageSection title="Contact">
         <FormField
           label="Contact person *"
           value={form.contact_person}
@@ -639,6 +645,9 @@ export default function LeadEditScreen({ navigation, route }: any) {
           onChangeText={(text) => setForm((f) => ({ ...f, financial_contact_designation: text }))}
           placeholder="e.g. Accountant"
         />
+        </PageSection>
+
+        <PageSection title="Address">
         <FormField
           label="Landmark"
           value={form.location}
@@ -676,8 +685,10 @@ export default function LeadEditScreen({ navigation, route }: any) {
           />
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Products * (all required — cannot deselect)</Text>
+        </PageSection>
+
+        <PageSection title="Products *">
+          <Text style={styles.hintTop}>Pick a status for each. Hot / Warm need Strength, Price and Chance %.</Text>
           {loadingProducts ? (
             <ActivityIndicator color={colors.primary} style={{ marginVertical: 12 }} />
           ) : products.length === 0 ? (
@@ -742,10 +753,9 @@ export default function LeadEditScreen({ navigation, route }: any) {
               );
             })
           )}
-          <Text style={styles.hint}>
-            All products are required. Choose a status for each. Strength, Unit Price, and Chance % are required only for Hot and Warm.
-          </Text>
-        </View>
+        </PageSection>
+
+        <PageSection title="School details">
 
         <FormField
           label="Average School Fee *"
@@ -805,6 +815,9 @@ export default function LeadEditScreen({ navigation, route }: any) {
           />
         </View>
 
+        </PageSection>
+
+        <PageSection title="Follow-up">
         <WebSelect
           label="Priority *"
           value={form.priority}
@@ -865,6 +878,8 @@ export default function LeadEditScreen({ navigation, route }: any) {
           </Modal>
         )}
 
+        </PageSection>
+
         <WebButton
           title={submitting ? 'Updating...' : 'Update Lead Details'}
           onPress={handleSubmit}
@@ -918,30 +933,21 @@ const styles = StyleSheet.create({
   },
   loadingText: { marginTop: 12, ...typography.body.medium, color: colors.textSecondary },
   content: { flex: 1 },
-  contentContainer: { padding: 16, paddingBottom: 40 },
-  fieldContainer: { marginBottom: 16 },
-  label: { ...typography.body.small, color: colors.textSecondary, marginBottom: 6 },
-  input: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  inputDisabled: { backgroundColor: colors.background, opacity: 0.7 },
-  textAreaContainer: { marginBottom: 16 },
+  contentContainer: { paddingBottom: 32 },
+  mandatoryNote: { fontSize: 13, color: colors.textTertiary, marginBottom: 12 },
+  fieldContainer: { marginBottom: 2 },
+  label: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 6 },
+  input: {},
+  inputDisabled: { backgroundColor: colors.backgroundMuted, color: colors.textTertiary },
+  textAreaContainer: { marginBottom: 2 },
   textArea: {
     minHeight: 80,
     textAlignVertical: 'top',
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   section: { marginBottom: 16 },
   sectionTitle: { ...typography.heading.h3, color: colors.textPrimary, marginBottom: 12 },
-  hint: { ...typography.body.small, color: colors.textSecondary, marginTop: 8 },
+  hint: { fontSize: 13, color: colors.textTertiary, marginTop: 8 },
+  hintTop: { fontSize: 13, color: colors.textTertiary, marginBottom: 12 },
   retryBtn: {
     marginTop: 8,
     paddingVertical: 10,
@@ -958,10 +964,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
     marginBottom: 10,
-    backgroundColor: colors.backgroundLight,
+    backgroundColor: colors.background,
   },
-  productHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
-  productFields: { gap: 4, marginTop: 4 },
+  productHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  productFields: {},
   productRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -984,18 +990,20 @@ const styles = StyleSheet.create({
   },
   checkboxSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
   checkboxMark: { color: colors.textLight, fontSize: 14, fontWeight: 'bold' },
-  productName: { ...typography.body.medium, color: colors.textPrimary, flex: 1 },
+  productName: { fontSize: 15, fontWeight: '700', color: colors.textPrimary, flex: 1 },
   dateTouchable: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: colors.backgroundLight,
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    minHeight: 48,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#DCE3EC',
+    marginBottom: 14,
   },
-  dateText: { ...typography.body.medium, color: colors.textPrimary },
+  dateText: { fontSize: 15, color: colors.textPrimary },
   datePlaceholder: { color: colors.textSecondary },
   dateOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
   datePickerBox: {

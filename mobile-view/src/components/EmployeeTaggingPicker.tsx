@@ -26,10 +26,10 @@ export default function EmployeeTaggingPicker({ role, selectedIds, onChange, exc
   useEffect(() => {
     if (!supportsEmployeeTagging(role)) return;
     apiService
-      .get<any[]>('/employees?isActive=true')
-      .then((data) => {
+      .get('/employees?isActive=true')
+      .then((data: any) => {
         const list = Array.isArray(data) ? data : [];
-        const withoutSelf = list.filter((e) => e._id !== excludeId);
+        const withoutSelf = list.filter((e: any) => e._id !== excludeId);
         setOptions(filterTagOptions(withoutSelf, role));
       })
       .catch(() => setOptions([]));
@@ -80,11 +80,11 @@ export default function EmployeeTaggingPicker({ role, selectedIds, onChange, exc
 
 const styles = StyleSheet.create({
   container: { marginBottom: 16 },
-  title: { ...typography.label.medium, color: colors.textPrimary, marginBottom: 8, fontWeight: '600' },
-  empty: { ...typography.body.small, color: colors.textSecondary },
-  list: { maxHeight: 160, borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.backgroundLight },
-  row: { flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
-  checkbox: { width: 18, height: 18, borderRadius: 4, borderWidth: 2, borderColor: colors.border, marginRight: 10 },
-  checkboxOn: { backgroundColor: colors.primary, borderColor: colors.primary },
-  label: { ...typography.body.small, color: colors.textPrimary, flex: 1 },
+  title: { fontSize: 13, color: colors.textSecondary, marginBottom: 6, fontWeight: '600' },
+  empty: { fontSize: 13, color: colors.textTertiary },
+  list: { maxHeight: 180, borderWidth: 1, borderColor: '#DCE3EC', borderRadius: 10, backgroundColor: colors.backgroundLight },
+  row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
+  checkbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: '#CBD5E1', marginRight: 12 },
+  checkboxOn: { backgroundColor: colors.primaryDark, borderColor: colors.primaryDark },
+  label: { fontSize: 14, color: colors.textPrimary, flex: 1 },
 });

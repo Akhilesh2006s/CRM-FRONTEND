@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { colors, radii, spacing } from '../../theme/colors';
 import ScreenShell from '../../ui/ScreenShell';
+import { EmptyState } from '../../ui/Kit';
 import { WebInput, WebButton } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 import { apiService } from '../../services/api';
@@ -244,14 +245,14 @@ export default function ExpenseManagerUpdateScreen({ navigation, route }: any) {
           {employee?.empCode ? <Text style={styles.muted}> ({employee.empCode})</Text> : null}
           {employee?.role ? <Text style={styles.muted}> · {employee.role}</Text> : null}
         </Text>
-        <Text style={styles.hint}>
+        <Text style={styles.hint} numberOfLines={4}>
           Approving needs an approved amount (first level) or the final amount (Finance); remarks are required to reject or to change the amount. Either
           level can reject an item.
         </Text>
       </View>
 
       {expenses.length === 0 ? (
-        <Text style={styles.empty}>No expenses awaiting your approval for this employee</Text>
+        <EmptyState icon="✅" title="Nothing to approve" message="No expenses awaiting your approval for this employee" />
       ) : (
         sortedExpenses.map((exp, index) => {
           const form = forms[exp._id];
@@ -371,71 +372,88 @@ const styles = StyleSheet.create({
   filterCard: {
     backgroundColor: colors.backgroundLight,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
+    borderColor: '#EEF2F7',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 12,
   },
-  filterRow: { flexDirection: 'row', gap: 8 },
-  filterLabel: { fontSize: 12, fontWeight: '500', color: colors.textSecondary, marginBottom: 4 },
+  filterRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
+  filterLabel: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 6 },
   employeeCard: {
     backgroundColor: colors.backgroundLight,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
+    borderColor: '#EEF2F7',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 12,
   },
-  employeeText: { fontSize: 16, fontWeight: '600', color: colors.textPrimary },
-  employeeName: { color: colors.primary },
-  muted: { fontSize: 13, fontWeight: '400', color: colors.textSecondary },
-  hint: { fontSize: 12, color: colors.textSecondary, marginTop: 6 },
+  employeeText: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
+  employeeName: { color: colors.primaryDark },
+  muted: { fontSize: 13, fontWeight: '400', color: colors.textTertiary },
+  hint: { fontSize: 13, color: colors.textTertiary, marginTop: 6, lineHeight: 18 },
   empty: { textAlign: 'center', color: colors.textSecondary, marginTop: 32 },
   card: {
     backgroundColor: colors.backgroundLight,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.lg,
-    padding: spacing.md,
-    marginBottom: 10,
-    gap: 4,
+    borderColor: '#EEF2F7',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 12,
+    gap: 6,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 1,
   },
   cardRejecting: { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5' },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
-  cardTitle: { fontSize: 15, fontWeight: '600', color: colors.textPrimary, flexShrink: 1 },
-  cardAmount: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
-  statusLine: { fontSize: 11, color: colors.textSecondary },
-  meta: { fontSize: 13, color: colors.textSecondary },
-  metaStrong: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
-  gps: { fontSize: 13, fontWeight: '600', color: colors.error },
-  desc: { fontSize: 13, color: colors.textPrimary, backgroundColor: colors.backgroundMuted, padding: 8, borderRadius: radii.sm },
-  firstLevelBox: { backgroundColor: '#F5F3FF', borderRadius: radii.md, padding: 8, marginTop: 4 },
-  firstLevelTitle: { fontSize: 12, fontWeight: '600', color: '#6D28D9' },
+  cardTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, flexShrink: 1 },
+  cardAmount: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
+  statusLine: {
+    alignSelf: 'flex-start',
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#B45309',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  meta: { fontSize: 13, color: colors.textTertiary },
+  metaStrong: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
+  gps: { fontSize: 13, fontWeight: '700', color: colors.error },
+  desc: { fontSize: 13, color: colors.textPrimary, backgroundColor: colors.backgroundMuted, padding: 10, borderRadius: 10 },
+  firstLevelBox: { backgroundColor: '#F5F3FF', borderRadius: 10, padding: 10, marginTop: 4 },
+  firstLevelTitle: { fontSize: 13, fontWeight: '700', color: '#6D28D9' },
   decisionRow: { flexDirection: 'row', gap: 8, marginVertical: 8 },
   decisionBtn: {
     flex: 1,
-    paddingVertical: 8,
-    borderRadius: radii.md,
+    minHeight: 44,
+    justifyContent: 'center',
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#DCE3EC',
     alignItems: 'center',
     backgroundColor: colors.backgroundLight,
   },
   decisionApprove: { backgroundColor: colors.success, borderColor: colors.success },
   decisionReject: { backgroundColor: colors.error, borderColor: colors.error },
-  decisionText: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
+  decisionText: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
   decisionTextActive: { color: '#fff' },
   inputDisabled: { opacity: 0.5 },
   inputEdited: { borderColor: '#FB923C', color: '#C2410C' },
   remarks: { minHeight: 60, textAlignVertical: 'top' },
-  billRow: { flexDirection: 'row', marginTop: 4 },
+  billRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
   totalsCard: {
-    backgroundColor: colors.backgroundMuted,
+    backgroundColor: colors.accent,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.lg,
-    padding: spacing.md,
+    borderColor: '#BFDBFE',
+    borderRadius: 14,
+    padding: 16,
     marginTop: 4,
+    gap: 2,
   },
-  totalsTitle: { fontSize: 15, fontWeight: '600', color: colors.textPrimary, marginBottom: 4 },
+  totalsTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, marginBottom: 6 },
 });

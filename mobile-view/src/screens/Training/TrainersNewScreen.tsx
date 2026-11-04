@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
 import { phoneDigitsError, sanitizePhoneDigits } from '../../utils/phone';
-import ScreenShell from '../../ui/ScreenShell';
-import { WebInput, WebSelect } from '../../ui/WebPrimitives';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebSelect, WebLabel, WebButton } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 
 type ProductOption = { _id: string; productName: string };
@@ -154,13 +153,13 @@ export default function TrainersNewScreen({ navigation }: any) {
         )}
         {errorMessage && <MessageBanner type="error" message={errorMessage} onDismiss={() => setErrorMessage(null)} />}
 
+        <PageSection title="Trainer details">
         <FormField label="Trainer Name *" value={form.name} onChangeText={(t: string) => setForm((f) => ({ ...f, name: t }))} />
         <FormField label="Mobile *" value={form.mobile} onChangeText={(t: string) => setForm((f) => ({ ...f, mobile: sanitizePhoneDigits(t) }))} keyboardType="phone-pad" maxLength={15} placeholder="10 to 15 digits" />
         <FormField label="Email" value={form.email} onChangeText={(t: string) => setForm((f) => ({ ...f, email: t }))} keyboardType="email-address" />
 
-        <Text style={styles.sectionTitle}>Employment Type *</Text>
         <WebSelect
-          label=""
+          label="Employment Type *"
           value={form.trainerType}
           onValueChange={(v) => setForm((f) => ({ ...f, trainerType: v }))}
           items={[
@@ -169,6 +168,9 @@ export default function TrainersNewScreen({ navigation }: any) {
           ]}
         />
 
+        </PageSection>
+
+        <PageSection title="Location">
         {zones.length > 0 && (
           <WebSelect
             label="Zone"
@@ -189,8 +191,9 @@ export default function TrainersNewScreen({ navigation }: any) {
         )}
 
         <FormField label="Address" value={form.address1} onChangeText={(t: string) => setForm((f) => ({ ...f, address1: t }))} multiline />
+        </PageSection>
 
-        <Text style={styles.sectionTitle}>Products *</Text>
+        <PageSection title="Products *">
         {availableCategories.length > 0 && (
           <WebSelect
             key={`cat-${categoryPickerKey}`}
@@ -245,9 +248,9 @@ export default function TrainersNewScreen({ navigation }: any) {
           onChangeText={(t: string) => setForm((f) => ({ ...f, trainerLevels: t }))}
         />
 
-        <TouchableOpacity style={[styles.submitButton, submitting && styles.submitButtonDisabled]} onPress={handleSubmit} disabled={submitting}>
-          {submitting ? <ActivityIndicator color={colors.textLight} /> : <Text style={styles.submitButtonText}>Create Trainer</Text>}
-        </TouchableOpacity>
+        </PageSection>
+
+        <WebButton title="Create Trainer" onPress={handleSubmit} loading={submitting} disabled={submitting} />
       </ScrollView>
     </ScreenShell>
   );
@@ -255,10 +258,10 @@ export default function TrainersNewScreen({ navigation }: any) {
 
 function FormField({ label, value, onChangeText, placeholder, keyboardType, multiline, maxLength }: any) {
   return (
-    <View style={styles.fieldContainer}>
-      <Text style={styles.label}>{label}</Text>
+    <View>
+      <WebLabel>{label}</WebLabel>
       <WebInput
-        style={[styles.input, multiline && styles.inputMultiline]}
+        style={multiline ? styles.inputMultiline : undefined}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
@@ -272,19 +275,12 @@ function FormField({ label, value, onChangeText, placeholder, keyboardType, mult
 
 const styles = StyleSheet.create({
   content: { flex: 1 },
-  contentContainer: { padding: 20, paddingBottom: 40 },
-  fieldContainer: { marginBottom: 16 },
-  sectionTitle: { ...typography.label.medium, color: colors.textPrimary, marginBottom: 8, marginTop: 8, fontWeight: '600' },
-  label: { ...typography.label.medium, color: colors.textPrimary, marginBottom: 8 },
-  input: { ...typography.body.medium, backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 14, color: colors.textPrimary },
+  contentContainer: { padding: 16, paddingBottom: 40 },
   inputMultiline: { minHeight: 80, textAlignVertical: 'top' },
-  checkboxRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
-  chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundLight },
-  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { ...typography.body.small, color: colors.textPrimary },
-  chipTextActive: { color: colors.textLight },
-  hint: { ...typography.body.small, color: colors.textSecondary, marginBottom: 12 },
-  submitButton: { marginTop: 24, borderRadius: 12, backgroundColor: colors.primary, paddingVertical: 16, alignItems: 'center' },
-  submitButtonDisabled: { opacity: 0.6 },
-  submitButtonText: { ...typography.label.large, color: colors.textLight, fontWeight: '600' },
+  checkboxRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+  chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundLight },
+  chipActive: { backgroundColor: colors.accent, borderColor: colors.primaryLight },
+  chipText: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
+  chipTextActive: { color: colors.primaryDark },
+  hint: { fontSize: 13, color: colors.textTertiary, marginBottom: 12 },
 });

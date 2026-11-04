@@ -10,7 +10,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
-import ScreenShell from '../../ui/ScreenShell';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { EmptyState } from '../../ui/Kit';
 import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 import { printReturnSlip } from '../../lib/returnSlip';
@@ -291,12 +292,7 @@ export default function StockReturnWarehouseManagerReviewScreen({ navigation, ro
   );
 
   if (loading || !detail) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading return review…</Text>
-      </View>
-    );
+    return <ScreenShell title="Return Review" loading>{null}</ScreenShell>;
   }
 
   const schoolName =
@@ -319,13 +315,7 @@ export default function StockReturnWarehouseManagerReviewScreen({ navigation, ro
         readOnly ? ` (${statusLabel(detail.status)} — view only)` : ''
       }`}
       loading={false}
-      noScroll
     >
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={styles.contentContainer}
-        keyboardShouldPersistTaps="handled"
-      >
         <Text style={styles.rolesLine}>
           Field Executive: {detail.executiveName || '—'} · Warehouse Executive:{' '}
           {detail.verifiedBy?.name || '—'}
@@ -341,8 +331,7 @@ export default function StockReturnWarehouseManagerReviewScreen({ navigation, ro
           </View>
         ) : null}
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Return summary</Text>
+        <PageSection title="Return summary">
           <View style={styles.summaryGrid}>
             <InfoPair label="School" value={schoolName} />
             <InfoPair label="School code" value={schoolCode} />
@@ -375,19 +364,13 @@ export default function StockReturnWarehouseManagerReviewScreen({ navigation, ro
                 : ''}
             </Text>
           ) : null}
-        </View>
+        </PageSection>
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>
-            Compare quantities — Field Executive vs Warehouse Executive
-          </Text>
-          <Text style={styles.hint}>
-            Approve full or partial per line, or reject individual lines. Use Reject entire return
-            to reject all.
-          </Text>
+        <PageSection title="Compare quantities">
+          <Text style={styles.hint}>Field vs Warehouse Executive. Approve full/partial or reject per line.</Text>
 
           {lines.length === 0 ? (
-            <Text style={styles.emptyText}>No product lines</Text>
+            <EmptyState icon="📦" title="No product lines" />
           ) : (
             lines.map((line) => {
               const diff = qtyDiff(line.fieldExecQty, line.warehouseExecQty);
@@ -478,9 +461,9 @@ export default function StockReturnWarehouseManagerReviewScreen({ navigation, ro
               );
             })
           )}
-        </View>
+        </PageSection>
 
-        <View style={styles.card}>
+        <PageSection title="Remarks">
           <WebLabel>Manager remarks</WebLabel>
           <WebInput
             value={managerRemarks}
@@ -509,11 +492,12 @@ export default function StockReturnWarehouseManagerReviewScreen({ navigation, ro
               />
             </>
           ) : null}
-        </View>
+        </PageSection>
 
-        <View style={styles.footer}>
+        <View style={styles.footerRow}>
+          <View style={styles.footerCell}>
           <WebButton
-            title="Print Return Slip"
+            title="Print Slip"
             variant="outline"
             onPress={() =>
               printReturnSlip(
@@ -545,54 +529,49 @@ export default function StockReturnWarehouseManagerReviewScreen({ navigation, ro
               ).catch((e: any) => Alert.alert('Print', e?.message || 'Could not create the return slip'))
             }
           />
-          <WebButton
-            title="Back to list"
-            variant="outline"
-            onPress={() => navigation.navigate('ReturnsWarehouseManager')}
-          />
-          {!readOnly ? (
-            <>
-              <WebButton
-                title="Send back to WH Exec"
-                variant="outline"
-                onPress={handleSendBack}
-                disabled={processing}
-              />
-              <WebButton
-                title="Reject entire return"
-                variant="destructive"
-                onPress={handleRejectAll}
-                disabled={processing}
-              />
-              <WebButton
-                title={processing ? 'Processing…' : 'Approve (full / partial)'}
-                onPress={handleApprove}
-                disabled={processing}
-                loading={processing}
-              />
-            </>
-          ) : null}
+          </View>
+          <View style={styles.footerCell}>
+            <WebButton
+              title="Back to list"
+              variant="outline"
+              onPress={() => navigation.navigate('ReturnsWarehouseManager')}
+            />
+          </View>
         </View>
-      </ScrollView>
+        {!readOnly ? (
+          <>
+            <View style={styles.footerRow}>
+              <View style={styles.footerCell}>
+                <WebButton
+                  title="Send back"
+                  variant="outline"
+                  onPress={handleSendBack}
+                  disabled={processing}
+                />
+              </View>
+              <View style={styles.footerCell}>
+                <WebButton
+                  title="Reject all"
+                  variant="destructive"
+                  onPress={handleRejectAll}
+                  disabled={processing}
+                />
+              </View>
+            </View>
+            <WebButton
+              title={processing ? 'Processing…' : 'Approve (full / partial)'}
+              onPress={handleApprove}
+              disabled={processing}
+              loading={processing}
+            />
+          </>
+        ) : null}
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.background,
-  },
-  loadingText: { marginTop: 12, ...typography.body.medium, color: colors.textSecondary },
-  content: { flex: 1 },
-  contentContainer: { padding: 16, paddingBottom: 40, gap: 12 },
-  rolesLine: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginBottom: 4,
-  },
+  rolesLine: { fontSize: 13, color: colors.textSecondary, marginBottom: 12 },
   mismatchBanner: {
     flexDirection: 'row',
     gap: 8,
@@ -602,129 +581,48 @@ const styles = StyleSheet.create({
     borderColor: '#FDE68A',
     borderRadius: 10,
     padding: 12,
+    marginBottom: 12,
   },
-  mismatchBannerText: {
-    flex: 1,
-    fontSize: 13,
-    color: '#78350F',
-    lineHeight: 18,
-  },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
-    gap: 8,
-  },
-  sectionTitle: {
-    ...typography.heading.h3,
-    color: colors.textPrimary,
-    marginBottom: 4,
-  },
-  hint: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginBottom: 8,
-  },
-  summaryGrid: {
-    gap: 8,
-  },
-  infoPair: {
-    marginBottom: 4,
-  },
-  infoPairLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  infoPairValue: {
-    ...typography.body.medium,
-    color: colors.textPrimary,
-    fontWeight: '600',
-  },
+  mismatchBannerText: { flex: 1, fontSize: 13, color: '#78350F', lineHeight: 18 },
+  hint: { fontSize: 13, color: colors.textTertiary, marginBottom: 12 },
+  summaryGrid: {},
+  infoPair: { flexDirection: 'row', paddingVertical: 4, gap: 8 },
+  infoPairLabel: { width: 110, fontSize: 13, color: colors.textTertiary },
+  infoPairValue: { flex: 1, fontSize: 14, color: colors.textPrimary },
   rejectionBox: {
     borderWidth: 1,
     borderColor: '#FECACA',
     backgroundColor: '#FEF2F2',
-    borderRadius: 8,
-    padding: 10,
-  },
-  rejectionLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#991B1B',
-  },
-  rejectionValue: {
-    marginTop: 4,
-    fontSize: 13,
-    color: '#7F1D1D',
-  },
-  processedBy: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    marginTop: 4,
-  },
-  emptyText: {
-    textAlign: 'center',
-    color: colors.textSecondary,
-    paddingVertical: 16,
-  },
-  lineCard: {
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
     borderRadius: 10,
     padding: 12,
-    marginBottom: 10,
-    gap: 6,
+    marginTop: 8,
   },
-  lineMeta: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginBottom: 4,
+  rejectionLabel: { fontSize: 13, fontWeight: '700', color: '#991B1B' },
+  rejectionValue: { marginTop: 4, fontSize: 13, color: '#7F1D1D' },
+  processedBy: { fontSize: 13, color: colors.textTertiary, marginTop: 8 },
+  lineCard: {
+    borderWidth: 1,
+    borderColor: '#EEF2F7',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
   },
-  lineCardMismatch: {
-    backgroundColor: '#FFFBEB',
-    borderColor: '#FDE68A',
-  },
-  lineProduct: {
-    ...typography.heading.h3,
-    color: colors.textPrimary,
-    marginBottom: 4,
-  },
-  groupBlue: {
-    backgroundColor: '#EFF6FF',
-    borderRadius: 8,
-    padding: 10,
-    marginTop: 4,
-  },
-  groupOrange: {
-    backgroundColor: '#FFF7ED',
-    borderRadius: 8,
-    padding: 10,
-    marginTop: 4,
-  },
-  groupGreen: {
-    backgroundColor: '#ECFDF5',
-    borderRadius: 8,
-    padding: 10,
-    marginTop: 4,
-    gap: 4,
-  },
+  lineMeta: { fontSize: 13, color: colors.textSecondary, marginBottom: 6 },
+  lineCardMismatch: { borderColor: '#FDE68A', borderLeftWidth: 4 },
+  lineProduct: { fontSize: 15, fontWeight: '700', color: colors.textPrimary, marginBottom: 2 },
+  groupBlue: { borderTopWidth: 1, borderTopColor: '#EEF2F7', paddingTop: 8, marginTop: 8 },
+  groupOrange: { borderTopWidth: 1, borderTopColor: '#EEF2F7', paddingTop: 8, marginTop: 8 },
+  groupGreen: { borderTopWidth: 1, borderTopColor: '#EEF2F7', paddingTop: 8, marginTop: 8 },
   groupTitle: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
-    color: colors.textSecondary,
+    color: colors.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
     marginBottom: 4,
   },
-  readonly: {
-    backgroundColor: '#F8FAFC',
-  },
-  textArea: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  footer: {
-    gap: 10,
-    marginTop: 4,
-  },
+  readonly: { backgroundColor: colors.backgroundMuted },
+  textArea: { minHeight: 80, textAlignVertical: 'top' },
+  footerRow: { flexDirection: 'row', gap: 8 },
+  footerCell: { flex: 1 },
 });

@@ -10,10 +10,10 @@ import {
   Linking,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
-import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
-import ScreenShell from '../../ui/ScreenShell';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState } from '../../ui/Kit';
+import { rk, matchesWords } from '../Reports/ReportKit';
 import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
 import { apiService, getApiUrl } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -87,15 +87,6 @@ function formatDate(dateString?: string) {
   }
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.infoRow}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value}</Text>
-    </View>
-  );
-}
-
 export default function TrainingTrainerCompletedScreen({ navigation }: any) {
   const { user } = useAuth();
   const isTrainer = user?.role === 'Trainer';
@@ -110,6 +101,7 @@ export default function TrainingTrainerCompletedScreen({ navigation }: any) {
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [draftFilters, setDraftFilters] = useState<Filters>(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState<Filters>(EMPTY_FILTERS);
+  const [search, setSearch] = useState('');
 
   const loadMeta = useCallback(async () => {
     try {
@@ -247,10 +239,25 @@ export default function TrainingTrainerCompletedScreen({ navigation }: any) {
     }
   };
 
+  const shown = items.filter((item) =>
+    matchesWords(search, [
+      item.subject,
+      item.schoolName,
+      item.schoolCode,
+      item.zone,
+      item.town,
+      item.trainerId?.name,
+      item.employeeId?.name,
+      item.status || 'Completed',
+      formatDate(activeTab === 'training' ? item.trainingDate : item.serviceDate),
+      formatDate(item.completionDate),
+    ])
+  );
+
   return (
     <ScreenShell
-      title="Completed Training & Services (Closure + proof)"
-      subtitle="Audit and documentation after delivery. Upload feedback PDF for completed trainings and services."
+      title="Completed Training & Services"
+      subtitle="Closure and proof: upload the feedback PDF for each completed item."
       loading={loading && !refreshing}
       refreshing={refreshing}
       onRefresh={onRefresh}
@@ -281,102 +288,87 @@ export default function TrainingTrainerCompletedScreen({ navigation }: any) {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.filterCard}>
+        <PageSection title="Filters">
+          <WebInput placeholder="Search subject, school, code, zone, trainer…" value={search} onChangeText={setSearch} />
+          <View style={rk.row2}>
+            <View style={rk.col}>
+              <WebSelect
+                label="Zone"
+                placeholder="All Zones"
+                value={draftFilters.zone}
+                onValueChange={(v) => setDraftFilters((f) => ({ ...f, zone: v }))}
+                items={zones.map((z) => ({ label: z, value: z }))}
+              />
+            </View>
+            <View style={rk.col}>
+              <WebSelect
+                label="Trainer"
+                placeholder="All Trainers"
+                value={draftFilters.trainerId}
+                onValueChange={(v) => setDraftFilters((f) => ({ ...f, trainerId: v }))}
+                items={trainers.map((t) => ({ label: t.name, value: t._id }))}
+                disabled={isTrainer}
+              />
+            </View>
+          </View>
           <WebSelect
-            placeholder="All Zones"
-            value={draftFilters.zone}
-            onValueChange={(v) => setDraftFilters((f) => ({ ...f, zone: v }))}
-            items={zones.map((z) => ({ label: z, value: z }))}
-          />
-          <WebSelect
+            label="Employee"
             placeholder="All Employees"
             value={draftFilters.employeeId}
             onValueChange={(v) => setDraftFilters((f) => ({ ...f, employeeId: v }))}
             items={employees.map((e) => ({ label: e.name, value: e._id }))}
           />
-          <WebSelect
-            placeholder="All Trainers"
-            value={draftFilters.trainerId}
-            onValueChange={(v) => setDraftFilters((f) => ({ ...f, trainerId: v }))}
-            items={trainers.map((t) => ({ label: t.name, value: t._id }))}
-            disabled={isTrainer}
-          />
-          <WebInput
-            placeholder="By School Code"
-            value={draftFilters.schoolCode}
-            onChangeText={(v) => setDraftFilters((f) => ({ ...f, schoolCode: v }))}
-          />
-          <WebInput
-            placeholder="By School Name"
-            value={draftFilters.schoolName}
-            onChangeText={(v) => setDraftFilters((f) => ({ ...f, schoolName: v }))}
-          />
           <DateField placeholder="From date" value={draftFilters.fromDate} onChange={(v) => setDraftFilters((f) => ({ ...f, fromDate: v }))} />
           <DateField placeholder="To date" value={draftFilters.toDate} onChange={(v) => setDraftFilters((f) => ({ ...f, toDate: v }))} />
-          <View style={styles.filterActions}>
-            <View style={styles.searchWrap}>
+          <View style={rk.btnRow}>
+            <View style={rk.col}>
               <WebButton title="Search" onPress={onSearch} />
             </View>
-            <View style={styles.clearWrap}>
-              <WebButton title="Clear" variant="outline" onPress={onClear} />
+            <View style={rk.col}>
+              <WebButton
+                title="Clear"
+                variant="outline"
+                onPress={() => {
+                  setSearch('');
+                  onClear();
+                }}
+              />
             </View>
           </View>
-        </View>
+        </PageSection>
 
-        {items.length === 0 ? (
-          <View style={styles.emptyBox}>
-            <Text style={styles.emptyText}>
-              {activeTab === 'training' ? 'No completed trainings' : 'No completed services'}
-            </Text>
-          </View>
+        {shown.length === 0 ? (
+          <EmptyState title={activeTab === 'training' ? 'No completed trainings' : 'No completed services'} />
         ) : (
-          items.map((item) => {
+          shown.map((item) => {
             const startDate =
               activeTab === 'training' ? item.trainingDate : item.serviceDate;
             const clientLabel = item.schoolCode
               ? `${item.schoolName || '-'} (${item.schoolCode})`
               : item.schoolName || '-';
             return (
-              <View key={item._id} style={styles.card}>
-                <View style={styles.cardTop}>
-                  <Text style={styles.subject}>{item.subject || '-'}</Text>
-                  <View style={styles.statusBadge}>
-                    <Text style={styles.statusBadgeText}>{item.status || 'Completed'}</Text>
-                  </View>
-                </View>
-                <InfoRow
-                  label={activeTab === 'training' ? 'Training' : 'Service'}
-                  value={item.subject || '-'}
-                />
+              <Card key={item._id}>
+                <CardTitle title={item.subject || '-'} badge={item.status || 'Completed'} tone="success" />
+                <InfoRow label={activeTab === 'training' ? 'Training' : 'Service'} value={item.subject || '-'} />
                 <InfoRow label="Client" value={clientLabel} />
                 <InfoRow label="Zone" value={item.zone || '-'} />
                 <InfoRow label="Trainer" value={item.trainerId?.name || '-'} />
-                <InfoRow label="Starting Date" value={formatDate(startDate)} />
-                <InfoRow label="Completion Date" value={formatDate(item.completionDate)} />
+                <InfoRow label="Starting date" value={formatDate(startDate)} />
+                <InfoRow label="Completed on" value={formatDate(item.completionDate)} />
 
-                <View style={styles.actions}>
+                <ActionRow>
                   {!item.feedbackPdfUrl ? (
-                    <TouchableOpacity
-                      style={styles.actionBtn}
+                    <WebButton
+                      title={uploadingId === item._id ? 'Uploading...' : 'Upload Feedback PDF'}
+                      variant="outline"
                       disabled={uploadingId === item._id}
                       onPress={() => uploadFeedback(item._id, activeTab)}
-                    >
-                      <Ionicons name="cloud-upload-outline" size={16} color="#0F172A" />
-                      <Text style={styles.actionBtnText}>
-                        {uploadingId === item._id ? 'Uploading...' : 'Upload Feedback PDF'}
-                      </Text>
-                    </TouchableOpacity>
+                    />
                   ) : (
-                    <TouchableOpacity
-                      style={styles.actionBtn}
-                      onPress={() => viewFeedback(item.feedbackPdfUrl)}
-                    >
-                      <Ionicons name="eye-outline" size={16} color="#0F172A" />
-                      <Text style={styles.actionBtnText}>View Uploaded File</Text>
-                    </TouchableOpacity>
+                    <WebButton title="View Uploaded File" variant="outline" onPress={() => viewFeedback(item.feedbackPdfUrl)} />
                   )}
-                </View>
-              </View>
+                </ActionRow>
+              </Card>
             );
           })
         )}
@@ -388,123 +380,9 @@ export default function TrainingTrainerCompletedScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   content: { flex: 1 },
   contentContainer: { padding: 16, paddingBottom: 32 },
-  tabs: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    marginBottom: 14,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
-  tabActive: {
-    borderBottomColor: '#2563EB',
-  },
-  tabText: {
-    ...typography.body.medium,
-    color: '#64748B',
-    fontWeight: '500',
-  },
-  tabTextActive: {
-    color: '#2563EB',
-    fontWeight: '700',
-  },
-  filterCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
-    marginBottom: 16,
-    gap: 10,
-  },
-  filterActions: {
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'stretch',
-  },
-  searchWrap: { flex: 1 },
-  clearWrap: { width: 100 },
-  emptyBox: {
-    paddingVertical: 48,
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  emptyText: { ...typography.body.medium, color: colors.textSecondary },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
-    marginBottom: 12,
-  },
-  cardTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-    gap: 8,
-  },
-  subject: {
-    ...typography.heading.h3,
-    color: colors.textPrimary,
-    flex: 1,
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    backgroundColor: '#DCFCE7',
-  },
-  statusBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#15803D',
-  },
-  infoRow: {
-    flexDirection: 'row',
-    marginBottom: 6,
-    gap: 8,
-  },
-  infoLabel: {
-    width: 120,
-    ...typography.body.small,
-    color: colors.textSecondary,
-  },
-  infoValue: {
-    flex: 1,
-    ...typography.body.medium,
-    color: colors.textPrimary,
-  },
-  actions: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  actionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
-  },
-  actionBtnText: {
-    color: '#0F172A',
-    fontWeight: '600',
-    fontSize: 13,
-  },
+  tabs: { flexDirection: 'row', backgroundColor: colors.backgroundMuted, borderRadius: 12, padding: 4, gap: 4, marginBottom: 12 },
+  tab: { flex: 1, paddingVertical: 10, paddingHorizontal: 8, borderRadius: 10, alignItems: 'center' },
+  tabActive: { backgroundColor: '#FFFFFF' },
+  tabText: { fontSize: 13, fontWeight: '500', color: colors.textTertiary, textAlign: 'center' },
+  tabTextActive: { color: colors.textPrimary, fontWeight: '700' },
 });

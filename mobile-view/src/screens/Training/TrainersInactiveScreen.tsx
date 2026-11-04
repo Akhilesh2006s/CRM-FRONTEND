@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl, Alert, ActivityIndicator } from 'react-native';
-import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
-import ScreenShell, { PageSection } from '../../ui/ScreenShell';
-import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
+import { Alert } from 'react-native';
+import ScreenShell from '../../ui/ScreenShell';
+import { Card, CardTitle, InfoRow, EmptyState } from '../../ui/Kit';
 import { apiService } from '../../services/api';
 
 export default function TrainersInactiveScreen({ navigation }: any) {
@@ -34,50 +32,17 @@ export default function TrainersInactiveScreen({ navigation }: any) {
   };
 
   return (
-    <ScreenShell
-      title="Inactive Trainers"
-      loading={loading && !refreshing}
-      refreshing={refreshing}
-      onRefresh={onRefresh}
-    >
-<ScrollView style={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-        {trainers.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>👨‍🏫</Text>
-            <Text style={styles.emptyText}>No inactive trainers found</Text>
-          </View>
-        ) : (
-          trainers.map((trainer) => (
-            <View key={trainer._id} style={styles.card}>
-              <Text style={styles.trainerName}>{trainer.name || 'Trainer'}</Text>
-              <Text style={styles.trainerEmail}>{trainer.email || '-'}</Text>
-              {trainer.mobile && <Text style={styles.trainerMobile}>Mobile: {trainer.mobile}</Text>}
-            </View>
-          ))
-        )}
-      </ScrollView>
+    <ScreenShell title="Inactive Trainers" loading={loading && !refreshing} refreshing={refreshing} onRefresh={onRefresh}>
+      {trainers.length === 0 ? (
+        <EmptyState icon="👨‍🏫" title="No inactive trainers found" />
+      ) : (
+        trainers.map((trainer) => (
+          <Card key={trainer._id}>
+            <CardTitle title={trainer.name || 'Trainer'} subtitle={trainer.email || undefined} badge="Inactive" tone="neutral" />
+            <InfoRow label="Mobile" value={trainer.mobile} phone />
+          </Card>
+        ))
+      )}
     </ScreenShell>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
-  loadingText: { marginTop: 12, ...typography.body.medium, color: colors.textSecondary },
-  header: { paddingHorizontal: 20, paddingTop: 50, paddingBottom: 20, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
-  headerContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  backButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  backIcon: { fontSize: 24, color: colors.textLight, fontWeight: 'bold' },
-  headerTitle: { ...typography.heading.h1, color: colors.textLight, flex: 1, textAlign: 'center' },
-  placeholder: { width: 40 },
-  content: { flex: 1, padding: 16 },
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60 },
-  emptyIcon: { fontSize: 64, marginBottom: 16 },
-  emptyText: { ...typography.heading.h3, color: colors.textSecondary },
-  card: { backgroundColor: colors.backgroundLight, borderRadius: 16, padding: 16, marginBottom: 12, shadowColor: colors.shadowDark, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 3 },
-  trainerName: { ...typography.heading.h3, color: colors.textPrimary, marginBottom: 8 },
-  trainerEmail: { ...typography.body.medium, color: colors.textSecondary, marginBottom: 4 },
-  trainerMobile: { ...typography.body.medium, color: colors.textSecondary },
-});
-
-

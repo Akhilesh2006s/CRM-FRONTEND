@@ -3,6 +3,9 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl, A
 import { useFocusEffect } from '@react-navigation/native';
 import { colors } from '../../theme/colors';
 import ScreenShell from '../../ui/ScreenShell';
+import { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebButton } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState, toneFor } from '../../ui/Kit';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 
@@ -60,47 +63,35 @@ export default function WarehouseStockApprovalsScreen() {
 
   return (
     <ScreenShell title={isManager ? 'Pending Stock Approvals' : 'My Stock Requests'} loading={loading && !refreshing} refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
-      >
-        {isManager ? (
-          <TextInput
-            style={styles.input}
-            value={remarks}
-            onChangeText={setRemarks}
-            placeholder="Remarks for reject or return"
-            placeholderTextColor={colors.textMuted}
-          />
-        ) : null}
-        {rows.length === 0 && !loading ? <Text style={styles.empty}>No stock requests.</Text> : null}
-        {rows.map((row) => (
-          <View key={row._id} style={styles.card}>
-            <Text style={styles.title}>{row.productName}</Text>
-            <Text style={styles.meta}>{row.quantity} {row.unit || 'pcs'} · Batch {row.batchLot || '-'}</Text>
-            <Text style={styles.meta}>{row.location || '-'} · {row.supplier || '-'}</Text>
-            <Text style={styles.status}>{STATUS_LABEL[row.status] || row.status}</Text>
-            {row.reviewRemarks ? <Text style={styles.meta}>Remarks: {row.reviewRemarks}</Text> : null}
+      {isManager ? (
+        <PageSection title="Remarks" description="Required to reject or return a request.">
+          <WebInput value={remarks} onChangeText={setRemarks} placeholder="Remarks for reject or return" style={{ marginBottom: 0 }} />
+        </PageSection>
+      ) : null}
+      {rows.length === 0 && !loading ? <EmptyState icon="📦" title="No stock requests" /> : null}
+      {rows.map((row) => {
+        const label = STATUS_LABEL[row.status] || row.status;
+        return (
+          <Card key={row._id}>
+            <CardTitle title={row.productName || 'N/A'} badge={label} tone={toneFor(row.status)} />
+            <InfoRow label="Quantity" value={`${row.quantity} ${row.unit || 'pcs'}`} />
+            <InfoRow label="Batch" value={row.batchLot} />
+            <InfoRow label="Location" value={row.location} />
+            <InfoRow label="Supplier" value={row.supplier} />
+            <InfoRow label="Remarks" value={row.reviewRemarks} />
             {isManager && row.status === 'pending' ? (
-              <View style={styles.actions}>
-                <TouchableOpacity style={styles.approve} onPress={() => decide(row._id, 'approve')}>
-                  <Text style={styles.actionText}>Approve</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.neutral} onPress={() => decide(row._id, 'return')}>
-                  <Text style={styles.neutralText}>Return</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.reject} onPress={() => decide(row._id, 'reject')}>
-                  <Text style={styles.actionText}>Reject</Text>
-                </TouchableOpacity>
-              </View>
+              <ActionRow>
+                <WebButton title="Approve" variant="success" onPress={() => decide(row._id, 'approve')} />
+                <WebButton title="Return" variant="outline" onPress={() => decide(row._id, 'return')} />
+                <WebButton title="Reject" variant="destructive" onPress={() => decide(row._id, 'reject')} />
+              </ActionRow>
             ) : null}
-          </View>
-        ))}
-      </ScrollView>
+          </Card>
+        );
+      })}
     </ScreenShell>
   );
 }
-
 const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 40 },
   input: {

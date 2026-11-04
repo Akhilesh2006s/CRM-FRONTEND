@@ -151,10 +151,7 @@ export default function CloseLeadProductsModal({
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>Add Products & Details</Text>
-            <Text style={styles.subtitle}>
-              Add a section, pick products, then set classes and strength per product. Only one product
-              panel is open at a time. DC rows are generated per class for each product.
-            </Text>
+            <Text style={styles.subtitle}>Add a section, pick products, then set classes and strength.</Text>
           </View>
           <TouchableOpacity onPress={() => setProductDialogOpen(false)} hitSlop={12}>
             <Text style={styles.close}>✕</Text>
@@ -165,9 +162,7 @@ export default function CloseLeadProductsModal({
           <View style={styles.sectionsBar}>
             <View style={{ flex: 1 }}>
               <Text style={styles.bold}>Sections</Text>
-              <Text style={styles.muted}>
-                Products are always edited inside a section. Use the catalog list under each section.
-              </Text>
+              <Text style={styles.muted}>Pick products from the list inside each section.</Text>
             </View>
             <TouchableOpacity style={styles.addSectionBtn} onPress={addEmptyProductSection}>
               <Text style={styles.addSectionText}>+ Add section</Text>
@@ -183,8 +178,7 @@ export default function CloseLeadProductsModal({
 
           {productSections.length === 0 ? (
             <Text style={styles.infoBox}>
-              No sections yet. Tap "Add section", choose products, then set classes and strength for each
-              product.
+              No sections yet. Tap "+ Add section" to start.
             </Text>
           ) : (
             productSections.map((section, sectionIndex) => (
@@ -826,10 +820,10 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-    backgroundColor: '#fff',
+    backgroundColor: colors.backgroundLight,
   },
-  title: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
-  subtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 4 },
+  title: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
+  subtitle: { fontSize: 13, color: colors.textTertiary, marginTop: 4 },
   close: { fontSize: 22, color: colors.textSecondary },
   body: { flex: 1 },
   bodyContent: { padding: 16, paddingBottom: 40 },
@@ -839,22 +833,22 @@ const styles = StyleSheet.create({
     gap: 8,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
+    borderRadius: 12,
     padding: 12,
-    backgroundColor: colors.backgroundMuted,
+    backgroundColor: colors.backgroundLight,
     marginBottom: 12,
   },
-  addSectionBtn: { backgroundColor: colors.primary, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
-  addSectionText: { color: '#fff', fontWeight: '600', fontSize: 13 },
+  addSectionBtn: { backgroundColor: colors.primaryDark, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
+  addSectionText: { color: colors.textLight, fontWeight: '700', fontSize: 14 },
   bold: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
-  muted: { fontSize: 12, color: colors.textSecondary },
-  smallLabel: { fontSize: 12, fontWeight: '700', color: colors.textPrimary, marginTop: 8, marginBottom: 4 },
+  muted: { fontSize: 13, color: colors.textTertiary },
+  smallLabel: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginTop: 8, marginBottom: 6 },
   amber: { fontSize: 12, color: '#B45309', marginTop: 4 },
   errorText: { fontSize: 12, color: colors.error, marginTop: 4 },
   danger: { color: colors.error, fontSize: 13, fontWeight: '600' },
   warnBox: {
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: colors.warningLight,
     color: '#854D0E',
     fontSize: 13,
@@ -862,7 +856,7 @@ const styles = StyleSheet.create({
   },
   infoBox: {
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: colors.backgroundMuted,
     color: colors.textSecondary,
     fontSize: 13,
@@ -870,9 +864,9 @@ const styles = StyleSheet.create({
   sectionCard: {
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 12,
-    backgroundColor: '#fff',
+    backgroundColor: colors.backgroundLight,
     marginBottom: 12,
   },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
@@ -889,7 +883,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   catalogItem: { width: '50%' },
-  lineCard: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, marginTop: 8, overflow: 'hidden' },
+  lineCard: { borderWidth: 1, borderColor: colors.border, borderRadius: 10, marginTop: 8, overflow: 'hidden' },
   lineHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -899,7 +893,7 @@ const styles = StyleSheet.create({
   },
   chevron: { fontSize: 16, color: colors.textSecondary },
   lineTitle: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
-  lineBody: { padding: 10, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: '#fff' },
+  lineBody: { padding: 12, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.backgroundLight },
   borderTop: { borderTopWidth: 1, borderTopColor: colors.border, marginTop: 8, paddingTop: 8 },
   flexInput: { flex: 1, marginBottom: 0 },
   smallInput: { width: 110, marginBottom: 0 },
@@ -930,10 +924,10 @@ const styles = StyleSheet.create({
   iitRow: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 8, marginTop: 8 },
   half: { flex: 1 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: -6, marginBottom: 8 },
-  chip: { borderWidth: 1, borderColor: colors.border, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 4 },
-  chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { fontSize: 12, color: colors.textPrimary },
-  chipTextOn: { color: '#fff' },
+  chip: { borderWidth: 1, borderColor: colors.border, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
+  chipOn: { backgroundColor: colors.primaryDark, borderColor: colors.primaryDark },
+  chipText: { fontSize: 13, color: colors.textPrimary },
+  chipTextOn: { color: colors.textLight },
   subjectBox: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -947,20 +941,20 @@ const styles = StyleSheet.create({
   },
   outlineBtn: {
     borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: 8,
-    paddingVertical: 8,
+    borderColor: colors.primaryDark,
+    borderRadius: 10,
+    paddingVertical: 10,
     alignItems: 'center',
     marginVertical: 8,
   },
-  outlineBtnText: { color: colors.primary, fontWeight: '600' },
+  outlineBtnText: { color: colors.primaryDark, fontWeight: '600', fontSize: 14 },
   detailCard: {
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
-    padding: 10,
+    borderRadius: 10,
+    padding: 12,
     marginTop: 8,
-    backgroundColor: '#fff',
+    backgroundColor: colors.backgroundLight,
   },
   totalRow: {
     flexDirection: 'row',
@@ -970,13 +964,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: colors.tableHeader,
   },
-  footerError: { color: colors.error, fontSize: 13, paddingHorizontal: 16, paddingTop: 8, backgroundColor: '#fff' },
+  footerError: { color: colors.error, fontSize: 13, paddingHorizontal: 16, paddingTop: 8, backgroundColor: colors.backgroundLight },
   footer: {
     flexDirection: 'row',
     gap: 10,
     padding: 16,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    backgroundColor: '#fff',
+    backgroundColor: colors.backgroundLight,
   },
 });

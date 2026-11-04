@@ -18,6 +18,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState } from '../../ui/Kit';
 import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 
@@ -153,82 +154,34 @@ export default function WarehouseHoldDCScreen({ navigation }: any) {
   };
 
   return (
-    <ScreenShell
-      title="Hold DC List"
-      loading={loading && !refreshing}
-      refreshing={refreshing}
-      onRefresh={onRefresh}
-    >
-<ScrollView
-        style={styles.content}
-        contentContainerStyle={styles.contentContainer}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
-      >
-        {rows.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>⏸️</Text>
-            <Text style={styles.emptyText}>No DCs on hold</Text>
-          </View>
-        ) : (
-          rows.map((r, idx) => (
-            <View key={r._id} style={styles.card}>
-              <View style={styles.cardHeader}>
-                <Text style={styles.dcNo}>#{idx + 1} {r.dcNo}</Text>
-                <View style={[styles.statusBadge, { backgroundColor: (colors.warning || '#f59e0b') + '25' }]}>
-                  <Text style={[styles.statusBadgeText, { color: colors.warning || '#f59e0b' }]}>On Hold</Text>
-                </View>
-              </View>
-              <View style={styles.cardBody}>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>DC Date:</Text>
-                  <Text style={styles.infoValue}>{formatDate(r.dcDate)}</Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>School Type:</Text>
-                  <Text style={styles.infoValue}>{r.schoolType || '-'}</Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>School Name:</Text>
-                  <Text style={styles.infoValue}>{r.schoolName || '-'}</Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>School Code:</Text>
-                  <Text style={styles.infoValue}>{r.schoolCode || '-'}</Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Zone:</Text>
-                  <Text style={styles.infoValue}>{r.zone || '-'}</Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Executive:</Text>
-                  <Text style={styles.infoValue}>{r.executive || '-'}</Text>
-                </View>
-                {r.holdRemarks ? (
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Hold Remarks:</Text>
-                    <Text style={styles.infoValue}>{r.holdRemarks}</Text>
-                  </View>
-                ) : null}
-              </View>
-              <TouchableOpacity
-                style={[styles.moveButton, movingId === r._id && styles.moveButtonDisabled]}
+    <ScreenShell title="Hold DC List" loading={loading && !refreshing} refreshing={refreshing} onRefresh={onRefresh}>
+      {rows.length === 0 ? (
+        <EmptyState icon="⏸️" title="No DCs on hold" />
+      ) : (
+        rows.map((r, idx) => (
+          <Card key={r._id}>
+            <CardTitle title={`#${idx + 1} ${r.dcNo}`} subtitle={r.schoolName || undefined} badge="On Hold" tone="warning" />
+            <InfoRow label="DC Date" value={formatDate(r.dcDate)} />
+            <InfoRow label="School Type" value={r.schoolType} />
+            <InfoRow label="School Code" value={r.schoolCode} />
+            <InfoRow label="Zone" value={r.zone} />
+            <InfoRow label="Executive" value={r.executive} />
+            <InfoRow label="Hold Remarks" value={r.holdRemarks} />
+            <ActionRow>
+              <WebButton
+                title="Move to DC@Warehouse"
+                variant="destructive"
                 onPress={() => moveToWarehouse(r)}
+                loading={movingId === r._id}
                 disabled={!!movingId}
-              >
-                {movingId === r._id ? (
-                  <ActivityIndicator size="small" color={colors.textLight} />
-                ) : (
-                  <Text style={styles.moveButtonText}>Move to DC@Warehouse</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          ))
-        )}
-      </ScrollView>
+              />
+            </ActionRow>
+          </Card>
+        ))
+      )}
     </ScreenShell>
   );
 }
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },

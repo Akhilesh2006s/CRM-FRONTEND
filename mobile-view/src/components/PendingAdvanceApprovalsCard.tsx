@@ -43,9 +43,17 @@ export default function PendingAdvanceApprovalsCard() {
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: '#FFFBEB', borderColor: '#FDE68A', borderWidth: 1, borderRadius: 12, padding: 14, marginBottom: 12 },
+  card: { backgroundColor: '#FFFBEB', borderColor: '#FDE68A', borderWidth: 1, borderRadius: 14, padding: 16, marginBottom: 12 },
   title: { fontSize: 15, fontWeight: '700', color: '#78350F' },
-  body: { fontSize: 13, color: '#92400E', marginTop: 4 },
-  button: { alignSelf: 'flex-start', backgroundColor: '#D97706', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 14, marginTop: 10 },
-  buttonText: { color: '#fff', fontWeight: '600', fontSize: 13 },
+  body: { fontSize: 13, color: '#92400E', marginTop: 4, lineHeight: 18 },
+  button: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#D97706',
+    borderRadius: 10,
+    minHeight: 40,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    marginTop: 12,
+  },
+  buttonText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 });

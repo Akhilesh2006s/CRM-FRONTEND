@@ -1,10 +1,9 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
+import { Text } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import ScreenShell from '../../ui/ScreenShell';
-import { WebInput } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState, toneFor } from '../../ui/Kit';
+import { SearchBar, Act, matchesWords, ui } from '../../components/dc/DcUi';
 import { apiService } from '../../services/api';
 import { isTransportComplete, TRANSPORT_REQUIRED_MESSAGE } from '../../utils/dcTransport';
 import { showAlert } from '../../utils/showAlert';
@@ -88,111 +87,91 @@ export default function DCTermWiseScreen({ navigation }: any) {
     loadDCs();
   };
 
-  const filtered = searchQuery.trim()
-    ? dcs.filter((dc) => {
-        const q = searchQuery.toLowerCase();
-        return (
-          getSchoolName(dc).toLowerCase().includes(q) ||
-          (dc.saleId?.customerName || '').toLowerCase().includes(q) ||
-          getPhone(dc).toLowerCase().includes(q) ||
-          getTerm2Products(dc).toLowerCase().includes(q) ||
-          (dc.status || '').toLowerCase().includes(q)
-        );
-      })
-    : dcs;
+  const filtered = dcs.filter((dc) =>
+    matchesWords(searchQuery, [
+      getSchoolName(dc),
+      getSchoolCode(dc),
+      dc.saleId?.customerName,
+      getPhone(dc),
+      getTerm2Products(dc),
+      dc.status,
+      formatStatus(dc.status),
+    ]),
+  );
 
   return (
     <ScreenShell
       title="Term-Wise DC"
-      subtitle="Term-Wise DC rows (paired Level 2 / Term 2 from Close Lead)"
+      subtitle="Term 2 clients from Close Lead"
       loading={loading && !refreshing}
       refreshing={refreshing}
       onRefresh={onRefresh}
     >
-      <View style={styles.searchContainer}>
-        <WebInput
-          style={styles.searchInput}
-          placeholder="Search by client, phone, product, or status..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-      </View>
-      <View style={styles.contentContainer}>
-        {filtered.length > 0 ? (
-          <Text style={styles.countText}>Term 2 · Total: {filtered.length} client(s)</Text>
-        ) : null}
-        {filtered.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>📄</Text>
-            <Text style={styles.emptyText}>No clients found.</Text>
-          </View>
-        ) : (
-          filtered.map((dc, idx) => {
-            const orderId = getOrderId(dc);
-            const createdDate = dc.createdAt
-              ? new Date(dc.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
-              : '-';
-            const turnedDate =
-              typeof dc.dcOrderId === 'object' && dc.dcOrderId?.createdAt
-                ? new Date(dc.dcOrderId.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
-                : createdDate;
+      <SearchBar placeholder="Search school, code, phone, product, status…" value={searchQuery} onChangeText={setSearchQuery} />
+      {filtered.length > 0 ? <Text style={ui.count}>Term 2 · {filtered.length} client(s)</Text> : null}
+      {filtered.length === 0 ? (
+        <EmptyState icon="📄" title="No clients found" message="Term 2 clients from Close Lead appear here." />
+      ) : (
+        filtered.map((dc) => {
+          const orderId = getOrderId(dc);
+          const createdDate = dc.createdAt
+            ? new Date(dc.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
+            : '-';
+          const turnedDate =
+            typeof dc.dcOrderId === 'object' && dc.dcOrderId?.createdAt
+              ? new Date(dc.dcOrderId.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
+              : createdDate;
+          const status = formatStatus(dc.status);
 
-            return (
-              <View key={dc._id} style={styles.card}>
-                <Text style={styles.cardTitle}>{getSchoolName(dc)}</Text>
-                <View style={styles.metaGrid}>
-                  <MetaRow label="School Code" value={getSchoolCode(dc)} />
-                  <MetaRow label="Phone" value={getPhone(dc)} />
-                  <MetaRow label="Product" value={getTerm2Products(dc)} />
-                  <MetaRow label="Status" value={formatStatus(dc.status)} />
-                  <MetaRow label="Created" value={createdDate} />
-                  <MetaRow label="Client Turned" value={turnedDate} />
-                </View>
-                <View style={styles.cardActions}>
-                  {dc.poPhotoUrl || orderId ? (
-                    <TouchableOpacity
-                      style={[styles.actionBtn, styles.editBtn]}
-                      onPress={() => {
-                        if (!orderId) {
-                          showAlert('Error', 'Cannot edit: DC Order not found');
-                          return;
-                        }
-                        setEditDc(dc);
-                      }}
-                    >
-                      <Text style={[styles.actionBtnText, styles.editBtnText]}>Edit PO</Text>
-                    </TouchableOpacity>
-                  ) : null}
-                  <TouchableOpacity
-                    style={[styles.actionBtn, styles.requestBtn]}
-                    onPress={async () => {
-                      const orderId = getOrderId(dc);
+          return (
+            <Card key={dc._id}>
+              <CardTitle title={getSchoolName(dc)} badge={status} tone={toneFor(status)} />
+              <InfoRow label="School code" value={getSchoolCode(dc)} bold />
+              <InfoRow label="Phone" value={getPhone(dc)} phone />
+              <InfoRow label="Product" value={getTerm2Products(dc)} />
+              <InfoRow label="Created" value={createdDate} />
+              <InfoRow label="Client since" value={turnedDate} />
+              <ActionRow>
+                {dc.poPhotoUrl || orderId ? (
+                  <Act
+                    title="Edit PO"
+                    variant="outline"
+                    onPress={() => {
                       if (!orderId) {
-                        showAlert('Error', 'DC Order not found for this client.');
+                        showAlert('Error', 'Cannot edit: DC Order not found');
                         return;
                       }
-                      try {
-                        const order = await apiService.get(`/dc-orders/${orderId}`);
-                        if (!isTransportComplete(order)) {
-                          showAlert('Transport required', TRANSPORT_REQUIRED_MESSAGE);
-                          return;
-                        }
-                        if (!navigateRoot('DCTermWiseRequestDC', { dcId: dc._id })) {
-                          navigation.navigate('DCTermWiseRequestDC', { dcId: dc._id });
-                        }
-                      } catch (e: any) {
-                        showAlert('Error', e?.message || 'Failed to check transport details');
-                      }
+                      setEditDc(dc);
                     }}
-                  >
-                    <Text style={[styles.actionBtnText, styles.requestBtnText]}>Request DC</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            );
-          })
-        )}
-      </View>
+                  />
+                ) : null}
+                <Act
+                  title="Request DC"
+                  onPress={async () => {
+                    const orderId = getOrderId(dc);
+                    if (!orderId) {
+                      showAlert('Error', 'DC Order not found for this client.');
+                      return;
+                    }
+                    try {
+                      const order = await apiService.get(`/dc-orders/${orderId}`);
+                      if (!isTransportComplete(order)) {
+                        showAlert('Transport required', TRANSPORT_REQUIRED_MESSAGE);
+                        return;
+                      }
+                      if (!navigateRoot('DCTermWiseRequestDC', { dcId: dc._id })) {
+                        navigation.navigate('DCTermWiseRequestDC', { dcId: dc._id });
+                      }
+                    } catch (e: any) {
+                      showAlert('Error', e?.message || 'Failed to check transport details');
+                    }
+                  }}
+                />
+              </ActionRow>
+            </Card>
+          );
+        })
+      )}
       <TermWiseEditPOModal
         dc={editDc}
         bde={bde}
@@ -206,49 +185,3 @@ export default function DCTermWiseScreen({ navigation }: any) {
   );
 }
 
-function MetaRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.metaRow}>
-      <Text style={styles.metaLabel}>{label}</Text>
-      <Text style={styles.metaValue} numberOfLines={2}>
-        {value}
-      </Text>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  searchContainer: { paddingBottom: 8 },
-  searchInput: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  contentContainer: { paddingBottom: 16 },
-  countText: { ...typography.body.small, color: colors.textSecondary, marginBottom: 10 },
-  emptyContainer: { alignItems: 'center', paddingVertical: 48 },
-  emptyIcon: { fontSize: 48, marginBottom: 12 },
-  emptyText: { ...typography.body.medium, color: colors.textSecondary },
-  card: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  cardTitle: { ...typography.heading.h3, color: colors.textPrimary, marginBottom: 12 },
-  metaGrid: { marginBottom: 12 },
-  metaRow: { flexDirection: 'row', marginBottom: 6 },
-  metaLabel: { ...typography.body.small, color: colors.textSecondary, width: 110 },
-  metaValue: { ...typography.body.medium, color: colors.textPrimary, flex: 1, fontWeight: '500' },
-  cardActions: { flexDirection: 'row', gap: 10, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12 },
-  actionBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
-  editBtn: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },
-  requestBtn: { backgroundColor: colors.primary },
-  actionBtnText: { ...typography.label.small, fontWeight: '600' },
-  editBtnText: { color: colors.textPrimary },
-  requestBtnText: { color: colors.textLight },
-});

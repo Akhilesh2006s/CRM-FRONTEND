@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
-import { colors, radii } from '../../theme/colors';
+import { colors } from '../../theme/colors';
+import { Card, CardTitle, InfoRow, EmptyState, type Tone } from '../../ui/Kit';
 import { WebButton } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 
@@ -53,44 +54,40 @@ export function SentToSeniorList({ refreshKey = 0 }: { refreshKey?: number }) {
     load();
   }, [load, refreshKey]);
 
+  const tone = (label: string): Tone => (label === 'Completed' ? 'success' : label === 'At Warehouse' ? 'info' : 'warning');
+
   return (
-    <View style={styles.card}>
+    <View style={styles.wrap}>
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>DC Status</Text>
-          <Text style={styles.sub}>
-            DCs you raised and where each one is now: with the Senior Coordinator, at the warehouse, or completed.
-          </Text>
+          <Text style={styles.sub}>Where each DC you raised is now.</Text>
         </View>
-        <WebButton title="Refresh" variant="outline" onPress={load} />
+        <View style={styles.refresh}>
+          <WebButton title="Refresh" variant="outline" onPress={load} />
+        </View>
       </View>
       {loading ? (
         <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} />
       ) : error ? (
         <Text style={[styles.empty, { color: colors.error }]}>{error}</Text>
       ) : rows.length === 0 ? (
-        <Text style={styles.empty}>No DCs raised yet.</Text>
+        <EmptyState title="No DCs raised yet" />
       ) : (
         rows.map((row) => {
           const stage = dcStageLabel(row);
           const bde = typeof row.assigned_to === 'object' && row.assigned_to ? row.assigned_to.name || '-' : '-';
           return (
-            <View key={row._id} style={styles.item}>
-              <View style={styles.itemTop}>
-                <Text style={styles.school} numberOfLines={2}>
-                  {row.school_name || '-'}
-                </Text>
-                <View style={[styles.badge, { backgroundColor: stage.bg }]}>
-                  <Text style={[styles.badgeText, { color: stage.fg }]}>{stage.label}</Text>
-                </View>
-              </View>
-              <Text style={styles.meta}>
-                Code: {row.school_code || row.dc_code || '-'} · Zone: {row.zone || '-'} · BDE: {bde}
-              </Text>
-              <Text style={styles.meta}>
-                Updated: {row.updatedAt ? new Date(row.updatedAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}
-              </Text>
-            </View>
+            <Card key={row._id}>
+              <CardTitle title={row.school_name || '-'} badge={stage.label} tone={tone(stage.label)} />
+              <InfoRow label="Code" value={row.school_code || row.dc_code || '-'} />
+              <InfoRow label="Zone" value={row.zone || '-'} />
+              <InfoRow label="BDE" value={bde} />
+              <InfoRow
+                label="Updated"
+                value={row.updatedAt ? new Date(row.updatedAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}
+              />
+            </Card>
           );
         })
       )}
@@ -99,24 +96,12 @@ export function SentToSeniorList({ refreshKey = 0 }: { refreshKey?: number }) {
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.backgroundLight,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.lg,
-    padding: 12,
-    marginTop: 16,
-  },
-  header: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 8 },
+  wrap: { marginTop: 16 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  refresh: { minWidth: 110 },
   title: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
-  sub: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+  sub: { fontSize: 13, color: colors.textTertiary, marginTop: 2 },
   empty: { textAlign: 'center', paddingVertical: 16, fontSize: 13, color: colors.textSecondary },
-  item: { borderTopWidth: 1, borderTopColor: colors.borderLight, paddingVertical: 8 },
-  itemTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  school: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.textPrimary },
-  badge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
-  badgeText: { fontSize: 11, fontWeight: '600' },
-  meta: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
 });
 
 export default SentToSeniorList;

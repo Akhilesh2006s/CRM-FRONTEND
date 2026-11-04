@@ -7,7 +7,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, Modal, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { apiService } from '../../services/api';
-import { colors, radii, spacing } from '../../theme/colors';
+import { colors, spacing } from '../../theme/colors';
 import { WebButton, WebInput, WebLabel } from '../../ui/WebPrimitives';
 import { showAlert } from '../../utils/showAlert';
 import { persistProductTerm } from '../../lib/crm/productTerm';
@@ -293,39 +293,40 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     backgroundColor: colors.backgroundLight,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: '#EEF2F7',
   },
   close: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  title: { fontSize: 18, fontWeight: '600', color: colors.textPrimary },
-  subtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+  title: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
+  subtitle: { fontSize: 13, color: colors.textTertiary, marginTop: 2 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   content: { padding: spacing.md, paddingBottom: spacing.xl },
   section: {
     backgroundColor: colors.backgroundLight,
-    borderRadius: radii.lg,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#EEF2F7',
     padding: spacing.md,
-    marginBottom: spacing.md,
+    marginBottom: 12,
   },
-  sectionTitle: { fontSize: 16, fontWeight: '600', color: colors.textPrimary, marginBottom: 10 },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, marginBottom: 10 },
   readonly: {
     fontSize: 15,
     color: colors.textPrimary,
     backgroundColor: colors.backgroundMuted,
-    borderRadius: radii.md,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    marginBottom: 14,
   },
   readonlyInput: { backgroundColor: colors.backgroundMuted, color: colors.textSecondary },
   multiline: { minHeight: 72, textAlignVertical: 'top' },
-  muted: { fontSize: 13, color: colors.textSecondary, marginBottom: 10 },
-  rowCard: { borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, padding: 12, marginBottom: 10 },
+  muted: { fontSize: 13, color: colors.textTertiary, marginBottom: 10 },
+  rowCard: { borderWidth: 1, borderColor: '#EEF2F7', backgroundColor: colors.background, borderRadius: 12, padding: 12, marginBottom: 10 },
   rowHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  rowMeta: { fontSize: 12, color: colors.textSecondary, flex: 1 },
+  rowMeta: { fontSize: 13, color: colors.textTertiary, flex: 1 },
   remove: { color: colors.error, fontWeight: '600', fontSize: 13 },
-  inline: { flexDirection: 'row', gap: 10 },
+  inline: { flexDirection: 'row', gap: 12 },
   cell: { flex: 1 },
   lineTotal: { fontSize: 13, fontWeight: '600', color: colors.textPrimary, textAlign: 'right' },
-  footer: { flexDirection: 'row', gap: 10 },
+  footer: { flexDirection: 'row', gap: 12 },
 });

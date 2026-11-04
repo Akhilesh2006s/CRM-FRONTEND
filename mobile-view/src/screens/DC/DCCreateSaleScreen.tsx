@@ -10,8 +10,8 @@ import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { navigateRoot } from '../../navigation/navigationRef';
-import ScreenShell from '../../ui/ScreenShell';
-import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 
 import { ymdToDmy } from '../../utils/dateFormat';
@@ -91,7 +91,7 @@ function DateField({
   if (Platform.OS === 'web') {
     return (
       <View style={styles.fieldContainer}>
-        <Text style={styles.label}>{label}</Text>
+        <WebLabel>{label}</WebLabel>
         {React.createElement('input', {
           type: 'date',
           value: value || '',
@@ -104,9 +104,9 @@ function DateField({
           style: {
             width: '100%',
             padding: 12,
-            borderRadius: 12,
-            border: '1px solid #E2E8F0',
-            fontSize: 16,
+            borderRadius: 10,
+            border: '1px solid #DCE3EC',
+            fontSize: 15,
             backgroundColor: '#fff',
             color: '#1E293B',
             boxSizing: 'border-box',
@@ -118,7 +118,7 @@ function DateField({
 
   return (
     <View style={styles.fieldContainer}>
-      <Text style={styles.label}>{label}</Text>
+      <WebLabel>{label}</WebLabel>
       <TouchableOpacity style={styles.dateTouchable} onPress={() => setShowPicker(true)} activeOpacity={0.7}>
         <Text style={[styles.dateText, !value && styles.placeholderText]}>
           {ymdToDmy(value) || 'Tap to pick date'}
@@ -232,7 +232,7 @@ export default function DCCreateSaleScreen({ navigation }: any) {
     if (cleanPincode.length === 6) {
       setLoadingPincode(true);
       try {
-        const response = await apiService.get<any>(`/location/get-town?pincode=${cleanPincode}`);
+        const response: any = await apiService.get(`/location/get-town?pincode=${cleanPincode}`);
         if (response?.success && response.town) {
           setForm((f) => ({
             ...f,
@@ -490,21 +490,22 @@ export default function DCCreateSaleScreen({ navigation }: any) {
   return (
     <ScreenShell
       title="Create Deal (Sale)"
-      subtitle="Creating a deal automatically generates a DC. Submit PO from My DCs."
+      subtitle="A DC is created automatically with the deal."
     >
       {error ? <MessageBanner type="error" message={error} onDismiss={() => setError(null)} /> : null}
       {success ? <MessageBanner type="success" message={success} onDismiss={() => setSuccess(null)} /> : null}
 
-      <Text style={styles.label}>School name *</Text>
+      <PageSection title="School">
+      <WebLabel>School name *</WebLabel>
       <WebInput
         placeholder="School name"
         value={form.school_name}
         onChangeText={(v) => setField('school_name', v)}
       />
-      <Text style={styles.label}>School code</Text>
+      <WebLabel>School code</WebLabel>
       <View style={styles.autoBox}>
         <Text style={styles.autoValue}>Auto-generated</Text>
-        <Text style={styles.autoNote}>Created when the deal is saved, from the pincode and cluster.</Text>
+        <Text style={styles.autoNote}>Made from pincode and cluster on save.</Text>
       </View>
       <WebSelect
         label="School Type"
@@ -513,13 +514,16 @@ export default function DCCreateSaleScreen({ navigation }: any) {
         items={SCHOOL_TYPES}
         placeholder="Select Type"
       />
-      <Text style={styles.label}>Contact person *</Text>
+      </PageSection>
+
+      <PageSection title="Contacts">
+      <WebLabel>Contact person *</WebLabel>
       <WebInput
         placeholder="Contact person"
         value={form.contact_person}
         onChangeText={(v) => setField('contact_person', v)}
       />
-      <Text style={styles.label}>Contact mobile *</Text>
+      <WebLabel>Contact mobile *</WebLabel>
       <WebInput
         placeholder="10 to 15 digits"
         value={form.contact_mobile}
@@ -527,7 +531,7 @@ export default function DCCreateSaleScreen({ navigation }: any) {
         keyboardType="phone-pad"
         maxLength={15}
       />
-      <Text style={styles.label}>Email *</Text>
+      <WebLabel>Email *</WebLabel>
       <WebInput
         placeholder="Enter email address"
         value={form.email}
@@ -535,13 +539,13 @@ export default function DCCreateSaleScreen({ navigation }: any) {
         keyboardType="email-address"
         autoCapitalize="none"
       />
-      <Text style={styles.label}>Contact Person 2 *</Text>
+      <WebLabel>Contact Person 2 *</WebLabel>
       <WebInput
         placeholder="Contact Person 2"
         value={form.contact_person2}
         onChangeText={(v) => setField('contact_person2', v)}
       />
-      <Text style={styles.label}>Contact Mobile 2 *</Text>
+      <WebLabel>Contact Mobile 2 *</WebLabel>
       <WebInput
         placeholder="10 to 15 digits"
         value={form.contact_mobile2}
@@ -549,13 +553,16 @@ export default function DCCreateSaleScreen({ navigation }: any) {
         keyboardType="phone-pad"
         maxLength={15}
       />
-      <Text style={styles.label}>Location/Town</Text>
+      </PageSection>
+
+      <PageSection title="Location">
+      <WebLabel>Location/Town</WebLabel>
       <WebInput
         placeholder="Location/Town"
         value={form.location}
         onChangeText={(v) => setField('location', v)}
       />
-      <Text style={styles.label}>Pincode *</Text>
+      <WebLabel>Pincode *</WebLabel>
       <WebInput
         placeholder="Enter 6-digit pincode"
         value={form.pincode}
@@ -569,19 +576,19 @@ export default function DCCreateSaleScreen({ navigation }: any) {
       ) : pincodeError ? (
         <Text style={styles.fieldError}>{pincodeError}</Text>
       ) : null}
-      <Text style={styles.label}>State</Text>
+      <WebLabel>State</WebLabel>
       <WebInput
         placeholder="Auto-filled from pincode"
         value={form.state}
         onChangeText={(v) => setField('state', v)}
       />
-      <Text style={styles.label}>District</Text>
+      <WebLabel>District</WebLabel>
       <WebInput
         placeholder="Auto-filled from pincode"
         value={form.city}
         onChangeText={(v) => setField('city', v)}
       />
-      <Text style={styles.label}>City/Town</Text>
+      <WebLabel>City/Town</WebLabel>
       <WebInput
         placeholder="Auto-filled from pincode"
         value={form.region}
@@ -598,7 +605,7 @@ export default function DCCreateSaleScreen({ navigation }: any) {
         placeholder={areas.length === 0 ? 'Enter pincode first' : 'Select exact area'}
         disabled={areas.length === 0}
       />
-      <Text style={styles.label}>Address *</Text>
+      <WebLabel>Address *</WebLabel>
       <WebInput
         placeholder="Address"
         value={form.address}
@@ -607,8 +614,10 @@ export default function DCCreateSaleScreen({ navigation }: any) {
         style={{ minHeight: 72 }}
       />
 
-      <Text style={styles.sectionTitle}>Products *</Text>
-      <Text style={styles.hint}>Check products to enter Price, Quantity, and Strength.</Text>
+      </PageSection>
+
+      <PageSection title="Products *">
+      <Text style={styles.hint}>Tick a product to enter price, quantity and strength.</Text>
       {products.length === 0 ? (
         <Text style={styles.hint}>No products found. Add products in Settings first.</Text>
       ) : (
@@ -642,7 +651,7 @@ export default function DCCreateSaleScreen({ navigation }: any) {
             {product.checked && !(form.school_type === 'Existing' && product.renewal === 'not_renewed') ? (
               <View style={styles.productFields}>
                 <View style={styles.productField}>
-                  <Text style={styles.label}>Price (₹)</Text>
+                  <WebLabel>Price (₹)</WebLabel>
                   <WebInput
                     placeholder="0"
                     value={product.price ? String(product.price) : ''}
@@ -651,7 +660,7 @@ export default function DCCreateSaleScreen({ navigation }: any) {
                   />
                 </View>
                 <View style={styles.productField}>
-                  <Text style={styles.label}>Quantity</Text>
+                  <WebLabel>Quantity</WebLabel>
                   <WebInput
                     placeholder="1"
                     value={String(product.quantity || '')}
@@ -660,7 +669,7 @@ export default function DCCreateSaleScreen({ navigation }: any) {
                   />
                 </View>
                 <View style={styles.productField}>
-                  <Text style={styles.label}>Strength</Text>
+                  <WebLabel>Strength</WebLabel>
                   <WebInput
                     placeholder="0"
                     value={product.strength ? String(product.strength) : ''}
@@ -674,6 +683,9 @@ export default function DCCreateSaleScreen({ navigation }: any) {
         ))
       )}
 
+      </PageSection>
+
+      <PageSection title="Deal details">
       <WebSelect
         label="Deal Status"
         value={form.lead_status}
@@ -693,25 +705,25 @@ export default function DCCreateSaleScreen({ navigation }: any) {
         />
       ) : (
         <>
-          <Text style={styles.label}>Cluster *</Text>
+          <WebLabel>Cluster *</WebLabel>
           <WebInput placeholder="Cluster" value={form.cluster} onChangeText={(v) => setField('cluster', v)} />
         </>
       )}
-      <Text style={styles.label}>No. of Branches *</Text>
+      <WebLabel>No. of Branches *</WebLabel>
       <WebInput
         placeholder="No. of Branches"
         value={form.branches}
         onChangeText={(v) => setField('branches', v)}
         keyboardType="number-pad"
       />
-      <Text style={styles.label}>Average School Fee *</Text>
+      <WebLabel>Average School Fee *</WebLabel>
       <WebInput
         placeholder="Average School Fee"
         value={form.average_fee}
         onChangeText={(v) => setField('average_fee', v)}
         keyboardType="number-pad"
       />
-      <Text style={styles.label}>School strength (students) *</Text>
+      <WebLabel>School strength (students) *</WebLabel>
       <WebInput
         placeholder="School strength (students)"
         value={form.strength}
@@ -726,7 +738,7 @@ export default function DCCreateSaleScreen({ navigation }: any) {
         setShowPicker={setShowFollowUpPicker}
         minimumDate={startOfToday()}
       />
-      <Text style={styles.label}>Remarks *</Text>
+      <WebLabel>Remarks *</WebLabel>
       <WebInput
         placeholder="Remarks"
         value={form.remarks}
@@ -734,6 +746,8 @@ export default function DCCreateSaleScreen({ navigation }: any) {
         multiline
         style={{ minHeight: 72 }}
       />
+      </PageSection>
+
       <WebButton
         title={submitting ? 'Creating Deal...' : 'Create Deal'}
         onPress={onSubmit}
@@ -747,51 +761,49 @@ export default function DCCreateSaleScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   renewalRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
-  renewalChip: { paddingVertical: 7, paddingHorizontal: 12, borderRadius: 18, borderWidth: 1, borderColor: '#CBD5E1', backgroundColor: '#fff' },
-  renewalChipOn: { backgroundColor: '#2563EB', borderColor: '#2563EB' },
-  renewalChipText: { fontSize: 13, color: '#334155', fontWeight: '600' },
+  renewalChip: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: '#E0F2FE' },
+  renewalChipOn: { backgroundColor: '#0284C7' },
+  renewalChipText: { fontSize: 13, color: '#0369A1', fontWeight: '600' },
   renewalChipTextOn: { color: '#fff' },
-  label: { ...typography.label.medium, color: colors.textPrimary, marginBottom: 6 },
-  fieldError: { ...typography.body.small, color: colors.error, marginBottom: 10, marginTop: -4 },
-  checkingText: { ...typography.body.small, color: '#2563EB', marginBottom: 10, marginTop: -4 },
+  fieldError: { fontSize: 13, color: colors.error, marginBottom: 12, marginTop: -8 },
+  checkingText: { fontSize: 13, color: colors.primaryDark, marginBottom: 12, marginTop: -8 },
   inputError: { borderColor: colors.error },
-  sectionTitle: { ...typography.heading.h3, color: colors.textPrimary, marginTop: 8, marginBottom: 8 },
-  hint: { ...typography.body.small, color: colors.textSecondary, marginBottom: 12 },
+  hint: { fontSize: 13, color: colors.textTertiary, marginBottom: 12 },
   errorText: { ...typography.body.small, color: colors.error, marginBottom: 12 },
   autoBox: {
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    borderColor: '#DCE3EC',
+    backgroundColor: colors.backgroundMuted,
+    borderRadius: 10,
+    paddingHorizontal: 14,
     paddingVertical: 10,
-    marginBottom: 12,
+    marginBottom: 14,
   },
-  autoValue: { fontSize: 16, fontWeight: '600', color: colors.textPrimary },
+  autoValue: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
   autoNote: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
   saleProductRow: {
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#EEF2F7',
     borderRadius: 12,
     padding: 12,
-    marginBottom: 10,
-    backgroundColor: colors.backgroundLight,
+    marginBottom: 8,
+    backgroundColor: colors.background,
   },
   checkRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   checkbox: {
     width: 22,
     height: 22,
-    borderRadius: 4,
+    borderRadius: 6,
     borderWidth: 2,
-    borderColor: colors.border,
+    borderColor: '#CBD5E1',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.backgroundLight,
   },
-  checkboxOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  checkboxOn: { backgroundColor: colors.primaryDark, borderColor: colors.primaryDark },
   checkboxMark: { color: '#fff', fontSize: 14, fontWeight: '700' },
-  productName: { ...typography.body.medium, fontWeight: '600', color: colors.textPrimary, flex: 1 },
-  productFields: { marginTop: 10, gap: 4 },
+  productName: { fontSize: 15, fontWeight: '600', color: colors.textPrimary, flex: 1 },
+  productFields: { marginTop: 12, flexDirection: 'row', gap: 8 },
   productField: { flex: 1 },
   fieldContainer: { marginBottom: 14 },
   dateTouchable: {
@@ -800,12 +812,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     backgroundColor: colors.backgroundLight,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 12,
+    borderColor: '#DCE3EC',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    minHeight: 48,
   },
-  dateText: { ...typography.body.medium, color: colors.textPrimary },
-  placeholderText: { color: colors.textSecondary },
+  dateText: { fontSize: 15, color: colors.textPrimary },
+  placeholderText: { color: colors.textMuted },
   datePickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
   datePickerBox: {
     backgroundColor: colors.backgroundLight,
@@ -821,6 +834,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  datePickerTitle: { ...typography.heading.h3, color: colors.textPrimary },
-  doneText: { ...typography.label.medium, color: colors.primary, fontWeight: '600' },
+  datePickerTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
+  doneText: { fontSize: 15, color: colors.primaryDark, fontWeight: '600' },
 });

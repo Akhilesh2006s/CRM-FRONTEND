@@ -7,7 +7,7 @@ import {
   Modal,
   Alert,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { apiService } from '../services/api';
 import { getCurrentLocation } from '../services/location';
 import { takeLivePhoto } from '../services/photo';
@@ -18,8 +18,7 @@ import MissedExitCard from './MissedExitCard';
 /** India date of an instant, e.g. '2026-11-03'. */
 const istDate = (v: string | Date) => new Date(new Date(v).getTime() + 330 * 60000).toISOString().slice(0, 10);
 import { useAuth } from '../context/AuthContext';
-import { colors, gradients } from '../theme/colors';
-import { typography } from '../theme/typography';
+import { colors } from '../theme/colors';
 
 /** Same reasons / labels as web app/dashboard/attendance/page.tsx (Office is the default). */
 export const ATTENDANCE_REASONS = [
@@ -121,27 +120,35 @@ export default function AttendanceCard({ onChange }: { onChange?: () => void } =
     }
   };
 
+  const startedAt = currentAttendance
+    ? new Date(currentAttendance.startTime).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+    : '';
+
   return (
     <>
       <View style={styles.card}>
         <View style={styles.cardHeader}>
-          <Text style={styles.cardIcon}>⏰</Text>
-          <Text style={[styles.cardTitle, { flex: 1 }]}>Attendance</Text>
+          <View style={[styles.iconBox, currentAttendance ? styles.iconBoxOn : null]}>
+            <Ionicons name="time-outline" size={20} color={currentAttendance ? colors.success : colors.primaryDark} />
+          </View>
+          <View style={styles.headerText}>
+            <Text style={styles.cardTitle}>Attendance</Text>
+            <Text style={styles.cardSub} numberOfLines={1}>
+              {currentAttendance ? `Started ${startedAt}` : 'Your day has not started yet'}
+            </Text>
+          </View>
           {currentAttendance && !oldDay ? (
             <TouchableOpacity style={styles.endDayTop} onPress={handleCheckOut} disabled={loading} activeOpacity={0.7}>
-              <Text style={styles.checkOutButtonText}>{loading ? 'Ending…' : 'End Day'}</Text>
+              <Text style={styles.endDayText}>{loading ? 'Ending…' : 'End Day'}</Text>
             </TouchableOpacity>
           ) : null}
         </View>
         {currentAttendance ? (
           <View style={styles.attendanceStatus}>
             <View style={styles.statusBadge}>
-              <Text style={styles.statusIcon}>✓</Text>
+              <Ionicons name="checkmark-circle" size={14} color={colors.success} />
               <Text style={styles.statusText}>Day started</Text>
             </View>
-            <Text style={styles.statusTime}>
-              Started: {new Date(currentAttendance.startTime).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-            </Text>
             {oldDay ? (
               <>
                 <Text style={styles.oldDay}>This day was not ended. Enter the time you ended it.</Text>
@@ -153,19 +160,13 @@ export default function AttendanceCard({ onChange }: { onChange?: () => void } =
           </View>
         ) : (
           <TouchableOpacity
-            style={styles.checkInButton}
+            style={[styles.checkInButton, loading && styles.buttonDisabled]}
             onPress={() => setShowModal(true)}
             disabled={loading}
-            activeOpacity={0.7}
+            activeOpacity={0.8}
           >
-            <LinearGradient
-              colors={gradients.success as [string, string]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.buttonGradient}
-            >
-              <Text style={styles.checkInButtonText}>Start Day</Text>
-            </LinearGradient>
+            <Ionicons name="play-circle-outline" size={20} color="#FFFFFF" />
+            <Text style={styles.checkInButtonText}>Start Day</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -187,252 +188,63 @@ export default function AttendanceCard({ onChange }: { onChange?: () => void } =
 }
 
 const styles = StyleSheet.create({
-  gpsWarn: { alignSelf: 'stretch', backgroundColor: '#FEE2E2', borderColor: '#F87171', borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 12 },
-  gpsWarnTitle: { color: '#B91C1C', fontWeight: '700', fontSize: 14 },
-  gpsWarnText: { color: '#7F1D1D', fontSize: 13, marginTop: 4 },
-  endDayTop: { backgroundColor: colors.error, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 18 },
-  oldDay: { color: '#B45309', fontWeight: '600', fontSize: 13, marginBottom: 12 },
-  gpsOn: { color: '#15803D', fontWeight: '600', fontSize: 13, marginBottom: 12 },
   card: {
     backgroundColor: colors.backgroundLight,
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: colors.shadowDark,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 6,
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: colors.borderLight,
+    borderColor: '#EEF2F7',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 1,
   },
-  cardHeader: {
-    flexDirection: 'row',
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  iconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: colors.accent,
     alignItems: 'center',
-    marginBottom: 16,
+    justifyContent: 'center',
   },
-  cardIcon: {
-    fontSize: 24,
-    marginRight: 12,
+  iconBoxOn: { backgroundColor: colors.successLight },
+  headerText: { flex: 1 },
+  cardTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
+  cardSub: { fontSize: 13, color: colors.textTertiary, marginTop: 2 },
+  endDayTop: {
+    backgroundColor: colors.error,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    minHeight: 40,
+    justifyContent: 'center',
   },
-  cardTitle: {
-    ...typography.heading.h2,
-    color: colors.textPrimary,
-  },
-  attendanceStatus: {
-    alignItems: 'flex-start',
-  },
+  endDayText: { color: colors.textLight, fontSize: 15, fontWeight: '700' },
+  attendanceStatus: { alignItems: 'flex-start', marginTop: 12 },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
     backgroundColor: colors.successLight,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginBottom: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
   },
-  statusIcon: {
-    fontSize: 16,
-    color: colors.success,
-    marginRight: 8,
-    fontWeight: '700',
-  },
-  statusText: {
-    fontSize: 14,
-    color: colors.success,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-  statusTime: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginBottom: 16,
-  },
+  statusText: { fontSize: 13, color: '#15803D', fontWeight: '700' },
+  oldDay: { color: '#B45309', fontWeight: '600', fontSize: 13, marginTop: 12, marginBottom: 8 },
   checkInButton: {
-    borderRadius: 12,
-    overflow: 'hidden',
-    shadowColor: colors.success,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  checkOutButton: {
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginTop: 8,
-    shadowColor: colors.error,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  buttonGradient: {
-    padding: 16,
+    marginTop: 12,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  checkInButtonText: {
-    color: colors.textLight,
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  checkOutButtonText: {
-    color: colors.textLight,
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 24,
-    paddingTop: 60,
-  },
-  modalTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: colors.textLight,
-    letterSpacing: -0.5,
-  },
-  closeButton: {
-    fontSize: 28,
-    color: colors.textLight,
-    fontWeight: '700',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    textAlign: 'center',
-    lineHeight: 36,
-  },
-  modalContent: {
-    padding: 24,
-  },
-  section: {
-    marginBottom: 24,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 12,
-    color: colors.textPrimary,
-    letterSpacing: 0.3,
-  },
-  reasonGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 8,
+    minHeight: 48,
+    borderRadius: 10,
+    backgroundColor: colors.success,
   },
-  reasonButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: colors.backgroundLight,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    marginRight: 8,
-    marginBottom: 8,
-  },
-  reasonButtonSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  reasonButtonText: {
-    fontSize: 14,
-    color: colors.textPrimary,
-    fontWeight: '600',
-  },
-  reasonButtonTextSelected: {
-    color: colors.textLight,
-    fontWeight: '700',
-  },
-  photoButton: {
-    backgroundColor: colors.backgroundLight,
-    borderWidth: 2,
-    borderColor: colors.border,
-    borderStyle: 'dashed',
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 150,
-  },
-  photo: {
-    width: '100%',
-    height: 200,
-    borderRadius: 12,
-  },
-  photoButtonText: {
-    color: colors.primary,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  locationButton: {
-    backgroundColor: colors.backgroundLight,
-    borderWidth: 2,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-  },
-  locationButtonSuccess: {
-    backgroundColor: colors.successLight,
-    borderColor: colors.success,
-  },
-  locationButtonText: {
-    color: colors.primary,
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-  locationText: {
-    marginTop: 8,
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  input: {
-    backgroundColor: colors.backgroundLight,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: colors.textPrimary,
-  },
-  textArea: {
-    height: 100,
-    textAlignVertical: 'top',
-  },
-  submitButton: {
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginTop: 8,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  submitButtonText: {
-    color: colors.textLight,
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
+  checkInButtonText: { color: colors.textLight, fontSize: 16, fontWeight: '700' },
+  buttonDisabled: { opacity: 0.6 },
 });
-

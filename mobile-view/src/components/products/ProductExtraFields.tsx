@@ -295,16 +295,16 @@ export function ProductSpecimenItemsField({
 }
 
 const styles = StyleSheet.create({
-  section: { marginBottom: 20 },
-  label: { fontSize: 14, fontWeight: '600', color: colors.textPrimary, marginBottom: 4 },
-  smallLabel: { fontSize: 12, fontWeight: '500', color: colors.textSecondary, marginBottom: 4 },
-  hint: { fontSize: 12, color: colors.textSecondary, marginBottom: 8, lineHeight: 17 },
+  section: { marginBottom: 16 },
+  label: { fontSize: 15, fontWeight: '600', color: colors.textPrimary, marginBottom: 4 },
+  smallLabel: { fontSize: 13, fontWeight: '500', color: colors.textSecondary, marginBottom: 4 },
+  hint: { fontSize: 13, color: colors.textSecondary, marginBottom: 8, lineHeight: 18 },
   warn: { fontSize: 13, color: colors.warning },
-  box: { borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginBottom: 8, backgroundColor: colors.backgroundLight },
+  box: { borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, marginBottom: 8, backgroundColor: colors.backgroundLight },
   addRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   inputTight: { marginBottom: 6 },
   disabled: { backgroundColor: colors.backgroundMuted, color: colors.textMuted },
-  addBtn: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: colors.primary, marginBottom: 6 },
+  addBtn: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.primary, marginBottom: 6 },
   addBtnText: { color: colors.primary, fontWeight: '600', fontSize: 13 },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
@@ -313,7 +313,7 @@ const styles = StyleSheet.create({
     gap: 6,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 16,
+    borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 4,
     backgroundColor: colors.backgroundLight,
@@ -326,6 +326,6 @@ const styles = StyleSheet.create({
   twoCol: { flexDirection: 'row', gap: 8 },
   removeBtn: { alignSelf: 'flex-end', paddingHorizontal: 10, paddingVertical: 6 },
   removeBtnText: { color: colors.error, fontWeight: '600', fontSize: 13 },
-  outlineBtn: { alignSelf: 'flex-start', borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
+  outlineBtn: { alignSelf: 'flex-start', borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
   outlineBtnText: { color: colors.textPrimary, fontWeight: '600', fontSize: 13 },
 });

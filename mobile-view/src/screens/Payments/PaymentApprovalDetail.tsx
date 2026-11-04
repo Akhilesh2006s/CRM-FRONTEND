@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Alert } from 'react-native';
 import { colors } from '../../theme/colors';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
-import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
+import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
+import { InfoRow, Badge, toneFor } from '../../ui/Kit';
 import { apiService } from '../../services/api';
 import { inr, nameOf, statusColors } from './paymentHelpers';
 
@@ -127,10 +128,7 @@ export default function PaymentApprovalDetail({ kind, navigation, route }: { kin
                 <Row label="Deposited Bank Branch" value={d.depositedBankBranch} />
               </>
             ) : null}
-            <View style={styles.row}>
-              <Text style={styles.rowLabel}>Current Status</Text>
-              <Text style={[styles.rowValue, { color: sc.fg, fontWeight: '700' }]}>{d.status || 'Pending'}</Text>
-            </View>
+            <InfoRow label="Current Status" value={<View style={{ alignItems: 'flex-start' }}><Badge label={d.status || 'Pending'} tone={toneFor(d.status || 'Pending')} /></View>} />
             {d.approvedBy ? <Row label="Approved By" value={`${d.approvedBy.name || ''} ${fmtTs(d.approvedAt)}`} /> : null}
             {d.heldBy ? <Row label="Held By" value={`${d.heldBy.name || ''} ${fmtTs(d.heldAt)}`} /> : null}
             {d.rejectedBy ? <Row label="Rejected By" value={`${d.rejectedBy.name || ''} ${fmtTs(d.rejectedAt)}`} /> : null}
@@ -144,7 +142,7 @@ export default function PaymentApprovalDetail({ kind, navigation, route }: { kin
           </PageSection>
 
           <PageSection title="Update">
-            <Text style={styles.label}>Reference No *</Text>
+            <WebLabel>Reference No *</WebLabel>
             <WebInput value={referenceNumber} onChangeText={setReferenceNumber} placeholder="Enter reference number" />
             <WebSelect
               label={kind === 'cheque' ? 'Status *' : 'New Status'}
@@ -152,12 +150,12 @@ export default function PaymentApprovalDetail({ kind, navigation, route }: { kin
               onValueChange={(v) => v && setStatus(v)}
               items={statusOptions.map((s) => ({ label: s, value: s }))}
             />
-            <Text style={styles.label}>{kind === 'cheque' ? 'Remarks *' : 'Admin Remarks'}</Text>
+            <WebLabel>{kind === 'cheque' ? 'Remarks *' : 'Admin Remarks'}</WebLabel>
             <WebInput
               value={remarks}
               onChangeText={setRemarks}
               placeholder={
-                kind === 'cheque' ? 'Enter remarks' : 'Enter remarks for your action (required for Hold/Reject, optional for Approve)'
+                kind === 'cheque' ? 'Enter remarks' : 'Required for Hold/Reject, optional for Approve'
               }
               multiline
               numberOfLines={4}
@@ -167,10 +165,16 @@ export default function PaymentApprovalDetail({ kind, navigation, route }: { kin
 
             {kind === 'cash' ? (
               <View style={styles.btns}>
-                <WebButton title={saving ? 'Processing...' : 'Approve'} onPress={() => submitCash('Approved')} disabled={saving} />
-                <WebButton title={saving ? 'Processing...' : 'Hold'} variant="outline" onPress={() => submitCash('Hold')} disabled={saving} />
-                <WebButton title={saving ? 'Processing...' : 'Reject'} variant="destructive" onPress={() => submitCash('Rejected')} disabled={saving} />
+                <View style={styles.btnRow}>
+                  <View style={styles.btnCell}>
+                    <WebButton title="Hold" variant="outline" onPress={() => submitCash('Hold')} disabled={saving} />
+                  </View>
+                  <View style={styles.btnCell}>
+                    <WebButton title="Reject" variant="destructive" onPress={() => submitCash('Rejected')} disabled={saving} />
+                  </View>
+                </View>
                 <WebButton title={saving ? 'Processing...' : 'Update Status'} variant="outline" onPress={() => submitCash()} disabled={saving} />
+                <WebButton title={saving ? 'Processing...' : 'Approve'} variant="success" onPress={() => submitCash('Approved')} disabled={saving} />
               </View>
             ) : (
               <View style={styles.btns}>
@@ -185,24 +189,17 @@ export default function PaymentApprovalDetail({ kind, navigation, route }: { kin
 }
 
 function Row({ label, value }: { label: string; value?: any }) {
-  const v = value === undefined || value === null || String(value).trim() === '' ? '-' : String(value);
-  return (
-    <View style={styles.row}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={styles.rowValue}>{v}</Text>
-    </View>
-  );
+  const v = value === undefined || value === null || String(value).trim() === '' ? '' : String(value);
+  return <InfoRow label={label} value={v} phone={label === 'Contact Mobile'} />;
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
-  rowLabel: { width: 140, fontSize: 13, color: colors.textSecondary },
-  rowValue: { flex: 1, fontSize: 14, color: colors.textPrimary },
-  label: { fontSize: 13, fontWeight: '500', color: colors.textPrimary, marginBottom: 6 },
   textArea: { minHeight: 90, textAlignVertical: 'top' },
-  hint: { fontSize: 12, color: colors.textTertiary, marginTop: -6, marginBottom: 10 },
-  btns: { gap: 8, marginTop: 8 },
-  prevBox: { backgroundColor: colors.warningLight, borderRadius: 8, padding: 10, marginTop: 8 },
-  prevLabel: { fontSize: 12, fontWeight: '700', color: colors.warning, marginBottom: 2 },
-  prevText: { fontSize: 13, color: colors.textPrimary },
+  hint: { fontSize: 13, color: colors.textTertiary, marginTop: -8, marginBottom: 12 },
+  btns: { marginTop: 4 },
+  btnRow: { flexDirection: 'row', gap: 8 },
+  btnCell: { flex: 1 },
+  prevBox: { backgroundColor: colors.warningLight, borderRadius: 10, padding: 12, marginTop: 8 },
+  prevLabel: { fontSize: 13, fontWeight: '700', color: '#B45309', marginBottom: 2 },
+  prevText: { fontSize: 14, color: colors.textPrimary },
 });

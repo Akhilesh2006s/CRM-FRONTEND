@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { colors, radii } from '../../theme/colors';
+import { colors } from '../../theme/colors';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebInput } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, ChipRow, EmptyState, toneFor } from '../../ui/Kit';
 import MessageBanner from '../../components/MessageBanner';
 import { ExpenseBillModal } from '../../components/expenses/ExpenseBillViewer';
 import { apiService } from '../../services/api';
@@ -90,6 +91,7 @@ export default function EmployeeVerificationScreen() {
   const [view, setView] = useState<ViewMode>(isHr ? 'all' : 'pending');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [viewer, setViewer] = useState<{ url: string; title: string } | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const canActOn = (employee: Employee, roleKey: string) => {
     // HR Manager can approve before or after the Vertical Head; both are needed to activate.
@@ -150,21 +152,38 @@ export default function EmployeeVerificationScreen() {
     }
   };
 
-  const UploadLink = ({ url, title }: { url?: string; title: string }) =>
+  const uploadLink = (url: string | undefined, title: string) =>
     url ? (
       <TouchableOpacity onPress={() => setViewer({ url, title })}>
         <Text style={styles.link}>View upload</Text>
       </TouchableOpacity>
-    ) : (
-      <Text style={styles.value}>—</Text>
-    );
+    ) : undefined;
 
-  const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      {typeof children === 'string' ? <Text style={styles.value}>{children}</Text> : children}
-    </View>
-  );
+  const nameOf = (v: { name?: string } | string | null | undefined) => (v && typeof v === 'object' ? v.name || '' : '');
+
+  const words = searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const filtered = list.filter((emp) => {
+    if (!words.length) return true;
+    const text = [
+      emp.name,
+      emp.empCode ? formatEmployeeCode(emp.empCode) : '',
+      emp.email,
+      emp.phone,
+      emp.mobile,
+      emp.role,
+      ROLE_NAMES[emp.role],
+      emp.department,
+      emp.designation,
+      emp.zone,
+      emp.cluster,
+      nameOf(emp.executiveManagerId),
+      nameOf(emp.verticalManagerId),
+      approvalStatusLabel(emp),
+    ]
+      .map((v) => String(v || '').toLowerCase())
+      .join(' ');
+    return words.every((w) => text.includes(w));
+  });
 
   const emptyText =
     view === 'rejected'
@@ -189,96 +208,82 @@ export default function EmployeeVerificationScreen() {
     >
       <Text style={styles.intro}>
         {isHr
-          ? 'The respective Vertical Head completes background verification first. HR can view the status throughout, and the HR Manager receives final approval access only after the head approves.'
-          : 'Review the employee’s complete details and background information. After your approval, the request is routed to the HR Manager for final approval.'}
+          ? 'The Vertical Head verifies first; the HR Manager gives final approval after that.'
+          : 'Review the details below. After your approval it goes to the HR Manager.'}
       </Text>
 
       {isAdmin || isHr ? (
-        <View style={styles.tabRow}>
-          {(
-            [
-              ['all', 'All employees'],
-              ['pending', 'Pending approvals'],
-              ['rejected', 'Rejected'],
-              ['approved', 'Approved'],
-            ] as [ViewMode, string][]
-          ).map(([v, label]) => (
-            <TouchableOpacity key={v} style={[styles.tabBtn, view === v && styles.tabBtnActive]} onPress={() => setView(v)}>
-              <Text style={[styles.tabText, view === v && styles.tabTextActive]}>{label}</Text>
-            </TouchableOpacity>
-          ))}
+        <View style={{ marginTop: -12, marginBottom: 12 }}>
+          <ChipRow
+            items={[
+              { key: 'all', label: 'All employees' },
+              { key: 'pending', label: 'Pending approvals' },
+              { key: 'rejected', label: 'Rejected' },
+              { key: 'approved', label: 'Approved' },
+            ]}
+            value={view}
+            onChange={(k) => setView(k as ViewMode)}
+          />
         </View>
       ) : null}
 
+      <WebInput value={searchQuery} onChangeText={setSearchQuery} placeholder="Search name, code, mobile, email, role, zone…" />
+
       {message ? <MessageBanner type={message.type} message={message.text} onDismiss={() => setMessage(null)} /> : null}
 
-      {list.length === 0 ? (
-        <Text style={styles.empty}>{emptyText}</Text>
+      {filtered.length === 0 ? (
+        <EmptyState icon="🪪" title={emptyText} message={searchQuery ? 'Try a different search.' : undefined} />
       ) : (
-        list.map((emp) => {
+        filtered.map((emp) => {
           const statusLabel = approvalStatusLabel(emp);
-          const badge =
-            emp.verificationStatus === 'approved'
-              ? { bg: '#D1FAE5', text: '#065F46' }
-              : emp.verificationStatus === 'rejected'
-                ? { bg: '#FEE2E2', text: '#991B1B' }
-                : { bg: '#FEF3C7', text: '#92400E' };
           const canActAny = (emp.approvals || []).some((a) => a.status === 'pending' && canActOn(emp, a.roleKey));
+          const checklist =
+            (emp.onboardingChecklist?.length ? emp.onboardingChecklist.join(', ') : '') +
+            (emp.onboardingOtherNote ? ` (Other: ${emp.onboardingOtherNote})` : '');
+          const relation =
+            emp.hasEmployeeRelationship === true || emp.hasEmployeeRelationship === false
+              ? (emp.hasEmployeeRelationship ? 'Yes' : 'No') +
+                (emp.hasEmployeeRelationship && emp.employeeRelationshipDetails
+                  ? ` — ${[
+                      emp.employeeRelationshipDetails.fullName,
+                      emp.employeeRelationshipDetails.relationship,
+                      emp.employeeRelationshipDetails.department,
+                      emp.employeeRelationshipDetails.designation,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}`
+                  : '')
+              : '';
           return (
-            <View key={emp._id} style={styles.card}>
-              <Text style={styles.name}>{emp.empCode ? `${formatEmployeeCode(emp.empCode)} · ${emp.name}` : emp.name}</Text>
-              <Text style={styles.meta}>
-                {ROLE_NAMES[emp.role] || emp.role} · {emp.email}
-                {emp.zone ? ` · Zone: ${emp.zone}` : ''}
-                {emp.cluster ? ` · Cluster: ${emp.cluster}` : ''}
-              </Text>
-              <View style={[styles.badge, { backgroundColor: badge.bg }]}>
-                <Text style={[styles.badgeText, { color: badge.text }]}>{statusLabel}</Text>
-              </View>
+            <Card key={emp._id}>
+              <CardTitle
+                title={emp.name}
+                subtitle={[emp.empCode ? formatEmployeeCode(emp.empCode) : '', ROLE_NAMES[emp.role] || emp.role].filter(Boolean).join(' · ')}
+                badge={statusLabel}
+                tone={toneFor(statusLabel)}
+              />
 
-              <Field label="Official company number">{emp.phone || '—'}</Field>
-              <Field label="Personal mobile">{emp.mobile || '—'}</Field>
-              <Field label="Department / Designation">{[emp.department, emp.designation].filter(Boolean).join(' · ') || '—'}</Field>
-              <Field label="Joining date">{formatDate(emp.dateOfJoining)}</Field>
-              <Field label="Date of birth">{formatDate(emp.dateOfBirth)}</Field>
-              <Field label="Assigned Zonal Manager">
-                {typeof emp.executiveManagerId === 'object' ? emp.executiveManagerId?.name || '—' : '—'}
-              </Field>
-              <Field label="Assigned Product Head">
-                {typeof emp.verticalManagerId === 'object' ? emp.verticalManagerId?.name || '—' : '—'}
-              </Field>
-              <Field label="Temporary address">{emp.temporaryAddress || '—'}</Field>
-              <Field label="Permanent address">{emp.permanentAddress || '—'}</Field>
-              <Field label="Aadhaar">
-                <UploadLink url={emp.aadhaarUrl} title="Aadhaar" />
-              </Field>
-              <Field label="Location">
-                <UploadLink url={emp.locationPhotoUrl} title="Location" />
-              </Field>
-              <Field label="Passport photo">
-                <UploadLink url={emp.passportPhotoUrl} title="Passport photo" />
-              </Field>
-              <Field label="Onboarding checklist">
-                {(emp.onboardingChecklist?.length ? emp.onboardingChecklist.join(', ') : '—') +
-                  (emp.onboardingOtherNote ? ` (Other: ${emp.onboardingOtherNote})` : '')}
-              </Field>
-              <Field label="Employee relationship declaration">
-                {(emp.hasEmployeeRelationship === true ? 'Yes' : emp.hasEmployeeRelationship === false ? 'No' : '—') +
-                  (emp.hasEmployeeRelationship && emp.employeeRelationshipDetails
-                    ? ` — ${[
-                        emp.employeeRelationshipDetails.fullName,
-                        emp.employeeRelationshipDetails.relationship,
-                        emp.employeeRelationshipDetails.department,
-                        emp.employeeRelationshipDetails.designation,
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')}`
-                    : '')}
-              </Field>
+              <InfoRow label="Email" value={emp.email} />
+              <InfoRow label="Company no." value={emp.phone} phone />
+              <InfoRow label="Personal mobile" value={emp.mobile} phone />
+              <InfoRow label="Zone" value={emp.zone} />
+              <InfoRow label="Cluster" value={emp.cluster} />
+              <InfoRow label="Dept / Desig." value={[emp.department, emp.designation].filter(Boolean).join(' · ')} />
+              <InfoRow label="Joining date" value={emp.dateOfJoining ? formatDate(emp.dateOfJoining) : ''} />
+              <InfoRow label="Date of birth" value={emp.dateOfBirth ? formatDate(emp.dateOfBirth) : ''} />
+              <InfoRow label="Zonal Manager" value={nameOf(emp.executiveManagerId)} />
+              <InfoRow label="Product Head" value={nameOf(emp.verticalManagerId)} />
+              <InfoRow label="Temp. address" value={emp.temporaryAddress} />
+              <InfoRow label="Perm. address" value={emp.permanentAddress} />
+              <InfoRow label="Aadhaar" value={uploadLink(emp.aadhaarUrl, 'Aadhaar')} />
+              <InfoRow label="Location" value={uploadLink(emp.locationPhotoUrl, 'Location')} />
+              <InfoRow label="Passport photo" value={uploadLink(emp.passportPhotoUrl, 'Passport photo')} />
+              <InfoRow label="Onboarding" value={checklist} />
+              <InfoRow label="Relative in co." value={relation} />
 
               {emp.references && emp.references.length > 0 ? (
-                <View style={styles.field}>
-                  <Text style={styles.fieldLabel}>References</Text>
+                <View>
+                  <Text style={styles.blockTitle}>References</Text>
                   {emp.references.map((r, i) => (
                     <View key={i} style={styles.refRow}>
                       <Text style={styles.value}>
@@ -295,7 +300,7 @@ export default function EmployeeVerificationScreen() {
                 </View>
               ) : null}
 
-              <Text style={[styles.fieldLabel, { marginTop: 8 }]}>Approvals</Text>
+              <Text style={styles.blockTitle}>Approvals</Text>
               {(emp.approvals || []).map((a) => {
                 const actionable = a.status === 'pending' && canActOn(emp, a.roleKey);
                 return (
@@ -303,10 +308,17 @@ export default function EmployeeVerificationScreen() {
                     key={a.roleKey}
                     style={[styles.approvalRow, a.roleKey === 'hr_manager' && a.status === 'pending' && styles.approvalRowHighlight]}
                   >
-                    <Text style={styles.value}>
-                      <Text style={{ fontWeight: '600' }}>{APPROVAL_LABELS[a.roleKey] || a.roleKey}</Text>
-                      <Text style={styles.meta}> ({a.status})</Text>
-                    </Text>
+                    <View style={styles.approvalHead}>
+                      <Text style={styles.approvalName}>{APPROVAL_LABELS[a.roleKey] || a.roleKey}</Text>
+                      <Text
+                        style={[
+                          styles.approvalStatus,
+                          { color: a.status === 'approved' ? colors.success : a.status === 'rejected' ? colors.error : '#B45309' },
+                        ]}
+                      >
+                        {a.status}
+                      </Text>
+                    </View>
                     {a.note ? <Text style={styles.reason}>Reason: {a.note}</Text> : null}
                     {a.status === 'rejected' && typeof a.userId === 'object' && a.userId?.name ? (
                       <Text style={styles.meta}>
@@ -344,10 +356,10 @@ export default function EmployeeVerificationScreen() {
                   onChangeText={(t) => setNotes((n) => ({ ...n, [emp._id]: t }))}
                   placeholder="Approval note (required when rejecting)"
                   multiline
-                  style={{ minHeight: 60, textAlignVertical: 'top', marginTop: 8 }}
+                  style={{ minHeight: 64, textAlignVertical: 'top', marginTop: 12, marginBottom: 0 }}
                 />
               ) : null}
-            </View>
+            </Card>
           );
         })
       )}
@@ -359,50 +371,28 @@ export default function EmployeeVerificationScreen() {
 
 const styles = StyleSheet.create({
   intro: { fontSize: 13, color: colors.textSecondary, lineHeight: 18, marginBottom: 12 },
-  tabRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-  tabBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.backgroundLight,
-  },
-  tabBtnActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  tabText: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
-  tabTextActive: { color: colors.primaryForeground },
-  empty: { textAlign: 'center', color: colors.textSecondary, paddingVertical: 32 },
-  card: {
-    backgroundColor: colors.backgroundMuted,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.lg,
-    padding: 14,
-    marginBottom: 12,
-  },
-  name: { fontSize: 16, fontWeight: '600', color: colors.textPrimary },
-  meta: { fontSize: 12, color: colors.textSecondary },
-  badge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: radii.sm, marginVertical: 8 },
-  badgeText: { fontSize: 12, fontWeight: '600' },
-  field: { marginBottom: 6 },
-  fieldLabel: { fontSize: 12, fontWeight: '600', color: colors.textPrimary },
-  value: { fontSize: 13, color: colors.textSecondary },
-  link: { fontSize: 13, color: colors.primary, textDecorationLine: 'underline' },
-  refRow: { marginBottom: 4 },
+  meta: { fontSize: 13, color: colors.textTertiary },
+  value: { fontSize: 14, color: colors.textPrimary },
+  link: { fontSize: 14, color: colors.primaryDark, textDecorationLine: 'underline' },
+  blockTitle: { fontSize: 13, fontWeight: '700', color: colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 12, marginBottom: 4 },
+  refRow: { paddingVertical: 4 },
   approvalRow: {
-    backgroundColor: colors.backgroundLight,
+    backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    padding: 10,
-    marginTop: 6,
+    borderColor: '#EEF2F7',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 8,
     gap: 4,
   },
   approvalRowHighlight: { borderColor: '#FCD34D' },
+  approvalHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
+  approvalName: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
+  approvalStatus: { fontSize: 13, fontWeight: '700', textTransform: 'capitalize' },
   reason: { fontSize: 13, color: '#B91C1C' },
-  actionRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
-  actionBtn: { flex: 1, paddingVertical: 8, borderRadius: radii.md, alignItems: 'center' },
-  approveBtn: { backgroundColor: colors.primary },
+  actionRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  actionBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
+  approveBtn: { backgroundColor: colors.success },
   rejectBtn: { backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.error },
-  actionText: { color: '#fff', fontWeight: '600', fontSize: 13 },
+  actionText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 });

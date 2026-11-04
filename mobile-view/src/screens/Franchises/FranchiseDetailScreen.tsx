@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { apiService } from '../../services/api';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
-import { WebInput, WebButton, DataTable } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, SectionTitle } from '../../ui/Kit';
 import { colors } from '../../theme/colors';
 
 export default function FranchiseDetailScreen({ route }: any) {
@@ -27,35 +27,31 @@ export default function FranchiseDetailScreen({ route }: any) {
   if (!data) {
     return (
       <View style={styles.centered}>
-        <Text>Franchise not found</Text>
+        <Text style={styles.notFound}>Franchise not found</Text>
       </View>
     );
   }
 
   return (
     <ScreenShell title="Franchise Detail" loading={loading}>
-      <PageSection title="Franchise Detail">
-<Text style={styles.title}>{data.franchiseName}</Text>
-      <Text style={styles.meta}>{data.franchiseEmail}</Text>
-      <Text style={styles.stat}>Schools: {data.totalSchools} · Zones: {data.totalZones}</Text>
+      <Card>
+        <CardTitle title={data.franchiseName || 'Franchise'} subtitle={data.franchiseEmail} />
+        <InfoRow label="Schools" value={String(data.totalSchools ?? 0)} bold />
+        <InfoRow label="Zones" value={String(data.totalZones ?? 0)} bold />
+      </Card>
+      {(data.assignedSchools || []).length ? <SectionTitle>Assigned schools</SectionTitle> : null}
       {(data.assignedSchools || []).slice(0, 20).map((s: any) => (
-        <View key={s._id} style={styles.card}>
-          <Text style={styles.school}>{s.schoolName}</Text>
-          <Text style={styles.meta}>{s.zone} · {s.contactMobile}</Text>
-        </View>
+        <Card key={s._id}>
+          <CardTitle title={s.schoolName} />
+          <InfoRow label="Zone" value={s.zone} />
+          <InfoRow label="Mobile" value={s.contactMobile} phone />
+        </Card>
       ))}
-      </PageSection>
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  content: { padding: 16 },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  title: { fontSize: 22, fontWeight: '700' },
-  meta: { color: colors.textSecondary, marginTop: 4, marginBottom: 12 },
-  stat: { fontWeight: '600', marginBottom: 16 },
-  card: { backgroundColor: colors.backgroundLight, padding: 12, borderRadius: 10, marginBottom: 8 },
-  school: { fontWeight: '600' },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
+  notFound: { fontSize: 15, color: colors.textSecondary },
 });

@@ -15,6 +15,7 @@ import { apiService } from '../../services/api';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import ScreenShell from '../../ui/ScreenShell';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState } from '../../ui/Kit';
 import { WebButton } from '../../ui/WebPrimitives';
 import { navigateRoot } from '../../navigation/navigationRef';
 
@@ -113,86 +114,44 @@ export default function VendorsListScreen() {
   };
 
   return (
-    <ScreenShell loading={loading && !refreshing}>
-      <ScrollView
-        style={styles.page}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
-      >
-        <View style={styles.headerRow}>
-          <View style={styles.headerText}>
-            <Text style={styles.pageTitle}>Partners</Text>
-            <Text style={styles.pageSubtitle}>Manage partner accounts and product assignments</Text>
-          </View>
-          <TouchableOpacity style={styles.addBtn} onPress={() => navigateRoot('VendorNew')}>
-            <Ionicons name="add-circle-outline" size={18} color="#fff" />
-            <Text style={styles.addBtnText}>Add Partner</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.card}>
-          {partners.length === 0 ? (
-            <View style={styles.empty}>
-              <Ionicons name="business-outline" size={48} color={colors.textMuted} />
-              <Text style={styles.emptyText}>No partners yet. Add your first partner to get started.</Text>
-              <TouchableOpacity style={styles.addBtn} onPress={() => navigateRoot('VendorNew')}>
-                <Ionicons name="add-circle-outline" size={18} color="#fff" />
-                <Text style={styles.addBtnText}>Add Partner</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={Platform.OS === 'web'}>
-              <View style={styles.table}>
-                <View style={styles.tableHead}>
-                  <Text style={[styles.th, styles.colName]}>Partner Name</Text>
-                  <Text style={[styles.th, styles.colEmail]}>Email</Text>
-                  <Text style={[styles.th, styles.colCount]}>Assigned Products Count</Text>
-                  <Text style={[styles.th, styles.colStatus]}>Status</Text>
-                  <Text style={[styles.th, styles.colDate]}>Created Date</Text>
-                  <Text style={[styles.th, styles.colActions]}>Actions</Text>
-                </View>
-                {partners.map((partner) => (
-                  <View key={partner._id} style={styles.tableRow}>
-                    <Text style={[styles.td, styles.colName, styles.nameCell]}>{partner.name}</Text>
-                    <Text style={[styles.td, styles.colEmail, styles.mutedCell]}>{partner.email}</Text>
-                    <Text style={[styles.td, styles.colCount]}>{productCount(partner)}</Text>
-                    <View style={[styles.td, styles.colStatus]}>
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          partner.isActive === false ? styles.statusInactive : styles.statusActive,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.statusText,
-                            partner.isActive === false ? styles.statusInactiveText : styles.statusActiveText,
-                          ]}
-                        >
-                          {partner.isActive === false ? 'Inactive' : 'Active'}
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={[styles.td, styles.colDate, styles.mutedCell]}>{formatDate(partner.createdAt)}</Text>
-                    <View style={[styles.td, styles.colActions, styles.actionsCell]}>
-                      <TouchableOpacity
-                        style={styles.viewBtn}
-                        onPress={() => navigateRoot('VendorDetail', { id: partner._id })}
-                      >
-                        <Ionicons name="eye-outline" size={16} color={colors.textPrimary} />
-                        <Text style={styles.viewBtnText}>View</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.editBtn} onPress={() => openEdit(partner)}>
-                        <Ionicons name="pencil-outline" size={16} color="#1D4ED8" />
-                        <Text style={styles.editBtnText}>Edit</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            </ScrollView>
-          )}
-        </View>
-      </ScrollView>
+    <ScreenShell
+      title="Partners"
+      subtitle="Manage partner accounts and product assignments"
+      loading={loading && !refreshing}
+      refreshing={refreshing}
+      onRefresh={() => {
+        setRefreshing(true);
+        load();
+      }}
+      headerRight={
+        <TouchableOpacity onPress={() => navigateRoot('VendorNew')} hitSlop={8} accessibilityLabel="Add Partner">
+          <Ionicons name="add-circle" size={28} color={colors.primary} />
+        </TouchableOpacity>
+      }
+    >
+      {partners.length === 0 ? (
+        <>
+          <EmptyState icon="🏢" title="No partners yet" message="Add your first partner to get started." />
+          <WebButton title="+ Add Partner" onPress={() => navigateRoot('VendorNew')} />
+        </>
+      ) : (
+        partners.map((partner) => (
+          <Card key={partner._id}>
+            <CardTitle
+              title={partner.name}
+              subtitle={partner.email}
+              badge={partner.isActive === false ? 'Inactive' : 'Active'}
+              tone={partner.isActive === false ? 'neutral' : 'success'}
+            />
+            <InfoRow label="Products" value={String(productCount(partner))} />
+            <InfoRow label="Created" value={formatDate(partner.createdAt)} />
+            <ActionRow>
+              <WebButton title="View" variant="outline" onPress={() => navigateRoot('VendorDetail', { id: partner._id })} />
+              <WebButton title="Edit Products" variant="outline" onPress={() => openEdit(partner)} />
+            </ActionRow>
+          </Card>
+        ))
+      )}
 
       <Modal visible={editOpen} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
@@ -239,112 +198,16 @@ export default function VendorsListScreen() {
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, padding: 16, backgroundColor: colors.background },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 20,
-    gap: 12,
-    flexWrap: 'wrap',
-  },
-  headerText: { flex: 1, minWidth: 200 },
-  pageTitle: { ...typography.heading.h1, color: colors.textPrimary, fontSize: 28 },
-  pageSubtitle: { ...typography.body.medium, color: colors.textSecondary, marginTop: 4 },
-  addBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#7C3AED',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  addBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
-  card: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    shadowColor: colors.shadowDark,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  table: { minWidth: 900 },
-  tableHead: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    paddingBottom: 12,
-    marginBottom: 4,
-  },
-  tableRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
-    paddingVertical: 14,
-  },
-  th: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
-  td: { fontSize: 14, color: colors.textPrimary },
-  colName: { width: 140 },
-  colEmail: { width: 200 },
-  colCount: { width: 180 },
-  colStatus: { width: 100 },
-  colDate: { width: 120 },
-  colActions: { width: 200 },
-  nameCell: { fontWeight: '600' },
-  mutedCell: { color: colors.textSecondary },
-  statusBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  statusActive: { backgroundColor: '#DCFCE7' },
-  statusInactive: { backgroundColor: '#F3F4F6' },
-  statusText: { fontSize: 12, fontWeight: '600' },
-  statusActiveText: { color: '#166534' },
-  statusInactiveText: { color: '#4B5563' },
-  actionsCell: { flexDirection: 'row', gap: 8 },
-  viewBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: '#fff',
-  },
-  viewBtnText: { fontSize: 13, fontWeight: '500', color: colors.textPrimary },
-  editBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-    backgroundColor: '#fff',
-  },
-  editBtnText: { fontSize: 13, fontWeight: '500', color: '#1D4ED8' },
-  empty: { alignItems: 'center', paddingVertical: 48, gap: 12 },
-  emptyText: { ...typography.body.medium, color: colors.textSecondary, textAlign: 'center' },
+  emptyText: { fontSize: 14, color: colors.textSecondary, textAlign: 'center' },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(15,23,42,0.45)',
     justifyContent: 'center',
     padding: 16,
   },
   modalContent: {
     backgroundColor: colors.backgroundLight,
-    borderRadius: 12,
+    borderRadius: 14,
     maxHeight: '85%',
     overflow: 'hidden',
   },
@@ -354,22 +217,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: '#EEF2F7',
   },
-  modalTitle: { ...typography.heading.h3, flex: 1, paddingRight: 8 },
-  modalClose: { color: colors.primary, fontWeight: '600' },
+  modalTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary, flex: 1, paddingRight: 8 },
+  modalClose: { fontSize: 15, color: colors.primary, fontWeight: '600' },
   modalBody: { padding: 16 },
   productRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#EEF2F7',
     marginBottom: 8,
   },
   productRowOn: { borderColor: colors.primary, backgroundColor: colors.infoLight },
-  productName: { ...typography.body.medium, flex: 1 },
-  selectedCount: { ...typography.body.small, color: colors.textSecondary, marginVertical: 12 },
+  productName: { fontSize: 15, color: colors.textPrimary, flex: 1 },
+  selectedCount: { fontSize: 13, color: colors.textSecondary, marginVertical: 12 },
 });

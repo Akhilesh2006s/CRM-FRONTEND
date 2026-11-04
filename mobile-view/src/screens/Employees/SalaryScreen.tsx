@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { colors, radii, spacing } from '../../theme/colors';
+import { colors } from '../../theme/colors';
 import ScreenShell from '../../ui/ScreenShell';
-import { WebInput, WebButton } from '../../ui/WebPrimitives';
+import { WebInput, WebButton, WebLabel } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, EmptyState } from '../../ui/Kit';
 import MessageBanner from '../../components/MessageBanner';
 import { apiService } from '../../services/api';
 
@@ -88,11 +89,14 @@ export default function SalaryScreen() {
   };
 
   const shown = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((r) =>
-      [r.name, r.email, r.role, r.empCode, formatEmployeeCode(r.empCode, '')].some((v) => String(v || '').toLowerCase().includes(q)),
-    );
+    const words = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (!words.length) return rows;
+    return rows.filter((r) => {
+      const text = [r.name, r.email, r.role, r.empCode, formatEmployeeCode(r.empCode, '')]
+        .map((v) => String(v || '').toLowerCase())
+        .join(' ');
+      return words.every((w) => text.includes(w));
+    });
   }, [rows, search]);
 
   return (
@@ -112,27 +116,17 @@ export default function SalaryScreen() {
       {error ? <MessageBanner type="error" message={error} onDismiss={() => setError('')} /> : null}
       {success ? <MessageBanner type="success" message={success} onDismiss={() => setSuccess('')} /> : null}
 
-      <WebInput placeholder="Search name, email, code, role" value={search} onChangeText={setSearch} autoCapitalize="none" />
+      <WebInput placeholder="Search name, email, code, role…" value={search} onChangeText={setSearch} autoCapitalize="none" />
 
-      {!loading && shown.length === 0 ? <Text style={styles.empty}>No active employees.</Text> : null}
+      {!loading && shown.length === 0 ? <EmptyState title="No active employees." /> : null}
 
       {shown.map((row) => (
-        <View key={row._id} style={styles.card}>
-          <View style={styles.head}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.name}>{row.name || '—'}</Text>
-              {row.email ? <Text style={styles.sub}>{row.email}</Text> : null}
-              <Text style={styles.code}>{formatEmployeeCode(row.empCode)}</Text>
-            </View>
-            <View style={styles.roleBadge}>
-              <Text style={styles.roleText} numberOfLines={1}>
-                {row.role || '—'}
-              </Text>
-            </View>
-          </View>
+        <Card key={row._id}>
+          <CardTitle title={row.name || '—'} subtitle={formatEmployeeCode(row.empCode)} badge={row.role || '—'} tone="info" />
+          <InfoRow label="Email" value={row.email} />
           <View style={styles.inputs}>
             <View style={styles.inputCell}>
-              <Text style={styles.label}>Yearly salary</Text>
+              <WebLabel>Yearly salary</WebLabel>
               <WebInput
                 keyboardType="number-pad"
                 value={drafts[row._id]?.yearly || ''}
@@ -141,7 +135,7 @@ export default function SalaryScreen() {
               />
             </View>
             <View style={styles.inputCell}>
-              <Text style={styles.label}>Monthly take-home</Text>
+              <WebLabel>Monthly take-home</WebLabel>
               <WebInput
                 keyboardType="number-pad"
                 value={drafts[row._id]?.monthly || ''}
@@ -155,37 +149,15 @@ export default function SalaryScreen() {
             onPress={() => void save(row._id)}
             disabled={saving === row._id}
           />
-        </View>
+        </Card>
       ))}
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  help: { fontSize: 13, color: colors.textSecondary, marginBottom: spacing.sm },
-  empty: { textAlign: 'center', color: colors.textSecondary, paddingVertical: 32 },
-  card: {
-    backgroundColor: colors.backgroundLight,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.lg,
-    padding: 12,
-    marginBottom: 10,
-  },
-  head: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginBottom: 8 },
-  name: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
-  sub: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-  code: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
-  roleBadge: {
-    backgroundColor: colors.infoLight,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    maxWidth: 140,
-  },
-  roleText: { fontSize: 12, fontWeight: '600', color: colors.info },
-  inputs: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  help: { fontSize: 13, color: colors.textSecondary, marginBottom: 12, lineHeight: 18 },
+  inputs: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   inputCell: { flexGrow: 1, flexBasis: '45%' },
-  label: { fontSize: 12, color: colors.textSecondary, marginBottom: 4 },
-  input: { marginBottom: 10 },
+  input: { marginBottom: 8 },
 });

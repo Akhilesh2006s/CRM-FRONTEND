@@ -1,19 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  Alert,
-  ActivityIndicator,
-  TextInput,
-  Modal,
-} from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
-import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
+import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState, ChipRow, SectionTitle, toneFor } from '../../ui/Kit';
+import { Act } from '../../components/dc/DcUi';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useDcCatalog } from '../../hooks/useDcCatalog';
@@ -176,314 +167,224 @@ export default function DCEmpScreen({ navigation }: any) {
     }
   };
 
-  const statusColors = (status: string) =>
-    status === 'Accepted'
-      ? { bg: colors.successLight, fg: colors.success }
-      : status === 'Rejected'
-        ? { bg: colors.errorLight, fg: colors.error }
-        : { bg: colors.warningLight, fg: '#92400E' };
+  const empName = (e: any) => (typeof e === 'object' ? e?.name : e);
+  const cap = (v: any) => String(v || '').replace(/^./, (c: string) => c.toUpperCase());
 
   return (
     <ScreenShell title="EMP DC (Employee Kits)">
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'samples' && styles.tabActive]}
-          onPress={() => setActiveTab('samples')}
-        >
-          <Text style={[styles.tabText, activeTab === 'samples' && styles.tabTextActive]}>Sample Requests</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'kits' && styles.tabActive]}
-          onPress={() => setActiveTab('kits')}
-        >
-          <Text style={[styles.tabText, activeTab === 'kits' && styles.tabTextActive]}>Employee Kits</Text>
-        </TouchableOpacity>
+      <View style={styles.tabs}>
+        <ChipRow
+          items={[
+            { key: 'samples', label: 'Sample Requests' },
+            { key: 'kits', label: 'Employee Kits' },
+          ]}
+          value={activeTab}
+          onChange={(k) => setActiveTab(k as 'samples' | 'kits')}
+        />
       </View>
 
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-        {activeTab === 'samples' ? (
-          <View>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{isBde ? 'My Sample Requests' : 'Pending Sample Requests'}</Text>
-              {isBde ? (
-                <WebButton title="+ Request samples" onPress={() => navigation?.navigate?.('SamplesRequest')} />
-              ) : null}
-            </View>
-            {loadingSamples ? (
-              <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
-            ) : sampleRequests.length === 0 ? (
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>
-                  {isBde ? 'You have not requested any samples yet.' : 'No pending sample requests'}
-                </Text>
+      {activeTab === 'samples' ? (
+        <View>
+          <SectionTitle>{isBde ? 'My Sample Requests' : 'Pending Sample Requests'}</SectionTitle>
+          {isBde ? <WebButton title="+ Request samples" onPress={() => navigation?.navigate?.('SamplesRequest')} /> : null}
+          {loadingSamples ? (
+            <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
+          ) : sampleRequests.length === 0 ? (
+            <EmptyState title={isBde ? 'No sample requests yet' : 'No pending sample requests'} />
+          ) : (
+            sampleRequests.map((request) => {
+              const delivery = [request.area, request.city].filter(Boolean).join(', ');
+              const transport = [request.transport_name, request.pincode].filter(Boolean).join(' · ');
+              const status = String(request.status || 'Pending');
+              return (
+                <Card key={request._id}>
+                  <CardTitle
+                    title={request.request_code || 'Sample request'}
+                    subtitle={formatDate(request.createdAt)}
+                    badge={isBde ? status : undefined}
+                    tone={toneFor(status)}
+                  />
+                  <InfoRow label="School" value={request.school_name} />
+                  <InfoRow label="Employee" value={empName(request.employee_id)} />
+                  <InfoRow label="Purpose" value={request.purpose} />
+                  {delivery || transport ? (
+                    <InfoRow label="Delivery" value={`${delivery || '—'}${transport ? ` (${transport})` : ''}`} />
+                  ) : null}
+                  {request.products && request.products.length > 0 ? (
+                    <InfoRow
+                      label="Products"
+                      value={
+                        <View>
+                          {request.products.map((p: any, idx: number) => (
+                            <Text key={idx} style={styles.productItem}>
+                              {p.product_name}
+                              {p.class ? ` · Cl ${p.class}` : ''}
+                              {p.level ? ` · ${p.level}` : ''} × {p.quantity}
+                            </Text>
+                          ))}
+                        </View>
+                      }
+                    />
+                  ) : null}
+                  {!isBde ? (
+                    <ActionRow>
+                      <Act
+                        title="Accept"
+                        variant="success"
+                        onPress={() => handleAccept(request._id)}
+                        disabled={processingRequest === request._id}
+                        loading={processingRequest === request._id}
+                      />
+                      <Act
+                        title="Reject"
+                        variant="destructive"
+                        onPress={() => handleReject(request._id)}
+                        disabled={processingRequest === request._id}
+                      />
+                    </ActionRow>
+                  ) : null}
+                </Card>
+              );
+            })
+          )}
+        </View>
+      ) : (
+        <View>
+          {!isBde ? (
+            <PageSection title="Create Employee Kit">
+              <WebSelect
+                label="Employee *"
+                value={form.employee_id}
+                onValueChange={(v) => setForm({ ...form, employee_id: v })}
+                placeholder="Select employee"
+                items={employees.map((emp) => ({
+                  value: String(emp._id),
+                  label: `${emp.name || emp.email || 'Employee'}${emp.empCode ? ` (${emp.empCode})` : ''}${emp.role ? ` · ${emp.role}` : ''}`,
+                }))}
+              />
+              <WebLabel>Kit Type</WebLabel>
+              <View style={styles.kitTypeContainer}>
+                {['Sales', 'Training', 'Field'].map((type) => (
+                  <TouchableOpacity
+                    key={type}
+                    style={[styles.kitTypeButton, form.kit_type === type && styles.kitTypeButtonActive]}
+                    onPress={() => setForm({ ...form, kit_type: type })}
+                  >
+                    <Text style={[styles.kitTypeText, form.kit_type === type && styles.kitTypeTextActive]}>{type}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
-            ) : (
-              sampleRequests.map((request) => {
-                const delivery = [request.area, request.city].filter(Boolean).join(', ');
-                const transport = [request.transport_name, request.pincode].filter(Boolean).join(' · ');
-                const sc = statusColors(String(request.status || 'Pending'));
-                return (
-                  <View key={request._id} style={styles.requestCard}>
-                    <View style={styles.requestHeader}>
-                      <Text style={styles.requestCode}>{request.request_code}</Text>
-                      <Text style={styles.requestDate}>{formatDate(request.createdAt)}</Text>
-                    </View>
-                    {request.school_name ? <Text style={styles.requestEmployee}>School: {request.school_name}</Text> : null}
-                    <Text style={styles.requestEmployee}>
-                      Employee: {typeof request.employee_id === 'object' ? request.employee_id?.name : request.employee_id}
-                    </Text>
-                    <Text style={styles.requestPurpose}>{request.purpose}</Text>
-                    {delivery || transport ? (
-                      <Text style={styles.productItem}>
-                        Delivery: {delivery || '—'}
-                        {transport ? ` (${transport})` : ''}
-                      </Text>
-                    ) : null}
-                    {request.products && request.products.length > 0 && (
-                      <View style={styles.productsList}>
-                        {request.products.map((p: any, idx: number) => (
-                          <Text key={idx} style={styles.productItem}>
-                            • {p.product_name}
-                            {p.class ? ` · Cl ${p.class}` : ''}
-                            {p.level ? ` · ${p.level}` : ''} (Qty: {p.quantity})
-                          </Text>
-                        ))}
-                      </View>
-                    )}
-                    {isBde ? (
-                      <View style={[styles.badge, { backgroundColor: sc.bg }]}>
-                        <Text style={[styles.badgeText, { color: sc.fg }]}>{request.status || 'Pending'}</Text>
-                      </View>
-                    ) : (
-                      <View style={styles.requestActions}>
-                        <TouchableOpacity
-                          style={[styles.actionButton, styles.acceptButton]}
-                          onPress={() => handleAccept(request._id)}
-                          disabled={processingRequest === request._id}
-                        >
-                          {processingRequest === request._id ? (
-                            <ActivityIndicator color={colors.textLight} />
-                          ) : (
-                            <Text style={styles.actionButtonText}>Accept</Text>
-                          )}
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[styles.actionButton, styles.rejectButton]}
-                          onPress={() => handleReject(request._id)}
-                          disabled={processingRequest === request._id}
-                        >
-                          <Text style={[styles.actionButtonText, styles.rejectButtonText]}>Reject</Text>
-                        </TouchableOpacity>
-                      </View>
-                    )}
-                  </View>
-                );
-              })
-            )}
-          </View>
-        ) : (
-          <View>
-            {!isBde ? (
-              <View style={styles.formCard}>
-                <Text style={styles.formTitle}>Create Employee Kit</Text>
-                <WebSelect
-                  label="Employee *"
-                  value={form.employee_id}
-                  onValueChange={(v) => setForm({ ...form, employee_id: v })}
-                  placeholder="Select employee"
-                  items={employees.map((emp) => ({
-                    value: String(emp._id),
-                    label: `${emp.name || emp.email || 'Employee'}${emp.empCode ? ` (${emp.empCode})` : ''}${emp.role ? ` · ${emp.role}` : ''}`,
-                  }))}
-                />
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Kit Type</Text>
-                  <View style={styles.kitTypeContainer}>
-                    {['Sales', 'Training', 'Field'].map((type) => (
-                      <TouchableOpacity
-                        key={type}
-                        style={[styles.kitTypeButton, form.kit_type === type && styles.kitTypeButtonActive]}
-                        onPress={() => setForm({ ...form, kit_type: type })}
-                      >
-                        <Text style={[styles.kitTypeText, form.kit_type === type && styles.kitTypeTextActive]}>{type}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Distribution Date *</Text>
+              <View style={styles.dateRow}>
+                <View style={styles.flex1}>
+                  <WebLabel>Distribution Date *</WebLabel>
                   <DateField placeholder="Distribution Date *" value={form.distribution_date} onChange={(text) => setForm({ ...form, distribution_date: text })} />
                 </View>
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Expected Return</Text>
+                <View style={styles.flex1}>
+                  <WebLabel>Expected Return</WebLabel>
                   <DateField placeholder="Expected Return" value={form.expected_return_date} onChange={(text) => setForm({ ...form, expected_return_date: text })} />
                 </View>
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Kit products</Text>
-                  {kitProducts.map((item, idx) => (
-                    <View key={idx} style={styles.kitProductRow}>
-                      <View style={{ flex: 1 }}>
-                        <WebSelect
-                          compact
-                          value={item.product}
-                          onValueChange={(v) => updateKitProduct(idx, { product: v })}
-                          placeholder="Select product"
-                          items={productNames.map((name) => ({ label: name, value: name }))}
-                        />
-                      </View>
-                      <WebInput
-                        style={styles.qtyInput}
-                        placeholder="Qty"
-                        keyboardType="number-pad"
-                        value={item.quantity}
-                        onChangeText={(t) => updateKitProduct(idx, { quantity: t.replace(/[^0-9]/g, '') })}
-                      />
-                      <TouchableOpacity
-                        onPress={() =>
-                          setKitProducts((rows) =>
-                            rows.length > 1 ? rows.filter((_, i) => i !== idx) : [{ product: '', quantity: '1' }]
-                          )
-                        }
-                      >
-                        <Text style={styles.removeText}>Remove</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                  <WebButton
-                    title="+ Add product"
-                    variant="outline"
-                    onPress={() => setKitProducts((rows) => [...rows, { product: '', quantity: '1' }])}
-                  />
-                </View>
-                <WebButton
-                  title={submitting ? 'Creating…' : 'Create Kit'}
-                  onPress={submitKit}
-                  loading={submitting}
-                  disabled={submitting}
-                />
               </View>
-            ) : null}
-
-            <View style={styles.listCard}>
-              <Text style={styles.listTitle}>{isBde ? 'My Kits' : 'Employee Kits'}</Text>
-              {loadingKits ? (
-                <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
-              ) : empDCs.length === 0 ? (
-                <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyText}>No employee kits</Text>
+              <WebLabel>Kit products</WebLabel>
+              {kitProducts.map((item, idx) => (
+                <View key={idx} style={styles.kitProductRow}>
+                  <View style={styles.flex1}>
+                    <WebSelect
+                      compact
+                      value={item.product}
+                      onValueChange={(v) => updateKitProduct(idx, { product: v })}
+                      placeholder="Select product"
+                      items={productNames.map((name) => ({ label: name, value: name }))}
+                    />
+                  </View>
+                  <WebInput
+                    style={styles.qtyInput}
+                    placeholder="Qty"
+                    keyboardType="number-pad"
+                    value={item.quantity}
+                    onChangeText={(t) => updateKitProduct(idx, { quantity: t.replace(/[^0-9]/g, '') })}
+                  />
+                  <TouchableOpacity
+                    hitSlop={8}
+                    onPress={() =>
+                      setKitProducts((rows) =>
+                        rows.length > 1 ? rows.filter((_, i) => i !== idx) : [{ product: '', quantity: '1' }]
+                      )
+                    }
+                  >
+                    <Text style={styles.removeText}>Remove</Text>
+                  </TouchableOpacity>
                 </View>
-              ) : (
-                empDCs.map((kit) => {
-                  const returned = kit.status === 'returned';
-                  return (
-                    <View key={kit._id} style={styles.kitCard}>
-                      <View style={styles.kitHeader}>
-                        <Text style={styles.kitCode}>{kit.emp_dc_code}</Text>
-                        <Text style={styles.kitStatus}>
-                          {String(kit.status || '').replace(/^./, (c: string) => c.toUpperCase())}
-                        </Text>
-                      </View>
-                      <Text style={styles.kitEmployee}>
-                        Employee: {typeof kit.employee_id === 'object' ? kit.employee_id?.name : kit.employee_id}
-                      </Text>
-                      <Text style={styles.kitType}>Kit: {kit.kit_type}</Text>
-                      <Text style={styles.kitType}>
-                        Products:{' '}
-                        {Array.isArray(kit.products) && kit.products.length
-                          ? kit.products.map((p: any) => `${p.product} × ${p.quantity}`).join(', ')
-                          : '-'}
-                      </Text>
-                      <Text style={styles.kitDate}>Date: {formatDate(kit.distribution_date)}</Text>
-                      <Text style={styles.kitDate}>Expected Return: {formatDate(kit.expected_return_date)}</Text>
-                      <View style={styles.kitAction}>
-                        {isBde ? (
-                          <Text style={styles.kitStatus}>{returned ? 'Returned' : 'With you'}</Text>
-                        ) : returned ? (
-                          <Text style={styles.kitStatus}>Returned</Text>
-                        ) : (
-                          <WebButton
-                            title={returningId === kit._id ? 'Saving…' : 'Mark Returned'}
-                            variant="outline"
-                            disabled={returningId === kit._id}
-                            onPress={() => markReturned(kit)}
-                          />
-                        )}
-                      </View>
-                    </View>
-                  );
-                })
-              )}
-            </View>
-          </View>
-        )}
-      </ScrollView>
+              ))}
+              <WebButton
+                title="+ Add product"
+                variant="outline"
+                onPress={() => setKitProducts((rows) => [...rows, { product: '', quantity: '1' }])}
+              />
+              <WebButton
+                title={submitting ? 'Creating…' : 'Create Kit'}
+                onPress={submitKit}
+                loading={submitting}
+                disabled={submitting}
+              />
+            </PageSection>
+          ) : null}
+
+          <SectionTitle>{isBde ? 'My Kits' : 'Employee Kits'}</SectionTitle>
+          {loadingKits ? (
+            <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
+          ) : empDCs.length === 0 ? (
+            <EmptyState title="No employee kits" />
+          ) : (
+            empDCs.map((kit) => {
+              const returned = kit.status === 'returned';
+              const badge = isBde ? (returned ? 'Returned' : 'With you') : cap(kit.status);
+              return (
+                <Card key={kit._id}>
+                  <CardTitle title={kit.emp_dc_code || 'Kit'} badge={badge || undefined} tone={returned ? 'success' : 'info'} />
+                  <InfoRow label="Employee" value={empName(kit.employee_id)} />
+                  <InfoRow label="Kit" value={kit.kit_type} />
+                  <InfoRow
+                    label="Products"
+                    value={
+                      Array.isArray(kit.products) && kit.products.length
+                        ? kit.products.map((p: any) => `${p.product} × ${p.quantity}`).join(', ')
+                        : '-'
+                    }
+                  />
+                  <InfoRow label="Date" value={formatDate(kit.distribution_date)} />
+                  <InfoRow label="Expected return" value={formatDate(kit.expected_return_date)} />
+                  {!isBde && !returned ? (
+                    <ActionRow>
+                      <Act
+                        title={returningId === kit._id ? 'Saving…' : 'Mark Returned'}
+                        variant="outline"
+                        disabled={returningId === kit._id}
+                        onPress={() => markReturned(kit)}
+                      />
+                    </ActionRow>
+                  ) : null}
+                </Card>
+              );
+            })
+          )}
+        </View>
+      )}
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: { paddingHorizontal: 20, paddingTop: 50, paddingBottom: 20, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
-  headerContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  backButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  backIcon: { fontSize: 24, color: colors.textLight, fontWeight: 'bold' },
-  headerTitleContainer: { flex: 1, alignItems: 'center' },
-  headerTitle: { ...typography.heading.h1, color: colors.textLight, marginBottom: 4 },
-  headerSubtitle: { ...typography.body.small, color: colors.textLight + 'CC' },
-  placeholder: { width: 40 },
-  tabContainer: { flexDirection: 'row', backgroundColor: colors.backgroundLight, borderBottomWidth: 1, borderBottomColor: colors.border },
-  tab: { flex: 1, padding: 16, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  tabActive: { borderBottomColor: colors.primary },
-  tabText: { ...typography.body.medium, color: colors.textSecondary },
-  tabTextActive: { color: colors.primary, fontWeight: '600' },
-  content: { flex: 1 },
-  contentContainer: { padding: 16, paddingBottom: 32 },
-  sectionTitle: { ...typography.heading.h3, color: colors.textPrimary, marginBottom: 16 },
+  tabs: { marginBottom: 8 },
   loader: { padding: 20 },
-  emptyContainer: { padding: 20, alignItems: 'center' },
-  emptyText: { ...typography.body.medium, color: colors.textSecondary },
-  requestCard: { backgroundColor: colors.backgroundLight, borderRadius: 16, padding: 16, marginBottom: 12, shadowColor: colors.shadowDark, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 3 },
-  requestHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  requestCode: { ...typography.heading.h4, color: colors.textPrimary },
-  requestDate: { ...typography.body.small, color: colors.textSecondary },
-  requestEmployee: { ...typography.body.medium, color: colors.textPrimary, marginBottom: 4 },
-  requestPurpose: { ...typography.body.medium, color: colors.textPrimary, marginBottom: 8 },
-  productsList: { marginBottom: 12 },
-  productItem: { ...typography.body.small, color: colors.textSecondary, marginBottom: 4 },
-  requestActions: { flexDirection: 'row', gap: 12, marginTop: 8 },
-  actionButton: { flex: 1, padding: 12, borderRadius: 12, alignItems: 'center' },
-  acceptButton: { backgroundColor: colors.success },
-  rejectButton: { backgroundColor: colors.error },
-  actionButtonText: { ...typography.body.medium, color: colors.textLight, fontWeight: '600' },
-  rejectButtonText: { color: colors.textLight },
-  formCard: { backgroundColor: colors.backgroundLight, borderRadius: 16, padding: 20, marginBottom: 20, shadowColor: colors.shadowDark, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 3 },
-  formTitle: { ...typography.heading.h3, color: colors.textPrimary, marginBottom: 16 },
-  formGroup: { marginBottom: 16 },
-  label: { ...typography.body.medium, color: colors.textPrimary, marginBottom: 8, fontWeight: '600' },
-  input: { backgroundColor: colors.background, borderRadius: 12, padding: 12, ...typography.body.medium, color: colors.textPrimary, borderWidth: 1, borderColor: colors.border },
-  kitTypeContainer: { flexDirection: 'row', gap: 8 },
-  kitTypeButton: { flex: 1, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, alignItems: 'center' },
-  kitTypeButtonActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  kitTypeText: { ...typography.body.medium, color: colors.textPrimary },
+  productItem: { fontSize: 14, color: colors.textPrimary, marginBottom: 2 },
+  kitTypeContainer: { flexDirection: 'row', gap: 8, marginBottom: 14 },
+  kitTypeButton: { flex: 1, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: '#DCE3EC', backgroundColor: colors.backgroundLight, alignItems: 'center' },
+  kitTypeButtonActive: { backgroundColor: colors.primaryDark, borderColor: colors.primaryDark },
+  kitTypeText: { fontSize: 14, color: colors.textPrimary },
   kitTypeTextActive: { color: colors.textLight, fontWeight: '600' },
-  submitButton: { backgroundColor: colors.primary, padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 8 },
-  submitButtonText: { ...typography.body.medium, color: colors.textLight, fontWeight: '600' },
-  listCard: { backgroundColor: colors.backgroundLight, borderRadius: 16, padding: 20, shadowColor: colors.shadowDark, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 3 },
-  listTitle: { ...typography.heading.h3, color: colors.textPrimary, marginBottom: 16 },
-  kitCard: { backgroundColor: colors.background, borderRadius: 12, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: colors.border },
-  kitHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  kitCode: { ...typography.heading.h4, color: colors.textPrimary },
-  kitStatus: { ...typography.body.small, color: colors.textSecondary },
-  kitEmployee: { ...typography.body.medium, color: colors.textPrimary, marginBottom: 4 },
-  kitType: { ...typography.body.medium, color: colors.textPrimary, marginBottom: 4 },
-  kitDate: { ...typography.body.small, color: colors.textSecondary },
-  kitAction: { marginTop: 8, alignItems: 'flex-start' },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 },
-  badge: { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3, marginTop: 4 },
-  badgeText: { fontSize: 12, fontWeight: '600' },
+  dateRow: { flexDirection: 'row', gap: 12 },
+  flex1: { flex: 1 },
   kitProductRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   qtyInput: { width: 70, marginBottom: 0 },
   removeText: { color: colors.error, fontSize: 13, fontWeight: '600' },
 });
-
-

@@ -22,8 +22,9 @@ import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
-import ScreenShell, { PageSection } from '../../ui/ScreenShell';
-import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
+import ScreenShell from '../../ui/ScreenShell';
+import { WebInput, WebButton, WebLabel } from '../../ui/WebPrimitives';
+import { InfoRow, EmptyState, Badge } from '../../ui/Kit';
 import MessageBanner from '../../components/MessageBanner';
 import { useDcCatalog } from '../../hooks/useDcCatalog';
 import { DcCategoryPicker } from '../../components/dc/DcCategoryPicker';
@@ -140,7 +141,7 @@ function DateField({
   if (Platform.OS === 'web') {
     return (
       <View style={styles.fieldContainer}>
-        <Text style={styles.label}>{label}</Text>
+        <WebLabel>{label}</WebLabel>
         {React.createElement('input', {
           type: 'date',
           value: value || '',
@@ -162,7 +163,7 @@ function DateField({
 
   return (
     <View style={styles.fieldContainer}>
-      <Text style={styles.label}>{label}</Text>
+      <WebLabel>{label}</WebLabel>
       <TouchableOpacity style={styles.dateTouchable} onPress={() => setShowPicker(true)} activeOpacity={0.7}>
         <Text style={[styles.dateText, !value && styles.placeholderText]}>{ymdToDmy(value) || 'Tap to pick date'}</Text>
         <Text style={styles.calendarIcon}>📅</Text>
@@ -614,20 +615,13 @@ export default function DCPendingOpenScreen({ navigation, route }: any) {
   };
 
   if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading DC...</Text>
-      </View>
-    );
+    return <ScreenShell title="Pending DC" loading>{null}</ScreenShell>;
   }
 
   if (!dc && !loading) {
     return (
     <ScreenShell title="Pending DC - Open" loading={loading}>
-<View style={styles.errorBlock}>
-          <Text style={styles.errorText}>{errorMessage || 'DC not found'}</Text>
-        </View>
+      <EmptyState icon="⚠️" title="DC not found" message={errorMessage || undefined} />
     </ScreenShell>
   );
   }
@@ -640,12 +634,10 @@ export default function DCPendingOpenScreen({ navigation, route }: any) {
         ? (dc.employeeId as { name?: string }).name
         : '-';
 
-  const shellTitle = isTermWiseDc
-    ? `Edit PO${order?.school_name ? ` - ${order.school_name}` : ''}`
-    : `Pending DC${order?.school_name ? ` - ${order.school_name}` : ''}`;
+  const shellTitle = isTermWiseDc ? 'Edit PO' : 'Pending DC';
 
   return (
-    <ScreenShell title={shellTitle} noScroll>
+    <ScreenShell title={shellTitle} subtitle={order?.school_name || undefined} noScroll>
       <ScrollView ref={scrollRef} style={styles.content} contentContainerStyle={styles.contentContainer}>
         {successMessage && (
           <MessageBanner type="success" message={successMessage} onDismiss={clearMessages} />
@@ -655,34 +647,35 @@ export default function DCPendingOpenScreen({ navigation, route }: any) {
         )}
 
         <View style={styles.dcMeta}>
-          <Text style={styles.dcMetaText}>DC No: {getDCNumber()}</Text>
+          <Badge label={`DC ${getDCNumber()}`} tone="info" />
           {order && (
-            <Text style={styles.dcMetaText}>
-              Due: {(order as any).due_amount ?? 0} ({(order as any).due_percentage ?? 0}%)
-            </Text>
+            <Badge
+              label={`Due ${(order as any).due_amount ?? 0} (${(order as any).due_percentage ?? 0}%)`}
+              tone={Number((order as any).due_amount) > 0 ? 'warning' : 'neutral'}
+            />
           )}
         </View>
 
         {!isTermWiseDc && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Lead Information</Text>
-          <FormField label="School Type" value={order?.school_type || '-'} editable={false} />
-          <FormField label="School Name" value={order?.school_name || dc?.customerName || '-'} editable={false} />
-          <FormField label="School Code" value={order?.school_code || order?.dc_code || '-'} editable={false} />
-          <FormField label="Contact Person" value={order?.contact_person || '-'} editable={false} />
-          <FormField label="Contact Mobile" value={order?.contact_mobile || dc?.customerPhone || '-'} editable={false} />
-          <FormField label="Assigned To" value={assignedName || "-"} editable={false} />
+          <Text style={styles.sectionTitle}>School</Text>
+          <InfoRow label="School name" value={order?.school_name || dc?.customerName || '-'} bold />
+          <InfoRow label="School code" value={order?.school_code || order?.dc_code || '-'} />
+          <InfoRow label="School type" value={order?.school_type || '-'} />
+          <InfoRow label="Contact" value={order?.contact_person || '-'} />
+          <InfoRow label="Mobile" value={order?.contact_mobile || dc?.customerPhone || '-'} phone />
+          <InfoRow label="Assigned to" value={assignedName || '-'} />
         </View>
         )}
 
         {!isTermWiseDc && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>More Information</Text>
-          <FormField label="Town" value={order?.location || (order?.address || '').split(',')[0] || '-'} editable={false} />
-          <FormField label="Address" value={order?.address || order?.location || dc?.customerAddress || '-'} editable={false} />
-          <FormField label="Zone" value={order?.zone || '-'} editable={false} />
-          <FormField label="Cluster" value={order?.cluster || '-'} editable={false} />
-          <FormField label="Remarks" value={order?.remarks || '-'} editable={false} />
+          <Text style={styles.sectionTitle}>Location</Text>
+          <InfoRow label="Town" value={order?.location || (order?.address || '').split(',')[0] || '-'} />
+          <InfoRow label="Address" value={order?.address || order?.location || dc?.customerAddress || '-'} />
+          <InfoRow label="Zone" value={order?.zone || '-'} />
+          <InfoRow label="Cluster" value={order?.cluster || '-'} />
+          <InfoRow label="Remarks" value={order?.remarks || '-'} />
         </View>
         )}
 
@@ -729,7 +722,7 @@ export default function DCPendingOpenScreen({ navigation, route }: any) {
           />
           <FormField label="DC Remarks *" value={dcRemarks} onChangeText={setDcRemarks} placeholder="DC Remarks" />
           <View style={styles.fieldContainer}>
-            <Text style={styles.label}>DC Category *</Text>
+            <WebLabel>DC Category *</WebLabel>
             <View style={styles.pickerWrap}>
               <Picker selectedValue={dcCategory} onValueChange={setDcCategory} style={styles.picker}>
                 <Picker.Item label="Select DC Category *" value="" />
@@ -747,7 +740,7 @@ export default function DCPendingOpenScreen({ navigation, route }: any) {
           <View style={styles.sectionTitleRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.sectionTitle}>Products & Quantities</Text>
-              <Text style={styles.sectionSubtitle}>Product details and quantities</Text>
+              <Text style={styles.sectionSubtitle}>Scroll sideways to see all columns.</Text>
             </View>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator style={styles.tableScroll}>
@@ -927,7 +920,7 @@ export default function DCPendingOpenScreen({ navigation, route }: any) {
         {(isSeniorCoordinator || isAdmin) && !isTermWiseDc && (
           <View style={styles.section}>
             <View style={styles.fieldContainer}>
-              <Text style={styles.label}>SME Remarks *</Text>
+              <WebLabel>SME Remarks *</WebLabel>
               <WebInput
                 style={styles.input}
                 value={smeRemarks}
@@ -939,35 +932,22 @@ export default function DCPendingOpenScreen({ navigation, route }: any) {
         )}
 
         <View style={styles.buttonRow}>
-          <TouchableOpacity style={styles.cancelButton} onPress={() => navigation.goBack()}>
-            <Text style={styles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.saveButton, saving && styles.buttonDisabled]}
-            onPress={handleSave}
-            disabled={saving}
-          >
-            {saving ? (
-              <ActivityIndicator color={colors.textLight} size="small" />
-            ) : (
-              <Text style={styles.saveButtonText}>Save</Text>
-            )}
-          </TouchableOpacity>
           {canSubmitToWarehouse && (
-            <TouchableOpacity
-              style={[styles.warehouseButton, submitting && styles.buttonDisabled]}
+            <WebButton
+              title="Submit to Warehouse"
               onPress={handleSubmitToWarehouse}
+              loading={submitting}
               disabled={submitting}
-            >
-              {submitting ? (
-                <ActivityIndicator color={colors.textLight} size="small" />
-              ) : (
-                <Text style={styles.warehouseButtonText} numberOfLines={2}>
-                  Submit to Warehouse
-                </Text>
-              )}
-            </TouchableOpacity>
+            />
           )}
+          <WebButton
+            title="Save"
+            variant={canSubmitToWarehouse ? 'outline' : 'primary'}
+            onPress={handleSave}
+            loading={saving}
+            disabled={saving}
+          />
+          <WebButton title="Cancel" variant="outline" onPress={() => navigation.goBack()} />
         </View>
       </ScrollView>
     </ScreenShell>
@@ -989,7 +969,7 @@ function FormField({
 }) {
   return (
     <View style={styles.fieldContainer}>
-      <Text style={styles.label}>{label}</Text>
+      <WebLabel>{label}</WebLabel>
       <WebInput
         style={[styles.input, !editable && styles.inputDisabled]}
         value={value}
@@ -1010,14 +990,21 @@ const styles = StyleSheet.create({
   backIcon: { fontSize: 24, color: colors.textLight, fontWeight: 'bold' },
   headerTitle: { ...typography.heading.h1, color: colors.textLight, flex: 1, textAlign: 'center' },
   content: { flex: 1 },
-  contentContainer: { padding: 20, paddingBottom: 40 },
+  contentContainer: { padding: 16, paddingBottom: 32 },
   errorBlock: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
   errorText: { ...typography.body.medium, color: colors.error },
-  dcMeta: { flexDirection: 'row', gap: 16, marginBottom: 16 },
+  dcMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
   dcMetaText: { ...typography.body.small, color: colors.textSecondary },
-  section: { marginBottom: 24 },
-  sectionTitle: { ...typography.heading.h3, color: colors.textPrimary, marginBottom: 4 },
-  sectionSubtitle: { ...typography.body.small, color: colors.textSecondary, marginBottom: 0 },
+  section: {
+    backgroundColor: colors.backgroundLight,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#EEF2F7',
+    padding: 16,
+    marginBottom: 12,
+  },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, marginBottom: 8 },
+  sectionSubtitle: { fontSize: 13, color: colors.textTertiary, marginTop: -4 },
   sectionTitleRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -1026,35 +1013,34 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   fieldContainer: { marginBottom: 14 },
-  label: { ...typography.label.medium, color: colors.textPrimary, marginBottom: 6 },
-  input: { ...typography.body.medium, backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, color: colors.textPrimary },
-  inputDisabled: { backgroundColor: colors.background, opacity: 0.8 },
-  pickerWrap: { borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.backgroundLight },
+  input: { fontSize: 15, backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: '#DCE3EC', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, minHeight: 48, color: colors.textPrimary, marginBottom: 0 },
+  inputDisabled: { backgroundColor: colors.backgroundMuted, opacity: 0.8 },
+  pickerWrap: { borderWidth: 1, borderColor: '#DCE3EC', borderRadius: 10, backgroundColor: colors.backgroundLight, overflow: 'hidden' },
   picker: { height: 48 },
-  dateTouchable: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12 },
-  dateText: { ...typography.body.medium, color: colors.textPrimary },
-  placeholderText: { color: colors.textSecondary },
+  dateTouchable: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: '#DCE3EC', borderRadius: 10, paddingHorizontal: 14, minHeight: 48 },
+  dateText: { fontSize: 15, color: colors.textPrimary },
+  placeholderText: { color: colors.textMuted },
   calendarIcon: { fontSize: 18 },
   datePickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
   datePickerBox: { backgroundColor: colors.backgroundLight, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: Platform.OS === 'ios' ? 24 : 16 },
   datePickerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
-  datePickerTitle: { ...typography.heading.h3, color: colors.textPrimary },
-  doneText: { ...typography.label.medium, color: colors.primary, fontWeight: '600' },
-  tableScroll: { marginHorizontal: -20 },
+  datePickerTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
+  doneText: { fontSize: 15, color: colors.primaryDark, fontWeight: '600' },
+  tableScroll: { marginHorizontal: -16 },
   tableWrap: { minWidth: 980, paddingRight: 16 },
   tableWrapEditable: { minWidth: 1080 },
   tableHeader: {
     flexDirection: 'row',
-    backgroundColor: '#F8FAFC',
-    paddingVertical: 12,
+    backgroundColor: colors.backgroundMuted,
+    paddingVertical: 10,
     paddingHorizontal: 8,
-    borderBottomWidth: 2,
-    borderBottomColor: '#CBD5E1',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
     alignItems: 'center',
   },
   th: {
     ...typography.label.small,
-    color: '#1E3A5F',
+    color: colors.textTertiary,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.3,
@@ -1099,7 +1085,7 @@ const styles = StyleSheet.create({
   cellInput: {
     backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#DCE3EC',
     borderRadius: 8,
     paddingVertical: 6,
     paddingHorizontal: 8,
@@ -1125,9 +1111,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 8,
-    backgroundColor: '#E2E8F0',
-    borderTopWidth: 2,
-    borderTopColor: '#94A3B8',
+    backgroundColor: colors.backgroundMuted,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
   },
   footerLeadingSpacer: { width: 652 },
   footerLabel: {
@@ -1146,56 +1132,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   footerTrailingSpacer: { flex: 1 },
-  buttonRow: { flexDirection: 'column', gap: 12, marginTop: 16, marginBottom: 24 },
-  cancelButton: {
-    width: '100%',
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: colors.backgroundLight,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelButtonText: {
-    ...typography.label.medium,
-    color: colors.textPrimary,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  saveButton: {
-    width: '100%',
-    minHeight: 48,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saveButtonText: {
-    color: colors.textLight,
-    fontWeight: '600',
-    fontSize: 15,
-    lineHeight: 22,
-    textAlign: 'center',
-  },
-  warehouseButton: {
-    width: '100%',
-    minHeight: 48,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    backgroundColor: colors.error,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  warehouseButtonText: {
-    color: colors.textLight,
-    fontWeight: '600',
-    fontSize: 15,
-    lineHeight: 22,
-    textAlign: 'center',
-  },
-  buttonDisabled: { opacity: 0.6 },
+  buttonRow: { marginTop: 4, marginBottom: 16 },
 });

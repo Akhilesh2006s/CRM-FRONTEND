@@ -1,18 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  RefreshControl,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, StyleSheet, Alert } from 'react-native';
 import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
-import ScreenShell, { PageSection } from '../../ui/ScreenShell';
-import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
+import ScreenShell from '../../ui/ScreenShell';
+import { Card, CardTitle, EmptyState, SectionTitle, toneFor } from '../../ui/Kit';
 import { apiService } from '../../services/api';
 
 export default function SalesScreen({ navigation }: any) {
@@ -52,77 +42,45 @@ export default function SalesScreen({ navigation }: any) {
       refreshing={refreshing}
       onRefresh={onRefresh}
     >
-<ScrollView
-        style={styles.content}
-        contentContainerStyle={styles.contentContainer}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
-      >
-        <View style={styles.statsRow}>
-          <View style={[styles.statCard, styles.statCardPink]}>
-            <Text style={styles.statLabel}>Total Sales</Text>
-            <Text style={styles.statValue}>{sales.length}</Text>
-          </View>
-          <View style={[styles.statCard, styles.statCardAmber]}>
-            <Text style={styles.statLabel}>Pending</Text>
-            <Text style={styles.statValue}>{pendingCount}</Text>
-          </View>
-          <View style={[styles.statCard, styles.statCardGreen]}>
-            <Text style={styles.statLabel}>Revenue</Text>
-            <Text style={styles.statValue}>₹{totalRevenue.toFixed(0)}</Text>
-          </View>
+      <View style={styles.statsRow}>
+        <View style={styles.statCard}>
+          <Text style={styles.statLabel}>Total Sales</Text>
+          <Text style={styles.statValue}>{sales.length}</Text>
         </View>
+        <View style={styles.statCard}>
+          <Text style={styles.statLabel}>Pending</Text>
+          <Text style={[styles.statValue, { color: colors.warning }]}>{pendingCount}</Text>
+        </View>
+        <View style={styles.statCard}>
+          <Text style={styles.statLabel}>Revenue</Text>
+          <Text style={[styles.statValue, { color: colors.success }]}>₹{totalRevenue.toFixed(0)}</Text>
+        </View>
+      </View>
 
-        <View style={styles.salesCard}>
-          <Text style={styles.salesTitle}>Recent Sales</Text>
-          {sales.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No sales yet.</Text>
-            </View>
-          ) : (
-            sales.slice(0, 20).map((sale) => (
-              <View key={sale._id} style={styles.saleItem}>
-                <View style={styles.saleItemLeft}>
-                  <Text style={styles.saleStatus}>{sale.status || 'Sale'}</Text>
-                </View>
-                <Text style={styles.saleAmount}>₹{sale.totalAmount || 0}</Text>
-              </View>
-            ))
-          )}
-        </View>
-      </ScrollView>
+      <SectionTitle>Recent Sales</SectionTitle>
+      {sales.length === 0 ? (
+        <EmptyState icon="🧾" title="No sales yet." />
+      ) : (
+        sales.slice(0, 20).map((sale) => (
+          <Card key={sale._id} style={{ paddingVertical: 12 }}>
+            <CardTitle title={`₹${sale.totalAmount || 0}`} badge={sale.status || 'Sale'} tone={toneFor(sale.status)} />
+          </Card>
+        ))
+      )}
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
-  loadingText: { marginTop: 12, ...typography.body.medium, color: colors.textSecondary },
-  header: { paddingHorizontal: 20, paddingTop: 50, paddingBottom: 20, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
-  headerContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  backButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  backIcon: { fontSize: 24, color: colors.textLight, fontWeight: 'bold' },
-  headerTitleContainer: { flex: 1, alignItems: 'center' },
-  headerTitle: { ...typography.heading.h1, color: colors.textLight, marginBottom: 4 },
-  headerSubtitle: { ...typography.body.small, color: colors.textLight + 'CC' },
-  placeholder: { width: 40 },
-  content: { flex: 1 },
-  contentContainer: { padding: 16, paddingBottom: 32 },
-  statsRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
-  statCard: { flex: 1, borderRadius: 16, padding: 16, shadowColor: colors.shadowDark, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 3 },
-  statCardPink: { backgroundColor: '#EC4899' },
-  statCardAmber: { backgroundColor: '#F59E0B' },
-  statCardGreen: { backgroundColor: '#059669' },
-  statLabel: { ...typography.body.small, color: colors.textLight + 'CC', marginBottom: 8 },
-  statValue: { ...typography.heading.h1, color: colors.textLight },
-  salesCard: { backgroundColor: colors.backgroundLight, borderRadius: 16, padding: 20, shadowColor: colors.shadowDark, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 3 },
-  salesTitle: { ...typography.heading.h3, color: colors.textPrimary, marginBottom: 16 },
-  emptyContainer: { padding: 20, alignItems: 'center' },
-  emptyText: { ...typography.body.medium, color: colors.textSecondary },
-  saleItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
-  saleItemLeft: { flex: 1 },
-  saleStatus: { ...typography.body.medium, color: colors.textPrimary },
-  saleAmount: { ...typography.body.medium, color: colors.textPrimary, fontWeight: '600' },
+  statsRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  statCard: {
+    flex: 1,
+    backgroundColor: colors.backgroundLight,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#EEF2F7',
+    padding: 12,
+  },
+  statLabel: { fontSize: 13, color: colors.textTertiary, marginBottom: 4 },
+  statValue: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
 });
-
-

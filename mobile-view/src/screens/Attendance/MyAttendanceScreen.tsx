@@ -1,11 +1,11 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { colors, radii } from '../../theme/colors';
 import ScreenShell from '../../ui/ScreenShell';
 import MessageBanner from '../../components/MessageBanner';
 import AttendanceCard, { attendanceReasonLabel } from '../../components/AttendanceCard';
 import { apiService } from '../../services/api';
+import { Card, CardTitle, InfoRow, EmptyState, SectionTitle } from '../../ui/Kit';
 
 type AttendanceRow = {
   _id: string;
@@ -51,7 +51,7 @@ export default function MyAttendanceScreen() {
   return (
     <ScreenShell
       title="Attendance"
-      subtitle="Check in when you start work and check out when you finish."
+      subtitle="Start your day and end it when you finish."
       loading={loading && !refreshing}
       refreshing={refreshing}
       onRefresh={() => {
@@ -60,22 +60,22 @@ export default function MyAttendanceScreen() {
       }}
     >
       <AttendanceCard onChange={load} />
-      <Text style={styles.sectionTitle}>History</Text>
+      <SectionTitle>History</SectionTitle>
       {error ? <MessageBanner type="error" message={error} onDismiss={() => setError('')} /> : null}
       {rows.length === 0 && !error ? (
-        <Text style={styles.empty}>No attendance records yet.</Text>
+        <EmptyState icon="🕒" title="No attendance yet" message="Your days will show here." />
       ) : (
         rows.map((row) => (
-          <View key={row._id} style={styles.row}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.primary}>In: {when(row.startTime)}</Text>
-              <Text style={styles.secondary}>Out: {when(row.endTime)}</Text>
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={styles.primary}>{attendanceReasonLabel(row.attendanceReason)}</Text>
-              <Text style={styles.secondary}>{row.town || '—'}</Text>
-            </View>
-          </View>
+          <Card key={row._id} style={styles.card}>
+            <CardTitle
+              title={attendanceReasonLabel(row.attendanceReason)}
+              subtitle={row.town || undefined}
+              badge={row.endTime ? 'Ended' : 'Open'}
+              tone={row.endTime ? 'neutral' : 'success'}
+            />
+            <InfoRow label="Start" value={when(row.startTime)} />
+            <InfoRow label="End" value={when(row.endTime)} />
+          </Card>
         ))
       )}
     </ScreenShell>
@@ -83,18 +83,5 @@ export default function MyAttendanceScreen() {
 }
 
 const styles = StyleSheet.create({
-  sectionTitle: { fontSize: 16, fontWeight: '600', color: colors.textPrimary, marginTop: 8, marginBottom: 8 },
-  empty: { color: colors.textSecondary, textAlign: 'center', paddingVertical: 24 },
-  row: {
-    flexDirection: 'row',
-    gap: 12,
-    backgroundColor: colors.backgroundLight,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    padding: 12,
-    marginBottom: 8,
-  },
-  primary: { fontSize: 14, color: colors.textPrimary },
-  secondary: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+  card: { padding: 14 },
 });

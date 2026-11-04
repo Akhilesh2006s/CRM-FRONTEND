@@ -1,19 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  RefreshControl,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
 import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
 import { useAuth } from '../../context/AuthContext';
-import ScreenShell, { PageSection } from '../../ui/ScreenShell';
-import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
+import ScreenShell from '../../ui/ScreenShell';
+import { WebInput } from '../../ui/WebPrimitives';
+import { Card, CardTitle, Badge, InfoRow, EmptyState, toneFor, type Tone } from '../../ui/Kit';
 import { apiService } from '../../services/api';
 import { confirmLogout } from '../../utils/confirmLogout';
 import SchoolOverview from '../../components/SchoolOverview';
@@ -38,6 +29,7 @@ export default function LeadsListScreen({ navigation }: any) {
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'open' | 'followup' | 'closed'>('all');
   const [openId, setOpenId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
 
   const handleLogout = () => {
     confirmLogout(logout);
@@ -91,58 +83,49 @@ export default function LeadsListScreen({ navigation }: any) {
     }
   };
 
-  const getStatusColor = (status?: string) => {
-    switch (status?.toLowerCase()) {
-      case 'closed':
-        return colors.success;
-      case 'follow-up':
-        return colors.warning;
-      case 'open':
-        return colors.info;
+  const priorityTone = (priority?: string): Tone => {
+    switch (priority?.toLowerCase()) {
+      case 'hot':
+        return 'error';
+      case 'warm':
+        return 'warning';
+      case 'cold':
+        return 'info';
       default:
-        return colors.textSecondary;
+        return 'neutral';
     }
   };
 
-  const getPriorityColor = (priority?: string) => {
-    switch (priority?.toLowerCase()) {
-      case 'hot':
-        return '#ef4444';
-      case 'warm':
-        return '#f97316';
-      case 'cold':
-        return '#3b82f6';
-      default:
-        return colors.textSecondary;
-    }
-  };
+  const words = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const visibleLeads = !words.length
+    ? leads
+    : leads.filter((l) => {
+        const hay = [l.school_name, l.contact_person, l.contact_mobile, l.zone, l.location, l.status, l.priority]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return words.every((w) => hay.includes(w));
+      });
 
   return (
     <ScreenShell
       title="My Schools"
-      subtitle="Tap a school to see all of its details, deals, DCs, payments and visits."
+      subtitle="Tap a school to see its deals, DCs, payments and visits."
       loading={loading && !refreshing}
       refreshing={refreshing}
       onRefresh={onRefresh}
     >
-{/* Filter Tabs */}
+      <WebInput placeholder="Search school, contact, mobile, zone…" value={search} onChangeText={setSearch} />
+
       <View style={styles.filterContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
           {(['all', 'open', 'followup', 'closed'] as const).map((filterType) => (
             <TouchableOpacity
               key={filterType}
-              style={[
-                styles.filterTab,
-                filter === filterType && styles.filterTabActive,
-              ]}
+              style={[styles.filterTab, filter === filterType && styles.filterTabActive]}
               onPress={() => setFilter(filterType)}
             >
-              <Text
-                style={[
-                  styles.filterTabText,
-                  filter === filterType && styles.filterTabTextActive,
-                ]}
-              >
+              <Text style={[styles.filterTabText, filter === filterType && styles.filterTabTextActive]}>
                 {filterType.charAt(0).toUpperCase() + filterType.slice(1)}
               </Text>
             </TouchableOpacity>
@@ -150,328 +133,73 @@ export default function LeadsListScreen({ navigation }: any) {
         </ScrollView>
       </View>
 
-      <ScrollView
-        style={styles.content}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        {leads.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>📋</Text>
-            <Text style={styles.emptyText}>No schools found</Text>
-            <TouchableOpacity
-              style={styles.emptyButton}
-              onPress={() => navigation.navigate('LeadAdd')}
-            >
-              <Text style={styles.emptyButtonText}>Add Lead</Text>
+      {visibleLeads.length === 0 ? (
+        <View>
+          <EmptyState icon="📋" title="No schools found" />
+          <View style={{ alignItems: 'center' }}>
+            <TouchableOpacity style={styles.primaryBtn} onPress={() => navigation.navigate('LeadAdd')}>
+              <Text style={styles.primaryBtnText}>Add Lead</Text>
             </TouchableOpacity>
           </View>
-        ) : (
-          leads.map((lead) => (
-            <TouchableOpacity
-              key={lead._id}
-              style={styles.leadCard}
-              onPress={() => setOpenId(openId === lead._id ? null : lead._id)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.leadCardHeader}>
-                <View style={styles.leadCardHeaderLeft}>
-                  <Text style={styles.leadSchoolName}>
-                    {lead.school_name || 'Unnamed School'}
-                  </Text>
-                  <View style={styles.leadBadges}>
-                    {lead.status && (
-                      <View
-                        style={[
-                          styles.badge,
-                          { backgroundColor: getStatusColor(lead.status) + '20' },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.badgeText,
-                            { color: getStatusColor(lead.status) },
-                          ]}
-                        >
-                          {lead.status}
-                        </Text>
-                      </View>
-                    )}
-                    {lead.priority && (
-                      <View
-                        style={[
-                          styles.badge,
-                          { backgroundColor: getPriorityColor(lead.priority) + '20' },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.badgeText,
-                            { color: getPriorityColor(lead.priority) },
-                          ]}
-                        >
-                          {lead.priority}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
+        </View>
+      ) : (
+        visibleLeads.map((lead) => {
+          const open = openId === lead._id;
+          return (
+            <Card key={lead._id} onPress={() => setOpenId(open ? null : lead._id)}>
+              <CardTitle
+                title={lead.school_name || 'Unnamed School'}
+                badge={lead.status || undefined}
+                tone={toneFor(lead.status)}
+              />
+              <InfoRow label="Priority" value={lead.priority ? <Badge label={lead.priority} tone={priorityTone(lead.priority)} /> : undefined} />
+              <InfoRow label="Contact" value={lead.contact_person || undefined} />
+              <InfoRow label="Mobile" value={lead.contact_mobile || undefined} phone />
+              <InfoRow label="Zone" value={lead.zone || undefined} />
+              <InfoRow label="Location" value={lead.location || undefined} />
+              <InfoRow label="Follow-up" value={lead.follow_up_date ? formatDate(lead.follow_up_date) : undefined} />
+              <View style={styles.footer}>
+                <Text style={styles.footerDate}>Created: {formatDate(lead.createdAt)}</Text>
+                <Text style={styles.footerToggle}>{open ? 'Hide details ⌃' : 'Details ⌄'}</Text>
               </View>
-
-              <View style={styles.leadCardBody}>
-                <View style={styles.leadInfoRow}>
-                  <Text style={styles.leadInfoLabel}>Contact:</Text>
-                  <Text style={styles.leadInfoValue}>
-                    {lead.contact_person || '-'}
-                  </Text>
-                </View>
-                <View style={styles.leadInfoRow}>
-                  <Text style={styles.leadInfoLabel}>Mobile:</Text>
-                  <Text style={styles.leadInfoValue}>
-                    {lead.contact_mobile || '-'}
-                  </Text>
-                </View>
-                <View style={styles.leadInfoRow}>
-                  <Text style={styles.leadInfoLabel}>Zone:</Text>
-                  <Text style={styles.leadInfoValue}>{lead.zone || '-'}</Text>
-                </View>
-                {lead.location && (
-                  <View style={styles.leadInfoRow}>
-                    <Text style={styles.leadInfoLabel}>Location:</Text>
-                    <Text style={styles.leadInfoValue}>{lead.location}</Text>
-                  </View>
-                )}
-                {lead.follow_up_date && (
-                  <View style={styles.leadInfoRow}>
-                    <Text style={styles.leadInfoLabel}>Follow-up:</Text>
-                    <Text style={styles.leadInfoValue}>
-                      {formatDate(lead.follow_up_date)}
-                    </Text>
-                  </View>
-                )}
-              </View>
-
-              <View style={styles.leadCardFooter}>
-                <Text style={styles.leadDate}>
-                  Created: {formatDate(lead.createdAt)}
-                </Text>
-                <Text style={styles.leadArrow}>{openId === lead._id ? '⌃' : '⌄'}</Text>
-              </View>
-              {openId === lead._id ? (
+              {open ? (
                 <SchoolOverview
                   leadId={lead._id}
                   onEdit={() => navigation.navigate(lead.status === 'Closed' ? 'LeadClose' : 'LeadEdit', { id: lead._id })}
                 />
               ) : null}
-            </TouchableOpacity>
-          ))
-        )}
-      </ScrollView>
+            </Card>
+          );
+        })
+      )}
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.background,
-  },
-  loadingText: {
-    marginTop: 12,
-    ...typography.body.medium,
-    color: colors.textSecondary,
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 50,
-    paddingBottom: 20,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  backIcon: {
-    fontSize: 24,
-    color: colors.textLight,
-    fontWeight: 'bold',
-  },
-  headerTitle: {
-    ...typography.heading.h1,
-    color: colors.textLight,
-    flex: 1,
-    textAlign: 'center',
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  addButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  addIcon: {
-    fontSize: 24,
-    color: colors.textLight,
-    fontWeight: 'bold',
-  },
-  logoutButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoutIcon: {
-    fontSize: 20,
-  },
-  filterContainer: {
-    backgroundColor: colors.backgroundLight,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
+  filterContainer: { marginBottom: 12 },
   filterTab: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 8,
-    marginHorizontal: 6,
-    borderRadius: 20,
-    backgroundColor: colors.background,
-  },
-  filterTabActive: {
-    backgroundColor: colors.primary,
-  },
-  filterTabText: {
-    ...typography.label.medium,
-    color: colors.textSecondary,
-  },
-  filterTabTextActive: {
-    color: colors.textLight,
-    fontWeight: '600',
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 60,
-  },
-  emptyIcon: {
-    fontSize: 64,
-    marginBottom: 16,
-  },
-  emptyText: {
-    ...typography.heading.h3,
-    color: colors.textSecondary,
-    marginBottom: 24,
-  },
-  emptyButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: colors.primary,
-  },
-  emptyButtonText: {
-    ...typography.label.medium,
-    color: colors.textLight,
-    fontWeight: '600',
-  },
-  leadCard: {
+    borderRadius: 999,
     backgroundColor: colors.backgroundLight,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: colors.shadowDark,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  leadCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  leadCardHeaderLeft: {
-    flex: 1,
-  },
-  leadSchoolName: {
-    ...typography.heading.h3,
-    color: colors.textPrimary,
-    marginBottom: 8,
-  },
-  leadBadges: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  badgeText: {
-    ...typography.label.small,
-    fontWeight: '600',
-  },
-  leadCardBody: {
-    marginBottom: 12,
-  },
-  leadInfoRow: {
-    flexDirection: 'row',
-    marginBottom: 6,
-  },
-  leadInfoLabel: {
-    ...typography.body.medium,
-    color: colors.textSecondary,
-    width: 80,
-  },
-  leadInfoValue: {
-    ...typography.body.medium,
-    color: colors.textPrimary,
-    flex: 1,
-  },
-  leadCardFooter: {
+  filterTabActive: { backgroundColor: colors.primaryDark, borderColor: colors.primaryDark },
+  filterTabText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
+  filterTabTextActive: { color: colors.textLight },
+  primaryBtn: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10, backgroundColor: colors.primaryDark },
+  primaryBtnText: { fontSize: 15, fontWeight: '700', color: colors.primaryForeground },
+  footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: '#EEF2F7',
   },
-  leadDate: {
-    ...typography.body.small,
-    color: colors.textSecondary,
-  },
-  leadArrow: {
-    fontSize: 20,
-    color: colors.primary,
-    fontWeight: 'bold',
-  },
+  footerDate: { fontSize: 13, color: colors.textTertiary },
+  footerToggle: { fontSize: 13, fontWeight: '600', color: colors.primaryDark },
 });
-

@@ -1,19 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  RefreshControl,
-  Alert,
-  TouchableOpacity,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, StyleSheet, Alert, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
-import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
+import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, EmptyState, SectionTitle } from '../../ui/Kit';
+import { StatGrid, matchesWords } from './ReportKit';
 import { apiService } from '../../services/api';
 import { downloadStockReport } from '../../utils/downloadStockReport';
 
@@ -107,10 +99,7 @@ export default function ReportsStockScreen() {
       const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter;
       const matchesSearch =
         !term ||
-        item.productName?.toLowerCase().includes(term) ||
-        item.productCode?.toLowerCase().includes(term) ||
-        item.category?.toLowerCase().includes(term) ||
-        item.location?.toLowerCase().includes(term);
+        matchesWords(term, [item.productName, item.productCode, item.category, item.level, item.location, item.status, item.unit]);
       return matchesStatus && matchesCategory && matchesSearch;
     });
   }, [items, statusFilter, categoryFilter, search]);
@@ -151,46 +140,23 @@ export default function ReportsStockScreen() {
         </TouchableOpacity>
       }
     >
-      <View style={styles.summaryRow}>
-        <View style={[styles.summaryCard, styles.summaryBlue]}>
-          <Text style={styles.summaryLabel}>Total Items</Text>
-          <Text style={styles.summaryValue}>{summary.total}</Text>
-        </View>
-        <View style={[styles.summaryCard, styles.summaryGreen]}>
-          <Text style={styles.summaryLabel}>In Stock</Text>
-          <Text style={[styles.summaryValue, { color: colors.success }]}>{summary.inStock}</Text>
-        </View>
-        <View style={[styles.summaryCard, styles.summaryYellow]}>
-          <Text style={styles.summaryLabel}>Low Stock</Text>
-          <Text style={[styles.summaryValue, { color: colors.warning }]}>{summary.lowStock}</Text>
-        </View>
-        <View style={[styles.summaryCard, styles.summaryRed]}>
-          <Text style={styles.summaryLabel}>Out of Stock</Text>
-          <Text style={[styles.summaryValue, { color: colors.error || '#ef4444' }]}>{summary.outStock}</Text>
-        </View>
-      </View>
-
-      <View style={styles.summaryRow}>
-        <View style={[styles.summaryCard, styles.summaryPurple]}>
-          <Text style={styles.summaryLabel}>Total Quantity</Text>
-          <Text style={[styles.summaryValue, { color: '#6D28D9' }]}>
-            {summary.totalQuantity.toLocaleString('en-IN')}
-          </Text>
-        </View>
-        <View style={[styles.summaryCard, styles.summaryIndigo]}>
-          <Text style={styles.summaryLabel}>Total Value</Text>
-          <Text style={[styles.summaryValue, { color: '#4338CA' }]}>
-            ₹{summary.totalValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-          </Text>
-        </View>
-      </View>
+      <StatGrid
+        items={[
+          { label: 'Total Items', value: summary.total, tone: 'blue' },
+          { label: 'In Stock', value: summary.inStock, tone: 'green' },
+          { label: 'Low Stock', value: summary.lowStock, tone: 'amber' },
+          { label: 'Out of Stock', value: summary.outStock, tone: 'red' },
+          { label: 'Total Quantity', value: summary.totalQuantity.toLocaleString('en-IN'), tone: 'purple' },
+          { label: 'Total Value', value: `₹${summary.totalValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`, tone: 'slate' },
+        ]}
+      />
 
       <PageSection title="Filters">
-        <WebInput placeholder="Search products..." value={search} onChangeText={setSearch} />
+        <WebInput placeholder="Search product, code, category, location…" value={search} onChangeText={setSearch} />
         <View style={styles.filterRow}>
           <View style={styles.filterField}>
-            <WebLabel>Status</WebLabel>
             <WebSelect
+              label="Status"
               value={statusFilter}
               onValueChange={setStatusFilter}
               items={[
@@ -203,8 +169,8 @@ export default function ReportsStockScreen() {
             />
           </View>
           <View style={styles.filterField}>
-            <WebLabel>Category</WebLabel>
             <WebSelect
+              label="Category"
               value={categoryFilter}
               onValueChange={setCategoryFilter}
               items={[
@@ -222,101 +188,36 @@ export default function ReportsStockScreen() {
         />
       </PageSection>
 
-      <PageSection title={`Stock Items (${filtered.length})`}>
-        {filtered.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>📦</Text>
-            <Text style={styles.emptyText}>No stock items found</Text>
-          </View>
-        ) : (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View>
-              <View style={styles.tableHeader}>
-                {['Product', 'Code', 'Category', 'Stock', 'Min', 'Max', 'Price', 'Value', 'Location', 'Status'].map(
-                  (col) => (
-                    <Text key={col} style={styles.tableHeaderCell}>
-                      {col}
-                    </Text>
-                  )
-                )}
-              </View>
-              {filtered.map((item) => (
-                <View key={item._id} style={styles.tableRow}>
-                  <Text style={styles.tableCell}>{item.productName || '-'}</Text>
-                  <Text style={styles.tableCell}>{item.productCode || '-'}</Text>
-                  <Text style={styles.tableCell}>{item.category || '-'}</Text>
-                  <Text style={styles.tableCell}>
-                    {(item.currentStock || 0).toLocaleString('en-IN')} {item.unit}
-                  </Text>
-                  <Text style={styles.tableCell}>{(item.minStock || 0).toLocaleString('en-IN')}</Text>
-                  <Text style={styles.tableCell}>
-                    {item.maxStock != null ? item.maxStock.toLocaleString('en-IN') : '-'}
-                  </Text>
-                  <Text style={styles.tableCell}>₹{(item.unitPrice || 0).toLocaleString('en-IN')}</Text>
-                  <Text style={styles.tableCell}>
-                    ₹{((item.currentStock || 0) * (item.unitPrice || 0)).toLocaleString('en-IN', {
-                      maximumFractionDigits: 0,
-                    })}
-                  </Text>
-                  <Text style={styles.tableCell}>{item.location || '-'}</Text>
-                  <Text style={styles.tableCell}>{item.status || '-'}</Text>
-                </View>
-              ))}
-            </View>
-          </ScrollView>
-        )}
-      </PageSection>
+      <SectionTitle>{`Stock items (${filtered.length})`}</SectionTitle>
+      {filtered.length === 0 ? (
+        <EmptyState icon="📦" title="No stock items found" />
+      ) : (
+        filtered.map((item) => (
+          <Card key={item._id}>
+            <CardTitle
+              title={item.productName || '-'}
+              subtitle={[item.productCode, item.category].filter(Boolean).join(' • ') || undefined}
+              badge={item.status || '-'}
+              tone={item.status === 'In Stock' ? 'success' : item.status === 'Low Stock' ? 'warning' : item.status === 'Out of Stock' ? 'error' : 'neutral'}
+            />
+            <InfoRow label="Stock" value={`${(item.currentStock || 0).toLocaleString('en-IN')} ${item.unit}`} bold />
+            <InfoRow label="Min / Max" value={`${(item.minStock || 0).toLocaleString('en-IN')} / ${item.maxStock != null ? item.maxStock.toLocaleString('en-IN') : '-'}`} />
+            <InfoRow label="Unit price" value={`₹${(item.unitPrice || 0).toLocaleString('en-IN')}`} />
+            <InfoRow
+              label="Value"
+              value={`₹${((item.currentStock || 0) * (item.unitPrice || 0)).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
+            />
+            <InfoRow label="Location" value={item.location} />
+          </Card>
+        ))
+      )}
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  summaryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 10 },
-  summaryCard: {
-    flex: 1,
-    minWidth: 140,
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  summaryBlue: { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' },
-  summaryGreen: { backgroundColor: '#ECFDF5', borderColor: '#BBF7D0' },
-  summaryYellow: { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' },
-  summaryRed: { backgroundColor: '#FEF2F2', borderColor: '#FECACA' },
-  summaryPurple: { backgroundColor: '#F5F3FF', borderColor: '#DDD6FE' },
-  summaryIndigo: { backgroundColor: '#EEF2FF', borderColor: '#C7D2FE' },
-  summaryLabel: { ...typography.label.medium, color: colors.textSecondary },
-  summaryValue: { ...typography.heading.h3, color: colors.textPrimary, marginTop: 4 },
-  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 12, marginBottom: 12 },
-  filterField: { flex: 1, minWidth: 160 },
-  emptyContainer: { alignItems: 'center', paddingVertical: 32 },
-  emptyIcon: { fontSize: 48, marginBottom: 8 },
-  emptyText: { ...typography.body.medium, color: colors.textSecondary },
-  tableHeader: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.border, paddingBottom: 8 },
-  tableHeaderCell: {
-    width: 110,
-    ...typography.label.small,
-    color: colors.textSecondary,
-    fontWeight: '700',
-    paddingRight: 8,
-  },
-  tableRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    paddingVertical: 10,
-  },
-  tableCell: { width: 110, ...typography.body.small, color: colors.textPrimary, paddingRight: 8 },
-  exportBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: colors.backgroundLight,
-  },
-  exportText: { ...typography.label.small, color: colors.primary, fontWeight: '600' },
+  exportBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  exportText: { color: colors.primary, fontWeight: '600', fontSize: 13 },
+  filterRow: { flexDirection: 'row', gap: 8 },
+  filterField: { flex: 1 },
 });

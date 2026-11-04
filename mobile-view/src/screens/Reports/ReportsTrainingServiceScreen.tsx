@@ -1,18 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  RefreshControl,
-  Alert,
-  TouchableOpacity,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
-import ScreenShell from '../../ui/ScreenShell';
-import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebButton, WebSelect } from '../../ui/WebPrimitives';
+import { StatGrid, rk } from './ReportKit';
 import { apiService } from '../../services/api';
 import { downloadTrainingServiceReport } from '../../utils/downloadTrainingServiceReport';
 
@@ -67,7 +59,8 @@ function StatusRow({
   fg: string;
 }) {
   return (
-    <View style={[styles.statusRow, { backgroundColor: bg }]}>
+    <View style={styles.statusRow}>
+      <View style={[styles.statusDot, { backgroundColor: fg }]} />
       <Text style={styles.statusLabel}>{label}</Text>
       <Text style={[styles.statusValue, { color: fg }]}>{value}</Text>
     </View>
@@ -181,66 +174,37 @@ export default function ReportsTrainingServiceScreen() {
         keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <WebButton
-          title={exporting ? 'Exporting…' : 'Export Report'}
-          onPress={handleExport}
-          loading={exporting}
-        />
-
-        <View style={styles.filterCard}>
-          <WebLabel>From Date</WebLabel>
+        <PageSection title="Filters">
           <DateField placeholder="From Date" value={fromDate} onChange={setFromDate} />
-          <WebLabel>To Date</WebLabel>
           <DateField placeholder="To Date" value={toDate} onChange={setToDate} />
-          <WebLabel>Zone</WebLabel>
           <WebSelect
+            label="Zone"
             placeholder="All Zones"
             value={zone}
             onValueChange={setZone}
             items={zones.map((z) => ({ label: z, value: z }))}
           />
-          <WebButton title="Apply Filters" onPress={loadStats} />
-        </View>
+          <View style={rk.btnRow}>
+            <View style={rk.col}>
+              <WebButton title="Apply Filters" onPress={loadStats} />
+            </View>
+            <View style={rk.col}>
+              <WebButton title={exporting ? 'Exporting…' : 'Export Report'} variant="outline" onPress={handleExport} loading={exporting} />
+            </View>
+          </View>
+        </PageSection>
 
-        <View style={styles.kpiCard}>
-          <View style={styles.kpiText}>
-            <Text style={styles.kpiLabel}>Total Trainings</Text>
-            <Text style={[styles.kpiValue, { color: '#2563EB' }]}>{trainingStats?.total || 0}</Text>
-          </View>
-          <Ionicons name="school-outline" size={28} color="#2563EB" />
-        </View>
-        <View style={styles.kpiCard}>
-          <View style={styles.kpiText}>
-            <Text style={styles.kpiLabel}>Completed Trainings</Text>
-            <Text style={[styles.kpiValue, { color: '#16A34A' }]}>
-              {trainingByStatus.Completed || 0}
-            </Text>
-          </View>
-          <Ionicons name="checkmark-circle-outline" size={28} color="#16A34A" />
-        </View>
-        <View style={styles.kpiCard}>
-          <View style={styles.kpiText}>
-            <Text style={styles.kpiLabel}>Total Services</Text>
-            <Text style={[styles.kpiValue, { color: '#9333EA' }]}>{serviceStats?.total || 0}</Text>
-          </View>
-          <Ionicons name="checkmark-done-outline" size={28} color="#9333EA" />
-        </View>
-        <View style={styles.kpiCard}>
-          <View style={styles.kpiText}>
-            <Text style={styles.kpiLabel}>Completed Services</Text>
-            <Text style={[styles.kpiValue, { color: '#16A34A' }]}>
-              {serviceByStatus.Completed || 0}
-            </Text>
-          </View>
-          <Ionicons name="checkmark-circle-outline" size={28} color="#16A34A" />
-        </View>
+        <StatGrid
+          items={[
+            { label: 'Total Trainings', value: trainingStats?.total || 0, tone: 'blue' },
+            { label: 'Completed Trainings', value: trainingByStatus.Completed || 0, tone: 'green' },
+            { label: 'Total Services', value: serviceStats?.total || 0, tone: 'purple' },
+            { label: 'Completed Services', value: serviceByStatus.Completed || 0, tone: 'green' },
+          ]}
+        />
 
         {trainingStats?.zoneStats?.length ? (
-          <View style={styles.sectionCard}>
-            <View style={styles.sectionTitleRow}>
-              <Ionicons name="trending-up-outline" size={18} color={colors.textPrimary} />
-              <Text style={styles.sectionTitle}>Zone-wise Training Analysis</Text>
-            </View>
+          <PageSection title="Zone-wise Training">
             <View style={styles.tableHeader}>
               <Text style={[styles.th, styles.thZone]}>Zone</Text>
               <Text style={styles.th}>Total</Text>
@@ -259,35 +223,26 @@ export default function ReportsTrainingServiceScreen() {
                 <Text style={styles.td}>{pct(z.completed, z.total)}%</Text>
               </View>
             ))}
-          </View>
+          </PageSection>
         ) : null}
 
         {trainingStats?.subjectStats?.length ? (
-          <View style={styles.sectionCard}>
-            <View style={styles.sectionTitleRow}>
-              <Ionicons name="bar-chart-outline" size={18} color={colors.textPrimary} />
-              <Text style={styles.sectionTitle}>Training by Subject</Text>
-            </View>
+          <PageSection title="Training by Subject">
             {trainingStats.subjectStats.map((subj) => (
               <SubjectRow key={subj._id} subject={subj} accent="#2563EB" />
             ))}
-          </View>
+          </PageSection>
         ) : null}
 
         {serviceStats?.subjectStats?.length ? (
-          <View style={styles.sectionCard}>
-            <View style={styles.sectionTitleRow}>
-              <Ionicons name="bar-chart-outline" size={18} color={colors.textPrimary} />
-              <Text style={styles.sectionTitle}>Service by Subject</Text>
-            </View>
+          <PageSection title="Service by Subject">
             {serviceStats.subjectStats.map((subj) => (
               <SubjectRow key={subj._id} subject={subj} accent="#9333EA" />
             ))}
-          </View>
+          </PageSection>
         ) : null}
 
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Training Status Breakdown</Text>
+        <PageSection title="Training Status">
           <StatusRow
             label="Completed"
             value={trainingByStatus.Completed || 0}
@@ -306,10 +261,9 @@ export default function ReportsTrainingServiceScreen() {
             bg="#FEF2F2"
             fg="#DC2626"
           />
-        </View>
+        </PageSection>
 
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Service Status Breakdown</Text>
+        <PageSection title="Service Status">
           <StatusRow
             label="Completed"
             value={serviceByStatus.Completed || 0}
@@ -328,7 +282,7 @@ export default function ReportsTrainingServiceScreen() {
             bg="#FEF2F2"
             fg="#DC2626"
           />
-        </View>
+        </PageSection>
       </ScrollView>
     </ScreenShell>
   );
@@ -336,96 +290,24 @@ export default function ReportsTrainingServiceScreen() {
 
 const styles = StyleSheet.create({
   content: { flex: 1 },
-  contentContainer: { padding: 16, paddingBottom: 32, gap: 12 },
+  contentContainer: { padding: 16, paddingBottom: 32 },
   headerExport: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   headerExportText: { color: colors.primary, fontWeight: '600', fontSize: 13 },
-  filterCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
-    gap: 6,
-  },
-  kpiCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  kpiText: { flex: 1, paddingRight: 8 },
-  kpiLabel: { ...typography.body.small, color: colors.textSecondary, marginBottom: 4 },
-  kpiValue: { fontSize: 28, fontWeight: '700' },
-  sectionCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
-    gap: 10,
-  },
-  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  sectionTitle: {
-    ...typography.heading.h3,
-    color: colors.textPrimary,
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    paddingBottom: 8,
-  },
-  tableRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    paddingVertical: 10,
-  },
-  th: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.textSecondary,
-    textAlign: 'right',
-  },
-  thZone: { flex: 1.4, textAlign: 'left' },
-  td: {
-    flex: 1,
-    fontSize: 13,
-    color: colors.textPrimary,
-    textAlign: 'right',
-  },
-  subjectCard: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    padding: 12,
-    gap: 6,
-  },
-  subjectTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  subjectName: { ...typography.body.medium, fontWeight: '600', color: colors.textPrimary, flex: 1 },
-  subjectTotal: { fontSize: 18, fontWeight: '700' },
-  subjectMeta: { flexDirection: 'row', justifyContent: 'space-between' },
-  subjectMetaText: { fontSize: 12, color: colors.textSecondary },
-  progressTrack: {
-    height: 8,
-    borderRadius: 999,
-    backgroundColor: '#E2E8F0',
-    overflow: 'hidden',
-    marginTop: 2,
-  },
-  progressFill: { height: 8, borderRadius: 999 },
-  statusRow: {
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  statusLabel: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+  tableHeader: { flexDirection: 'row', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
+  th: { flex: 1, fontSize: 13, fontWeight: '700', color: colors.textTertiary, textAlign: 'right' },
+  thZone: { flex: 2, textAlign: 'left' },
+  tableRow: { flexDirection: 'row', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
+  td: { flex: 1, fontSize: 14, color: colors.textPrimary, textAlign: 'right' },
+  subjectCard: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
+  subjectTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
+  subjectName: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+  subjectTotal: { fontSize: 16, fontWeight: '700' },
+  subjectMeta: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
+  subjectMetaText: { fontSize: 13, color: colors.textTertiary },
+  progressTrack: { height: 6, borderRadius: 999, backgroundColor: colors.backgroundMuted, overflow: 'hidden', marginTop: 6 },
+  progressFill: { height: '100%', borderRadius: 999 },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
+  statusDot: { width: 10, height: 10, borderRadius: 5 },
+  statusLabel: { flex: 1, fontSize: 14, color: colors.textPrimary },
   statusValue: { fontSize: 16, fontWeight: '700' },
 });

@@ -1,18 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  RefreshControl,
-  Alert,
-  TouchableOpacity,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
-import ScreenShell from '../../ui/ScreenShell';
-import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, EmptyState } from '../../ui/Kit';
+import { StatGrid, rk, matchesWords } from './ReportKit';
 import { apiService } from '../../services/api';
 import { downloadReturnsReport } from '../../utils/downloadReturnsReport';
 
@@ -60,21 +53,16 @@ function statusFromRemarks(remarks?: string) {
 
 function matchesSearch(row: ReturnRow, search: string) {
   if (!search) return true;
-  const q = search.toLowerCase();
-  return (
-    (row.lrNumber || '').toLowerCase().includes(q) ||
-    (row.createdBy?.name || '').toLowerCase().includes(q) ||
-    (row.remarks || '').toLowerCase().includes(q)
-  );
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.infoRow}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value}</Text>
-    </View>
-  );
+  return matchesWords(search, [
+    row.returnNumber,
+    row.lrNumber,
+    row.createdBy?.name,
+    row.remarks,
+    row.finYear,
+    row.leadId?.school_name,
+    statusFromRemarks(row.remarks).label,
+    formatDateIn(row.returnDate),
+  ]);
 }
 
 export default function ReportsReturnsScreen() {
@@ -206,53 +194,34 @@ export default function ReportsReturnsScreen() {
         keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <WebButton
-          title={exporting ? 'Exporting…' : 'Export to Excel'}
-          onPress={handleExport}
-          loading={exporting}
+        <StatGrid
+          items={[
+            { label: 'Total returns', value: totalReturnsCount, tone: 'green' },
+            { label: 'Pending manager review', value: pendingManagerReview, tone: 'amber' },
+            { label: 'Received at warehouse', value: receivedAtWarehouse, tone: 'blue' },
+          ]}
         />
 
-        <View style={[styles.kpiCard, styles.kpiGreen]}>
-          <View style={styles.kpiTextWrap}>
-            <Text style={[styles.kpiLabel, { color: '#047857' }]}>TOTAL RETURNS</Text>
-            <Text style={[styles.kpiValue, { color: '#047857' }]}>{totalReturnsCount} Logged</Text>
-          </View>
-          <Ionicons name="cube-outline" size={22} color="#047857" />
-        </View>
-        <View style={[styles.kpiCard, styles.kpiAmber]}>
-          <View style={styles.kpiTextWrap}>
-            <Text style={[styles.kpiLabel, { color: '#B45309' }]}>PENDING MANAGER REVIEW</Text>
-            <Text style={[styles.kpiValue, { color: '#B45309' }]}>{pendingManagerReview}</Text>
-          </View>
-          <Ionicons name="time-outline" size={22} color="#B45309" />
-        </View>
-        <View style={[styles.kpiCard, styles.kpiBlue]}>
-          <View style={styles.kpiTextWrap}>
-            <Text style={[styles.kpiLabel, { color: '#1D4ED8' }]}>RECEIVED AT WAREHOUSE</Text>
-            <Text style={[styles.kpiValue, { color: '#1D4ED8' }]}>{receivedAtWarehouse}</Text>
-          </View>
-          <Ionicons name="business-outline" size={22} color="#1D4ED8" />
-        </View>
-
-        <View style={styles.filterCard}>
-          <WebInput
-            value={searchTerm}
-            onChangeText={setSearchTerm}
-            placeholder="Search by LR No, Executive, or Remarks..."
-          />
-          <WebLabel>Fin Year</WebLabel>
+        <PageSection title="Filters">
+          <WebInput value={searchTerm} onChangeText={setSearchTerm} placeholder="Search return no, LR no, executive, remarks…" />
           <WebSelect
+            label="Fin Year"
             placeholder="All"
             value={finYear}
             onValueChange={setFinYear}
             items={finYears.map((year) => ({ label: year, value: year }))}
           />
-          <WebLabel>From Date</WebLabel>
           <DateField placeholder="From Date" value={fromDate} onChange={setFromDate} />
-          <WebLabel>To Date</WebLabel>
           <DateField placeholder="To Date" value={toDate} onChange={setToDate} />
-          <WebButton title="Search" onPress={onSearch} />
-        </View>
+          <View style={rk.btnRow}>
+            <View style={rk.col}>
+              <WebButton title="Search" onPress={onSearch} />
+            </View>
+            <View style={rk.col}>
+              <WebButton title={exporting ? 'Exporting…' : 'Export Excel'} variant="outline" onPress={handleExport} loading={exporting} />
+            </View>
+          </View>
+        </PageSection>
 
         <View style={styles.tabs}>
           <TouchableOpacity
@@ -274,41 +243,26 @@ export default function ReportsReturnsScreen() {
         </View>
 
         {activeRows.length === 0 ? (
-          <View style={styles.emptyBox}>
-            <Text style={styles.emptyText}>
-              {activeTab === 'executive' ? 'No executive returns' : 'No warehouse returns'}
-            </Text>
-          </View>
+          <EmptyState title={activeTab === 'executive' ? 'No executive returns' : 'No warehouse returns'} />
         ) : (
           activeRows.map((row) => {
             const status = statusFromRemarks(row.remarks);
             const remark = remarksText(row);
             return (
-              <View key={row._id} style={styles.card}>
-                <View style={styles.cardTop}>
-                  <Text style={styles.returnNo}>#{row.returnNumber}</Text>
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      {
-                        backgroundColor: status.bg,
-                        borderColor: status.border,
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.statusBadgeText, { color: status.fg }]}>{status.label}</Text>
-                  </View>
-                </View>
-                <InfoRow label="LR Number" value={row.lrNumber || '-'} />
-                <InfoRow
-                  label={activeTab === 'executive' ? 'Initiated By' : 'Manager'}
-                  value={row.createdBy?.name || '-'}
+              <Card key={row._id}>
+                <CardTitle
+                  title={`#${row.returnNumber}`}
+                  subtitle={row.leadId?.school_name || undefined}
+                  badge={status.label}
+                  tone={status.label === 'Approved' ? 'success' : status.label === 'Pending Approval' ? 'warning' : 'info'}
                 />
+                <InfoRow label="LR Number" value={row.lrNumber || '-'} />
+                <InfoRow label={activeTab === 'executive' ? 'Initiated By' : 'Manager'} value={row.createdBy?.name || '-'} />
                 <InfoRow label="Fin Year" value={row.finYear || '-'} />
                 <InfoRow label="Return Date" value={formatDateIn(row.returnDate)} />
                 {remark ? <InfoRow label="Remarks" value={remark} /> : null}
                 <InfoRow label="Created At" value={formatDateTimeIn(row.createdAt)} />
-              </View>
+              </Card>
             );
           })
         )}
@@ -319,108 +273,12 @@ export default function ReportsReturnsScreen() {
 
 const styles = StyleSheet.create({
   content: { flex: 1 },
-  contentContainer: { padding: 16, paddingBottom: 32, gap: 12 },
+  contentContainer: { padding: 16, paddingBottom: 32 },
   headerExport: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   headerExportText: { color: colors.primary, fontWeight: '600', fontSize: 13 },
-  kpiCard: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  kpiGreen: { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' },
-  kpiAmber: { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' },
-  kpiBlue: { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' },
-  kpiTextWrap: { flex: 1, paddingRight: 8 },
-  kpiLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.4 },
-  kpiValue: { fontSize: 22, fontWeight: '700', marginTop: 6 },
-  filterCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
-    gap: 8,
-  },
-  tabs: {
-    flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 12,
-    padding: 4,
-    gap: 4,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  tabActive: {
-    backgroundColor: '#FFFFFF',
-  },
-  tabText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#64748B',
-    textAlign: 'center',
-  },
-  tabTextActive: {
-    color: '#0F172A',
-    fontWeight: '700',
-  },
-  emptyBox: {
-    paddingVertical: 40,
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  emptyText: { ...typography.body.medium, color: colors.textSecondary },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
-  },
-  cardTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-    gap: 8,
-  },
-  returnNo: {
-    ...typography.heading.h3,
-    color: colors.textPrimary,
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  statusBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  infoRow: {
-    flexDirection: 'row',
-    marginBottom: 6,
-    gap: 8,
-  },
-  infoLabel: {
-    width: 110,
-    ...typography.body.small,
-    color: colors.textSecondary,
-  },
-  infoValue: {
-    flex: 1,
-    ...typography.body.medium,
-    color: colors.textPrimary,
-  },
+  tabs: { flexDirection: 'row', backgroundColor: colors.backgroundMuted, borderRadius: 12, padding: 4, gap: 4, marginBottom: 12 },
+  tab: { flex: 1, paddingVertical: 10, paddingHorizontal: 8, borderRadius: 10, alignItems: 'center' },
+  tabActive: { backgroundColor: '#FFFFFF' },
+  tabText: { fontSize: 13, fontWeight: '500', color: colors.textTertiary, textAlign: 'center' },
+  tabTextActive: { color: colors.textPrimary, fontWeight: '700' },
 });

@@ -4,8 +4,8 @@ import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
-import ScreenShell from '../../ui/ScreenShell';
-import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 
 import DateField from '../../ui/DateField';
@@ -260,6 +260,7 @@ export default function PaymentAddScreen({ navigation }: any) {
         )}
         {errorMessage && <MessageBanner type="error" message={errorMessage} onDismiss={() => setErrorMessage(null)} />}
 
+        <PageSection title="School">
         <WebSelect
           label="School (school code) *"
           value={school}
@@ -278,11 +279,13 @@ export default function PaymentAddScreen({ navigation }: any) {
             {selectedSchool.location ? <Text style={styles.schoolInfoText}>Location: {selectedSchool.location}</Text> : null}
           </View>
         ) : null}
+        </PageSection>
 
+        <PageSection title="Payment">
         <FormField label="Amount (₹) *" value={amount} onChangeText={setAmount} placeholder="Enter amount" keyboardType="decimal-pad" />
 
         <View style={styles.fieldContainer}>
-          <Text style={styles.label}>Payment Mode *</Text>
+          <WebLabel>Payment Mode *</WebLabel>
           <View style={styles.chipsWrap}>
             {PAYMENT_MODES.map((m) => (
               <TouchableOpacity
@@ -360,29 +363,32 @@ export default function PaymentAddScreen({ navigation }: any) {
 
         {mode === 'Other' && (
           <View style={styles.fieldContainer}>
-            <Text style={styles.label}>Payment Details *</Text>
+            <WebLabel>Payment Details *</WebLabel>
             <WebInput
               style={styles.textArea}
               value={details.otherDetails}
               onChangeText={(t) => setDetail('otherDetails', t)}
-              placeholder="Enter payment details (e.g., payment method, reference number, etc.)"
+              placeholder="Payment method, reference number, etc."
               multiline
               numberOfLines={3}
             />
           </View>
         )}
 
+        </PageSection>
+
+        <PageSection title="Remarks">
         <View style={styles.fieldContainer}>
-          <Text style={styles.label}>Remarks</Text>
           <WebInput
             style={styles.textArea}
             value={remarks}
             onChangeText={setRemarks}
-            placeholder="Enter any remarks or notes about this payment"
+            placeholder="Any remarks or notes about this payment"
             multiline
             numberOfLines={3}
           />
         </View>
+        </PageSection>
 
         <WebButton title={submitting ? 'Saving...' : 'Add Payment'} onPress={handleSubmit} loading={submitting} disabled={submitting || loadingSchools} />
       </ScrollView>
@@ -393,7 +399,7 @@ export default function PaymentAddScreen({ navigation }: any) {
 function FormField({ label, value, onChangeText, placeholder, keyboardType, maxLength, autoCapitalize }: any) {
   return (
     <View style={styles.fieldContainer}>
-      <Text style={styles.label}>{label}</Text>
+      <WebLabel>{label}</WebLabel>
       <WebInput
         value={value}
         onChangeText={onChangeText}
@@ -409,29 +415,26 @@ function FormField({ label, value, onChangeText, placeholder, keyboardType, maxL
 const styles = StyleSheet.create({
   content: { flex: 1 },
   contentContainer: { padding: 16, paddingBottom: 40 },
-  fieldContainer: { marginBottom: 4 },
+  fieldContainer: {},
   label: { ...typography.label.medium, color: colors.textPrimary, marginBottom: 6 },
-  chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 12 },
+  chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
   chip: {
     paddingHorizontal: 14,
     paddingVertical: 8,
-    marginRight: 8,
-    marginBottom: 8,
-    borderRadius: 20,
+    borderRadius: 999,
     backgroundColor: colors.backgroundLight,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#DCE3EC',
   },
-  chipSelected: { backgroundColor: colors.primary + '20', borderColor: colors.primary },
-  chipText: { ...typography.body.medium, color: colors.textPrimary },
-  chipTextSelected: { color: colors.primary, fontWeight: '600' },
+  chipSelected: { backgroundColor: colors.infoLight, borderColor: colors.primary },
+  chipText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
+  chipTextSelected: { color: colors.primaryDark },
   textArea: { minHeight: 80, textAlignVertical: 'top' },
   schoolInfo: {
     backgroundColor: colors.accent,
-    borderRadius: 8,
-    padding: 10,
+    borderRadius: 10,
+    padding: 12,
     marginTop: -4,
-    marginBottom: 12,
   },
   schoolInfoText: { fontSize: 13, color: colors.accentForeground, marginBottom: 2 },
 });

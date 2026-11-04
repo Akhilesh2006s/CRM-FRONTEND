@@ -10,8 +10,8 @@ import {
 } from 'react-native';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
-import ScreenShell from '../../ui/ScreenShell';
-import { WebInput, WebSelect } from '../../ui/WebPrimitives';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebSelect, WebButton, WebLabel } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 import {
   getCatalogProductNames,
@@ -204,18 +204,10 @@ export default function WarehouseInventoryItemEditScreen({ navigation, route }: 
 
   const productNames = getCatalogProductNames(products);
 
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading item...</Text>
-      </View>
-    );
-  }
 
   return (
     <ScreenShell title="Edit Item" loading={loading}>
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+      <PageSection title="Item Details">
         <WebSelect
           label="Product *"
           value={form.productName}
@@ -310,63 +302,22 @@ export default function WarehouseInventoryItemEditScreen({ navigation, route }: 
           keyboardType="decimal-pad"
         />
 
-        <TouchableOpacity
-          style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
-          onPress={handleSubmit}
-          disabled={submitting}
-        >
-          <View style={styles.submitButtonGradient}>
-            <Text style={styles.submitButtonText}>{submitting ? 'Saving…' : 'Save Changes'}</Text>
-          </View>
-        </TouchableOpacity>
-      </ScrollView>
+      </PageSection>
+      <WebButton title={submitting ? 'Saving…' : 'Save Changes'} onPress={handleSubmit} loading={submitting} disabled={submitting} />
     </ScreenShell>
   );
 }
 
-function FormField({ label, value, onChangeText, placeholder, keyboardType }: any) {
+function FormField({ label, value, onChangeText, placeholder, keyboardType }: { label: string; value: string; onChangeText: (v: string) => void; placeholder?: string; keyboardType?: any }) {
   return (
-    <View style={styles.fieldContainer}>
-      <Text style={styles.label}>{label}</Text>
-      <WebInput
-        style={styles.input}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        keyboardType={keyboardType}
-      />
+    <View>
+      <WebLabel>{label}</WebLabel>
+      <WebInput value={value} onChangeText={onChangeText} placeholder={placeholder} keyboardType={keyboardType} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.background,
-  },
-  loadingText: { marginTop: 12, ...typography.body.medium, color: colors.textSecondary },
-  content: { flex: 1 },
-  contentContainer: { padding: 20, paddingBottom: 40 },
-  fieldContainer: { marginBottom: 16 },
-  label: { ...typography.label.medium, color: colors.textPrimary, marginBottom: 8 },
-  input: {
-    ...typography.body.medium,
-    backgroundColor: colors.backgroundLight,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 14,
-    color: colors.textPrimary,
-  },
-  submitButton: {
-    marginTop: 24,
-    borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: colors.primary,
-  },
-  submitButtonDisabled: { opacity: 0.6 },
-  submitButtonGradient: { paddingVertical: 16, alignItems: 'center' },
-  submitButtonText: { ...typography.label.large, color: colors.textLight, fontWeight: '600' },
+  helper: { fontSize: 13, color: colors.textTertiary, marginBottom: 12 },
+  readOnlyInput: { backgroundColor: colors.backgroundMuted, color: colors.textSecondary },
 });

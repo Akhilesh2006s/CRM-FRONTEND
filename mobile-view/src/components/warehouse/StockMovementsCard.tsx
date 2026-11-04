@@ -7,6 +7,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { colors } from '../../theme/colors';
 import { apiService } from '../../services/api';
+import { ChipRow, EmptyState, kit } from '../../ui/Kit';
 
 type MovementType = 'In' | 'Out' | 'Return' | 'Adjustment';
 
@@ -69,25 +70,21 @@ export default function StockMovementsCard({ refreshKey = 0 }: { refreshKey?: nu
   }, [type, refreshKey]);
 
   return (
-    <View style={styles.card}>
+    <View style={[kit.card, styles.card]}>
       <Text style={styles.title}>Stock Movements</Text>
       <Text style={styles.hint}>
         Stock goes down automatically when the warehouse finalises a DC, and up when the Warehouse Manager accepts a sellable return.
       </Text>
-      <View style={styles.filters}>
-        {FILTERS.map((f) => {
-          const active = type === f.value;
-          return (
-            <TouchableOpacity key={f.label} style={[styles.filterBtn, active && styles.filterBtnActive]} onPress={() => setType(f.value)}>
-              <Text style={[styles.filterText, active && styles.filterTextActive]}>{f.label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+      <ChipRow
+        items={FILTERS.map((f) => ({ key: f.value, label: f.label }))}
+        value={type}
+        onChange={(k) => setType(k as '' | MovementType)}
+      />
+      <View style={{ height: 12 }} />
       {loading ? (
         <ActivityIndicator color={colors.primary} style={{ paddingVertical: 16 }} />
       ) : rows.length === 0 ? (
-        <Text style={styles.empty}>No stock movements yet.</Text>
+        <EmptyState icon="📦" title="No stock movements yet" />
       ) : (
         rows.map((m) => {
           const meta = TYPE_META[m.type] || TYPE_META.Adjustment;
@@ -126,33 +123,19 @@ export default function StockMovementsCard({ refreshKey = 0 }: { refreshKey?: nu
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    marginTop: 8,
-    marginBottom: 16,
-  },
-  title: { fontSize: 17, fontWeight: '600', color: colors.textPrimary },
-  hint: { fontSize: 12, color: colors.textSecondary, marginTop: 4, marginBottom: 10, lineHeight: 17 },
-  filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 },
-  filterBtn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: colors.border },
-  filterBtnActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  filterText: { fontSize: 12, color: colors.textPrimary, fontWeight: '500' },
-  filterTextActive: { color: colors.primaryForeground },
-  empty: { textAlign: 'center', color: colors.textSecondary, paddingVertical: 16, fontSize: 13 },
-  row: { borderTopWidth: 1, borderTopColor: colors.borderLight, paddingVertical: 10 },
-  rowTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  badge: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
-  badgeText: { fontSize: 11, fontWeight: '600' },
-  when: { fontSize: 11, color: colors.textTertiary },
+  card: { marginTop: 4 },
+  title: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
+  hint: { fontSize: 13, color: colors.textTertiary, marginTop: 4, lineHeight: 18 },
+  row: { borderTopWidth: 1, borderTopColor: colors.borderLight, paddingVertical: 12 },
+  rowTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  badge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
+  badgeText: { fontSize: 12, fontWeight: '700' },
+  when: { fontSize: 12, color: colors.textTertiary },
   rowMain: { flexDirection: 'row', alignItems: 'flex-start' },
-  product: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
-  detail: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+  product: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
+  detail: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
   qtyCol: { alignItems: 'flex-end', marginLeft: 8 },
   qty: { fontSize: 16, fontWeight: '700' },
-  stockNow: { fontSize: 11, color: colors.textTertiary },
-  meta: { fontSize: 12, color: colors.textSecondary, marginTop: 4 },
+  stockNow: { fontSize: 12, color: colors.textTertiary },
+  meta: { fontSize: 13, color: colors.textSecondary, marginTop: 4 },
 });

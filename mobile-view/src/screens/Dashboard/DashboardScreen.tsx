@@ -18,7 +18,6 @@ import StatCard from '../../components/dashboard/StatCard';
 import PremiumIcon from '../../components/ui/PremiumIcon';
 import { apiService } from '../../services/api';
 import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
 import { navigateRoot } from '../../navigation/navigationRef';
 import { getRoleFlags } from '../../utils/roles';
 import HierarchyDashboardScreen from '../Hierarchy/HierarchyDashboardScreen';
@@ -36,25 +35,56 @@ type DashboardStats = {
   completedServices: number;
 };
 
+type Quick = {
+  label: string;
+  sub: string;
+  screen: string;
+  ion: React.ComponentProps<typeof Ionicons>['name'];
+  color: string;
+  bg: string;
+};
 
-const ADMIN_QUICK = [
-  { label: 'Add Lead', screen: 'LeadAdd', ion: 'person-add-outline' as const, color: '#16A34A', bg: '#DCFCE7' },
-  { label: 'All Leads', screen: 'LeadsList', ion: 'list-outline' as const, color: '#2563EB', bg: '#DBEAFE' },
-  { label: 'Create Sale', screen: 'DCCreateSale', ion: 'add-circle-outline' as const, color: '#059669', bg: '#D1FAE5' },
-  { label: 'Reports', screen: 'ReportsLeads', ion: 'bar-chart-outline' as const, color: '#7C3AED', bg: '#EDE9FE' },
+const ADMIN_QUICK: Quick[] = [
+  { label: 'Add Lead', sub: 'Create a new lead', screen: 'LeadAdd', ion: 'person-add-outline', color: '#16A34A', bg: '#DCFCE7' },
+  { label: 'All Leads', sub: 'Browse every lead', screen: 'LeadsList', ion: 'list-outline', color: '#2563EB', bg: '#DBEAFE' },
+  { label: 'Create Sale', sub: 'Start a new sale', screen: 'DCCreateSale', ion: 'add-circle-outline', color: '#059669', bg: '#D1FAE5' },
+  { label: 'Reports', sub: 'Leads and sales reports', screen: 'ReportsLeads', ion: 'bar-chart-outline', color: '#7C3AED', bg: '#EDE9FE' },
 ];
 
 const SUPER_ADMIN_QUICK = ADMIN_QUICK.filter(
   (q) => q.screen !== 'LeadAdd' && q.screen !== 'LeadsList',
 );
 
-const EM_QUICK = [
-  { label: 'My Dashboard', screen: 'ExecutiveManagerDashboard', ion: 'home-outline' as const, color: '#2563EB', bg: '#DBEAFE' },
-  { label: 'Executives', screen: 'ExecutiveManagerExecutives', ion: 'people-outline' as const, color: '#059669', bg: '#D1FAE5' },
-  { label: 'PO Edit Request', screen: 'ClientsClosedSales', ion: 'document-text-outline' as const, color: '#7C3AED', bg: '#EDE9FE' },
-  { label: 'Pending Expenses', screen: 'ExpenseExecutiveManagerPending', ion: 'time-outline' as const, color: '#D97706', bg: '#FEF3C7' },
-  { label: 'Leave Management', screen: 'ExecutiveManagerLeaves', ion: 'calendar-outline' as const, color: '#0D9488', bg: '#CCFBF1' },
+const EM_QUICK: Quick[] = [
+  { label: 'My Dashboard', sub: 'Team overview', screen: 'ExecutiveManagerDashboard', ion: 'home-outline', color: '#2563EB', bg: '#DBEAFE' },
+  { label: 'Executives', sub: 'Your team members', screen: 'ExecutiveManagerExecutives', ion: 'people-outline', color: '#059669', bg: '#D1FAE5' },
+  { label: 'PO Edit Request', sub: 'Closed sales edits', screen: 'ClientsClosedSales', ion: 'document-text-outline', color: '#7C3AED', bg: '#EDE9FE' },
+  { label: 'Pending Expenses', sub: 'Awaiting your approval', screen: 'ExpenseExecutiveManagerPending', ion: 'time-outline', color: '#D97706', bg: '#FEF3C7' },
+  { label: 'Leave Management', sub: 'Team leave requests', screen: 'ExecutiveManagerLeaves', ion: 'calendar-outline', color: '#0D9488', bg: '#CCFBF1' },
 ];
+
+const LEAVE_QUICK: Quick[] = [
+  { label: 'Apply for Leave', sub: 'Submit a new request', screen: 'LeaveRequest', ion: 'paper-plane-outline', color: '#7C3AED', bg: '#EDE9FE' },
+  { label: 'My Leaves', sub: 'View leave history', screen: 'LeavesApproved', ion: 'calendar-outline', color: '#0D9488', bg: '#CCFBF1' },
+];
+
+/** One quick-link tile: icon, title and a one-line subtitle. Same size everywhere. */
+function QuickTile({ q, onPress }: { q: Quick; onPress: () => void }) {
+  return (
+    <TouchableOpacity style={styles.tile} onPress={onPress} activeOpacity={0.8}>
+      <View style={styles.tileTop}>
+        <PremiumIcon name={q.ion} color={q.color} bg={q.bg} size={20} />
+        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+      </View>
+      <Text style={styles.tileTitle} numberOfLines={1}>
+        {q.label}
+      </Text>
+      <Text style={styles.tileSub} numberOfLines={1}>
+        {q.sub}
+      </Text>
+    </TouchableOpacity>
+  );
+}
 
 export default function DashboardScreen({ navigation }: { navigation?: any }) {
   const { user } = useAuth();
@@ -163,20 +193,23 @@ export default function DashboardScreen({ navigation }: { navigation?: any }) {
     <View style={styles.container}>
       <View style={styles.header}>
         <Image source={require('../../../assets/logo-login.png')} style={styles.logo} resizeMode="contain" accessibilityLabel="Viswam" />
-        <View>
-          <Text style={styles.greeting}>Welcome back,</Text>
-          <Text style={styles.userName}>{user?.name?.split(' ')[0] || 'User'}</Text>
-          <View style={styles.roleBadge}>
-            <View style={styles.roleDot} />
-            <Text style={styles.roleText}>{user?.role || 'User'}</Text>
-            </View>
-          </View>
+        <View style={styles.headerText}>
+          <Text style={styles.greeting}>Welcome back</Text>
+          <Text style={styles.userName} numberOfLines={1}>
+            {user?.name?.split(' ')[0] || 'User'}
+          </Text>
+        </View>
+        <View style={styles.roleBadge}>
+          <Text style={styles.roleText} numberOfLines={1}>
+            {user?.role || 'User'}
+          </Text>
+        </View>
       </View>
 
       {loading ? (
         <View style={styles.loadingWrap}>
           <ActivityIndicator size="large" color={colors.primary} />
-            </View>
+        </View>
       ) : (
         <ScrollView
           contentContainerStyle={styles.scroll}
@@ -196,30 +229,22 @@ export default function DashboardScreen({ navigation }: { navigation?: any }) {
           {flags.isAdmin ? (
             <>
               <Text style={styles.sectionHeading}>Quick actions</Text>
-              <View style={styles.quickRow}>
+              <View style={styles.grid}>
                 {(flags.isSuperAdmin ? SUPER_ADMIN_QUICK : ADMIN_QUICK).map((q) => (
-        <TouchableOpacity
-                    key={q.screen}
-                    style={[styles.quickCard, { backgroundColor: q.bg }]}
-                    onPress={() => navigateRoot(q.screen)}
-                  >
-                    <PremiumIcon name={q.ion} color={q.color} bg="#FFFFFF" size={20} />
-                    <Text style={styles.quickLabel}>{q.label}</Text>
-                    <Ionicons name="chevron-forward" size={16} color={q.color} style={styles.quickChevron} />
-        </TouchableOpacity>
+                  <QuickTile key={q.screen} q={q} onPress={() => navigateRoot(q.screen)} />
                 ))}
-            </View>
+              </View>
             </>
           ) : null}
 
           {flags.isExecutiveManager ? (
             <>
               <Text style={styles.sectionHeading}>Quick actions</Text>
-              <View style={styles.quickRow}>
+              <View style={styles.grid}>
                 {EM_QUICK.map((q) => (
-        <TouchableOpacity
+                  <QuickTile
                     key={q.screen}
-                    style={[styles.quickCard, { backgroundColor: q.bg }]}
+                    q={q}
                     onPress={() =>
                       navigateRoot(
                         q.screen,
@@ -228,41 +253,25 @@ export default function DashboardScreen({ navigation }: { navigation?: any }) {
                           : undefined
                       )
                     }
-                  >
-                    <PremiumIcon name={q.ion} color={q.color} bg="#FFFFFF" size={20} />
-                    <Text style={styles.quickLabel}>{q.label}</Text>
-                    <Ionicons name="chevron-forward" size={16} color={q.color} style={styles.quickChevron} />
-        </TouchableOpacity>
+                  />
                 ))}
-            </View>
+              </View>
             </>
           ) : null}
 
           {showLeaveActions ? (
-            <View style={styles.leaveRow}>
-        <TouchableOpacity
-                style={[styles.leaveCard, { backgroundColor: '#EDE9FE' }]}
-                onPress={() => navigateRoot('LeaveRequest')}
-              >
-                <PremiumIcon name="paper-plane-outline" color="#7C3AED" bg="#FFFFFF" size={20} />
-                <Text style={styles.leaveTitle}>Apply for Leave</Text>
-                <Text style={styles.leaveSub}>Submit a new request</Text>
-                <Ionicons name="chevron-forward" size={18} color="#7C3AED" style={styles.cardChevron} />
-        </TouchableOpacity>
-        <TouchableOpacity
-                style={[styles.leaveCard, { backgroundColor: '#CCFBF1' }]}
-                onPress={() => navigateRoot('LeavesApproved')}
-              >
-                <PremiumIcon name="calendar-outline" color="#0D9488" bg="#FFFFFF" size={20} />
-                <Text style={styles.leaveTitle}>My Leaves</Text>
-                <Text style={styles.leaveSub}>View leave history</Text>
-                <Ionicons name="chevron-forward" size={18} color="#0D9488" style={styles.cardChevron} />
-        </TouchableOpacity>
-      </View>
+            <>
+              <Text style={styles.sectionHeading}>Leaves</Text>
+              <View style={styles.grid}>
+                {LEAVE_QUICK.map((q) => (
+                  <QuickTile key={q.screen} q={q} onPress={() => navigateRoot(q.screen)} />
+                ))}
+              </View>
+            </>
           ) : null}
 
           <Text style={styles.sectionHeading}>Overview</Text>
-          <View style={styles.statGrid}>
+          <View style={styles.grid}>
             {DASHBOARD_STAT_ICONS.map((c) => (
               <StatCard
                 key={c.key}
@@ -273,12 +282,12 @@ export default function DashboardScreen({ navigation }: { navigation?: any }) {
                 bg={c.bg}
               />
             ))}
-      </View>
+          </View>
 
           {flags.isExecutive && executiveAnalytics ? (
             <>
               <Text style={styles.sectionHeading}>My leads breakdown</Text>
-              <View style={styles.statGrid}>
+              <View style={styles.grid}>
                 <StatCard label="Hot Leads" value={hot} ion="flame-outline" color="#DC2626" bg="#FEE2E2" />
                 <StatCard label="Warm Leads" value={warm} ion="thermometer-outline" color="#D97706" bg="#FFFBEB" />
                 <StatCard label="Cold Leads" value={cold} ion="snow-outline" color="#0284C7" bg="#EFF6FF" />
@@ -296,118 +305,98 @@ export default function DashboardScreen({ navigation }: { navigation?: any }) {
                   color="#7C3AED"
                   bg="#EDE9FE"
                 />
-            </View>
+              </View>
             </>
           ) : null}
 
-          <TouchableOpacity 
-            style={styles.workCta}
-            onPress={() => navigation?.navigate?.('Menu')}
-          >
-            <View style={styles.workCtaRow}>
-              <PremiumIcon name="grid-outline" color="#FFFFFF" bg="rgba(255,255,255,0.2)" size={22} />
-              <View style={styles.workCtaText}>
-                <Text style={styles.workCtaTitle}>Open Menu</Text>
-                <Text style={styles.workCtaSub}>All modules (Leads, DC, Warehouse, Reports…)</Text>
+          <TouchableOpacity style={styles.workCta} onPress={() => navigation?.navigate?.('Menu')} activeOpacity={0.85}>
+            <PremiumIcon name="grid-outline" color="#FFFFFF" bg="rgba(255,255,255,0.2)" size={20} />
+            <View style={styles.workCtaText}>
+              <Text style={styles.workCtaTitle}>Open Menu</Text>
+              <Text style={styles.workCtaSub} numberOfLines={1}>
+                All modules: Leads, DC, Warehouse, Reports
+              </Text>
             </View>
-              <Ionicons name="chevron-forward" size={22} color="#FFFFFF" />
-        </View>
-        </TouchableOpacity>
-      </ScrollView>
+            <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
+          </TouchableOpacity>
+        </ScrollView>
       )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  logo: { width: 56, height: 56, marginRight: 12 },
+  logo: { width: 44, height: 44, marginRight: 12 },
   container: { flex: 1, backgroundColor: colors.background },
   header: {
-    paddingHorizontal: 20,
-    paddingTop: 56,
-    paddingBottom: 16,
+    paddingHorizontal: 16,
+    paddingTop: 52,
+    paddingBottom: 14,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.backgroundLight,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: '#EEF2F7',
   },
-  greeting: { ...typography.body.medium, color: colors.textSecondary },
-  userName: { ...typography.heading.h1, color: colors.textPrimary, marginTop: 4 },
+  headerText: { flex: 1 },
+  greeting: { fontSize: 13, color: colors.textTertiary },
+  userName: { fontSize: 17, fontWeight: '700', color: colors.textPrimary, marginTop: 2 },
   roleBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-    alignSelf: 'flex-start',
-    backgroundColor: colors.successLight,
+    marginLeft: 8,
+    maxWidth: 150,
+    backgroundColor: colors.accent,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 20,
+    borderRadius: 999,
   },
-  roleDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary, marginRight: 6 },
-  roleText: { fontSize: 12, fontWeight: '600', color: colors.primaryDark },
+  roleText: { fontSize: 12, fontWeight: '700', color: colors.primaryDark },
   loadingWrap: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scroll: { padding: 16, paddingBottom: 48 },
-  block: { marginBottom: 8 },
+  block: { marginBottom: 4 },
   wishWrap: { marginHorizontal: 16, marginTop: 12, marginBottom: 4 },
-  leaveRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-  quickRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
-  quickCard: {
-    width: '47%',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-    minHeight: 88,
-  },
-  quickLabel: { fontSize: 14, fontWeight: '700', color: colors.textPrimary, marginTop: 10 },
-  quickChevron: { position: 'absolute', top: 14, right: 12 },
-  leaveCard: {
-    flex: 1,
-    borderRadius: 16,
-    padding: 16,
-    paddingRight: 36,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-  },
-  cardChevron: { position: 'absolute', top: 16, right: 12 },
-  leaveTitle: { fontSize: 15, fontWeight: '700', color: colors.textPrimary, marginTop: 10, paddingRight: 4 },
-  leaveSub: { fontSize: 12, color: colors.textSecondary, marginTop: 4, paddingRight: 4, lineHeight: 16 },
-  sectionHeading: {
-    ...typography.heading.h3,
-    color: colors.textPrimary,
-    marginBottom: 12,
-    marginTop: 8,
-  },
-  statGrid: {
+  grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     marginBottom: 8,
   },
-  kpiRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
-  kpiCard: {
-    flex: 1,
+  tile: {
+    width: '48.5%',
+    minHeight: 104,
+    backgroundColor: colors.backgroundLight,
     borderRadius: 14,
-    padding: 14,
     borderWidth: 1,
+    borderColor: '#EEF2F7',
+    padding: 12,
+    marginBottom: 12,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 1,
   },
-  kpiBlue: { backgroundColor: '#DBEAFE', borderColor: '#93C5FD' },
-  kpiGreen: { backgroundColor: '#DCFCE7', borderColor: '#86EFAC' },
-  kpiRed: { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' },
-  kpiProfit: { backgroundColor: '#D1FAE5', borderColor: '#6EE7B7' },
-  kpiPink: { backgroundColor: '#FCE7F3', borderColor: '#F9A8D4' },
-  kpiLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', color: '#525252' },
-  kpiValue: { fontSize: 20, fontWeight: '800', color: colors.textPrimary, marginTop: 6 },
-  kpiSub: { fontSize: 11, color: colors.textSecondary, marginTop: 4 },
+  tileTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  tileTitle: { fontSize: 15, fontWeight: '700', color: colors.textPrimary, marginTop: 10 },
+  tileSub: { fontSize: 13, color: colors.textTertiary, marginTop: 2 },
+  sectionHeading: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+    marginTop: 8,
+  },
   workCta: {
-    marginTop: 16,
-    backgroundColor: colors.primary,
+    marginTop: 8,
+    backgroundColor: colors.primaryDark,
     borderRadius: 14,
     padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
-  workCtaRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   workCtaText: { flex: 1 },
-  workCtaTitle: { color: '#fff', fontSize: 17, fontWeight: '700' },
-  workCtaSub: { color: 'rgba(255,255,255,0.85)', fontSize: 13, marginTop: 4 },
+  workCtaTitle: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  workCtaSub: { color: 'rgba(255,255,255,0.85)', fontSize: 13, marginTop: 2 },
 });

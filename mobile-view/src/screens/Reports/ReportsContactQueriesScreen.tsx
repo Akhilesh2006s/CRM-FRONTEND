@@ -1,18 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  RefreshControl,
-  Alert,
-  ActivityIndicator,
-  Platform,
-} from 'react-native';
+import { View, Alert, ActivityIndicator, Platform } from 'react-native';
 import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
-import ScreenShell from '../../ui/ScreenShell';
-import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
+import { Card, CardTitle, Badge, InfoRow, EmptyState, SectionTitle, toneFor } from '../../ui/Kit';
+import { StatGrid, rk, matchesWords } from './ReportKit';
 import { apiService } from '../../services/api';
 import { exportContactQueriesReport } from '../../utils/exportContactQueriesReport';
 import { fetchContactEnquiries } from '../../utils/fetchContactEnquiries';
@@ -112,11 +104,20 @@ export default function ReportsContactQueriesScreen() {
     const search = schoolSearch.trim().toLowerCase();
 
     if (search) {
-      filtered = filtered.filter((q) => {
-        const name = q.school_name?.toLowerCase() || '';
-        const code = q.school_code?.toLowerCase() || '';
-        return name.includes(search) || code.includes(search);
-      });
+      filtered = filtered.filter((q) =>
+        matchesWords(search, [
+          q.school_name,
+          q.school_code,
+          q.zone,
+          q.town,
+          q.subject,
+          q.contact_mobile,
+          q.executive?.name,
+          extractContactName(q),
+          getDisplayStatus(q.status),
+          formatEnquiryDate(q.enquiry_date),
+        ])
+      );
     }
 
     if (zone) {
@@ -182,168 +183,64 @@ export default function ReportsContactQueriesScreen() {
       refreshing={refreshing}
       onRefresh={onRefresh}
     >
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      >
-        <WebButton
-          title={exporting ? 'Exporting…' : 'Export to Excel'}
-          onPress={handleExport}
-          loading={exporting}
+      <StatGrid
+        items={[
+          { label: 'Total Enquiries', value: summary.totalEnquiries, tone: 'blue' },
+          { label: 'Unique Schools', value: summary.uniqueSchools, tone: 'green' },
+          { label: 'New / Existing', value: summary.newExisting, tone: 'purple' },
+          { label: 'Active Zones', value: summary.activeZones, tone: 'amber' },
+        ]}
+      />
+
+      <PageSection title="Filters">
+        <WebInput placeholder="Search school, code, mobile, contact, subject…" value={schoolSearch} onChangeText={setSchoolSearch} />
+        <WebSelect
+          label="Zone"
+          value={zone}
+          onValueChange={setZone}
+          placeholder="All Zones"
+          items={[{ label: 'All Zones', value: '' }, ...zones.map((z) => ({ label: z, value: z }))]}
         />
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.kpiRow}>
-          <View style={styles.kpiCard}>
-            <Text style={styles.kpiLabel}>Total Enquiries</Text>
-            <Text style={styles.kpiValue}>{summary.totalEnquiries}</Text>
+        <DateField placeholder="Enquiry From" value={enquiryFrom} onChange={setEnquiryFrom} />
+        <DateField placeholder="Enquiry To" value={enquiryTo} onChange={setEnquiryTo} />
+        <View style={rk.btnRow}>
+          <View style={rk.col}>
+            <WebButton title="Search" onPress={applyFilters} />
           </View>
-          <View style={styles.kpiCard}>
-            <Text style={styles.kpiLabel}>Unique Schools</Text>
-            <Text style={styles.kpiValue}>{summary.uniqueSchools}</Text>
+          <View style={rk.col}>
+            <WebButton title={exporting ? 'Exporting…' : 'Export Excel'} variant="outline" onPress={handleExport} loading={exporting} />
           </View>
-          <View style={styles.kpiCard}>
-            <Text style={styles.kpiLabel}>New / Existing</Text>
-            <Text style={styles.kpiValue}>{summary.newExisting}</Text>
-          </View>
-          <View style={styles.kpiCard}>
-            <Text style={styles.kpiLabel}>Active Zones</Text>
-            <Text style={styles.kpiValue}>{summary.activeZones}</Text>
-          </View>
-        </ScrollView>
-
-        <View style={styles.filters}>
-          <WebInput
-            placeholder="Search by school name or code"
-            value={schoolSearch}
-            onChangeText={setSchoolSearch}
-          />
-          <WebSelect
-            label="Zone"
-            value={zone}
-            onValueChange={setZone}
-            placeholder="All Zones"
-            items={[{ label: 'All Zones', value: '' }, ...zones.map((z) => ({ label: z, value: z }))]}
-          />
-          <WebInput
-            placeholder="Contact Mobile"
-            value={contactMobile}
-            onChangeText={setContactMobile}
-            keyboardType="phone-pad"
-          />
-          <WebLabel>Enquiry From</WebLabel>
-          <DateField placeholder="Enquiry From" value={enquiryFrom} onChange={setEnquiryFrom} />
-          <WebLabel>Enquiry To</WebLabel>
-          <DateField placeholder="Enquiry To" value={enquiryTo} onChange={setEnquiryTo} />
-          <WebButton title="Search" onPress={applyFilters} />
         </View>
+      </PageSection>
 
-        <View style={styles.logHeader}>
-          <Text style={styles.logTitle}>Enquiry log</Text>
-          <Text style={styles.logCount}>{queries.length} enquiries found</Text>
-        </View>
+      <SectionTitle>{`Enquiry log (${queries.length})`}</SectionTitle>
 
-        {loading ? (
-          <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
-        ) : queries.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>❓</Text>
-            <Text style={styles.emptyText}>No enquiries found</Text>
-          </View>
-        ) : (
-          queries.map((query, index) => (
-            <View key={query._id} style={styles.card}>
-              <View style={styles.cardTop}>
-                <Text style={styles.indexText}>#{index + 1}</Text>
-                <Text style={styles.dateText}>{formatEnquiryDate(query.enquiry_date)}</Text>
+      {loading ? (
+        <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
+      ) : queries.length === 0 ? (
+        <EmptyState icon="❓" title="No enquiries found" />
+      ) : (
+        queries.map((query, index) => (
+          <Card key={query._id}>
+            <CardTitle
+              title={`${index + 1}. ${query.school_name || 'School'}`}
+              subtitle={[query.school_code, formatEnquiryDate(query.enquiry_date)].filter((x) => x && x !== '-').join(' • ')}
+              badge={getDisplayStatus(query.status)}
+              tone={toneFor(getDisplayStatus(query.status) === 'Closed' ? 'completed' : getDisplayStatus(query.status))}
+            />
+            {isNewSchool(query) ? (
+              <View style={{ flexDirection: 'row', marginBottom: 6 }}>
+                <Badge label="New school" tone="info" />
               </View>
-              <View style={styles.titleRow}>
-                <Text style={styles.schoolName}>{query.school_name || 'School'}</Text>
-                {isNewSchool(query) ? <Text style={styles.newBadge}>New</Text> : null}
-              </View>
-              <Text style={styles.schoolCode}>{query.school_code || '-'}</Text>
-              <Text style={styles.infoLine}>Executive: {query.executive?.name || '-'}</Text>
-              <Text style={styles.infoLine}>Zone: {query.zone || '-'}</Text>
-              <Text style={styles.infoLine}>Contact: {extractContactName(query)}</Text>
-              <Text style={styles.infoLine}>Mobile: {query.contact_mobile || '-'}</Text>
-              <Text style={styles.infoLine}>Subject: {query.subject || '-'}</Text>
-              <Text style={styles.statusBadge}>{getDisplayStatus(query.status)}</Text>
-            </View>
-          ))
-        )}
-      </ScrollView>
+            ) : null}
+            <InfoRow label="Executive" value={query.executive?.name} />
+            <InfoRow label="Zone" value={query.zone} />
+            <InfoRow label="Contact" value={extractContactName(query)} />
+            <InfoRow label="Mobile" value={query.contact_mobile} phone />
+            <InfoRow label="Subject" value={query.subject} />
+          </Card>
+        ))
+      )}
     </ScreenShell>
   );
 }
-
-const styles = StyleSheet.create({
-  scrollContent: { paddingBottom: 24 },
-  kpiRow: { paddingHorizontal: 16, gap: 10, marginTop: 12 },
-  kpiCard: {
-    width: 150,
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.backgroundLight,
-  },
-  kpiLabel: { ...typography.label.small, color: colors.textSecondary, textTransform: 'uppercase' },
-  kpiValue: { ...typography.heading.h3, color: colors.textPrimary, marginTop: 4 },
-  filters: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    padding: 16,
-    gap: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.backgroundLight,
-  },
-  logHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  logTitle: { ...typography.heading.h3, color: colors.textPrimary },
-  logCount: { ...typography.body.medium, color: colors.textSecondary },
-  emptyContainer: { alignItems: 'center', marginTop: 60, paddingHorizontal: 16 },
-  emptyIcon: { fontSize: 64, marginBottom: 12 },
-  emptyText: { ...typography.heading.h3, color: colors.textSecondary },
-  card: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    marginHorizontal: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  cardTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  indexText: { ...typography.label.medium, color: colors.textSecondary },
-  dateText: { ...typography.label.medium, color: colors.textSecondary },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  schoolName: { ...typography.heading.h3, color: colors.textPrimary, flex: 1 },
-  newBadge: {
-    ...typography.label.small,
-    color: '#1d4ed8',
-    backgroundColor: '#dbeafe',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  schoolCode: { ...typography.label.small, color: colors.textSecondary, marginTop: 2 },
-  infoLine: { ...typography.body.medium, color: colors.textSecondary, marginTop: 4 },
-  statusBadge: {
-    ...typography.label.small,
-    alignSelf: 'flex-start',
-    marginTop: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    backgroundColor: '#d1fae5',
-    color: '#047857',
-    overflow: 'hidden',
-  },
-});

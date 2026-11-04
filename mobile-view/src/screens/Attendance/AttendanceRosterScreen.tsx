@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking, Image, ActivityIndicator } from 'react-native';
-import { colors, radii } from '../../theme/colors';
+import { colors } from '../../theme/colors';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState } from '../../ui/Kit';
+import { WebLabel } from '../../ui/WebPrimitives';
 import ScreenShell from '../../ui/ScreenShell';
 import MessageBanner from '../../components/MessageBanner';
 import { attendanceReasonLabel } from '../../components/AttendanceCard';
@@ -102,7 +104,7 @@ export default function AttendanceRosterScreen() {
   return (
     <ScreenShell
       title="Team Attendance"
-      subtitle="Admin and HR see everyone; Product Managers their trainers; Zonal Managers their BDEs; Coordinators their zones."
+      subtitle="Who started and ended their day."
       loading={loading && !refreshing}
       refreshing={refreshing}
       onRefresh={() => {
@@ -110,54 +112,56 @@ export default function AttendanceRosterScreen() {
         load();
       }}
     >
-      <Text style={styles.dayLabel}>Day</Text>
-      <DateField value={day} onChange={(v) => setDay(v || todayIST())} maximumDate={new Date()} />
+      <Card>
+        <WebLabel>Day</WebLabel>
+        <DateField value={day} onChange={(v) => setDay(v || todayIST())} maximumDate={new Date()} />
+      </Card>
       {error ? <MessageBanner type="error" message={error} onDismiss={() => setError('')} /> : null}
-      {!error && rows.length === 0 ? <Text style={styles.empty}>No attendance records for this day.</Text> : null}
+      {!error && rows.length === 0 ? <EmptyState icon="🕒" title="No attendance" message="No records for this day." /> : null}
       {rows.map((row) => {
         const employee = typeof row.employeeId === 'object' && row.employeeId ? row.employeeId : null;
         const location = [row.town, row.pincode].filter(Boolean).join(' - ') || '—';
         const hasCoords = typeof row.latitude === 'number' && typeof row.longitude === 'number';
         return (
-          <View key={row._id} style={styles.card}>
-            <View style={styles.rowBetween}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.name}>{employee?.name || '—'}</Text>
-                <Text style={styles.meta}>
-                  {formatEmployeeCode(employee?.empCode)}
-                  {employee?.role ? ` · ${ROLE_LABELS[employee.role] || employee.role}` : ''}
-                  {employee?.zone ? ` · ${employee.zone}` : ''}
+          <Card key={row._id}>
+            <CardTitle
+              title={employee?.name || '—'}
+              subtitle={[
+                formatEmployeeCode(employee?.empCode),
+                employee?.role ? ROLE_LABELS[employee.role] || employee.role : '',
+                employee?.zone || '',
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+              badge={row.endTime ? 'Checked out' : 'Checked in'}
+              tone={row.endTime ? 'neutral' : 'success'}
+            />
+            <InfoRow label="Start" value={when(row.startTime)} />
+            <InfoRow label="End" value={when(row.endTime)} />
+            <InfoRow label="Location" value={location} />
+            <InfoRow label="Reason" value={attendanceReasonLabel(row.attendanceReason)} />
+            {selfies[row._id] === 'loading' ? <ActivityIndicator style={{ marginTop: 8 }} /> : null}
+            {selfies[row._id] === 'none' ? <Text style={styles.meta}>No photo saved for this check-in.</Text> : null}
+            {selfies[row._id] && !['loading', 'none'].includes(selfies[row._id]) ? (
+              <Image source={{ uri: selfies[row._id] }} style={styles.selfie} resizeMode="contain" />
+            ) : null}
+            <ActionRow>
+              <TouchableOpacity style={styles.action} onPress={() => toggleSelfie(row._id)}>
+                <Text style={styles.link}>
+                  {selfies[row._id] ? 'Hide selfie' : 'View selfie'}
+                  {row.source === 'login_selfie' ? ' (app selfie)' : ''}
                 </Text>
-              </View>
-              <Text style={row.endTime ? styles.statusOut : styles.statusIn}>{row.endTime ? 'Checked out' : 'Checked in'}</Text>
-            </View>
-            <Text style={styles.meta}>
-              In: {when(row.startTime)} · Out: {when(row.endTime)}
-            </Text>
-            <View style={styles.rowBetween}>
-              <Text style={styles.meta}>
-                {location} · {attendanceReasonLabel(row.attendanceReason)}
-              </Text>
+              </TouchableOpacity>
               {hasCoords ? (
                 <TouchableOpacity
+                  style={styles.action}
                   onPress={() => Linking.openURL(`https://www.google.com/maps?q=${row.latitude},${row.longitude}`).catch(() => {})}
                 >
                   <Text style={styles.link}>Map</Text>
                 </TouchableOpacity>
               ) : null}
-            </View>
-            <TouchableOpacity onPress={() => toggleSelfie(row._id)}>
-              <Text style={styles.link}>
-                {selfies[row._id] ? 'Hide selfie' : 'View selfie'}
-                {row.source === 'login_selfie' ? ' (app selfie)' : ''}
-              </Text>
-            </TouchableOpacity>
-            {selfies[row._id] === 'loading' ? <ActivityIndicator /> : null}
-            {selfies[row._id] === 'none' ? <Text style={styles.meta}>No photo saved for this check-in.</Text> : null}
-            {selfies[row._id] && !['loading', 'none'].includes(selfies[row._id]) ? (
-              <Image source={{ uri: selfies[row._id] }} style={styles.selfie} resizeMode="contain" />
-            ) : null}
-          </View>
+            </ActionRow>
+          </Card>
         );
       })}
     </ScreenShell>
@@ -165,22 +169,15 @@ export default function AttendanceRosterScreen() {
 }
 
 const styles = StyleSheet.create({
-  empty: { color: colors.textSecondary, textAlign: 'center', paddingVertical: 24 },
-  dayLabel: { fontSize: 12, fontWeight: '600', color: colors.textSecondary, marginBottom: 4 },
-  card: {
-    backgroundColor: colors.backgroundLight,
+  meta: { fontSize: 13, color: colors.textTertiary, marginTop: 8 },
+  selfie: { width: '100%', aspectRatio: 3 / 4, borderRadius: 12, backgroundColor: colors.border, marginTop: 8 },
+  action: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    padding: 12,
-    marginBottom: 8,
-    gap: 4,
+    borderColor: '#DCE3EC',
+    backgroundColor: colors.backgroundLight,
   },
-  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
-  name: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
-  meta: { fontSize: 12, color: colors.textSecondary, flexShrink: 1 },
-  statusIn: { fontSize: 12, fontWeight: '600', color: colors.success },
-  statusOut: { fontSize: 12, color: colors.textSecondary },
-  selfie: { width: '100%', aspectRatio: 3 / 4, borderRadius: radii.md, backgroundColor: colors.border },
-  link: { fontSize: 12, color: colors.primary, textDecorationLine: 'underline' },
+  link: { fontSize: 14, fontWeight: '600', color: colors.primaryDark },
 });

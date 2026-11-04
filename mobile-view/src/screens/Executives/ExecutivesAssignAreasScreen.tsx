@@ -11,11 +11,11 @@ import {
   Modal,
 } from 'react-native';
 import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
 import { useAuth } from '../../context/AuthContext';
+import { Card, CardTitle, InfoRow, ChipRow, ActionRow, EmptyState } from '../../ui/Kit';
 
 export default function ExecutivesAssignAreasScreen({ navigation }: any) {
   const { user } = useAuth();
@@ -77,10 +77,13 @@ export default function ExecutivesAssignAreasScreen({ navigation }: any) {
     }
   };
 
+  const searchWords = searchTerm.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const filteredEmployees = employees.filter((emp) => {
-    const matchesSearch = !searchTerm || 
-      emp.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.email?.toLowerCase().includes(searchTerm.toLowerCase());
+    const text = [emp.name, emp.email, emp.phone, emp.mobile, emp.role, emp.assignedCity, emp.assignedArea]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    const matchesSearch = searchWords.every((w) => text.includes(w));
     const matchesCity = !cityFilter || emp.assignedCity === cityFilter;
     return matchesSearch && matchesCity;
   });
@@ -101,61 +104,35 @@ export default function ExecutivesAssignAreasScreen({ navigation }: any) {
       title="Assign Areas"
       loading={loading}
     >
-<View style={styles.filtersContainer}>
-        <WebInput
-          style={styles.searchInput}
-          placeholder="Search employees..."
-          value={searchTerm}
-          onChangeText={setSearchTerm}
+      <WebInput
+        placeholder="Search name, email, phone, city, area…"
+        value={searchTerm}
+        onChangeText={setSearchTerm}
+      />
+      {cities.length > 0 ? (
+        <ChipRow
+          items={[{ key: '', label: 'All Cities' }, ...cities.map((c) => ({ key: String(c), label: String(c) }))]}
+          value={cityFilter}
+          onChange={setCityFilter}
         />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cityFilter}>
-          <TouchableOpacity
-            style={[styles.filterChip, !cityFilter && styles.filterChipActive]}
-            onPress={() => setCityFilter('')}
-          >
-            <Text style={[styles.filterChipText, !cityFilter && styles.filterChipTextActive]}>All Cities</Text>
-          </TouchableOpacity>
-          {cities.map((city) => (
-            <TouchableOpacity
-              key={city}
-              style={[styles.filterChip, cityFilter === city && styles.filterChipActive]}
-              onPress={() => setCityFilter(city)}
-            >
-              <Text style={[styles.filterChipText, cityFilter === city && styles.filterChipTextActive]}>{city}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
+      ) : null}
+      <View style={{ height: 12 }} />
 
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-        {filteredEmployees.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No employees found</Text>
-          </View>
-        ) : (
-          filteredEmployees.map((employee) => (
-            <TouchableOpacity
-              key={employee._id}
-              style={styles.employeeCard}
-              onPress={() => openAssignModal(employee)}
-            >
-              <View style={styles.employeeInfo}>
-                <Text style={styles.employeeName}>{employee.name}</Text>
-                <Text style={styles.employeeEmail}>{employee.email}</Text>
-                <View style={styles.employeeLocation}>
-                  <Text style={styles.locationLabel}>City: </Text>
-                  <Text style={styles.locationValue}>{employee.assignedCity || 'Not assigned'}</Text>
-                </View>
-                <View style={styles.employeeLocation}>
-                  <Text style={styles.locationLabel}>Area: </Text>
-                  <Text style={styles.locationValue}>{employee.assignedArea || 'Not assigned'}</Text>
-                </View>
-              </View>
-              <Text style={styles.assignButton}>Assign →</Text>
-            </TouchableOpacity>
-          ))
-        )}
-      </ScrollView>
+      {filteredEmployees.length === 0 ? (
+        <EmptyState icon="👥" title="No employees found" message={searchTerm || cityFilter ? 'Try a different search or city.' : undefined} />
+      ) : (
+        filteredEmployees.map((employee) => (
+          <Card key={employee._id}>
+            <CardTitle title={employee.name || '—'} subtitle={employee.email} badge={employee.role} tone="info" />
+            <InfoRow label="Phone" value={employee.phone || employee.mobile || ''} phone />
+            <InfoRow label="City" value={employee.assignedCity || 'Not assigned'} />
+            <InfoRow label="Area" value={employee.assignedArea || 'Not assigned'} />
+            <ActionRow>
+              <WebButton title={employee.assignedArea ? 'Change area' : 'Assign area'} variant="outline" onPress={() => openAssignModal(employee)} />
+            </ActionRow>
+          </Card>
+        ))
+      )}
 
       <Modal visible={showAssignModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
@@ -167,34 +144,19 @@ export default function ExecutivesAssignAreasScreen({ navigation }: any) {
               </TouchableOpacity>
             </View>
             <View style={styles.modalBody}>
-              <Text style={styles.modalLabel}>Employee: {selectedEmployee?.name}</Text>
-              <Text style={styles.modalLabel}>City: {selectedEmployee?.assignedCity}</Text>
-              <Text style={styles.modalLabel}>Area *</Text>
-              <WebInput
-                style={styles.input}
-                placeholder="Enter area name"
-                value={area}
-                onChangeText={setArea}
-              />
+              <InfoRow label="Employee" value={selectedEmployee?.name || ''} />
+              <InfoRow label="City" value={selectedEmployee?.assignedCity || ''} />
+              <View style={{ height: 12 }} />
+              <WebLabel>Area *</WebLabel>
+              <WebInput placeholder="Enter area name" value={area} onChangeText={setArea} />
             </View>
             <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonCancel]}
-                onPress={() => setShowAssignModal(false)}
-              >
-                <Text style={styles.modalButtonTextCancel}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonSubmit]}
-                onPress={handleAssignArea}
-                disabled={assigning || !area.trim()}
-              >
-                {assigning ? (
-                  <ActivityIndicator color={colors.textLight} />
-                ) : (
-                  <Text style={styles.modalButtonTextSubmit}>Assign</Text>
-                )}
-              </TouchableOpacity>
+              <View style={{ flex: 1 }}>
+                <WebButton title="Cancel" variant="outline" onPress={() => setShowAssignModal(false)} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <WebButton title="Assign" onPress={handleAssignArea} disabled={assigning || !area.trim()} loading={assigning} />
+              </View>
             </View>
           </View>
         </View>
@@ -204,50 +166,13 @@ export default function ExecutivesAssignAreasScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
-  loadingText: { marginTop: 12, ...typography.body.medium, color: colors.textSecondary },
-  header: { paddingHorizontal: 20, paddingTop: 50, paddingBottom: 20, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
-  headerContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  backButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  backIcon: { fontSize: 24, color: colors.textLight, fontWeight: 'bold' },
-  headerTitleContainer: { flex: 1, alignItems: 'center' },
-  headerTitle: { ...typography.heading.h1, color: colors.textLight, marginBottom: 4 },
-  headerSubtitle: { ...typography.body.small, color: colors.textLight + 'CC' },
-  placeholder: { width: 40 },
-  filtersContainer: { padding: 16, backgroundColor: colors.backgroundLight, borderBottomWidth: 1, borderBottomColor: colors.border },
-  searchInput: { backgroundColor: colors.background, borderRadius: 12, padding: 12, ...typography.body.medium, color: colors.textPrimary, borderWidth: 1, borderColor: colors.border, marginBottom: 12 },
-  cityFilter: { flexDirection: 'row' },
-  filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: colors.background, marginRight: 8, borderWidth: 1, borderColor: colors.border },
-  filterChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  filterChipText: { ...typography.body.small, color: colors.textPrimary },
-  filterChipTextActive: { color: colors.textLight },
-  content: { flex: 1 },
-  contentContainer: { padding: 16, paddingBottom: 32 },
-  emptyContainer: { padding: 20, alignItems: 'center' },
-  emptyText: { ...typography.body.medium, color: colors.textSecondary },
-  employeeCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.backgroundLight, borderRadius: 16, padding: 16, marginBottom: 12, shadowColor: colors.shadowDark, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 3 },
-  employeeInfo: { flex: 1 },
-  employeeName: { ...typography.heading.h4, color: colors.textPrimary, marginBottom: 4 },
-  employeeEmail: { ...typography.body.small, color: colors.textSecondary, marginBottom: 8 },
-  employeeLocation: { flexDirection: 'row', marginBottom: 4 },
-  locationLabel: { ...typography.body.small, color: colors.textSecondary },
-  locationValue: { ...typography.body.small, color: colors.textPrimary, fontWeight: '500' },
-  assignButton: { ...typography.body.medium, color: colors.primary, fontWeight: '600' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: colors.backgroundLight, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '90%' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: colors.border },
-  modalTitle: { ...typography.heading.h2, color: colors.textPrimary },
-  modalClose: { fontSize: 24, color: colors.textSecondary },
-  modalBody: { padding: 20 },
-  modalLabel: { ...typography.body.medium, color: colors.textPrimary, marginBottom: 8, fontWeight: '600' },
-  input: { backgroundColor: colors.background, borderRadius: 12, padding: 12, ...typography.body.medium, color: colors.textPrimary, borderWidth: 1, borderColor: colors.border, marginBottom: 16 },
-  modalFooter: { flexDirection: 'row', padding: 20, borderTopWidth: 1, borderTopColor: colors.border, gap: 12 },
-  modalButton: { flex: 1, padding: 16, borderRadius: 12, alignItems: 'center' },
-  modalButtonCancel: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },
-  modalButtonSubmit: { backgroundColor: colors.primary },
-  modalButtonTextCancel: { ...typography.body.medium, color: colors.textPrimary, fontWeight: '600' },
-  modalButtonTextSubmit: { ...typography.body.medium, color: colors.textLight, fontWeight: '600' },
+  loadingText: { marginTop: 12, fontSize: 14, color: colors.textSecondary },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(15,23,42,0.45)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: colors.backgroundLight, borderTopLeftRadius: 14, borderTopRightRadius: 14, maxHeight: '90%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
+  modalTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
+  modalClose: { fontSize: 20, color: colors.textSecondary },
+  modalBody: { padding: 16 },
+  modalFooter: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: colors.border, gap: 8 },
 });
-
-

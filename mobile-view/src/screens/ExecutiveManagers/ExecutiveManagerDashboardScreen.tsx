@@ -13,9 +13,9 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
-import ScreenShell from '../../ui/ScreenShell';
-import { WebInput, WebButton } from '../../ui/WebPrimitives';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebButton, WebLabel } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, ChipRow, ActionRow, EmptyState } from '../../ui/Kit';
 import StatCard from '../../components/dashboard/StatCard';
 import SimpleBarChart from '../../components/dashboard/SimpleBarChart';
 import GroupedBarChart from '../../components/dashboard/GroupedBarChart';
@@ -137,6 +137,7 @@ export default function ExecutiveManagerDashboardScreen({ navigation, route }: a
   const [zoneModalEmp, setZoneModalEmp] = useState<EmployeeDetail | null>(null);
   const [zoneInput, setZoneInput] = useState('');
   const [assigningZone, setAssigningZone] = useState(false);
+  const [empSearch, setEmpSearch] = useState('');
 
   const loadDashboard = useCallback(async () => {
     if (!managerId) {
@@ -215,6 +216,19 @@ export default function ExecutiveManagerDashboardScreen({ navigation, route }: a
         .sort((a, b) => b.totalActivity - a.totalActivity),
     [employees],
   );
+
+  /** Employee list search: every typed word must appear in a visible field. */
+  const shownEmployees = useMemo(() => {
+    const words = empSearch.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (!words.length) return byActivity;
+    return byActivity.filter((e) => {
+      const text = [e.name, e.email, e.phone, e.role, e.department, e.assignedCity, e.assignedArea]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return words.every((w) => text.includes(w));
+    });
+  }, [byActivity, empSearch]);
 
   const avgActivity = useMemo(() => {
     if (!employees.length) return 0;
@@ -392,59 +406,56 @@ export default function ExecutiveManagerDashboardScreen({ navigation, route }: a
           <Text style={styles.stateBadge}>State: {data.managerState}</Text>
         ) : null}
 
-        <View style={styles.filters}>
-          <View style={styles.filterCol}>
-            <Text style={styles.filterLabel}>From Date</Text>
-            <DateField placeholder="From Date" value={fromDate} onChange={setFromDate} />
+        <PageSection title="Date range">
+          <View style={styles.filters}>
+            <View style={styles.filterCol}>
+              <WebLabel>From</WebLabel>
+              <DateField placeholder="From Date" value={fromDate} onChange={setFromDate} />
+            </View>
+            <View style={styles.filterCol}>
+              <WebLabel>To</WebLabel>
+              <DateField placeholder="To Date" value={toDate} onChange={setToDate} />
+            </View>
           </View>
-          <View style={styles.filterCol}>
-            <Text style={styles.filterLabel}>To Date</Text>
-            <DateField placeholder="To Date" value={toDate} onChange={setToDate} />
+          <View style={styles.filterActions}>
+            <View style={{ flex: 1 }}>
+              <WebButton title="Apply" onPress={loadDashboard} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <WebButton
+                title="Clear Filters"
+                variant="outline"
+                onPress={async () => {
+                  setFromDate('');
+                  setToDate('');
+                  if (!managerId) return;
+                  try {
+                    setLoading(true);
+                    const res = await apiService.get<DashboardData>(
+                      `/executive-managers/${managerId}/dashboard`,
+                    );
+                    setData(res);
+                  } catch (error: any) {
+                    showAlert('Error', error.message || 'Failed to load dashboard data');
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+              />
+            </View>
           </View>
-        </View>
-        <View style={styles.filterActions}>
-          <WebButton title="Apply" onPress={loadDashboard} />
-          <WebButton
-            title="Clear Filters"
-            variant="outline"
-            onPress={async () => {
-              setFromDate('');
-              setToDate('');
-              if (!managerId) return;
-              try {
-                setLoading(true);
-                const res = await apiService.get<DashboardData>(
-                  `/executive-managers/${managerId}/dashboard`,
-                );
-                setData(res);
-              } catch (error: any) {
-                showAlert('Error', error.message || 'Failed to load dashboard data');
-              } finally {
-                setLoading(false);
-              }
-            }}
-          />
-        </View>
+        </PageSection>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsScroll}>
-          <View style={styles.tabs}>
-            {TABS.map((tab) => {
-              const active = activeTab === tab.key;
-              return (
-                <TouchableOpacity
-                  key={tab.key}
-                  style={[styles.tab, active && styles.tabActive]}
-                  onPress={() => setActiveTab(tab.key)}
-                >
-                  <Text style={[styles.tabText, active && styles.tabTextActive]}>{tab.label}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          <ChipRow
+            items={TABS.map((t) => ({ key: t.key, label: t.label }))}
+            value={activeTab}
+            onChange={(k) => setActiveTab(k as TabKey)}
+          />
         </ScrollView>
 
         {!data ? (
-          <Text style={styles.emptyHint}>No dashboard data</Text>
+          <EmptyState icon="📊" title="No dashboard data" message="Pull down to refresh or change the dates." />
         ) : (
           <>
             {(activeTab === 'dashboard' || activeTab === 'analytics') && (
@@ -565,20 +576,20 @@ export default function ExecutiveManagerDashboardScreen({ navigation, route }: a
                   <Text style={styles.sectionTitle}>Employee Activity Distribution</Text>
                   <Text style={styles.sectionSubtitle}>Workload and activity levels across team</Text>
                   <View style={styles.activityRow}>
-                    <View style={[styles.activityCard, { backgroundColor: '#DBEAFE', borderColor: '#93C5FD' }]}>
-                      <Text style={[styles.activityLabel, { color: '#1E3A8A' }]}>Highly Active</Text>
+                    <View style={styles.activityCard}>
+                      <Text style={styles.activityLabel}>Highly Active</Text>
                       <Text style={[styles.activityValue, { color: '#1D4ED8' }]}>{highlyActive}</Text>
                       <Text style={styles.activitySub}>Above {highThreshold} leads</Text>
                     </View>
-                    <View style={[styles.activityCard, { backgroundColor: '#D1FAE5', borderColor: '#6EE7B7' }]}>
-                      <Text style={[styles.activityLabel, { color: '#064E3B' }]}>Moderately Active</Text>
+                    <View style={styles.activityCard}>
+                      <Text style={styles.activityLabel}>Moderately Active</Text>
                       <Text style={[styles.activityValue, { color: '#047857' }]}>{moderatelyActive}</Text>
                       <Text style={styles.activitySub}>
                         Between {midLow}-{highThreshold} leads
                       </Text>
                     </View>
-                    <View style={[styles.activityCard, { backgroundColor: '#FFEDD5', borderColor: '#FDBA74' }]}>
-                      <Text style={[styles.activityLabel, { color: '#7C2D12' }]}>Needs Attention</Text>
+                    <View style={styles.activityCard}>
+                      <Text style={styles.activityLabel}>Needs Attention</Text>
                       <Text style={[styles.activityValue, { color: '#C2410C' }]}>{needsAttention}</Text>
                       <Text style={styles.activitySub}>Below {midLow} leads</Text>
                     </View>
@@ -828,23 +839,23 @@ export default function ExecutiveManagerDashboardScreen({ navigation, route }: a
                 <View style={styles.sectionCard}>
                   <Text style={styles.sectionTitle}>Executive Activity Insights</Text>
                   <View style={styles.activityRow}>
-                    <View style={[styles.activityCard, { backgroundColor: '#DBEAFE', borderColor: '#93C5FD' }]}>
-                      <Text style={[styles.activityLabel, { color: '#1E3A8A' }]}>High Performers</Text>
+                    <View style={styles.activityCard}>
+                      <Text style={styles.activityLabel}>High Performers</Text>
                       <Text style={[styles.activityValue, { color: '#1D4ED8' }]}>{highPerformers}</Text>
                       <Text style={styles.activitySub}>above average activity</Text>
                     </View>
-                    <View style={[styles.activityCard, { backgroundColor: '#D1FAE5', borderColor: '#6EE7B7' }]}>
-                      <Text style={[styles.activityLabel, { color: '#064E3B' }]}>Active Executives</Text>
+                    <View style={styles.activityCard}>
+                      <Text style={styles.activityLabel}>Active Executives</Text>
                       <Text style={[styles.activityValue, { color: '#047857' }]}>{activeExecutives}</Text>
                       <Text style={styles.activitySub}>with at least one activity</Text>
                     </View>
-                    <View style={[styles.activityCard, { backgroundColor: '#FFEDD5', borderColor: '#FDBA74' }]}>
-                      <Text style={[styles.activityLabel, { color: '#7C2D12' }]}>Needs Support</Text>
+                    <View style={styles.activityCard}>
+                      <Text style={styles.activityLabel}>Needs Support</Text>
                       <Text style={[styles.activityValue, { color: '#C2410C' }]}>{needsSupport}</Text>
                       <Text style={styles.activitySub}>no activities recorded</Text>
                     </View>
-                    <View style={[styles.activityCard, { backgroundColor: '#EDE9FE', borderColor: '#C4B5FD' }]}>
-                      <Text style={[styles.activityLabel, { color: '#5B21B6' }]}>Avg Activity/Executive</Text>
+                    <View style={styles.activityCard}>
+                      <Text style={styles.activityLabel}>Avg Activity/Executive</Text>
                       <Text style={[styles.activityValue, { color: '#7C3AED' }]}>{avgActivity}</Text>
                       <Text style={styles.activitySub}>total activities per executive</Text>
                     </View>
@@ -911,61 +922,39 @@ export default function ExecutiveManagerDashboardScreen({ navigation, route }: a
                   />
                 </View>
 
-                <View style={styles.sectionCard}>
-                  <Text style={styles.sectionTitle}>Employee Performance Details</Text>
-                  <Text style={styles.sectionSubtitle}>
-                    Name, email, zone, area, leads, DCs, sales, leaves, activity
-                  </Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator>
-                    <View>
-                      <View style={styles.tableHead}>
-                        {['Name', 'Email', 'Zone', 'Area', 'Leads', 'DCs', 'Sales', 'Leaves', 'Activity', 'Actions'].map(
-                          (h) => (
-                            <Text key={h} style={[styles.th, h === 'Email' || h === 'Name' ? styles.thWide : null]}>
-                              {h}
-                            </Text>
-                          ),
-                        )}
-                      </View>
-                      {byActivity.map((emp) => (
-                        <View key={emp._id} style={styles.tableRow}>
-                          <Text style={styles.tdName} numberOfLines={1}>
-                            {emp.name}
-                          </Text>
-                          <Text style={styles.tdWide} numberOfLines={1}>
-                            {emp.email || '-'}
-                          </Text>
-                          <Text style={styles.td} numberOfLines={1}>
-                            {emp.assignedCity || '-'}
-                          </Text>
-                          <Text style={styles.td} numberOfLines={1}>
-                            {emp.assignedArea || '-'}
-                          </Text>
-                          <Text style={styles.td}>{emp.totalLeads}</Text>
-                          <Text style={styles.td}>{emp.totalDCs}</Text>
-                          <Text style={styles.td}>{emp.totalSales}</Text>
-                          <Text style={styles.td}>{emp.totalLeaves || 0}</Text>
-                          <Text style={styles.tdBold}>{emp.totalActivity}</Text>
-                          <View style={styles.tdAction}>
-                            {canManageTeam ? (
-                              <TouchableOpacity
-                                style={styles.assignZoneBtn}
-                                onPress={() => {
-                                  setZoneModalEmp(emp);
-                                  setZoneInput(emp.assignedCity || '');
-                                }}
-                              >
-                                <Text style={styles.assignZoneBtnText}>Assign Zone</Text>
-                              </TouchableOpacity>
-                            ) : (
-                              <Text style={styles.td}>-</Text>
-                            )}
-                          </View>
-                        </View>
-                      ))}
-                    </View>
-                  </ScrollView>
-                </View>
+                <Text style={styles.listTitle}>Employee Performance Details</Text>
+                <WebInput
+                  value={empSearch}
+                  onChangeText={setEmpSearch}
+                  placeholder="Search name, email, zone, area…"
+                />
+                {shownEmployees.length === 0 ? (
+                  <EmptyState icon="👥" title={byActivity.length ? 'No matching employees' : 'No employees'} />
+                ) : (
+                  shownEmployees.map((emp) => (
+                    <Card key={emp._id}>
+                      <CardTitle title={emp.name} subtitle={emp.email || undefined} badge={`${emp.totalActivity} activity`} tone="info" />
+                      <InfoRow label="Zone" value={emp.assignedCity || ''} />
+                      <InfoRow label="Area" value={emp.assignedArea || ''} />
+                      <InfoRow label="Leads" value={String(emp.totalLeads)} />
+                      <InfoRow label="DCs" value={String(emp.totalDCs)} />
+                      <InfoRow label="Sales" value={String(emp.totalSales)} />
+                      <InfoRow label="Leaves" value={String(emp.totalLeaves || 0)} />
+                      {canManageTeam ? (
+                        <ActionRow>
+                          <WebButton
+                            title="Assign Zone"
+                            variant="outline"
+                            onPress={() => {
+                              setZoneModalEmp(emp);
+                              setZoneInput(emp.assignedCity || '');
+                            }}
+                          />
+                        </ActionRow>
+                      ) : null}
+                    </Card>
+                  ))
+                )}
               </>
             )}
 
@@ -1018,7 +1007,7 @@ export default function ExecutiveManagerDashboardScreen({ navigation, route }: a
             <Text style={styles.sectionSubtitle}>
               Assign or update the zone (city) for this employee.
             </Text>
-            <Text style={styles.filterLabel}>Zone (City) *</Text>
+            <WebLabel>Zone (City) *</WebLabel>
             <WebInput
               value={zoneInput}
               onChangeText={setZoneInput}
@@ -1026,27 +1015,20 @@ export default function ExecutiveManagerDashboardScreen({ navigation, route }: a
               autoCapitalize="words"
             />
             <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.headerBtn}
-                onPress={() => {
-                  setZoneModalEmp(null);
-                  setZoneInput('');
-                }}
-                disabled={assigningZone}
-              >
-                <Text style={styles.headerBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.headerBtnPrimary, assigningZone && { opacity: 0.7 }]}
-                onPress={assignZone}
-                disabled={assigningZone}
-              >
-                {assigningZone ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.headerBtnPrimaryText}>Assign Zone</Text>
-                )}
-              </TouchableOpacity>
+              <View style={{ flex: 1 }}>
+                <WebButton
+                  title="Cancel"
+                  variant="outline"
+                  disabled={assigningZone}
+                  onPress={() => {
+                    setZoneModalEmp(null);
+                    setZoneInput('');
+                  }}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <WebButton title="Assign Zone" onPress={assignZone} disabled={assigningZone} loading={assigningZone} />
+              </View>
             </View>
           </View>
         </View>
@@ -1098,12 +1080,13 @@ function SummaryRow({
   color: string;
 }) {
   return (
-    <View style={[styles.summaryRow, { backgroundColor: bg }]}>
+    <View style={styles.summaryRow}>
+      <View style={[styles.summaryDot, { backgroundColor: color }]} />
       <View style={{ flex: 1, paddingRight: 8 }}>
-        <Text style={[styles.summaryLabel, { color }]}>{label}</Text>
-        {sub ? <Text style={[styles.summarySub, { color }]}>{sub}</Text> : null}
+        <Text style={styles.summaryLabel}>{label}</Text>
+        {sub ? <Text style={styles.summarySub}>{sub}</Text> : null}
       </View>
-      <Text style={[styles.summaryValue, { color }]}>{value}</Text>
+      <Text style={styles.summaryValue}>{value}</Text>
     </View>
   );
 }
@@ -1112,7 +1095,8 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { padding: 16, paddingBottom: 40 },
   stateBadge: {
-    ...typography.label.small,
+    fontSize: 13,
+    fontWeight: '700',
     color: '#1D4ED8',
     backgroundColor: '#DBEAFE',
     alignSelf: 'flex-start',
@@ -1126,57 +1110,51 @@ const styles = StyleSheet.create({
   headerBtn: {
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
+    borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    backgroundColor: '#fff',
+    backgroundColor: colors.backgroundLight,
   },
-  headerBtnText: { ...typography.label.small, color: colors.textPrimary, fontWeight: '600' },
+  headerBtnText: { fontSize: 13, color: colors.textPrimary, fontWeight: '600' },
   headerBtnPrimary: {
-    backgroundColor: colors.primary,
-    borderRadius: 8,
+    backgroundColor: colors.primaryDark,
+    borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  headerBtnPrimaryText: { ...typography.label.small, color: '#fff', fontWeight: '600' },
-  filters: { flexDirection: 'row', gap: 10 },
+  headerBtnPrimaryText: { fontSize: 13, color: colors.primaryForeground, fontWeight: '700' },
+  filters: { flexDirection: 'row', gap: 8, marginBottom: 8 },
   filterCol: { flex: 1 },
-  filterLabel: { ...typography.label.small, color: colors.textSecondary, marginBottom: 4 },
-  filterActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-  tabsScroll: { marginBottom: 12 },
-  tabs: { flexDirection: 'row', gap: 8 },
-  tab: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: colors.backgroundMuted,
-  },
-  tabActive: { backgroundColor: '#fff', borderWidth: 1, borderColor: colors.border },
-  tabText: { ...typography.label.small, color: colors.textSecondary },
-  tabTextActive: { color: colors.textPrimary, fontWeight: '700' },
-  statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
+  filterActions: { flexDirection: 'row', gap: 8 },
+  tabsScroll: { marginTop: -12, marginBottom: 12 },
+  statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
   sectionCard: {
     backgroundColor: colors.backgroundLight,
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#EEF2F7',
     padding: 16,
     marginBottom: 12,
   },
-  sectionTitle: { ...typography.heading.h3, color: colors.textPrimary },
-  sectionSubtitle: { ...typography.body.small, color: colors.textSecondary, marginBottom: 12, marginTop: 2 },
-  activityRow: { gap: 8 },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
+  sectionSubtitle: { fontSize: 13, color: colors.textTertiary, marginBottom: 12, marginTop: 2 },
+  listTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, marginTop: 4, marginBottom: 8 },
+  activityRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   activityCard: {
+    flexGrow: 1,
+    flexBasis: '46%',
     borderWidth: 1,
+    borderColor: '#EEF2F7',
+    backgroundColor: colors.background,
     borderRadius: 12,
     padding: 12,
   },
-  activityLabel: { ...typography.label.small, fontWeight: '700', marginBottom: 4 },
+  activityLabel: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginTop: 2 },
   activityValue: { fontSize: 24, fontWeight: '800' },
-  activitySub: { ...typography.body.small, color: colors.textSecondary, marginTop: 2 },
+  activitySub: { fontSize: 13, color: colors.textTertiary, marginTop: 2 },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   statusDot: { width: 10, height: 10, borderRadius: 5 },
-  statusLabel: { width: 72, ...typography.body.small, color: colors.textPrimary },
+  statusLabel: { width: 80, fontSize: 13, color: colors.textPrimary },
   statusTrack: {
     flex: 1,
     height: 8,
@@ -1185,55 +1163,35 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   statusFill: { height: '100%', borderRadius: 4 },
-  statusCount: { width: 72, textAlign: 'right', ...typography.label.small, color: colors.textSecondary },
-  emptyHint: { ...typography.body.medium, color: colors.textSecondary, textAlign: 'center', paddingVertical: 24 },
+  statusCount: { width: 72, textAlign: 'right', fontSize: 13, color: colors.textSecondary },
+  emptyHint: { fontSize: 14, color: colors.textTertiary, textAlign: 'center', paddingVertical: 24 },
   aiHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  aiLine: { ...typography.body.medium, color: colors.textPrimary, marginBottom: 8, lineHeight: 20 },
-  empRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
-  },
-  empName: { ...typography.label.medium, color: colors.textPrimary, fontWeight: '600' },
-  empMeta: { ...typography.body.small, color: colors.textSecondary, marginTop: 2 },
-  empStats: { ...typography.label.small, color: colors.textSecondary },
+  aiLine: { fontSize: 14, color: colors.textPrimary, marginBottom: 8, lineHeight: 20 },
+  empName: { fontSize: 15, color: colors.textPrimary, fontWeight: '600' },
+  empMeta: { fontSize: 13, color: colors.textTertiary, marginTop: 2 },
   metricHead: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  metricLabel: { ...typography.body.small, color: colors.textSecondary },
-  metricValue: { ...typography.label.medium, color: colors.textPrimary, fontWeight: '700' },
+  metricLabel: { fontSize: 13, color: colors.textSecondary },
+  metricValue: { fontSize: 15, color: colors.textPrimary, fontWeight: '700' },
   metricTrack: {
-    height: 10,
+    height: 8,
     backgroundColor: colors.backgroundMuted,
     borderRadius: 999,
     overflow: 'hidden',
   },
   metricFill: { height: '100%', borderRadius: 999 },
-  conversionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 4,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
-  },
-  conversionLabel: { ...typography.label.medium, color: colors.textPrimary, fontWeight: '600' },
-  conversionValue: { fontSize: 22, fontWeight: '800', color: '#047857' },
   summaryRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    marginBottom: 8,
+    gap: 10,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
   },
-  summaryLabel: { ...typography.label.medium, fontWeight: '600' },
-  summarySub: { ...typography.body.small, marginTop: 2, opacity: 0.85 },
-  summaryValue: { fontSize: 22, fontWeight: '800' },
-  metricFoot: { ...typography.body.small, color: colors.textSecondary, marginTop: 4 },
+  summaryDot: { width: 8, height: 8, borderRadius: 4 },
+  summaryLabel: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+  summarySub: { fontSize: 13, marginTop: 2, color: colors.textTertiary },
+  summaryValue: { fontSize: 17, fontWeight: '800', color: colors.textPrimary },
+  metricFoot: { fontSize: 13, color: colors.textTertiary, marginTop: 4 },
   rankRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1249,49 +1207,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rankBadgeText: { color: '#fff', fontWeight: '800', fontSize: 12 },
-  rankScore: { ...typography.heading.h3, color: colors.textPrimary },
-  tableHead: { flexDirection: 'row', backgroundColor: colors.backgroundMuted, paddingVertical: 8 },
-  tableRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  th: {
-    width: 88,
-    paddingHorizontal: 6,
-    ...typography.label.small,
-    color: colors.textSecondary,
-    fontWeight: '700',
-  },
-  thWide: { width: 140 },
-  td: { width: 88, paddingHorizontal: 6, ...typography.body.small, color: colors.textPrimary },
-  tdWide: { width: 140, paddingHorizontal: 6, ...typography.body.small, color: colors.textPrimary },
-  tdName: { width: 120, paddingHorizontal: 6, ...typography.label.small, color: colors.textPrimary, fontWeight: '600' },
-  tdBold: { width: 88, paddingHorizontal: 6, ...typography.label.medium, color: colors.textPrimary, fontWeight: '700' },
-  tdAction: { width: 110, paddingHorizontal: 6, alignItems: 'flex-start' },
-  assignZoneBtn: {
-    backgroundColor: colors.primary,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-  },
-  assignZoneBtnText: { ...typography.label.small, color: '#fff', fontWeight: '700' },
+  rankBadgeText: { color: '#fff', fontWeight: '800', fontSize: 13 },
+  rankScore: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(15,23,42,0.45)',
     justifyContent: 'center',
-    padding: 20,
+    padding: 16,
   },
   modalCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
+    backgroundColor: colors.backgroundLight,
+    borderRadius: 14,
     padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
-  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 16 },
+  modalActions: { flexDirection: 'row', gap: 8, marginTop: 4 },
 });
-

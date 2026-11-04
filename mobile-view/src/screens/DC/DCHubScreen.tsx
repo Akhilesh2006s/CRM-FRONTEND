@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { apiService } from '../../services/api';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebButton } from '../../ui/WebPrimitives';
-import { colors, radii, spacing } from '../../theme/colors';
+import { colors, spacing } from '../../theme/colors';
 import { navigateRoot } from '../../navigation/navigationRef';
 
 type Stats = {
@@ -64,13 +64,14 @@ export default function DCHubScreen() {
 const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   tile: {
-    width: '47%',
+    flexGrow: 1,
+    flexBasis: '45%',
     padding: spacing.md,
-    backgroundColor: colors.backgroundLight,
-    borderRadius: radii.lg,
+    backgroundColor: colors.background,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#EEF2F7',
   },
-  tileLabel: { fontSize: 12, color: colors.textSecondary },
+  tileLabel: { fontSize: 13, fontWeight: '600', color: colors.textTertiary },
   tileValue: { fontSize: 22, fontWeight: '700', color: colors.textPrimary, marginTop: 4 },
 });

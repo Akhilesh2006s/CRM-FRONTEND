@@ -8,7 +8,9 @@ import * as Sharing from 'expo-sharing';
 import { colors, radii, spacing } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { apiService, getApiUrl } from '../../services/api';
-import ScreenShell from '../../ui/ScreenShell';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { Card, InfoRow, EmptyState } from '../../ui/Kit';
+import { StatGrid } from './ReportKit';
 import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 
@@ -298,7 +300,7 @@ export default function ReportsOperationalScreen() {
         <MessageBanner type={banner.type} message={banner.message} onDismiss={() => setBanner(null)} />
       ) : null}
 
-      <View style={styles.panel}>
+      <PageSection title="Report & filters">
         <WebSelect
           label="Report"
           value={reportKey}
@@ -365,7 +367,7 @@ export default function ReportsOperationalScreen() {
           onPress={exportReport}
           disabled={loading || exporting || !payload}
         />
-      </View>
+      </PageSection>
 
       <Text style={styles.reportTitle}>{payload?.report?.title || selected?.title || 'Report'}</Text>
       {payload?.report?.description || selected?.description ? (
@@ -373,18 +375,16 @@ export default function ReportsOperationalScreen() {
       ) : null}
 
       {payload && Object.keys(payload.summary || {}).length > 0 ? (
-        <View style={styles.summaryGrid}>
-          {Object.entries(payload.summary).map(([key, value]) => (
-            <View key={key} style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>{formatLabel(key)}</Text>
-              <Text style={styles.summaryValue}>
-                {typeof value === 'number'
-                  ? value.toLocaleString('en-IN', { maximumFractionDigits: 2 })
-                  : String(value ?? '—')}
-              </Text>
-            </View>
-          ))}
-        </View>
+        <StatGrid
+          items={Object.entries(payload.summary).map(([key, value]) => ({
+            label: formatLabel(key),
+            value:
+              typeof value === 'number'
+                ? value.toLocaleString('en-IN', { maximumFractionDigits: 2 })
+                : String(value ?? '—'),
+            tone: 'slate' as const,
+          }))}
+        />
       ) : null}
 
       {payload?.notes?.map((note) => (
@@ -400,23 +400,18 @@ export default function ReportsOperationalScreen() {
         ) : null}
       </View>
 
-      {!loading && rows.length === 0 ? <Text style={styles.empty}>No records match these filters.</Text> : null}
+      {!loading && rows.length === 0 ? <EmptyState title="No records found" message="No records match these filters." /> : null}
 
       {!loading
         ? rows.slice(0, visibleCount).map((row, index) => (
-            <View key={index} style={styles.rowCard}>
+            <Card key={index}>
               {titleCol ? (
                 <Text style={styles.rowTitle}>{formatValue(row[titleCol.key], titleCol.type)}</Text>
               ) : null}
               {restCols.map((c) => (
-                <View key={c.key} style={styles.kv}>
-                  <Text style={styles.kvLabel}>{c.label}</Text>
-                  <Text style={[styles.kvValue, c.type && c.type !== 'text' ? styles.kvValueRight : null]}>
-                    {formatValue(row[c.key], c.type)}
-                  </Text>
-                </View>
+                <InfoRow key={c.key} label={c.label} value={formatValue(row[c.key], c.type)} />
               ))}
-            </View>
+            </Card>
           ))
         : null}
 
@@ -442,16 +437,16 @@ const styles = StyleSheet.create({
   },
   filterToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
   filterToggleText: { fontSize: 14, fontWeight: '600', color: colors.primaryDark },
-  twoCol: { flexDirection: 'row', gap: 10 },
+  twoCol: { flexDirection: 'row', gap: 8 },
   col: { flex: 1 },
-  btnRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
+  btnRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
   fieldBlock: { marginBottom: 0 },
   dateRow: { flexDirection: 'row', alignItems: 'center' },
   dateTouchable: {
     flex: 1,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
+    borderRadius: 10,
     padding: 12,
     marginBottom: 12,
     backgroundColor: colors.backgroundLight,
@@ -460,7 +455,7 @@ const styles = StyleSheet.create({
   dateText: { ...typography.body.medium, color: colors.textPrimary },
   datePlaceholder: { color: colors.textMuted },
   datePickerBox: { backgroundColor: colors.backgroundLight, padding: 16, marginTop: 'auto' },
-  reportTitle: { fontSize: 18, fontWeight: '600', color: colors.textPrimary },
+  reportTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary, marginTop: 4 },
   reportDesc: { fontSize: 13, color: colors.textSecondary, marginTop: 2, marginBottom: spacing.sm },
   summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: spacing.sm },
   summaryCard: {
@@ -478,7 +473,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#FDE68A',
     backgroundColor: '#FFFBEB',
-    borderRadius: radii.md,
+    borderRadius: 12,
     padding: 12,
     marginBottom: spacing.sm,
   },
@@ -503,7 +498,7 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: spacing.sm,
   },
-  rowTitle: { fontSize: 15, fontWeight: '600', color: colors.textPrimary, marginBottom: 6 },
+  rowTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary, marginBottom: 8 },
   kv: {
     flexDirection: 'row',
     paddingVertical: 4,

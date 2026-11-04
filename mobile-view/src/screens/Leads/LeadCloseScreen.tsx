@@ -21,7 +21,7 @@ import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
 import { phoneDigitsError, sanitizePhoneDigits } from '../../utils/phone';
 import { getRoleFlags } from '../../utils/roles';
-import ScreenShell from '../../ui/ScreenShell';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebLabel, WebSelect } from '../../ui/WebPrimitives';
 import { useAuth } from '../../context/AuthContext';
 import MessageBanner from '../../components/MessageBanner';
@@ -627,6 +627,7 @@ export default function LeadCloseScreen({ route }: any) {
       {error ? <MessageBanner type="error" message={error} onDismiss={() => setError(null)} /> : null}
       {notice ? <MessageBanner type="success" message={notice} onDismiss={() => setNotice(null)} /> : null}
 
+      <PageSection title="School & Contact">
       {isSuperAdmin ? (
         <WebSelect
           label="Assign to (BDE) *"
@@ -674,6 +675,9 @@ export default function LeadCloseScreen({ route }: any) {
         onChangeText={(t: string) => setForm({ ...form, financial_contact_designation: t })}
       />
 
+      </PageSection>
+
+      <PageSection title="Delivery">
       <View style={styles.fieldContainer}>
         <WebLabel>Delivery Date *</WebLabel>
         {Platform.OS === 'web' ? (
@@ -743,9 +747,9 @@ export default function LeadCloseScreen({ route }: any) {
       ) : null}
 
       <Field label="Select Year" value={form.year} editable={false} />
+      </PageSection>
 
-      <View style={[styles.fieldContainer, styles.borderTop]}>
-        <WebLabel>PO Document *</WebLabel>
+      <PageSection title="PO Document *">
         {poPhotoUrl ? (
           <View style={styles.poRow}>
             <View style={styles.pdfBadge}>
@@ -769,20 +773,20 @@ export default function LeadCloseScreen({ route }: any) {
         ) : (
           <View>
             <TouchableOpacity style={styles.uploadButton} onPress={pickPOPhoto} disabled={uploadingPO}>
-              <Text style={styles.uploadButtonText}>{uploadingPO ? 'Uploading...' : '📄 Upload PO Document (PDF)'}</Text>
+              <Text style={styles.uploadButtonText}>{uploadingPO ? 'Uploading...' : 'Upload PO Document (PDF)'}</Text>
             </TouchableOpacity>
             <Text style={styles.hint}>Accepted: PDF only (max 5MB)</Text>
           </View>
         )}
-      </View>
+      </PageSection>
 
+      <PageSection title="Products">
       <TouchableOpacity style={styles.addProductsButton} onPress={() => productConfig.setProductDialogOpen(true)}>
-        <Text style={styles.addProductsButtonText}>📦 ADD PRODUCTS {rowCount > 0 ? `(${rowCount})` : ''}</Text>
+        <Text style={styles.addProductsButtonText}>+ ADD PRODUCTS {rowCount > 0 ? `(${rowCount})` : ''}</Text>
       </TouchableOpacity>
 
       {childProductRows.length > 0 ? (
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>Products</Text>
           {groupedChildProductRows.map((row, idx) => (
             <Text key={`${row.product}_${row.class}_${idx}`} style={styles.summaryLine}>
               • {row.product} · Cl {row.class}
@@ -793,6 +797,7 @@ export default function LeadCloseScreen({ route }: any) {
           {specimenRequested ? <Text style={styles.summaryLine}>• Specimen copies requested</Text> : null}
         </View>
       ) : null}
+      </PageSection>
 
       <TouchableOpacity
         style={[styles.turnToClientButton, submitting && styles.disabled]}
@@ -885,17 +890,18 @@ const styles = StyleSheet.create({
   fieldContainer: { marginBottom: 4 },
   readOnly: { backgroundColor: colors.backgroundMuted, color: colors.textSecondary },
   borderTop: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12, marginTop: 4 },
-  hint: { fontSize: 12, color: colors.textSecondary, marginTop: 6, marginBottom: 8 },
+  hint: { fontSize: 13, color: colors.textTertiary, marginTop: 6 },
   dateTouchable: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: colors.backgroundLight,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
+    borderColor: '#DCE3EC',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    minHeight: 48,
+    marginBottom: 14,
   },
   dateText: { fontSize: 15, color: colors.textPrimary },
   datePlaceholder: { color: colors.textMuted },
@@ -929,37 +935,46 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pdfBadgeText: { fontSize: 14, fontWeight: '700', color: colors.error },
-  removeBtn: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
+  removeBtn: { borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
   removeBtnText: { color: colors.textPrimary, fontWeight: '600' },
-  uploadButton: { backgroundColor: colors.primary, borderRadius: 8, padding: 12, alignItems: 'center' },
-  uploadButtonText: { color: colors.textLight, fontWeight: '600' },
+  uploadButton: {
+    borderWidth: 1,
+    borderColor: colors.primaryDark,
+    backgroundColor: colors.accent,
+    borderRadius: 10,
+    minHeight: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  uploadButtonText: { color: colors.primaryDark, fontWeight: '700', fontSize: 15 },
   addProductsButton: {
     borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: 8,
-    padding: 14,
+    borderColor: colors.primaryDark,
+    borderRadius: 10,
+    minHeight: 48,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginVertical: 12,
-    backgroundColor: '#fff',
+    backgroundColor: colors.accent,
   },
-  addProductsButtonText: { color: colors.primary, fontWeight: '700' },
+  addProductsButtonText: { color: colors.primaryDark, fontWeight: '700', fontSize: 15 },
   extraBox: { borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, marginTop: 12, backgroundColor: '#fff' },
   summaryCard: {
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 10,
     padding: 12,
-    marginBottom: 12,
-    backgroundColor: colors.backgroundLight,
+    marginTop: 12,
+    backgroundColor: colors.background,
   },
   summaryTitle: { fontSize: 14, fontWeight: '700', color: colors.textPrimary, marginBottom: 6 },
-  summaryLine: { fontSize: 12, color: colors.textSecondary, marginBottom: 2 },
+  summaryLine: { fontSize: 13, color: colors.textSecondary, marginBottom: 4 },
   turnToClientButton: {
     backgroundColor: colors.success,
-    borderRadius: 8,
-    padding: 16,
+    borderRadius: 10,
+    minHeight: 50,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 4,
     marginBottom: 8,
   },
   turnToClientButtonText: { color: colors.textLight, fontWeight: '700', fontSize: 16 },

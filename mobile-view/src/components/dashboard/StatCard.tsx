@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import PremiumIcon from '../ui/PremiumIcon';
 import type { ComponentProps } from 'react';
 import type { Ionicons } from '@expo/vector-icons';
-import { typography } from '../../theme/typography';
+import { colors } from '../../theme/colors';
 
 type IonName = ComponentProps<typeof Ionicons>['name'];
 
@@ -18,13 +18,21 @@ type Props = {
 
 export default function StatCard({ label, value, subtitle, ion, color, bg }: Props) {
   return (
-    <View style={[styles.card, { backgroundColor: bg, borderColor: color + '33' }]}>
-      <PremiumIcon name={ion} color={color} bg="#FFFFFF" size={20} />
-      <Text style={[styles.label, { color: color }]} numberOfLines={2}>
+    <View style={styles.card}>
+      <View style={styles.top}>
+        <PremiumIcon name={ion} color={color} bg={bg} size={18} />
+        <Text style={styles.value} numberOfLines={1}>
+          {value}
+        </Text>
+      </View>
+      <Text style={styles.label} numberOfLines={1}>
         {label}
       </Text>
-      <Text style={styles.value}>{value}</Text>
-      {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+      {subtitle ? (
+        <Text style={styles.subtitle} numberOfLines={1}>
+          {subtitle}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -33,27 +41,35 @@ const styles = StyleSheet.create({
   card: {
     flex: 1,
     minWidth: '46%',
-    borderRadius: 16,
-    borderWidth: 1.5,
-    padding: 14,
-    marginBottom: 10,
+    maxWidth: '48.5%',
+    backgroundColor: colors.backgroundLight,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#EEF2F7',
+    padding: 12,
+    marginBottom: 12,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 1,
   },
+  top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   label: {
-    ...typography.label.small,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textTertiary,
     marginTop: 10,
-    marginBottom: 4,
-    fontWeight: '700',
   },
   value: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#171717',
+    flexShrink: 1,
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.textPrimary,
   },
   subtitle: {
-    fontSize: 11,
-    color: '#737373',
-    marginTop: 4,
+    fontSize: 13,
+    color: colors.textMuted,
+    marginTop: 2,
   },
 });

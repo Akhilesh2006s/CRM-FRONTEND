@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
-import { colors, radii } from '../../theme/colors';
+import { colors } from '../../theme/colors';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState, Badge } from '../../ui/Kit';
+import { WebButton } from '../../ui/WebPrimitives';
 import ScreenShell from '../../ui/ScreenShell';
 import MessageBanner from '../../components/MessageBanner';
 import { apiService } from '../../services/api';
@@ -54,7 +56,7 @@ export default function MyTripsScreen() {
   return (
     <ScreenShell
       title="My Trips"
-      subtitle="Bike / Car work trips tracked by GPS. The km × per-km rate is paid as a travel expense."
+      subtitle="GPS-tracked work trips, paid as travel expense."
       loading={loading && !refreshing}
       refreshing={refreshing}
       onRefresh={() => {
@@ -66,56 +68,40 @@ export default function MyTripsScreen() {
       <Text style={styles.summary}>
         {ended.length} trip{ended.length === 1 ? '' : 's'} · {Math.round(totalKm * 100) / 100} km
       </Text>
-      {!error && ended.length === 0 ? <Text style={styles.empty}>No finished trips yet.</Text> : null}
+      {!error && ended.length === 0 ? <EmptyState icon="🛵" title="No finished trips yet" /> : null}
       {ended.map((t) => (
-        <View key={t._id} style={styles.card}>
-          <View style={styles.rowBetween}>
-            <Text style={styles.name}>
-              {t.distanceKm} km · {t.vehicle}
-            </Text>
-            <Text style={styles.amount}>{rupees(t.amount)}</Text>
-          </View>
-          <Text style={styles.meta}>
-            {when(t.startedAt)} → {when(t.endedAt)}
-          </Text>
-          {t.fromPlace || t.toPlace ? (
-            <Text style={styles.meta}>
-              {t.fromPlace || '?'} → {t.toPlace || '?'}
-            </Text>
-          ) : null}
-          {t.purpose ? <Text style={styles.meta}>{t.purpose}</Text> : null}
-          {t.expenseId ? (
-            <Text style={styles.claimed}>Claimed as expense</Text>
-          ) : t.distanceKm > 0 ? (
-            <TouchableOpacity style={styles.btn} onPress={() => claim(t)} disabled={!!claiming}>
-              {claiming === t._id ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Claim as Travel Expense</Text>}
-            </TouchableOpacity>
+        <Card key={t._id}>
+          <CardTitle
+            title={`${t.distanceKm} km · ${t.vehicle}`}
+            subtitle={rupees(t.amount)}
+            badge={t.expenseId ? 'Claimed' : undefined}
+            tone="success"
+          />
+          <InfoRow label="Start" value={when(t.startedAt)} />
+          <InfoRow label="End" value={when(t.endedAt)} />
+          {t.fromPlace || t.toPlace ? <InfoRow label="Route" value={`${t.fromPlace || '?'} → ${t.toPlace || '?'}`} /> : null}
+          <InfoRow label="Purpose" value={t.purpose} />
+          {t.expenseId ? null : t.distanceKm > 0 ? (
+            <ActionRow>
+              <View style={{ flex: 1 }}>
+                <WebButton
+                  title="Claim as Travel Expense"
+                  onPress={() => claim(t)}
+                  loading={claiming === t._id}
+                  disabled={!!claiming}
+                />
+              </View>
+            </ActionRow>
           ) : (
             <Text style={styles.meta}>No distance recorded.</Text>
           )}
-        </View>
+        </Card>
       ))}
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  summary: { fontSize: 13, color: colors.textSecondary, marginTop: 16, marginBottom: 8 },
-  empty: { color: colors.textSecondary, textAlign: 'center', paddingVertical: 24 },
-  card: {
-    backgroundColor: colors.backgroundLight,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    padding: 12,
-    marginBottom: 8,
-    gap: 4,
-  },
-  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
-  name: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
-  amount: { fontSize: 15, fontWeight: '700', color: colors.primary },
-  meta: { fontSize: 12, color: colors.textSecondary },
-  claimed: { fontSize: 12, fontWeight: '600', color: colors.success },
-  btn: { backgroundColor: colors.primary, borderRadius: 8, paddingVertical: 10, alignItems: 'center', marginTop: 4 },
-  btnText: { color: '#fff', fontWeight: '600' },
+  summary: { fontSize: 13, fontWeight: '600', color: colors.textTertiary, marginBottom: 12 },
+  meta: { fontSize: 13, color: colors.textTertiary, marginTop: 8 },
 });

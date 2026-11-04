@@ -21,6 +21,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import ScreenShell from '../../ui/ScreenShell';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState } from '../../ui/Kit';
 import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
 import { apiService, getApiUrl } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -788,106 +789,85 @@ export default function WarehouseCompletedDCScreen({ navigation }: any) {
       refreshing={refreshing}
       onRefresh={onRefresh}
     >
-      <ScrollView style={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-        {rows.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>✅</Text>
-            <Text style={styles.emptyText}>No completed DCs found</Text>
-          </View>
-        ) : (
-          rows.map((row, idx) => (
-            <View key={row._id} style={styles.card}>
-              <View style={styles.cardHeader}>
-                <Text style={styles.customerName}>
-                  {idx + 1}. {row.schoolName || row.dcNo}
-                </Text>
-                <View style={[styles.statusBadge, { backgroundColor: colors.success + '20' }]}>
-                  <Text style={[styles.statusBadgeText, { color: colors.success }]}>Completed</Text>
-                </View>
-              </View>
-              <View style={styles.cardBody}>
-                <Info label="DC No" value={row.dcNo} />
-                <Info label="DC Date" value={formatDate(row.dcDate)} />
-                <Info label="DC Category" value={row.dcCategory} />
-                <Info label="DC Fin Year" value={row.dcFinYear} />
-                <Info label="School Name" value={row.schoolName} />
-                <Info label="School Code" value={row.schoolCode} />
-                <Info label="School Type" value={row.schoolType} />
-                <Info label="Zone" value={row.zone} />
-                <Info label="Executive" value={row.executive} />
-                <Info label="Completed Date" value={formatDate(row.completedDate)} />
-                <Info label="LR Info" value={row.lrNo} />
-                <Info label="LR Date" value={formatDate(row.lrDate)} />
-                <Info label="LR Cost" value={row.lrCost} />
-                <Info label="Remarks" value={row.remarks} />
-                <Info label="Delivery Status" value={row.deliveryStatus} />
-              </View>
+      {rows.length === 0 ? (
+        <EmptyState icon="✅" title="No completed DCs found" />
+      ) : (
+        rows.map((row, idx) => (
+          <Card key={row._id}>
+            <CardTitle title={`${idx + 1}. ${row.schoolName || row.dcNo}`} badge="Completed" tone="success" />
+            <InfoRow label="DC No" value={row.dcNo} />
+            <InfoRow label="DC Date" value={formatDate(row.dcDate)} />
+            <InfoRow label="DC Category" value={row.dcCategory} />
+            <InfoRow label="DC Fin Year" value={row.dcFinYear} />
+            <InfoRow label="School Code" value={row.schoolCode} />
+            <InfoRow label="School Type" value={row.schoolType} />
+            <InfoRow label="Zone" value={row.zone} />
+            <InfoRow label="Executive" value={row.executive} />
+            <InfoRow label="Completed" value={formatDate(row.completedDate)} />
+            <InfoRow label="LR Info" value={row.lrNo} />
+            <InfoRow label="LR Date" value={formatDate(row.lrDate)} />
+            <InfoRow label="LR Cost" value={row.lrCost} />
+            <InfoRow label="Remarks" value={row.remarks} />
+            <InfoRow label="Delivery" value={row.deliveryStatus} />
 
-              <View style={styles.actionsBlock}>
-                <Text style={styles.actionsTitle}>Action 1</Text>
-                <View style={styles.actionWrap}>
-                  <TouchableOpacity style={[styles.chipBtn, styles.chipSecondary]} onPress={() => openEdit(row)}>
-                    <Text style={styles.chipBtnTextDark}>Edit</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.chipBtn, styles.chipPrimary]}
-                    onPress={() => openViewPdf(row)}
-                    disabled={!!openingPdfId}
-                  >
-                    {openingPdfId === row._id ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <Text style={styles.chipBtnText}>View PDF</Text>
-                    )}
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.chipBtn, styles.chipOutline]} onPress={() => replacePdf(row)}>
-                    <Text style={styles.chipBtnTextDark}>Replace PDF</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.chipBtn, styles.chipOutline]}
-                    onPress={() => setPrintRow(row)}
-                    disabled={printBusy}
-                    accessibilityLabel="Print Delivery Challan"
-                  >
-                    <Text style={styles.chipBtnTextDark}>Print DC</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.chipBtn, styles.chipOutline]}
-                    onPress={() => openInvoice(row)}
-                    disabled={invoiceLoadingId === row._id}
-                  >
-                    {invoiceLoadingId === row._id ? (
-                      <ActivityIndicator size="small" color={colors.primary} />
-                    ) : (
-                      <Text style={styles.chipBtnTextDark}>View Invoice</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
+            <ActionRow>
+              <TouchableOpacity style={[styles.chipBtn, styles.chipOutline]} onPress={() => openEdit(row)}>
+                <Text style={styles.chipBtnTextDark}>Edit</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.chipBtn, styles.chipPrimary]}
+                onPress={() => openViewPdf(row)}
+                disabled={!!openingPdfId}
+              >
+                {openingPdfId === row._id ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.chipBtnText}>View PDF</Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.chipBtn, styles.chipOutline]} onPress={() => replacePdf(row)}>
+                <Text style={styles.chipBtnTextDark}>Replace PDF</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.chipBtn, styles.chipOutline]}
+                onPress={() => setPrintRow(row)}
+                disabled={printBusy}
+                accessibilityLabel="Print Delivery Challan"
+              >
+                <Text style={styles.chipBtnTextDark}>Print DC</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.chipBtn, styles.chipOutline]}
+                onPress={() => openInvoice(row)}
+                disabled={invoiceLoadingId === row._id}
+              >
+                {invoiceLoadingId === row._id ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <Text style={styles.chipBtnTextDark}>View Invoice</Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.chipBtn, styles.chipOutline]} onPress={() => openStockReturn(row)}>
+                <Text style={styles.chipBtnTextDark}>Stock Return</Text>
+              </TouchableOpacity>
+            </ActionRow>
+
+            <View style={styles.studentType}>
+              <View style={{ flex: 1 }}>
                 <WebSelect
-                  label="Student type"
                   value={studentTypeById[row._id] || ''}
                   onValueChange={(v) => setStudentTypeById((p) => ({ ...p, [row._id]: v }))}
-                  placeholder="Select student type"
+                  placeholder="Student type"
                   items={STUDENT_TYPE_OPTIONS.map((o) => ({ label: o, value: o }))}
                 />
-                <TouchableOpacity style={styles.continueLink} onPress={() => continueStudentType(row)}>
-                  <Text style={styles.continueLinkText}>Continue</Text>
-                </TouchableOpacity>
               </View>
-
-              <View style={styles.actionsBlock}>
-                <Text style={styles.actionsTitle}>Action 2</Text>
-                <TouchableOpacity
-                  style={[styles.chipBtn, styles.chipInfo, { alignSelf: 'flex-start' }]}
-                  onPress={() => openStockReturn(row)}
-                >
-                  <Text style={styles.chipBtnText}>Stock Return</Text>
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity style={[styles.chipBtn, styles.chipPrimary, styles.continueBtn]} onPress={() => continueStudentType(row)}>
+                <Text style={styles.chipBtnText}>Continue</Text>
+              </TouchableOpacity>
             </View>
-          ))
-        )}
-      </ScrollView>
+          </Card>
+        ))
+      )}
 
       {/* PDF modal */}
       <Modal visible={pdfVisible} animationType="slide" transparent>
@@ -1228,52 +1208,29 @@ export default function WarehouseCompletedDCScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  content: { flex: 1, padding: 16 },
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60 },
-  emptyIcon: { fontSize: 64, marginBottom: 16 },
-  emptyText: { ...typography.heading.h3, color: colors.textSecondary },
-  card: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: colors.shadowDark,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  customerName: { ...typography.heading.h3, color: colors.textPrimary, flex: 1, paddingRight: 8 },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  statusBadgeText: { ...typography.label.small, fontWeight: '600' },
-  cardBody: { marginBottom: 8 },
-  infoRow: { flexDirection: 'row', marginBottom: 6 },
-  infoLabel: { ...typography.body.medium, color: colors.textSecondary, width: 120 },
-  infoValue: { ...typography.body.medium, color: colors.textPrimary, flex: 1 },
-  actionsBlock: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border },
-  actionsTitle: { ...typography.label.medium, color: colors.textSecondary, marginBottom: 8 },
-  actionWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
+  infoRow: { flexDirection: 'row', paddingVertical: 4, gap: 8 },
+  infoLabel: { width: 110, fontSize: 13, color: colors.textTertiary },
+  infoValue: { flex: 1, fontSize: 14, color: colors.textPrimary },
+  actionsTitle: { fontSize: 13, fontWeight: '700', color: colors.textSecondary },
   chipBtn: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 8,
-    minHeight: 36,
+    borderRadius: 10,
+    minHeight: 38,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  chipPrimary: { backgroundColor: colors.primary },
-  chipSecondary: { backgroundColor: colors.backgroundMuted || '#e5e7eb' },
-  chipOutline: { backgroundColor: '#fff', borderWidth: 1, borderColor: colors.border },
-  chipInfo: { backgroundColor: colors.info || '#0ea5e9' },
-  chipBtnText: { ...typography.label.small, color: '#fff', fontWeight: '600' },
-  chipBtnTextDark: { ...typography.label.small, color: colors.textPrimary, fontWeight: '600' },
-  continueLink: { marginTop: 4, marginBottom: 4 },
-  continueLinkText: { color: '#dc2626', fontWeight: '700', fontSize: 14 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 16 },
+  chipPrimary: { backgroundColor: colors.primaryDark },
+  chipOutline: { backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: '#DCE3EC' },
+  chipBtnText: { fontSize: 13, color: '#fff', fontWeight: '600' },
+  chipBtnTextDark: { fontSize: 13, color: colors.textPrimary, fontWeight: '600' },
+  studentType: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 12 },
+  continueBtn: { minHeight: 48 },
+  continueLinkText: { color: colors.error, fontWeight: '600', fontSize: 14 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(15,23,42,0.45)', justifyContent: 'center', padding: 16 },
   modalContent: {
     backgroundColor: colors.backgroundLight,
-    borderRadius: 16,
+    borderRadius: 14,
     maxHeight: '90%',
     overflow: 'hidden',
   },
@@ -1285,36 +1242,38 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  modalTitle: { ...typography.heading.h3, color: colors.textPrimary, flex: 1, paddingRight: 8 },
-  modalCloseText: { ...typography.label.medium, color: colors.primary, fontWeight: '600' },
+  modalTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary, flex: 1, paddingRight: 8 },
+  modalCloseText: { fontSize: 15, color: colors.primary, fontWeight: '600' },
   modalBody: { padding: 16 },
-  fieldWrap: { marginBottom: 10 },
+  fieldWrap: {},
   pdfContainer: { minHeight: Platform.OS === 'ios' ? 420 : 400, padding: 8 },
   webview: { flex: 1, minHeight: 400, borderRadius: 8 },
-  pdfFallback: { ...typography.body.small, color: colors.textSecondary, padding: 16 },
+  pdfFallback: { fontSize: 14, color: colors.textSecondary, padding: 16 },
   openBrowserBtn: {
     marginTop: 10,
     alignSelf: 'center',
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: colors.primary,
+    borderRadius: 10,
+    backgroundColor: colors.primaryDark,
   },
-  openBrowserBtnText: { ...typography.label.small, color: '#fff', fontWeight: '600' },
+  openBrowserBtnText: { fontSize: 13, color: '#fff', fontWeight: '600' },
   invoiceLine: {
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: colors.borderLight,
   },
-  invoiceProduct: { ...typography.label.medium, color: colors.textPrimary },
-  invoiceMeta: { ...typography.body.small, color: colors.textSecondary, marginTop: 2 },
+  invoiceProduct: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
+  invoiceMeta: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
   shortageCard: {
     marginBottom: 12,
-    padding: 10,
-    borderRadius: 10,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#EEF2F7',
     backgroundColor: colors.background,
   },
-  srHint: { ...typography.body.small, color: colors.textSecondary, marginBottom: 12 },
+  srHint: { fontSize: 13, color: colors.textSecondary, marginBottom: 12 },
   srProductsHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -3,7 +3,8 @@ import { View, Text, FlatList, StyleSheet } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { navigateRoot } from '../../navigation/navigationRef';
 import { apiService } from '../../services/api';
-import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import ScreenShell from '../../ui/ScreenShell';
+import { Card, CardTitle, EmptyState } from '../../ui/Kit';
 import { WebButton } from '../../ui/WebPrimitives';
 import { colors } from '../../theme/colors';
 
@@ -41,28 +42,20 @@ export default function DeliverableViewScreen({ route }: any) {
 
   return (
     <ScreenShell title="Deliverables" subtitle={productName} loading={loading}>
-      <PageSection title={productName || 'Product'}>
-        <WebButton
-          title="Add deliverable"
-          onPress={() => navigateRoot('DeliverableAdd', { productId, productName })}
-        />
-        <FlatList
-          data={items}
-          keyExtractor={(i, idx) => i._id || String(idx)}
-          ListEmptyComponent={<Text style={styles.empty}>No deliverables mapped</Text>}
-          renderItem={({ item }) => (
-            <View style={styles.card}>
-              <Text style={styles.name}>{item.deliverableName || item.name || '—'}</Text>
-            </View>
-          )}
-        />
-      </PageSection>
+      <WebButton
+        title="+ Add deliverable"
+        onPress={() => navigateRoot('DeliverableAdd', { productId, productName })}
+      />
+      <View style={{ height: 12 }} />
+      {items.length === 0 ? (
+        <EmptyState icon="📦" title="No deliverables mapped" />
+      ) : (
+        items.map((item, idx) => (
+          <Card key={item._id || String(idx)}>
+            <CardTitle title={item.deliverableName || item.name || '—'} />
+          </Card>
+        ))
+      )}
     </ScreenShell>
   );
 }
-
-const styles = StyleSheet.create({
-  card: { padding: 12, backgroundColor: colors.backgroundLight, borderRadius: 10, marginBottom: 8, marginTop: 8 },
-  name: { fontWeight: '600', color: colors.textPrimary },
-  empty: { textAlign: 'center', marginTop: 24, color: colors.textSecondary },
-});

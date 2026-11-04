@@ -14,8 +14,8 @@ import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
-import ScreenShell from '../../ui/ScreenShell';
-import { WebInput } from '../../ui/WebPrimitives';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebLabel, WebButton } from '../../ui/WebPrimitives';
 import {
   ProductClassesField,
   ProductRelatedItemsField,
@@ -320,9 +320,9 @@ export default function ProductEditScreen({ navigation, route }: any) {
           <MessageBanner type="error" message={errorMessage} onDismiss={clearMessages} />
         )}
 
-        <View style={styles.formCard}>
+        <PageSection title="Product Details">
           <View style={styles.formSection}>
-            <Text style={styles.label}>Product Name *</Text>
+            <WebLabel>Product Name *</WebLabel>
             <WebInput
               style={styles.input}
               placeholder="Enter product name"
@@ -374,12 +374,15 @@ export default function ProductEditScreen({ navigation, route }: any) {
             </View>
           )}
 
+        </PageSection>
+
+        <PageSection title="Classes & Terms">
           <ProductClassesField value={classes} onChange={setClasses} />
 
           <View style={styles.formSection}>
-            <Text style={styles.label}>Term / Level</Text>
+            <WebLabel>Term / Level</WebLabel>
             <Text style={styles.hint}>
-              Type a custom name (e.g. hi), then tap Add Term 1 / Term 2 — or edit names below.
+              Type a name, then tap Add Term — or edit names below.
             </Text>
             <View style={styles.addRow}>
               <WebInput
@@ -432,10 +435,16 @@ export default function ProductEditScreen({ navigation, route }: any) {
             )}
           </View>
 
+        </PageSection>
+
+        <PageSection title="Streams & Items">
           <ProductStreamsField value={streams} subjects={form.hasSubjects ? form.subjects : []} onChange={setStreams} />
           <ProductRelatedItemsField value={relatedItems} onChange={setRelatedItems} />
           <ProductSpecimenItemsField value={specimenItems} onChange={setSpecimenItems} productOptions={catalogueNames} />
 
+        </PageSection>
+
+        <PageSection title="Deliverables, Specs & Series">
           <View style={styles.formSection}>
             <View style={styles.switchRow}>
               <Text style={styles.label}>Deliverables</Text>
@@ -450,7 +459,7 @@ export default function ProductEditScreen({ navigation, route }: any) {
 
           {form.hasSubjects && (
             <View style={styles.formSection}>
-              <Text style={styles.label}>Deliverables *</Text>
+              <WebLabel>Deliverables *</WebLabel>
               <View style={styles.addRow}>
                 <WebInput
                   style={[styles.input, styles.addInput]}
@@ -492,7 +501,7 @@ export default function ProductEditScreen({ navigation, route }: any) {
 
           {form.hasSpecs && (
             <View style={styles.formSection}>
-              <Text style={styles.label}>Specs *</Text>
+              <WebLabel>Specs *</WebLabel>
               <Text style={styles.hint}>Add one or multiple specs</Text>
               <View style={styles.addRow}>
                 <WebInput
@@ -535,7 +544,7 @@ export default function ProductEditScreen({ navigation, route }: any) {
 
           {form.hasCategory && (
             <View style={styles.formSection}>
-              <Text style={styles.label}>Series *</Text>
+              <WebLabel>Series *</WebLabel>
               <Text style={styles.hint}>Add one or multiple series</Text>
               <View style={styles.addRow}>
                 <WebInput
@@ -564,8 +573,10 @@ export default function ProductEditScreen({ navigation, route }: any) {
             </View>
           )}
 
-          <View style={styles.formSection}>
-            <Text style={styles.label}>Product Status *</Text>
+        </PageSection>
+
+        <PageSection title="Status">
+            <WebLabel>Product Status *</WebLabel>
             <View style={styles.statusContainer}>
               <TouchableOpacity
                 style={[styles.statusButton, form.prodStatus === 1 && styles.statusButtonActive]}
@@ -594,26 +605,14 @@ export default function ProductEditScreen({ navigation, route }: any) {
                 </Text>
               </TouchableOpacity>
             </View>
-          </View>
+        </PageSection>
 
-          <View style={styles.buttonRow}>
-            <TouchableOpacity
-              style={[styles.button, styles.buttonCancel]}
-              onPress={() => navigation.goBack()}
-            >
-              <Text style={styles.buttonTextCancel}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.button, styles.buttonSubmit]}
-              onPress={onSubmit}
-              disabled={saving}
-            >
-              {saving ? (
-                <ActivityIndicator color={colors.textLight} />
-              ) : (
-                <Text style={styles.buttonTextSubmit}>Save Changes</Text>
-              )}
-            </TouchableOpacity>
+        <View style={styles.buttonRow}>
+          <View style={{ flex: 1 }}>
+            <WebButton title="Cancel" variant="outline" onPress={() => navigation.goBack()} />
+          </View>
+          <View style={{ flex: 2 }}>
+            <WebButton title="Save Changes" onPress={onSubmit} loading={saving} disabled={saving} />
           </View>
         </View>
       </ScrollView>
@@ -623,23 +622,11 @@ export default function ProductEditScreen({ navigation, route }: any) {
 
 const styles = StyleSheet.create({
   content: { flex: 1 },
-  contentContainer: { padding: 16, paddingBottom: 32 },
+  contentContainer: { padding: 16, paddingBottom: 32, gap: 0 },
   errorText: { ...typography.body.medium, color: colors.error, textAlign: 'center', padding: 20 },
-  formCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 16,
-  },
   formSection: { marginBottom: 20 },
-  label: {
-    ...typography.body.medium,
-    color: colors.textPrimary,
-    marginBottom: 8,
-    fontWeight: '600',
-  },
-  hint: { ...typography.body.small, color: colors.textSecondary, marginBottom: 8 },
+  label: { fontSize: 15, color: colors.textPrimary, fontWeight: '600' },
+  hint: { fontSize: 13, color: colors.textSecondary, marginBottom: 8 },
   input: {
     backgroundColor: '#FFFFFF',
     borderRadius: 10,
@@ -759,7 +746,7 @@ const styles = StyleSheet.create({
   termBtnDisabled: { opacity: 0.45, backgroundColor: '#F8FAFC' },
   termBtnText: { ...typography.body.small, color: colors.textPrimary, fontWeight: '500' },
   termBtnTextDisabled: { color: colors.textSecondary },
-  buttonRow: { flexDirection: 'row', gap: 12, marginTop: 8 },
+  buttonRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
   button: { flex: 1, padding: 14, borderRadius: 10, alignItems: 'center' },
   buttonCancel: {
     backgroundColor: '#FFFFFF',

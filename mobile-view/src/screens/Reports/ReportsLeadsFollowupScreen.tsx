@@ -1,20 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  RefreshControl,
-  Alert,
-  TouchableOpacity,
-  ActivityIndicator,
-  Platform,
-} from 'react-native';
+import { View, Text, StyleSheet, Alert, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
 import { Ionicons } from '@expo/vector-icons';
-import ScreenShell from '../../ui/ScreenShell';
-import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
+import { Card, CardTitle, Badge, InfoRow, EmptyState, SectionTitle, toneFor, type Tone } from '../../ui/Kit';
+import { rk, matchesWords } from './ReportKit';
 import { apiService } from '../../services/api';
 import { exportLeadsReport } from '../../utils/exportLeadsReport';
 
@@ -51,22 +42,6 @@ const CONVERTED_OR_CLOSED_STATUSES = new Set([
   'in_transit',
 ]);
 
-const TABLE_COLUMNS = [
-  { key: 'sno', label: 'S.No', width: 56 },
-  { key: 'createdOn', label: 'Created On', width: 190 },
-  { key: 'zone', label: 'Zone', width: 110 },
-  { key: 'assignedTo', label: 'Assigned To', width: 130 },
-  { key: 'priority', label: 'Priority', width: 110 },
-  { key: 'location', label: 'Location', width: 220 },
-  { key: 'schoolName', label: 'School Name', width: 170 },
-  { key: 'contactPerson', label: 'Contact Person', width: 150 },
-  { key: 'decisionMaker', label: 'Decision Maker', width: 140 },
-  { key: 'mobile', label: 'Mobile', width: 130 },
-  { key: 'followUpOn', label: 'Follow-up On', width: 190 },
-  { key: 'schoolStrength', label: 'School Strength', width: 120 },
-  { key: 'remarks', label: 'Remarks', width: 140 },
-  { key: 'status', label: 'Status', width: 110 },
-] as const;
 
 function isFollowUpLead(lead: Lead) {
   const status = String(lead.status || '').trim().toLowerCase();
@@ -98,42 +73,9 @@ function isFollowUpOverdue(dateStr?: string) {
   return dayOnly.getTime() < todayOnly.getTime();
 }
 
-function TableCell({
-  width,
-  children,
-  numberOfLines,
-  overdue,
-}: {
-  width: number;
-  children: React.ReactNode;
-  numberOfLines?: number;
-  overdue?: boolean;
-}) {
-  return (
-    <View style={[styles.tableCell, { width }]}>
-      {typeof children === 'string' || typeof children === 'number' ? (
-        <Text
-          style={[styles.tableCellText, overdue && styles.overdueText]}
-          numberOfLines={numberOfLines ?? 2}
-        >
-          {children}
-        </Text>
-      ) : (
-        children
-      )}
-    </View>
-  );
-}
-
-function priorityBadge(priority?: string) {
-  const p = normalizePriority(priority) || 'Hot';
-  const style =
-    p.toLowerCase() === 'hot'
-      ? styles.badgeHot
-      : p.toLowerCase() === 'warm'
-        ? styles.badgeWarm
-        : styles.badgeCold;
-  return <Text style={[styles.badge, style]}>{p}</Text>;
+function priorityTone(priority?: string): Tone {
+  const p = (normalizePriority(priority) || 'Hot').toLowerCase();
+  return p === 'hot' ? 'error' : p === 'warm' ? 'warning' : 'info';
 }
 
 export default function ReportsLeadsFollowupScreen() {
@@ -194,7 +136,21 @@ export default function ReportsLeadsFollowupScreen() {
     }
     if (contactMobile) filtered = filtered.filter((l) => l.contact_mobile?.includes(contactMobile));
     if (schoolName) {
-      filtered = filtered.filter((l) => l.school_name?.toLowerCase().includes(schoolName.toLowerCase()));
+      filtered = filtered.filter((l) =>
+        matchesWords(schoolName, [
+          l.school_name,
+          l.location,
+          l.contact_person,
+          l.contact_mobile,
+          l.zone,
+          l.remarks,
+          l.status || 'Pending',
+          normalizePriority(l.priority) || 'Hot',
+          getAssignedTo(l),
+          formatDate(l.createdAt),
+          l.follow_up_date ? formatDate(l.follow_up_date) : '',
+        ])
+      );
     }
     if (employee) {
       filtered = filtered.filter(
@@ -275,178 +231,106 @@ export default function ReportsLeadsFollowupScreen() {
         </TouchableOpacity>
       }
     >
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      >
-        <WebButton
-          title={exporting ? 'Exporting…' : 'Export to Excel'}
-          onPress={handleExport}
-          loading={exporting}
+      <PageSection title="Filters">
+        <WebInput value={schoolName} onChangeText={setSchoolName} placeholder="Search school, contact, mobile, remarks…" />
+        <View style={rk.row2}>
+          <View style={rk.col}>
+            <WebSelect
+              label="Zone"
+              value={zone}
+              onValueChange={setZone}
+              placeholder="All Zones"
+              items={[{ label: 'All Zones', value: '' }, ...zones.map((z) => ({ label: z, value: z }))]}
+            />
+          </View>
+          <View style={rk.col}>
+            <WebSelect
+              label="Priority"
+              value={priority}
+              onValueChange={setPriority}
+              placeholder="All Priorities"
+              items={[
+                { label: 'All Priorities', value: '' },
+                { label: 'Hot', value: 'Hot' },
+                { label: 'Warm', value: 'Warm' },
+                { label: 'Cold', value: 'Cold' },
+              ]}
+            />
+          </View>
+        </View>
+        <WebSelect
+          label="Employee"
+          value={employee}
+          onValueChange={setEmployee}
+          placeholder="All Employees"
+          items={[
+            { label: 'All Employees', value: '' },
+            ...employees.map((e) => ({ label: e.name || 'Unknown', value: e._id })),
+          ]}
         />
-        <View style={styles.filterCard}>
-          <WebSelect
-            label="Select Zone"
-            value={zone}
-            onValueChange={setZone}
-            placeholder="All Zones"
-            items={[{ label: 'All Zones', value: '' }, ...zones.map((z) => ({ label: z, value: z }))]}
-          />
-          <WebLabel>To Date</WebLabel>
-          <DateField placeholder="To Date" value={toDate} onChange={setToDate} />
-          <WebLabel>By School Name</WebLabel>
-          <WebInput value={schoolName} onChangeText={setSchoolName} placeholder="Enter school name" />
-          <WebLabel>From Date</WebLabel>
-          <DateField placeholder="From Date" value={fromDate} onChange={setFromDate} />
-          <WebSelect
-            label="Select Priority"
-            value={priority}
-            onValueChange={setPriority}
-            placeholder="All Priorities"
-            items={[
-              { label: 'All Priorities', value: '' },
-              { label: 'Hot', value: 'Hot' },
-              { label: 'Warm', value: 'Warm' },
-              { label: 'Cold', value: 'Cold' },
-            ]}
-          />
-          <WebSelect
-            label="Select Employee"
-            value={employee}
-            onValueChange={setEmployee}
-            placeholder="All Employees"
-            items={[
-              { label: 'All Employees', value: '' },
-              ...employees.map((e) => ({ label: e.name || 'Unknown', value: e._id })),
-            ]}
-          />
-          <WebLabel>By Contact Mobile</WebLabel>
-          <WebInput
-            value={contactMobile}
-            onChangeText={setContactMobile}
-            placeholder="Enter mobile number"
-            keyboardType="phone-pad"
-          />
-          <WebButton title="Search" onPress={applyFilters} />
+        <DateField placeholder="From Date" value={fromDate} onChange={setFromDate} />
+        <DateField placeholder="To Date" value={toDate} onChange={setToDate} />
+        <View style={rk.btnRow}>
+          <View style={rk.col}>
+            <WebButton title="Search" onPress={applyFilters} />
+          </View>
+          <View style={rk.col}>
+            <WebButton title={exporting ? 'Exporting…' : 'Export Excel'} variant="outline" onPress={handleExport} loading={exporting} />
+          </View>
         </View>
+      </PageSection>
 
-        <View style={styles.tableCard}>
-          <Text style={styles.totalText}>
-            Total: <Text style={styles.totalCount}>{leads.length}</Text> leads found
-          </Text>
-          {leads.length === 0 ? (
-            <Text style={styles.emptyText}>No leads found.</Text>
-          ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator>
-              <View style={{ width: TABLE_COLUMNS.reduce((sum, col) => sum + col.width, 0) }}>
-                <View style={styles.tableHead}>
-                  {TABLE_COLUMNS.map((col) => (
-                    <View key={col.key} style={[styles.tableHeadCell, { width: col.width }]}>
-                      <Text style={styles.th}>{col.label}</Text>
-                    </View>
-                  ))}
-                </View>
-                {leads.map((lead, index) => (
-                  <View key={lead._id} style={styles.tableRow}>
-                    <TableCell width={TABLE_COLUMNS[0].width}>{index + 1}</TableCell>
-                    <TableCell width={TABLE_COLUMNS[1].width}>{formatDate(lead.createdAt)}</TableCell>
-                    <TableCell width={TABLE_COLUMNS[2].width}>{lead.zone || '-'}</TableCell>
-                    <TableCell width={TABLE_COLUMNS[3].width}>{getAssignedTo(lead)}</TableCell>
-                    <TableCell width={TABLE_COLUMNS[4].width}>{priorityBadge(lead.priority)}</TableCell>
-                    <TableCell width={TABLE_COLUMNS[5].width} numberOfLines={2}>
-                      {lead.location || '-'}
-                    </TableCell>
-                    <TableCell width={TABLE_COLUMNS[6].width} numberOfLines={2}>
-                      {lead.school_name || '-'}
-                    </TableCell>
-                    <TableCell width={TABLE_COLUMNS[7].width} numberOfLines={2}>
-                      {lead.contact_person || '-'}
-                    </TableCell>
-                    <TableCell width={TABLE_COLUMNS[8].width}>-</TableCell>
-                    <TableCell width={TABLE_COLUMNS[9].width}>{lead.contact_mobile || '-'}</TableCell>
-                    <TableCell
-                      width={TABLE_COLUMNS[10].width}
-                      overdue={isFollowUpOverdue(lead.follow_up_date)}
-                    >
-                      {lead.follow_up_date ? formatDate(lead.follow_up_date) : '-'}
-                    </TableCell>
-                    <TableCell width={TABLE_COLUMNS[11].width}>{lead.strength ?? 0}</TableCell>
-                    <TableCell width={TABLE_COLUMNS[12].width} numberOfLines={2}>
-                      {lead.remarks || '-'}
-                    </TableCell>
-                    <TableCell width={TABLE_COLUMNS[13].width}>{lead.status || 'Pending'}</TableCell>
+      <SectionTitle>{`Follow-up leads (${leads.length})`}</SectionTitle>
+
+      {leads.length === 0 ? (
+        <EmptyState title="No leads found" />
+      ) : (
+        leads.map((lead, index) => {
+          const overdue = isFollowUpOverdue(lead.follow_up_date);
+          return (
+            <Card key={lead._id}>
+              <CardTitle
+                title={`${index + 1}. ${lead.school_name || '-'}`}
+                subtitle={lead.location || undefined}
+                badge={lead.status || 'Pending'}
+                tone={toneFor(lead.status || 'Pending')}
+              />
+              <InfoRow
+                label="Priority"
+                value={
+                  <View style={{ flexDirection: 'row' }}>
+                    <Badge label={normalizePriority(lead.priority) || 'Hot'} tone={priorityTone(lead.priority)} />
                   </View>
-                ))}
-              </View>
-            </ScrollView>
-          )}
-        </View>
-      </ScrollView>
+                }
+              />
+              <InfoRow label="Created on" value={formatDate(lead.createdAt)} />
+              <InfoRow label="Zone" value={lead.zone} />
+              <InfoRow label="Assigned to" value={getAssignedTo(lead)} />
+              <InfoRow label="Contact" value={lead.contact_person} />
+              <InfoRow label="Mobile" value={lead.contact_mobile} phone />
+              <InfoRow
+                label="Follow-up on"
+                value={
+                  lead.follow_up_date ? (
+                    <Text style={[styles.value, overdue && styles.overdueText]}>
+                      {formatDate(lead.follow_up_date) + (overdue ? ' (overdue)' : '')}
+                    </Text>
+                  ) : undefined
+                }
+              />
+              <InfoRow label="Strength" value={String(lead.strength ?? 0)} />
+              <InfoRow label="Remarks" value={lead.remarks} />
+            </Card>
+          );
+        })
+      )}
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 16, gap: 16, paddingBottom: 32 },
-  filterCard: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: 4,
-  },
-  tableCard: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  totalText: { ...typography.body.medium, color: colors.textSecondary, marginBottom: 12 },
-  totalCount: { fontWeight: '700', color: colors.textPrimary },
-  emptyText: { textAlign: 'center', paddingVertical: 24, color: colors.textSecondary },
-  tableHead: {
-    flexDirection: 'row',
-    backgroundColor: colors.tableHeader,
-    borderRadius: 8,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  tableHeadCell: { paddingHorizontal: 8, justifyContent: 'center' },
-  tableRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  th: { fontSize: 11, fontWeight: '700', color: colors.textPrimary },
-  tableCell: { paddingHorizontal: 8, justifyContent: 'center' },
-  tableCellText: { fontSize: 12, color: colors.textPrimary },
-  overdueText: { color: colors.error, fontWeight: '600' },
-  badge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
-    fontSize: 11,
-    overflow: 'hidden',
-  },
-  badgeHot: { backgroundColor: '#fee2e2', color: '#991b1b' },
-  badgeWarm: { backgroundColor: '#ffedd5', color: '#9a3412' },
-  badgeCold: { backgroundColor: '#f1f5f9', color: '#334155' },
-  exportBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-  },
-  exportText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.primary,
-  },
+  exportBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  exportText: { color: colors.primary, fontWeight: '600', fontSize: 13 },
+  value: { fontSize: 14, color: colors.textPrimary },
+  overdueText: { color: colors.error, fontWeight: '700' },
 });

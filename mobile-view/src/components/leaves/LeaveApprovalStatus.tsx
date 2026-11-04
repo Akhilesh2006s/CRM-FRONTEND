@@ -60,12 +60,12 @@ export default function LeaveApprovalStatus({
 }
 
 const styles = StyleSheet.create({
-  root: { gap: 3 },
-  badge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
-  badgeText: { fontSize: 12, fontWeight: '600' },
-  summary: { fontSize: 12, color: colors.textPrimary },
-  item: { fontSize: 12, color: colors.textSecondary },
+  root: { gap: 4 },
+  badge: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
+  badgeText: { fontSize: 12, fontWeight: '700' },
+  summary: { fontSize: 13, color: colors.textPrimary },
+  item: { fontSize: 13, color: colors.textSecondary },
   itemLabel: { fontWeight: '600', color: colors.textSecondary },
-  muted: { fontSize: 12, color: colors.textMuted },
+  muted: { fontSize: 13, color: colors.textMuted },
   remarks: { paddingLeft: 8 },
 });

@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Linking, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Linking, Text } from 'react-native';
 import { apiService, getApiUrl } from '../../services/api';
-import { colors, radii, spacing } from '../../theme/colors';
-import { typography } from '../../theme/typography';
-import ScreenShell from '../../ui/ScreenShell';
-import { WebButton, WebInput, WebSelect } from '../../ui/WebPrimitives';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebButton, WebSelect } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState } from '../../ui/Kit';
+import { SearchBar, Act, FilterRow, FilterCell, matchesWords, ui } from '../../components/dc/DcUi';
 import { useAuth } from '../../context/AuthContext';
 import { SentToSeniorList } from '../../components/dc/SentToSeniorList';
 import { uniqueProductNames } from '../../lib/crm/productNames';
@@ -18,8 +18,8 @@ type DcOrder = {
   assigned_to?: { _id?: string; name?: string } | string; createdAt?: string; created_at?: string;
   status?: string; pod_proof_url?: string; dcRequestData?: any; pendingEdit?: any;
 };
-type Filters = { school: string; mobile: string; from: string; to: string; zone: string; executive: string; town: string };
-const EMPTY_FILTERS: Filters = { school: '', mobile: '', from: '', to: '', zone: '', executive: '', town: '' };
+type Filters = { q: string; from: string; to: string; zone: string; executive: string };
+const EMPTY_FILTERS: Filters = { q: '', from: '', to: '', zone: '', executive: '' };
 
 const listFromResponse = (response: any): DcOrder[] => Array.isArray(response) ? response : response?.data || [];
 const assignedId = (item: DcOrder) => typeof item.assigned_to === 'string' ? item.assigned_to : item.assigned_to?._id || '';
@@ -90,11 +90,9 @@ export default function DCClosedScreen({ navigation }: any) {
   }, [items]);
   const filteredItems = useMemo(() => items.filter((item) => {
     const created = new Date(item.createdAt || item.created_at || 0);
-    if (filters.school && !(item.school_name || '').toLowerCase().includes(filters.school.toLowerCase())) return false;
-    if (filters.mobile && !String(item.contact_mobile || '').includes(filters.mobile)) return false;
+    if (!matchesWords(filters.q, [item.school_name, item.school_code, item.contact_mobile, item.school_type, item.zone, townOf(item), executiveName(item), productsOf(item), item.status === 'dc_accepted' ? 'DC Accepted' : 'DC Requested'])) return false;
     if (filters.zone && item.zone !== filters.zone) return false;
     if (filters.executive && assignedId(item) !== filters.executive) return false;
-    if (filters.town && !townOf(item).toLowerCase().includes(filters.town.toLowerCase())) return false;
     if (filters.from && created < new Date(`${filters.from}T00:00:00`)) return false;
     if (filters.to && created > new Date(`${filters.to}T23:59:59`)) return false;
     return true;
@@ -109,70 +107,39 @@ export default function DCClosedScreen({ navigation }: any) {
 
   return (
     <ScreenShell title="Closed Sales" loading={loading && !refreshing} refreshing={refreshing} onRefresh={refresh}>
-      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />} keyboardShouldPersistTaps="handled">
-        <Text style={styles.pageTitle}>Closed Leads List</Text>
-        <View style={styles.filterCard}>
-          <WebInput placeholder="By School Name" value={filters.school} onChangeText={(school) => setFilters((f) => ({ ...f, school }))} />
-          <WebInput placeholder="By Contact Mobile No" value={filters.mobile} keyboardType="phone-pad" onChangeText={(mobile) => setFilters((f) => ({ ...f, mobile }))} />
-          <DateField placeholder="From date" value={filters.from} onChange={(from) => setFilters((f) => ({ ...f, from }))} />
-          <DateField placeholder="To date" value={filters.to} onChange={(to) => setFilters((f) => ({ ...f, to }))} />
-          <WebSelect value={filters.zone} onValueChange={(zone) => setFilters((f) => ({ ...f, zone }))} items={zoneOptions} />
-          <WebSelect value={filters.executive} onValueChange={(executive) => setFilters((f) => ({ ...f, executive }))} items={executiveOptions} />
-          <WebInput placeholder="By Town" value={filters.town} onChangeText={(town) => setFilters((f) => ({ ...f, town }))} />
-          <WebButton title="Clear Filters" onPress={() => setFilters(EMPTY_FILTERS)} />
-        </View>
-        {filteredItems.length === 0 ? <Text style={styles.empty}>No closed sales found.</Text> : filteredItems.map((item) => (
-          <View key={item._id} style={styles.saleCard}>
-            <View style={styles.cardHeader}>
-              <View style={styles.schoolHeader}>
-                <Text style={styles.schoolName}>{item.school_name || '-'}</Text>
-                <Text style={styles.schoolCode}>Code: {item.school_code || '-'}</Text>
-              </View>
-              <View style={styles.statusBadge}><Text style={styles.statusText}>{item.status === 'dc_accepted' ? 'DC Accepted' : 'DC Requested'}</Text></View>
-            </View>
-            <View style={styles.detailsGrid}>
-              <View style={styles.detail}><Text style={styles.detailLabel}>Created On</Text><Text style={styles.detailValue}>{formatDate(item.createdAt || item.created_at)}</Text></View>
-              <View style={styles.detail}><Text style={styles.detailLabel}>School Type</Text><Text style={styles.detailValue}>{item.school_type || '-'}</Text></View>
-              <View style={styles.detail}><Text style={styles.detailLabel}>Zone</Text><Text style={styles.detailValue}>{item.zone || '-'}</Text></View>
-              <View style={styles.detail}><Text style={styles.detailLabel}>Town</Text><Text style={styles.detailValue}>{townOf(item)}</Text></View>
-              <View style={styles.detail}><Text style={styles.detailLabel}>Executive</Text><Text style={styles.detailValue}>{executiveName(item)}</Text></View>
-              <View style={styles.detail}><Text style={styles.detailLabel}>Mobile</Text><Text style={styles.detailValue}>{item.contact_mobile || '-'}</Text></View>
-            </View>
-            <View style={styles.productsBlock}><Text style={styles.detailLabel}>Products</Text><Text style={styles.productsValue}>{productsOf(item)}</Text></View>
-            <View style={styles.cardActions}>
-              {item.pod_proof_url ? <TouchableOpacity style={styles.outlineButton} onPress={() => openPO(item)}><Text style={styles.outlineButtonText}>View PO</Text></TouchableOpacity> : null}
-              <TouchableOpacity style={styles.outlineButton} onPress={() => Alert.alert('Location', item.location || item.address || 'No location available')}><Text style={styles.outlineButtonText}>View Location</Text></TouchableOpacity>
-              <TouchableOpacity style={styles.raiseButton} onPress={() => navigation.navigate('DCCreate', { dealId: item._id })}><Text style={styles.raiseButtonText}>Raise DC</Text></TouchableOpacity>
-            </View>
-          </View>
-        ))}
-        {canApproveDC ? <SentToSeniorList refreshKey={statusRefreshKey} /> : null}
-      </ScrollView>
+      <SearchBar placeholder="Search school, code, mobile, town, executive, product…" value={filters.q} onChangeText={(q) => setFilters((f) => ({ ...f, q }))} />
+      <PageSection title="Filters">
+        <FilterRow>
+          <FilterCell><DateField placeholder="From date" value={filters.from} onChange={(from) => setFilters((f) => ({ ...f, from }))} /></FilterCell>
+          <FilterCell><DateField placeholder="To date" value={filters.to} onChange={(to) => setFilters((f) => ({ ...f, to }))} /></FilterCell>
+          <FilterCell><WebSelect value={filters.zone} onValueChange={(zone) => setFilters((f) => ({ ...f, zone }))} items={zoneOptions} /></FilterCell>
+          <FilterCell><WebSelect value={filters.executive} onValueChange={(executive) => setFilters((f) => ({ ...f, executive }))} items={executiveOptions} /></FilterCell>
+        </FilterRow>
+        <WebButton title="Clear Filters" variant="outline" onPress={() => setFilters(EMPTY_FILTERS)} />
+      </PageSection>
+      <Text style={ui.count}>{filteredItems.length} closed sale{filteredItems.length === 1 ? '' : 's'}</Text>
+      {filteredItems.length === 0 ? <EmptyState title="No closed sales found" message="Try a different search or clear the filters." /> : filteredItems.map((item) => {
+        const status = item.status === 'dc_accepted' ? 'DC Accepted' : 'DC Requested';
+        return (
+          <Card key={item._id}>
+            <CardTitle title={item.school_name || '-'} subtitle={item.school_code ? `Code: ${item.school_code}` : undefined} badge={status} tone={item.status === 'dc_accepted' ? 'success' : 'warning'} />
+            <InfoRow label="Created on" value={formatDate(item.createdAt || item.created_at)} />
+            <InfoRow label="School type" value={item.school_type} />
+            <InfoRow label="Zone" value={item.zone} />
+            <InfoRow label="Town" value={townOf(item)} />
+            <InfoRow label="Executive" value={executiveName(item)} />
+            <InfoRow label="Mobile" value={item.contact_mobile} phone />
+            <InfoRow label="Products" value={productsOf(item)} />
+            <ActionRow>
+              {item.pod_proof_url ? <Act title="View PO" variant="outline" onPress={() => openPO(item)} /> : null}
+              <Act title="Location" variant="outline" onPress={() => Alert.alert('Location', item.location || item.address || 'No location available')} />
+              <Act title="Raise DC" onPress={() => navigation.navigate('DCCreate', { dealId: item._id })} />
+            </ActionRow>
+          </Card>
+        );
+      })}
+      {canApproveDC ? <SentToSeniorList refreshKey={statusRefreshKey} /> : null}
     </ScreenShell>
   );
 }
 
-const styles = StyleSheet.create({
-  content: { padding: spacing.md, paddingBottom: spacing.xl },
-  pageTitle: { ...typography.heading.h3, color: colors.textPrimary, marginBottom: spacing.md },
-  filterCard: { backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, padding: spacing.md, marginBottom: spacing.md },
-  saleCard: { backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, padding: spacing.md, marginBottom: spacing.md },
-  cardHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm, marginBottom: spacing.md },
-  schoolHeader: { flex: 1 },
-  schoolName: { ...typography.heading.h4, color: colors.textPrimary },
-  schoolCode: { ...typography.label.small, color: colors.textSecondary, marginTop: 3 },
-  statusBadge: { borderRadius: radii.sm, backgroundColor: colors.primary + '18', paddingHorizontal: 8, paddingVertical: 5 },
-  statusText: { ...typography.label.small, color: colors.primary, fontWeight: '700' },
-  detailsGrid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -4 },
-  detail: { width: '50%', paddingHorizontal: 4, marginBottom: spacing.sm },
-  detailLabel: { ...typography.label.small, color: colors.textSecondary, marginBottom: 2 },
-  detailValue: { ...typography.label.small, color: colors.textPrimary, fontWeight: '600' },
-  productsBlock: { borderTopWidth: 1, borderTopColor: colors.borderLight, paddingTop: spacing.sm, marginTop: 2 },
-  productsValue: { ...typography.label.small, color: colors.textPrimary, lineHeight: 19 },
-  cardActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, borderTopWidth: 1, borderTopColor: colors.borderLight, paddingTop: spacing.md, marginTop: spacing.md },
-  empty: { padding: spacing.lg, color: colors.textSecondary, textAlign: 'center' },
-  raiseButton: { backgroundColor: colors.error, borderRadius: radii.sm, paddingHorizontal: 12, paddingVertical: 7, minWidth: 86, alignItems: 'center' },
-  raiseButtonText: { ...typography.label.small, color: colors.textLight, fontWeight: '700' },
-  outlineButton: { borderWidth: 1, borderColor: colors.border, borderRadius: radii.sm, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: colors.backgroundLight, minWidth: 86, alignItems: 'center' },
-  outlineButtonText: { ...typography.label.small, color: colors.textPrimary, fontWeight: '600' },
-});

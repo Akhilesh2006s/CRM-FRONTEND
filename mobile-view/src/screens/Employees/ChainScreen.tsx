@@ -97,9 +97,12 @@ export default function ChainScreen({ navigation }: any) {
   }, [user?._id, allowed]);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return schools;
-    return schools.filter((s) => `${s.name} ${s.code}`.toLowerCase().includes(q));
+    const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (!words.length) return schools;
+    return schools.filter((s) => {
+      const text = `${s.name || ''} ${s.code || ''} ${s.location || ''} ${s.status || ''}`.toLowerCase();
+      return words.every((w) => text.includes(w));
+    });
   }, [schools, query]);
 
   const toggleSchool = (id: string) => {
@@ -153,10 +156,10 @@ export default function ChainScreen({ navigation }: any) {
 
       <PageSection
         title="Existing client schools"
-        description={`${selectedIds.length} selected. Search by school name or school code.`}
+        description={`${selectedIds.length} selected. Tap a school to select it.`}
       >
         <WebLabel>Search</WebLabel>
-        <WebInput value={query} onChangeText={setQuery} placeholder="School name or school code" />
+        <WebInput value={query} onChangeText={setQuery} placeholder="Search name, code, location…" />
 
         <View style={styles.list}>
           {loadingSchools ? (
@@ -207,17 +210,17 @@ const styles = StyleSheet.create({
   list: {
     backgroundColor: colors.backgroundLight,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.md,
+    borderColor: '#EEF2F7',
+    borderRadius: 12,
     overflow: 'hidden',
   },
   loadingRow: { flexDirection: 'row', alignItems: 'center', paddingLeft: spacing.md },
-  empty: { padding: spacing.md, fontSize: 13, color: colors.textSecondary },
+  empty: { padding: spacing.md, fontSize: 13, color: colors.textSecondary, textAlign: 'center' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
+    gap: 12,
+    paddingHorizontal: 12,
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
@@ -225,7 +228,7 @@ const styles = StyleSheet.create({
   rowChecked: { backgroundColor: colors.accent },
   rowLast: { borderBottomWidth: 0 },
   rowBody: { flex: 1 },
-  rowTitle: { fontSize: 14, color: colors.textPrimary },
-  rowMeta: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+  rowTitle: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
+  rowMeta: { fontSize: 13, color: colors.textTertiary, marginTop: 2 },
   error: { color: colors.error, fontSize: 13, marginBottom: spacing.sm },
 });

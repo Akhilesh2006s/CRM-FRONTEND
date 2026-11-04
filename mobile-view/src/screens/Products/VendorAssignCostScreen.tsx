@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { apiService } from '../../services/api';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
-import { WebInput, WebButton, DataTable } from '../../ui/WebPrimitives';
+import { WebInput, WebButton } from '../../ui/WebPrimitives';
+import { EmptyState } from '../../ui/Kit';
 import { colors } from '../../theme/colors';
 
 export default function VendorAssignCostScreen({ route }: any) {
@@ -39,39 +40,32 @@ export default function VendorAssignCostScreen({ route }: any) {
   };
 
   return (
-    <ScreenShell title="Vendor Assign Cost"
-      loading={loading}>
-      <PageSection title="Vendor Assign Cost">
-<Text style={styles.title}>Assign costs</Text>
-      <FlatList
-        data={products}
-        keyExtractor={(p) => p._id}
-        renderItem={({ item }) => (
-          <View style={styles.row}>
-            <Text style={styles.name}>{item.productName || item.name}</Text>
-            <WebInput
-              style={styles.costInput}
-              placeholder="Cost"
-              keyboardType="decimal-pad"
-              value={costs[item._id] || ''}
-              onChangeText={(v) => setCosts((c) => ({ ...c, [item._id]: v }))}
-            />
-          </View>
+    <ScreenShell title="Vendor Assign Cost" subtitle="Assign costs per product" loading={loading}>
+      <PageSection title="Product costs">
+        {products.length === 0 ? (
+          <EmptyState icon="📦" title="No active products" />
+        ) : (
+          products.map((item) => (
+            <View key={item._id} style={styles.row}>
+              <Text style={styles.name}>{item.productName || item.name}</Text>
+              <WebInput
+                style={styles.costInput}
+                placeholder="Cost"
+                keyboardType="decimal-pad"
+                value={costs[item._id] || ''}
+                onChangeText={(v) => setCosts((c) => ({ ...c, [item._id]: v }))}
+              />
+            </View>
+          ))
         )}
-      />
-      <WebButton title="Save assignments" onPress={save} loading={saving} />
       </PageSection>
+      <WebButton title="Save assignments" onPress={save} loading={saving} />
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, backgroundColor: colors.background },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  title: { fontSize: 20, fontWeight: '700', marginBottom: 12 },
-  row: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 8 },
-  name: { flex: 1 },
-  costInput: { width: 100, borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 8 },
-  btn: { marginTop: 12, backgroundColor: colors.primary, padding: 16, borderRadius: 12, alignItems: 'center' },
-  btnText: { color: '#fff', fontWeight: '600' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
+  name: { flex: 1, fontSize: 15, color: colors.textPrimary },
+  costInput: { width: 110, marginBottom: 0, marginVertical: 6, minHeight: 44, paddingVertical: 8 },
 });

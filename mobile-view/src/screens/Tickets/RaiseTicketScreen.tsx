@@ -3,12 +3,13 @@
  * Any employee can raise a ticket for coordinator review and see their own tickets.
  */
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { colors } from '../../theme/colors';
 import { apiService } from '../../services/api';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebLabel } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
+import { Card, CardTitle, InfoRow, EmptyState } from '../../ui/Kit';
 import { fmtTicketDate, ticketStatusLabel, type Ticket } from './ticketHelpers';
 
 const emptyForm = { subject: '', description: '', schoolName: '', schoolCode: '' };
@@ -63,7 +64,7 @@ export default function RaiseTicketScreen() {
   return (
     <ScreenShell
       title="Raise Ticket"
-      subtitle="Any employee can raise a ticket for coordinator review."
+      subtitle="Send an issue to the coordinator."
       refreshing={refreshing}
       onRefresh={() => {
         setRefreshing(true);
@@ -95,28 +96,21 @@ export default function RaiseTicketScreen() {
         {loading ? (
           <ActivityIndicator color={colors.primary} />
         ) : items.length === 0 ? (
-          <Text style={styles.empty}>No tickets yet</Text>
+          <EmptyState icon="🎫" title="No tickets yet" message="Tickets you raise will show here." />
         ) : (
-          items.map((item) => {
-            const solved = item.status === 'Resolved';
-            return (
-              <View key={item._id} style={styles.card}>
-                <View style={styles.cardTop}>
-                  <Text style={styles.subject}>{item.subject}</Text>
-                  <View style={[styles.badge, solved ? styles.badgeSolved : styles.badgePending]}>
-                    <Text style={[styles.badgeText, { color: solved ? colors.success : colors.warning }]}>
-                      {ticketStatusLabel(item.status)}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={styles.desc}>{item.description}</Text>
-                {item.resolutionNote ? <Text style={styles.note}>Note: {item.resolutionNote}</Text> : null}
-                <Text style={styles.meta}>
-                  {item.schoolName || '—'} · Raised {fmtTicketDate(item.createdAt)}
-                </Text>
-              </View>
-            );
-          })
+          items.map((item) => (
+            <Card key={item._id} style={styles.card}>
+              <CardTitle
+                title={item.subject}
+                badge={ticketStatusLabel(item.status)}
+                tone={item.status === 'Resolved' ? 'success' : 'warning'}
+              />
+              {item.description ? <Text style={styles.desc}>{item.description}</Text> : null}
+              <InfoRow label="School" value={item.schoolName || ''} />
+              <InfoRow label="Raised on" value={fmtTicketDate(item.createdAt)} />
+              <InfoRow label="Note" value={item.resolutionNote || ''} />
+            </Card>
+          ))
         )}
       </PageSection>
     </ScreenShell>
@@ -125,15 +119,6 @@ export default function RaiseTicketScreen() {
 
 const styles = StyleSheet.create({
   textArea: { minHeight: 100, textAlignVertical: 'top' },
-  empty: { textAlign: 'center', color: colors.textSecondary, paddingVertical: 12 },
-  card: { backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, marginBottom: 8 },
-  cardTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
-  subject: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.textPrimary },
-  badge: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
-  badgeSolved: { backgroundColor: colors.successLight },
-  badgePending: { backgroundColor: colors.warningLight },
-  badgeText: { fontSize: 12, fontWeight: '600' },
-  desc: { fontSize: 13, color: colors.textSecondary, marginTop: 4 },
-  note: { fontSize: 12, color: colors.textTertiary, marginTop: 4 },
-  meta: { fontSize: 12, color: colors.textTertiary, marginTop: 6 },
+  card: { marginBottom: 8, padding: 12, shadowOpacity: 0, elevation: 0 },
+  desc: { fontSize: 14, color: colors.textSecondary, marginBottom: 8, lineHeight: 20 },
 });

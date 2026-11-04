@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import ScreenShell from '../../ui/ScreenShell';
-import { WebInput, WebButton } from '../../ui/WebPrimitives';
+import { WebInput, WebButton, WebLabel } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 
 export default function SettingsPasswordScreen({ navigation }: any) {
@@ -46,6 +46,9 @@ export default function SettingsPasswordScreen({ navigation }: any) {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
         >
+          <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Password</Text>
+          <WebLabel>Current password *</WebLabel>
           <WebInput
             style={styles.input}
             secureTextEntry
@@ -53,6 +56,7 @@ export default function SettingsPasswordScreen({ navigation }: any) {
             onChangeText={setOldPassword}
             placeholder="Enter current password"
           />
+          <WebLabel>New password *</WebLabel>
           <WebInput
             style={styles.input}
             secureTextEntry
@@ -60,6 +64,7 @@ export default function SettingsPasswordScreen({ navigation }: any) {
             onChangeText={setNewPassword}
             placeholder="Enter new password"
           />
+          <WebLabel>Confirm new password *</WebLabel>
           <WebInput
             style={styles.input}
             secureTextEntry
@@ -67,6 +72,7 @@ export default function SettingsPasswordScreen({ navigation }: any) {
             onChangeText={setConfirmPassword}
             placeholder="Confirm new password"
           />
+          </View>
         </ScrollView>
         <View style={styles.footer}>
           <WebButton
@@ -85,23 +91,23 @@ export default function SettingsPasswordScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   page: { flex: 1 },
   scroll: { flex: 1 },
-  content: { padding: 20, gap: 14, paddingBottom: 16 },
-  input: {
-    ...typography.body.medium,
+  content: { padding: 16, paddingBottom: 16 },
+  section: {
     backgroundColor: colors.backgroundLight,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 14,
-    color: colors.textPrimary,
+    borderColor: '#EEF2F7',
+    padding: 16,
   },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, marginBottom: 12 },
+  input: {},
   footer: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 28,
-    gap: 10,
+    paddingBottom: 24,
+    gap: 4,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: '#EEF2F7',
     backgroundColor: colors.backgroundLight,
   },
 });

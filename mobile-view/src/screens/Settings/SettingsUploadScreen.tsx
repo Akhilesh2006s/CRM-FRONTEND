@@ -4,6 +4,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { InfoRow, EmptyState } from '../../ui/Kit';
 import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
 import { apiService, getApiUrl } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -129,6 +130,7 @@ export default function SettingsUploadScreen({ navigation }: any) {
           variant="outline"
           onPress={pickFile}
         />
+        <View style={{ height: 8 }} />
         <WebLabel>Data type</WebLabel>
         <WebSelect
           value={dataType}
@@ -148,27 +150,19 @@ export default function SettingsUploadScreen({ navigation }: any) {
 
       <PageSection title="Upload history">
         {uploads.length === 0 ? (
-          <Text style={styles.empty}>No uploads yet</Text>
+          <EmptyState icon="📂" title="No uploads yet" />
         ) : (
-          <>
-            <DataTable
-              columns={['File', 'Type', 'By', 'Date']}
-              rows={uploads.map((u) => [
-                u.originalName || u.fileName,
-                u.dataType,
-                u.uploadedByName || '—',
-                formatDate(u.createdAt),
-              ])}
-            />
-            {uploads.map((u) => (
-              <WebButton
-                key={u._id}
-                title={`Download ${u.originalName || u.fileName}`}
-                variant="outline"
-                onPress={() => openFile(u)}
-              />
-            ))}
-          </>
+          uploads.map((u) => (
+            <View key={u._id} style={styles.uploadRow}>
+              <Text style={styles.uploadName} numberOfLines={2}>
+                {u.originalName || u.fileName}
+              </Text>
+              <InfoRow label="Type" value={u.dataType} />
+              <InfoRow label="By" value={u.uploadedByName || '—'} />
+              <InfoRow label="Date" value={formatDate(u.createdAt)} />
+              <WebButton title="Download" variant="outline" onPress={() => openFile(u)} />
+            </View>
+          ))
         )}
       </PageSection>
     </ScreenShell>
@@ -176,6 +170,8 @@ export default function SettingsUploadScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
+  uploadRow: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#EEF2F7' },
+  uploadName: { fontSize: 15, fontWeight: '700', color: colors.textPrimary, marginBottom: 4 },
   empty: { ...typography.body.medium, color: colors.textSecondary, textAlign: 'center', paddingVertical: 16 },
   denied: { flex: 1, padding: 24, justifyContent: 'center', gap: 16 },
   deniedText: { ...typography.body.medium, color: colors.textSecondary, textAlign: 'center' },

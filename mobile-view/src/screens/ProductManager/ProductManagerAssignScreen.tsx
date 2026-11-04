@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { apiService } from '../../services/api';
 import { colors, radii, spacing } from '../../theme/colors';
 import ScreenShell from '../../ui/ScreenShell';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState } from '../../ui/Kit';
 import { WebButton, WebInput } from '../../ui/WebPrimitives';
 import { showAlert } from '../../utils/showAlert';
 import ProductManagerScreen from './ProductManagerScreen';
@@ -93,16 +94,11 @@ export default function ProductManagerAssignScreen({ navigation }: { navigation:
       <WebInput value={search} onChangeText={setSearch} placeholder="Search Product Manager" autoCapitalize="none" />
 
       {managers.map((row) => (
-        <View key={row._id} style={styles.card}>
-          <Text style={styles.name}>{row.name}</Text>
-          <Text style={styles.meta}>
-            {row.email}
-            {row.phone ? ` · ${row.phone}` : ''}
-          </Text>
-          <Text style={styles.products}>
-            {row.productIds?.length ? row.productIds.map(productName).join(', ') : 'No products assigned'}
-          </Text>
-          <View style={styles.actions}>
+        <Card key={row._id}>
+          <CardTitle title={row.name} subtitle={row.email} badge={`${row.productIds?.length || 0} products`} tone="info" />
+          <InfoRow label="Phone" value={row.phone} phone />
+          <InfoRow label="Products" value={row.productIds?.length ? row.productIds.map(productName).join(', ') : 'No products assigned'} />
+          <ActionRow>
             <View style={styles.actionCell}>
               <WebButton
                 title="View"
@@ -113,15 +109,15 @@ export default function ProductManagerAssignScreen({ navigation }: { navigation:
             <View style={styles.actionCell}>
               <WebButton title="Assign" onPress={() => openAssign(row)} />
             </View>
-          </View>
-        </View>
+          </ActionRow>
+        </Card>
       ))}
       {!loading && managers.length === 0 ? (
-        <View style={styles.card}>
-          <Text style={styles.meta}>
-            {search.trim() ? 'No Product Managers match your search.' : 'No Product Managers yet. Add one from New Employee.'}
-          </Text>
-        </View>
+        <EmptyState
+          icon="📦"
+          title="No Product Managers"
+          message={search.trim() ? 'No Product Managers match your search.' : 'No Product Managers yet. Add one from New Employee.'}
+        />
       ) : null}
 
       <Modal visible={Boolean(manager)} animationType="slide" transparent onRequestClose={() => !saving && setManager(null)}>
@@ -191,7 +187,16 @@ export default function ProductManagerAssignScreen({ navigation }: { navigation:
 }
 
 const styles = StyleSheet.create({
-  help: { color: colors.textSecondary, marginBottom: 12, fontSize: 13, lineHeight: 18 },
+  help: {
+    color: colors.accentForeground,
+    fontSize: 13,
+    lineHeight: 18,
+    backgroundColor: colors.accent,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
   card: {
     backgroundColor: colors.backgroundLight,
     borderRadius: radii.lg,
@@ -208,8 +213,8 @@ const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.45)', justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: colors.backgroundLight,
-    borderTopLeftRadius: radii.xl,
-    borderTopRightRadius: radii.xl,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
     padding: spacing.md,
     paddingBottom: spacing.lg,
     maxHeight: '85%',
@@ -222,15 +227,15 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 10,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.md,
+    borderColor: '#DCE3EC',
+    borderRadius: 10,
     padding: 12,
     marginBottom: 8,
   },
   choiceOn: { borderColor: colors.primary, backgroundColor: colors.accent },
   choiceText: { flex: 1 },
   choiceName: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
-  choiceNote: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+  choiceNote: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
   viewRoot: { flex: 1, backgroundColor: colors.background },
   viewBar: {
     flexDirection: 'row',
@@ -240,8 +245,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     backgroundColor: colors.backgroundLight,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: '#EEF2F7',
   },
   viewClose: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  viewTitle: { flex: 1, fontSize: 20, fontWeight: '600', color: colors.textPrimary, paddingHorizontal: 8 },
+  viewTitle: { flex: 1, fontSize: 17, fontWeight: '700', color: colors.textPrimary, paddingHorizontal: 8 },
 });

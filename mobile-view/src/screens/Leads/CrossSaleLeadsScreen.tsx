@@ -2,9 +2,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { apiService } from '../../services/api';
-import { colors, radii } from '../../theme/colors';
+import { colors } from '../../theme/colors';
 import ScreenShell from '../../ui/ScreenShell';
-import { WebButton, WebInput } from '../../ui/WebPrimitives';
+import { WebInput } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState, toneFor } from '../../ui/Kit';
 
 type Lead = {
   _id: string;
@@ -42,14 +43,15 @@ export default function CrossSaleLeadsScreen({ navigation }: any) {
     void load();
   }, [load]);
 
-  const q = search.trim().toLowerCase();
-  const filtered = leads.filter((l) =>
-    !q
-      ? true
-      : [l.school_name, l.school_code, l.contact_person, l.zone]
-          .filter(Boolean)
-          .some((v) => String(v).toLowerCase().includes(q)),
-  );
+  const words = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const filtered = leads.filter((l) => {
+    if (!words.length) return true;
+    const hay = [l.school_name, l.school_code, l.contact_person, l.contact_mobile, l.zone, l.status, l.priority]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    return words.every((w) => hay.includes(w));
+  });
 
   return (
     <ScreenShell
@@ -64,40 +66,29 @@ export default function CrossSaleLeadsScreen({ navigation }: any) {
     >
       <View style={styles.toolbar}>
         <View style={{ flex: 1 }}>
-          <WebInput placeholder="Search school / zone" value={search} onChangeText={setSearch} />
+          <WebInput placeholder="Search school, code, contact, zone…" value={search} onChangeText={setSearch} />
         </View>
-        <View style={{ marginBottom: 12 }}>
-          <WebButton title="Refresh" variant="outline" onPress={() => void load()} />
-        </View>
+        <TouchableOpacity style={styles.refreshBtn} onPress={() => void load()}>
+          <Text style={styles.refreshText}>Refresh</Text>
+        </TouchableOpacity>
       </View>
 
       {filtered.length === 0 ? (
-        <Text style={styles.empty}>No cross-sale leads yet. Create a lead with type Cross Sale.</Text>
+        <EmptyState icon="🔁" title="No cross-sale leads" message="Create a lead with type Cross Sale." />
       ) : (
         filtered.map((l) => (
-          <View key={l._id} style={styles.card}>
-            <Text style={styles.school}>{l.school_name || '-'}</Text>
-            <Text style={styles.code}>{l.school_code || '-'}</Text>
-            <Text style={styles.meta}>
-              <Text style={styles.label}>Contact: </Text>
-              {l.contact_person || '-'}
-              {l.contact_mobile ? ` · ${l.contact_mobile}` : ''}
-            </Text>
-            <Text style={styles.meta}>
-              <Text style={styles.label}>Zone: </Text>
-              {l.zone || '-'}
-            </Text>
-            <Text style={styles.meta}>
-              <Text style={styles.label}>Status: </Text>
-              {l.status || '-'}
-              {'   '}
-              <Text style={styles.label}>Priority: </Text>
-              {l.priority || '-'}
-            </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('LeadEdit', { id: l._id })}>
-              <Text style={styles.open}>Open</Text>
-            </TouchableOpacity>
-          </View>
+          <Card key={l._id}>
+            <CardTitle title={l.school_name || '-'} subtitle={l.school_code || undefined} badge={l.status || undefined} tone={toneFor(l.status)} />
+            <InfoRow label="Contact" value={l.contact_person || undefined} />
+            <InfoRow label="Mobile" value={l.contact_mobile || undefined} phone />
+            <InfoRow label="Zone" value={l.zone || undefined} />
+            <InfoRow label="Priority" value={l.priority || undefined} />
+            <ActionRow>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('LeadEdit', { id: l._id })}>
+                <Text style={styles.actionText}>Open</Text>
+              </TouchableOpacity>
+            </ActionRow>
+          </Card>
         ))
       )}
     </ScreenShell>
@@ -106,18 +97,21 @@ export default function CrossSaleLeadsScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   toolbar: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  empty: { textAlign: 'center', color: colors.textTertiary, paddingVertical: 32, fontSize: 14 },
-  card: {
-    backgroundColor: colors.backgroundLight,
+  refreshBtn: {
+    minHeight: 48,
+    paddingHorizontal: 14,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radii.lg,
-    padding: 12,
-    marginBottom: 10,
+    backgroundColor: colors.backgroundLight,
+    justifyContent: 'center',
   },
-  school: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
-  code: { fontSize: 12, color: '#1D4ED8', fontFamily: 'monospace', marginBottom: 4 },
-  meta: { fontSize: 13, color: colors.textPrimary, marginTop: 2 },
-  label: { color: colors.textSecondary },
-  open: { marginTop: 8, color: '#0F766E', fontWeight: '600', textAlign: 'right' },
+  refreshText: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+  actionBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: colors.primaryDark,
+  },
+  actionText: { fontSize: 14, fontWeight: '700', color: colors.primaryForeground },
 });

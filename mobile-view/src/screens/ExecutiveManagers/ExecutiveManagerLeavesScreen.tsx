@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { colors, radii } from '../../theme/colors';
-import { typography } from '../../theme/typography';
-import ScreenShell from '../../ui/ScreenShell';
-import { WebInput, WebSelect, WebButton } from '../../ui/WebPrimitives';
+import { colors } from '../../theme/colors';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebSelect, WebButton, WebLabel } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, ChipRow, ActionRow, EmptyState } from '../../ui/Kit';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { leaveTypeLabel, leaveDayTypeLabel, leaveDayCount, formatLeaveDays } from '../../lib/leaveTypes';
@@ -127,15 +127,15 @@ export default function ExecutiveManagerLeavesScreen({ navigation, route }: any)
         </TouchableOpacity>
       }
     >
-      <View style={styles.tabRow}>
-        {(['team', 'mine'] as Tab[]).map((t) => (
-          <TouchableOpacity key={t} style={[styles.tabBtn, tab === t && styles.tabBtnActive]} onPress={() => setTab(t)}>
-            <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
-              {t === 'mine' ? 'My Leaves' : isOwnPage ? 'My BDEs’ Leaves' : 'Team Leaves'}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      <ChipRow
+        items={(['team', 'mine'] as Tab[]).map((t) => ({
+          key: t,
+          label: t === 'mine' ? 'My Leaves' : isOwnPage ? 'My BDEs’ Leaves' : 'Team Leaves',
+        }))}
+        value={tab}
+        onChange={(k) => setTab(k as Tab)}
+      />
+      <View style={{ height: 12 }} />
 
       {loadError ? (
         <View style={styles.errorBox}>
@@ -146,27 +146,26 @@ export default function ExecutiveManagerLeavesScreen({ navigation, route }: any)
 
       {tab === 'mine' ? (
         <>
-          <Text style={styles.hint}>Your leave is approved after both Admin and HR Manager approve it.</Text>
+          <Text style={styles.hint}>Approved after both Admin and HR Manager approve.</Text>
           {myLeaves.length === 0 ? (
-            <Text style={styles.empty}>You have not applied for any leave yet.</Text>
+            <EmptyState icon="🗓️" title="No leaves yet" message="You have not applied for any leave yet." />
           ) : (
             myLeaves.map((leave) => (
-              <View key={leave._id} style={styles.card}>
-                <Text style={styles.cardTitle}>{leaveTypeLabel(leave.leaveType)}</Text>
-                <Text style={styles.meta}>
-                  {formatDate(leave.startDate)} – {formatDate(leave.endDate)} · {leaveDayTypeLabel(leave)} · {formatLeaveDays(leaveDayCount(leave))}
-                </Text>
-                {leave.reason ? <Text style={styles.meta}>Reason: {leave.reason}</Text> : null}
+              <Card key={leave._id}>
+                <CardTitle title={leaveTypeLabel(leave.leaveType)} subtitle={leaveDayTypeLabel(leave)} />
+                <InfoRow label="Dates" value={`${formatDate(leave.startDate)} – ${formatDate(leave.endDate)}`} />
+                <InfoRow label="Days" value={formatLeaveDays(leaveDayCount(leave))} />
+                <InfoRow label="Reason" value={leave.reason || ''} />
                 <View style={styles.section}>
                   <LeaveApprovalStatus leave={leave} showRejectionReason />
                 </View>
-              </View>
+              </Card>
             ))
           )}
         </>
       ) : (
         <>
-          <View style={styles.filterCard}>
+          <PageSection title="Filters">
             <WebSelect
               label="Status"
               value={statusFilter === 'all' ? '' : statusFilter}
@@ -183,53 +182,54 @@ export default function ExecutiveManagerLeavesScreen({ navigation, route }: any)
             />
             <View style={styles.dateRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.label}>From</Text>
+                <WebLabel>From</WebLabel>
                 <DateField placeholder="From" value={fromDate} onChange={setFromDate} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.label}>To</Text>
+                <WebLabel>To</WebLabel>
                 <DateField placeholder="To" value={toDate} onChange={setToDate} />
               </View>
             </View>
             <WebButton title="Apply" variant="outline" onPress={loadLeaves} />
-          </View>
+          </PageSection>
 
           {leaves.length === 0 ? (
-            <Text style={styles.empty}>No leaves found</Text>
+            <EmptyState icon="🗓️" title="No leaves found" />
           ) : (
             leaves.map((leave) => (
-              <View key={leave._id} style={[styles.card, leave.status === 'Pending' && leave.canDecide && styles.cardActionable]}>
-                <View style={styles.rowBetween}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.cardTitle}>{leave.employeeId?.name || 'Unknown employee'}</Text>
-                    {leave.employeeId?.email ? <Text style={styles.meta}>{leave.employeeId.email}</Text> : null}
-                  </View>
-                  <Text style={styles.meta}>{leaveTypeLabel(leave.leaveType)}</Text>
-                </View>
-                <Text style={styles.meta}>
-                  {formatDate(leave.startDate)} – {formatDate(leave.endDate)} · {leaveDayTypeLabel(leave)} · {formatLeaveDays(leaveDayCount(leave))}
-                </Text>
-                {leave.reason ? <Text style={styles.meta}>Reason: {leave.reason}</Text> : null}
-                <Text style={styles.meta}>City: {leave.employeeId?.assignedCity || '-'}</Text>
+              <Card key={leave._id} style={leave.status === 'Pending' && leave.canDecide ? styles.cardActionable : undefined}>
+                <CardTitle
+                  title={leave.employeeId?.name || 'Unknown employee'}
+                  subtitle={leave.employeeId?.email || undefined}
+                  badge={leaveTypeLabel(leave.leaveType)}
+                  tone="info"
+                />
+                <InfoRow label="Dates" value={`${formatDate(leave.startDate)} – ${formatDate(leave.endDate)}`} />
+                <InfoRow label="Type" value={leaveDayTypeLabel(leave)} />
+                <InfoRow label="Days" value={formatLeaveDays(leaveDayCount(leave))} />
+                <InfoRow label="Reason" value={leave.reason || ''} />
+                <InfoRow label="City" value={leave.employeeId?.assignedCity || ''} />
                 <View style={styles.section}>
                   <LeaveApprovalStatus leave={leave} />
                 </View>
-                <View style={styles.footer}>
-                  {leave.status === 'Pending' && leave.canDecide ? (
-                    <LeaveDecisionActions leave={leave} onDone={loadLeaves} />
-                  ) : leave.status === 'Pending' ? (
-                    null
-                  ) : (
-                    <View>
-                      {leave.approvedBy ? <Text style={styles.meta}>By: {leave.approvedBy.name}</Text> : null}
-                      {leave.approvedAt ? <Text style={styles.meta}>{formatDate(leave.approvedAt)}</Text> : null}
+                {leave.status === 'Pending' && leave.canDecide ? (
+                  <ActionRow>
+                    <View style={{ flex: 1 }}>
+                      <LeaveDecisionActions leave={leave} onDone={loadLeaves} />
+                    </View>
+                  </ActionRow>
+                ) : leave.status === 'Pending' ? null : leave.approvedBy || leave.approvedAt || leave.rejectionReason ? (
+                  <ActionRow>
+                    <View style={{ flex: 1 }}>
+                      {leave.approvedBy ? <InfoRow label="By" value={leave.approvedBy.name} /> : null}
+                      {leave.approvedAt ? <InfoRow label="On" value={formatDate(leave.approvedAt)} /> : null}
                       {leave.rejectionReason ? (
-                        <Text style={[styles.meta, { color: colors.error }]}>Reason: {leave.rejectionReason}</Text>
+                        <Text style={styles.rejectText}>Reason: {leave.rejectionReason}</Text>
                       ) : null}
                     </View>
-                  )}
-                </View>
-              </View>
+                  </ActionRow>
+                ) : null}
+              </Card>
             ))
           )}
         </>
@@ -239,46 +239,12 @@ export default function ExecutiveManagerLeavesScreen({ navigation, route }: any)
 }
 
 const styles = StyleSheet.create({
-  headerAction: { color: colors.primary, fontWeight: '600', fontSize: 14 },
-  tabRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  tabBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.backgroundLight,
-  },
-  tabBtnActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  tabText: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
-  tabTextActive: { color: colors.primaryForeground },
-  hint: { fontSize: 12, color: colors.textSecondary, marginBottom: 10 },
-  errorBox: { backgroundColor: colors.errorLight, borderRadius: radii.md, padding: 12, marginBottom: 12, gap: 8 },
+  headerAction: { color: colors.primary, fontWeight: '700', fontSize: 15 },
+  hint: { fontSize: 13, color: colors.textTertiary, marginBottom: 12 },
+  errorBox: { backgroundColor: colors.errorLight, borderRadius: 10, padding: 12, marginBottom: 12, gap: 8 },
   errorText: { color: colors.error, fontSize: 13 },
-  filterCard: {
-    backgroundColor: colors.backgroundMuted,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.lg,
-    padding: 12,
-    marginBottom: 12,
-  },
-  dateRow: { flexDirection: 'row', gap: 8 },
-  label: { fontSize: 12, fontWeight: '500', color: colors.textSecondary, marginBottom: 4 },
-  empty: { textAlign: 'center', color: colors.textSecondary, paddingVertical: 40 },
-  card: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    marginBottom: 10,
-    gap: 3,
-  },
+  dateRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
   cardActionable: { borderColor: colors.primaryLight },
-  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
-  cardTitle: { ...typography.heading.h4, color: colors.textPrimary },
-  meta: { fontSize: 13, color: colors.textSecondary },
-  section: { marginTop: 6 },
-  footer: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border },
+  section: { marginTop: 8 },
+  rejectText: { fontSize: 13, color: colors.error, marginTop: 4 },
 });

@@ -11,8 +11,8 @@ import {
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
-import ScreenShell from '../../ui/ScreenShell';
-import { WebInput } from '../../ui/WebPrimitives';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebLabel, WebButton } from '../../ui/WebPrimitives';
 import {
   ProductClassesField,
   ProductRelatedItemsField,
@@ -282,9 +282,9 @@ export default function ProductNewScreen({ navigation }: any) {
           </View>
         ) : null}
 
-        <View style={styles.formCard}>
+        <PageSection title="Product Details">
           <View style={styles.formSection}>
-            <Text style={styles.label}>Product Name *</Text>
+            <WebLabel>Product Name *</WebLabel>
             <WebInput
               style={styles.input}
               placeholder="Enter product name"
@@ -294,7 +294,7 @@ export default function ProductNewScreen({ navigation }: any) {
           </View>
 
           <View style={styles.formSection}>
-            <Text style={styles.label}>Payment logic</Text>
+            <WebLabel>Payment logic</WebLabel>
             <Text style={styles.hint}>How payable amount is divided per sale</Text>
             <View style={styles.chipRow}>
               {(
@@ -320,21 +320,24 @@ export default function ProductNewScreen({ navigation }: any) {
                 </TouchableOpacity>
               ))}
             </View>
-            <Text style={styles.hint}>
-              Level-Based: Total amount is divided by number of levels (terms)
+            <Text style={[styles.hint, { marginTop: 8 }]}>
+              {form.calculationType === 'level_based'
+                ? 'Level-Based: Total amount is divided by number of levels (terms)'
+                : form.calculationType === 'subject_based'
+                  ? 'Subject-Based: Total amount is divided by number of selected subjects'
+                  : 'Normal: Full amount is charged without division'}
             </Text>
-            <Text style={styles.hint}>
-              Subject-Based: Total amount is divided by number of selected subjects
-            </Text>
-            <Text style={styles.hint}>Normal: Full amount is charged without division</Text>
           </View>
 
+        </PageSection>
+
+        <PageSection title="Classes & Terms">
           <ProductClassesField value={classes} onChange={setClasses} />
 
           <View style={styles.formSection}>
-            <Text style={styles.label}>Term / Level</Text>
+            <WebLabel>Term / Level</WebLabel>
             <Text style={styles.hint}>
-              Type a custom name (e.g. hi), then tap Add Term 1 / Term 2 — or edit names below.
+              Type a name, then tap Add Term — or edit names below.
             </Text>
             <WebInput
               style={[styles.input, styles.termInput]}
@@ -382,10 +385,16 @@ export default function ProductNewScreen({ navigation }: any) {
             )}
           </View>
 
+        </PageSection>
+
+        <PageSection title="Streams & Items">
           <ProductStreamsField value={streams} subjects={form.hasSubjects ? form.subjects : []} onChange={setStreams} />
           <ProductRelatedItemsField value={relatedItems} onChange={setRelatedItems} />
           <ProductSpecimenItemsField value={specimenItems} onChange={setSpecimenItems} productOptions={catalogueNames} />
 
+        </PageSection>
+
+        <PageSection title="Deliverables, Specs & Series">
           <View style={styles.formSection}>
             <View style={styles.switchRow}>
               <Text style={styles.label}>Deliverables</Text>
@@ -400,7 +409,7 @@ export default function ProductNewScreen({ navigation }: any) {
 
           {form.hasSubjects && (
             <View style={styles.formSection}>
-              <Text style={styles.label}>Deliverables *</Text>
+              <WebLabel>Deliverables *</WebLabel>
               <Text style={styles.hint}>Add one or multiple deliverables</Text>
               <View style={styles.addRow}>
                 <WebInput
@@ -443,7 +452,7 @@ export default function ProductNewScreen({ navigation }: any) {
 
           {form.hasSpecs && (
             <View style={styles.formSection}>
-              <Text style={styles.label}>Specs *</Text>
+              <WebLabel>Specs *</WebLabel>
               <Text style={styles.hint}>Add one or multiple specs</Text>
               <View style={styles.addRow}>
                 <WebInput
@@ -486,7 +495,7 @@ export default function ProductNewScreen({ navigation }: any) {
 
           {form.hasCategory && (
             <View style={styles.formSection}>
-              <Text style={styles.label}>Series *</Text>
+              <WebLabel>Series *</WebLabel>
               <Text style={styles.hint}>Add one or multiple series</Text>
               <View style={styles.addRow}>
                 <WebInput
@@ -515,8 +524,10 @@ export default function ProductNewScreen({ navigation }: any) {
             </View>
           )}
 
-          <View style={styles.formSection}>
-            <Text style={styles.label}>Product Status *</Text>
+        </PageSection>
+
+        <PageSection title="Status">
+            <WebLabel>Product Status *</WebLabel>
             <View style={styles.statusContainer}>
               <TouchableOpacity
                 style={[styles.statusButton, form.prodStatus === 1 && styles.statusButtonActive]}
@@ -545,26 +556,14 @@ export default function ProductNewScreen({ navigation }: any) {
                 </Text>
               </TouchableOpacity>
             </View>
-          </View>
+        </PageSection>
 
-          <View style={styles.buttonRow}>
-            <TouchableOpacity
-              style={[styles.button, styles.buttonCancel]}
-              onPress={() => navigation.goBack()}
-            >
-              <Text style={styles.buttonTextCancel}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.button, styles.buttonSubmit]}
-              onPress={onSubmit}
-              disabled={submitting}
-            >
-              {submitting ? (
-                <ActivityIndicator color={colors.textLight} />
-              ) : (
-                <Text style={styles.buttonTextSubmit}>Create Product</Text>
-              )}
-            </TouchableOpacity>
+        <View style={styles.buttonRow}>
+          <View style={{ flex: 1 }}>
+            <WebButton title="Cancel" variant="outline" onPress={() => navigation.goBack()} />
+          </View>
+          <View style={{ flex: 2 }}>
+            <WebButton title="Create Product" onPress={onSubmit} loading={submitting} disabled={submitting} />
           </View>
         </View>
       </ScrollView>
@@ -574,41 +573,17 @@ export default function ProductNewScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   content: { flex: 1 },
-  contentContainer: { padding: 16, paddingBottom: 32 },
-  formCard: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 16,
-    padding: 20,
-    shadowColor: colors.shadowDark,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  formSection: { marginBottom: 24 },
-  label: {
-    ...typography.body.medium,
-    color: colors.textPrimary,
-    marginBottom: 8,
-    fontWeight: '600',
-  },
-  hint: { ...typography.body.small, color: colors.textSecondary, marginBottom: 8 },
-  input: {
-    backgroundColor: colors.background,
-    borderRadius: 12,
-    padding: 12,
-    ...typography.body.medium,
-    color: colors.textPrimary,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  addRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  addInput: { flex: 1 },
+  contentContainer: { padding: 16, paddingBottom: 32, gap: 0 },
+  formSection: { marginBottom: 16 },
+  label: { fontSize: 15, color: colors.textPrimary, fontWeight: '600' },
+  hint: { fontSize: 13, color: colors.textSecondary, marginBottom: 8 },
+  input: {},
+  addRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
+  addInput: { flex: 1, marginBottom: 0 },
   addButton: {
     backgroundColor: colors.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
     justifyContent: 'center',
   },
   addButtonText: { ...typography.body.medium, color: colors.textLight, fontWeight: '600' },
@@ -725,7 +700,7 @@ const styles = StyleSheet.create({
   dismissError: { alignSelf: 'flex-start' },
   dismissErrorText: { color: '#EF4444', fontWeight: '600', fontSize: 14 },
   errorText: { ...typography.body.medium, color: colors.error },
-  buttonRow: { flexDirection: 'row', gap: 12, marginTop: 8 },
+  buttonRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
   button: { flex: 1, padding: 16, borderRadius: 12, alignItems: 'center' },
   buttonCancel: {
     backgroundColor: colors.background,

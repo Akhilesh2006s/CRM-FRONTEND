@@ -1,9 +1,9 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, Alert } from 'react-native';
+import { View, StyleSheet, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebButton, WebInput } from '../../ui/WebPrimitives';
-import { colors, radii } from '../../theme/colors';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState, SectionTitle } from '../../ui/Kit';
 import { apiService } from '../../services/api';
 
 type Person = { _id: string; name?: string; empCode?: string; role?: string; zone?: string };
@@ -78,7 +78,7 @@ export default function FieldApprovalsScreen() {
       />
       <View style={styles.row}>
         <View style={{ flex: 1 }}>
-          <WebButton title="Approve" onPress={() => decide(kind, id, 'approve')} loading={busy === `${id}-approve`} />
+          <WebButton title="Approve" variant="success" onPress={() => decide(kind, id, 'approve')} loading={busy === `${id}-approve`} />
         </View>
         <View style={{ flex: 1 }}>
           <WebButton title="Reject" variant="destructive" onPress={() => decide(kind, id, 'reject')} loading={busy === `${id}-reject`} />
@@ -90,7 +90,7 @@ export default function FieldApprovalsScreen() {
   return (
     <ScreenShell
       title="Field Approvals"
-      subtitle="Office to Field attendance change requests, and check-outs that did not match the check-in."
+      subtitle="Office-to-field requests and check-out reviews."
       loading={loading && !refreshing}
       refreshing={refreshing}
       onRefresh={() => {
@@ -98,53 +98,44 @@ export default function FieldApprovalsScreen() {
         load();
       }}
     >
-      <Text style={styles.section}>Office to Field requests ({requests.length})</Text>
-      {requests.length === 0 ? <Text style={styles.empty}>No requests waiting.</Text> : null}
+      <SectionTitle>{`Office to Field requests (${requests.length})`}</SectionTitle>
+      {requests.length === 0 ? <EmptyState icon="✅" title="No requests waiting" /> : null}
       {requests.map((r) => (
-        <View key={r._id} style={styles.card}>
-          <Text style={styles.name}>
-            {r.employeeId?.name || '—'} {r.employeeId?.empCode ? `· ${r.employeeId.empCode}` : ''}
-          </Text>
-          <Text style={styles.meta}>Asked {when(r.createdAt)} for {r.day}</Text>
-          <Text style={styles.body}>Reason: {r.reason}</Text>
-          {r.places ? <Text style={styles.body}>Places: {r.places}</Text> : null}
-          {actions('request', r._id)}
-        </View>
+        <Card key={r._id}>
+          <CardTitle title={r.employeeId?.name || '—'} subtitle={r.employeeId?.empCode || undefined} badge="Pending" tone="warning" />
+          <InfoRow label="Asked" value={when(r.createdAt)} />
+          <InfoRow label="For day" value={r.day} />
+          <InfoRow label="Reason" value={r.reason} />
+          <InfoRow label="Places" value={r.places} />
+          <ActionRow>
+            <View style={{ flex: 1 }}>{actions('request', r._id)}</View>
+          </ActionRow>
+        </Card>
       ))}
 
-      <Text style={styles.section}>Attendance reviews ({reviews.length})</Text>
-      {reviews.length === 0 ? <Text style={styles.empty}>No attendance waiting for review.</Text> : null}
+      <SectionTitle>{`Attendance reviews (${reviews.length})`}</SectionTitle>
+      {reviews.length === 0 ? <EmptyState icon="✅" title="Nothing to review" /> : null}
       {reviews.map((a) => (
-        <View key={a._id} style={styles.card}>
-          <Text style={styles.name}>
-            {a.employeeId?.name || '—'} {a.employeeId?.empCode ? `· ${a.employeeId.empCode}` : ''}
-          </Text>
-          <Text style={styles.meta}>
-            In {when(a.startTime)} ({a.mode === 'office' ? `office${a.officeName ? `: ${a.officeName}` : ''}` : 'field'}) · Out {when(a.endTime)} (
-            {a.checkoutMode === 'office' ? `office${a.checkoutOfficeName ? `: ${a.checkoutOfficeName}` : ''}` : a.checkoutMode || 'no location'})
-          </Text>
-          {a.reviewReason ? <Text style={styles.body}>{a.reviewReason}</Text> : null}
-          {actions('review', a._id)}
-        </View>
+        <Card key={a._id}>
+          <CardTitle title={a.employeeId?.name || '—'} subtitle={a.employeeId?.empCode || undefined} badge="Review" tone="warning" />
+          <InfoRow
+            label="Start"
+            value={`${when(a.startTime)} (${a.mode === 'office' ? `office${a.officeName ? `: ${a.officeName}` : ''}` : 'field'})`}
+          />
+          <InfoRow
+            label="End"
+            value={`${when(a.endTime)} (${a.checkoutMode === 'office' ? `office${a.checkoutOfficeName ? `: ${a.checkoutOfficeName}` : ''}` : a.checkoutMode || 'no location'})`}
+          />
+          <InfoRow label="Note" value={a.reviewReason} />
+          <ActionRow>
+            <View style={{ flex: 1 }}>{actions('review', a._id)}</View>
+          </ActionRow>
+        </Card>
       ))}
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  section: { fontSize: 15, fontWeight: '700', color: colors.textPrimary, marginTop: 4, marginBottom: 8 },
-  empty: { color: colors.textSecondary, marginBottom: 12 },
-  card: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    marginBottom: 12,
-    gap: 6,
-  },
-  name: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
-  meta: { fontSize: 12, color: colors.textSecondary },
-  body: { fontSize: 13, color: colors.textPrimary },
   row: { flexDirection: 'row', gap: 8 },
 });

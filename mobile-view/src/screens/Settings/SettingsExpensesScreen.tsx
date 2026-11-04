@@ -180,17 +180,17 @@ const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 32 },
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#EEF2F7',
     padding: 16,
     gap: 4,
   },
   intro: {
-    ...typography.body.small,
-    color: colors.textSecondary,
+    fontSize: 13,
+    color: colors.textTertiary,
     marginBottom: 12,
-    lineHeight: 20,
+    lineHeight: 18,
   },
   checkRow: {
     flexDirection: 'row',
@@ -201,7 +201,7 @@ const styles = StyleSheet.create({
   checkbox: {
     width: 20,
     height: 20,
-    borderRadius: 4,
+    borderRadius: 6,
     borderWidth: 1.5,
     borderColor: '#CBD5E1',
     backgroundColor: '#FFFFFF',
@@ -215,7 +215,7 @@ const styles = StyleSheet.create({
   },
   checkLabel: {
     flex: 1,
-    ...typography.body.medium,
+    fontSize: 15,
     color: colors.textPrimary,
   },
   input: {
@@ -227,8 +227,8 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: '#E2E8F0',
-    marginVertical: 8,
+    backgroundColor: '#EEF2F7',
+    marginVertical: 12,
   },
   sectionTitle: {
     fontSize: 16,

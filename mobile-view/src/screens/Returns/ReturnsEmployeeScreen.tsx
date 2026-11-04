@@ -16,8 +16,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
-import ScreenShell from '../../ui/ScreenShell';
-import { WebInput } from '../../ui/WebPrimitives';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebButton, WebLabel } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState, SectionTitle, toneFor } from '../../ui/Kit';
 import MessageBanner from '../../components/MessageBanner';
 import { useAuth } from '../../context/AuthContext';
 import { getRoleFlags } from '../../utils/roles';
@@ -87,11 +88,7 @@ export default function ReturnsEmployeeScreen({ navigation, route }: any) {
   const [banner, setBanner] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const [returnDate, setReturnDate] = useState('');
-  const [lrNumber, setLrNumber] = useState('');
-  const [finYear, setFinYear] = useState('');
-  const [schoolType, setSchoolType] = useState('');
-  const [schoolCode, setSchoolCode] = useState('');
-  const [remarks, setRemarks] = useState('');
+  const [query, setQuery] = useState('');
 
   const loadData = useCallback(async () => {
     if (!user?._id) return;
@@ -142,65 +139,82 @@ export default function ReturnsEmployeeScreen({ navigation, route }: any) {
         : 0);
 
     return (
-      <ScreenShell title="Stock Returns" loading={loading} onRefresh={loadData}>
+      <ScreenShell
+        title="Stock Returns"
+        subtitle="Manage stock returns for your sales"
+        loading={loading}
+        onRefresh={loadData}
+      >
         {banner ? (
           <MessageBanner type={banner.type} message={banner.message} onDismiss={() => setBanner(null)} />
         ) : null}
 
-        <View style={styles.executiveHeader}>
-          <Text style={styles.executiveSubtitle}>Manage stock returns for your sales</Text>
-          <TouchableOpacity
-            style={styles.addReturnButton}
-            onPress={() => navigation.navigate('StockReturnAdd')}
-          >
-            <Text style={styles.addReturnButtonText}>+ Add Return</Text>
-          </TouchableOpacity>
-        </View>
+        <WebButton title="+ Add Return" onPress={() => navigation.navigate('StockReturnAdd')} />
+        <View style={{ height: 12 }} />
 
-        <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-          {drafts.length > 0 && (
-            <>
-              <Text style={styles.sectionTitle}>Saved drafts ({drafts.length})</Text>
-              {drafts.map((ret) => (
-                <TouchableOpacity key={ret._id} style={styles.resultCard} onPress={() => openReturn(ret)}>
-                  <Text style={styles.returnNumber}>{getReturnId(ret)}</Text>
-                  <Text style={styles.infoValue}>Draft · Tap to continue</Text>
-                </TouchableOpacity>
-              ))}
-            </>
-          )}
+        {drafts.length > 0 && (
+          <>
+            <SectionTitle>{`Saved drafts (${drafts.length})`}</SectionTitle>
+            {drafts.map((ret) => (
+              <Card key={ret._id} onPress={() => openReturn(ret)}>
+                <CardTitle title={getReturnId(ret)} subtitle="Tap to continue" badge="Draft" tone="neutral" />
+              </Card>
+            ))}
+            <SectionTitle>Returns</SectionTitle>
+          </>
+        )}
 
-          {allReturns.length === 0 && !loading ? (
-            <Text style={styles.emptyText}>No returns found</Text>
-          ) : (
-            allReturns.map((ret) => (
-              <View key={ret._id} style={styles.resultCard}>
-                <View style={styles.resultTop}>
-                  <Text style={styles.returnNumber}>{getReturnId(ret)}</Text>
-                  <Text style={styles.statusBadge}>{cell(ret.status)}</Text>
-                </View>
-                <InfoRow label="LR No" value={cell(ret.lrNumber)} />
-                <InfoRow label="Fin Year" value={cell(ret.finYear)} />
-                <InfoRow label="School" value={getSchool(ret)} />
-                <InfoRow label="School Code" value={cell(ret.schoolCode)} />
-                <InfoRow label="Sale ID" value={getSaleId(ret)} />
-                <InfoRow label="Return Type" value={cell(ret.returnType)} />
-                <InfoRow label="Return Qty" value={String(getQty(ret))} />
-                <View style={styles.cardActions}>
-                  <TouchableOpacity style={[styles.viewButton, styles.cardActionBtn]} onPress={() => openReturn(ret)}>
-                    <Text style={styles.viewButtonText}>View</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.printBtn, styles.cardActionBtn]} onPress={() => printSlip(ret)}>
-                    <Text style={styles.printBtnText}>Print</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))
-          )}
-        </ScrollView>
+        {allReturns.length === 0 && !loading ? (
+          <EmptyState icon="↩️" title="No returns found" />
+        ) : (
+          allReturns.map((ret) => (
+            <Card key={ret._id}>
+              <CardTitle title={getReturnId(ret)} subtitle={getSchool(ret) !== '-' ? getSchool(ret) : undefined} badge={cell(ret.status)} tone={toneFor(ret.status)} />
+              <InfoRow label="LR No" value={cell(ret.lrNumber)} />
+              <InfoRow label="Fin Year" value={cell(ret.finYear)} />
+              <InfoRow label="School Code" value={cell(ret.schoolCode)} />
+              <InfoRow label="Sale ID" value={getSaleId(ret)} />
+              <InfoRow label="Return Type" value={cell(ret.returnType)} />
+              <InfoRow label="Return Qty" value={String(getQty(ret))} />
+              <ActionRow>
+                <WebButton title="View" variant="outline" onPress={() => openReturn(ret)} />
+                <WebButton title="Print" variant="outline" onPress={() => printSlip(ret)} />
+              </ActionRow>
+            </Card>
+          ))
+        )}
       </ScreenShell>
     );
   }
+
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const toYmd = (d?: string) => {
+    if (!d) return '';
+    const dt = new Date(d);
+    if (Number.isNaN(dt.getTime())) return '';
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+  };
+  const visibleReturns = returns.filter((ret) => {
+    if (returnDate && toYmd(ret.returnDate) !== returnDate) return false;
+    if (!words.length) return true;
+    const text = [
+      ret.returnNumber,
+      ret.status,
+      ret.lrNumber,
+      ret.finYear,
+      ret.schoolType,
+      ret.schoolCode,
+      getLeadName(ret),
+      getExecutiveName(ret),
+      ret.remarks,
+      getManagerText(ret).text,
+      formatDate(ret.returnDate),
+    ]
+      .filter((v) => v !== undefined && v !== null)
+      .join(' ')
+      .toLowerCase();
+    return words.every((w) => text.includes(w));
+  });
 
   return (
     <ScreenShell title="Employee Stock Returns" loading={loading} onRefresh={loadData}>
@@ -208,217 +222,58 @@ export default function ReturnsEmployeeScreen({ navigation, route }: any) {
         <MessageBanner type={banner.type} message={banner.message} onDismiss={() => setBanner(null)} />
       ) : null}
 
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-        <View style={styles.formCard}>
-          <Field label="Return Date *">
-            <DateField placeholder="Select date" value={returnDate} onChange={setReturnDate} />
-          </Field>
-          <Field label="LR No (optional)">
-            <WebInput
-              style={styles.input}
-              placeholder="e.g. C062455"
-              value={lrNumber}
-              onChangeText={setLrNumber}
-            />
-          </Field>
-          <Field label="Fin Year (optional)">
-            <WebInput
-              style={styles.input}
-              placeholder="e.g. 2025-26"
-              value={finYear}
-              onChangeText={setFinYear}
-            />
-          </Field>
-          <Field label="School Type (optional)">
-            <WebInput
-              style={styles.input}
-              placeholder="New / Existing"
-              value={schoolType}
-              onChangeText={setSchoolType}
-            />
-          </Field>
-          <Field label="School Code (optional)">
-            <WebInput
-              style={styles.input}
-              placeholder="e.g. VJVIJ5050"
-              value={schoolCode}
-              onChangeText={setSchoolCode}
-            />
-          </Field>
-          <Field label="Remarks">
-            <WebInput
-              style={[styles.input, styles.textArea]}
-              placeholder="Reason/notes for return"
-              value={remarks}
-              onChangeText={setRemarks}
-              multiline
-            />
-          </Field>
-        </View>
+      <PageSection title="Search">
+        <WebInput
+          placeholder="Search LR no, fin year, school, executive, remarks…"
+          value={query}
+          onChangeText={setQuery}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        <WebLabel>Return Date</WebLabel>
+        <DateField placeholder="Select date" value={returnDate} onChange={setReturnDate} />
+      </PageSection>
 
-        <View style={styles.resultsHeader}>
-          <Text style={styles.resultsTitle}>
-            {isAdmin ? 'All Executive Returns' : 'My Returns'} ({returns.length})
-          </Text>
-        </View>
+      <SectionTitle>{`${isAdmin ? 'All Executive Returns' : 'My Returns'} (${visibleReturns.length})`}</SectionTitle>
 
-        {returns.length === 0 && !loading ? (
-          <Text style={styles.emptyText}>No returns yet</Text>
-        ) : (
-          returns.map((ret) => {
-            const manager = getManagerText(ret);
-            return (
-              <View key={ret._id} style={styles.resultCard}>
-                <View style={styles.resultTop}>
-                  <Text style={styles.returnNumber}>Return #{ret.returnNumber}</Text>
-                  <Text style={styles.status}>{cell(ret.status)}</Text>
-                </View>
-                <InfoRow label="LR No" value={cell(ret.lrNumber)} />
-                <InfoRow label="Fin Year" value={cell(ret.finYear)} />
-                <InfoRow label="Lead" value={getLeadName(ret)} />
-                <InfoRow label="Return Date" value={formatDate(ret.returnDate)} />
-                {isAdmin && <InfoRow label="Executive" value={getExecutiveName(ret)} />}
-                <InfoRow label="Remarks" value={cell(ret.remarks)} />
-                {isAdmin && (
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Manager / rejection</Text>
-                    <Text style={[styles.infoValue, manager.rejected && styles.rejectedText]}>
-                      {manager.text}
-                    </Text>
-                  </View>
-                )}
-                <InfoRow label="Created" value={formatCreated(ret.createdAt)} />
-                <View style={styles.cardActions}>
-                  <TouchableOpacity style={[styles.viewButton, styles.cardActionBtn]} onPress={() => openReturn(ret)}>
-                    <Text style={styles.viewButtonText}>View</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.printBtn, styles.cardActionBtn]} onPress={() => printSlip(ret)}>
-                    <Text style={styles.printBtnText}>Print</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            );
-          })
-        )}
-      </ScrollView>
+      {visibleReturns.length === 0 && !loading ? (
+        <EmptyState icon="↩️" title="No returns yet" />
+      ) : (
+        visibleReturns.map((ret) => {
+          const manager = getManagerText(ret);
+          return (
+            <Card key={ret._id}>
+              <CardTitle
+                title={`Return #${ret.returnNumber}`}
+                subtitle={getLeadName(ret) !== '-' ? getLeadName(ret) : undefined}
+                badge={cell(ret.status)}
+                tone={toneFor(ret.status)}
+              />
+              <InfoRow label="LR No" value={cell(ret.lrNumber)} />
+              <InfoRow label="Fin Year" value={cell(ret.finYear)} />
+              <InfoRow label="Return Date" value={formatDate(ret.returnDate)} />
+              {isAdmin && <InfoRow label="Executive" value={getExecutiveName(ret)} />}
+              <InfoRow label="Remarks" value={cell(ret.remarks)} />
+              {isAdmin && manager.text !== '-' ? (
+                <InfoRow
+                  label="Manager"
+                  value={<Text style={[styles.infoValue, manager.rejected && styles.rejectedText]}>{manager.text}</Text>}
+                />
+              ) : null}
+              <InfoRow label="Created" value={formatCreated(ret.createdAt)} />
+              <ActionRow>
+                <WebButton title="View" variant="outline" onPress={() => openReturn(ret)} />
+                <WebButton title="Print" variant="outline" onPress={() => printSlip(ret)} />
+              </ActionRow>
+            </Card>
+          );
+        })
+      )}
     </ScreenShell>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
-      {children}
-    </View>
-  );
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.infoRow}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  content: { flex: 1 },
-  contentContainer: { padding: 16, paddingBottom: 40 },
-  formCard: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    marginBottom: 16,
-  },
-  field: { marginBottom: 12 },
-  label: { ...typography.label.medium, color: colors.textPrimary, marginBottom: 6 },
-  input: {
-    ...typography.body.medium,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 12,
-    color: colors.textPrimary,
-  },
-  textArea: { minHeight: 72, textAlignVertical: 'top' },
-  resultsHeader: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    marginBottom: 12,
-  },
-  resultsTitle: { ...typography.label.large, color: colors.textPrimary, fontWeight: '600' },
-  emptyText: { ...typography.body.medium, color: colors.textSecondary, textAlign: 'center', paddingVertical: 24 },
-  resultCard: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    marginBottom: 12,
-  },
-  resultTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  returnNumber: { ...typography.label.large, color: colors.textPrimary, fontWeight: '600' },
-  status: { ...typography.body.small, color: colors.textSecondary, fontWeight: '600' },
-  infoRow: { flexDirection: 'row', marginBottom: 6, gap: 8 },
-  infoLabel: { ...typography.body.small, color: colors.textSecondary, width: 130 },
-  infoValue: { ...typography.body.small, color: colors.textPrimary, flex: 1 },
-  rejectedText: { color: '#DC2626' },
-  viewButton: {
-    marginTop: 10,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    backgroundColor: colors.background,
-  },
-  viewButtonText: { ...typography.label.medium, color: '#059669', fontWeight: '600' },
-  cardActions: { flexDirection: 'row', gap: 8 },
-  cardActionBtn: { flex: 1 },
-  printBtn: {
-    marginTop: 10,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    alignItems: 'center',
-    backgroundColor: colors.backgroundLight,
-  },
-  printBtnText: { ...typography.label.medium, color: colors.primary, fontWeight: '600' },
-  addReturnButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-  },
-  addReturnButtonText: { ...typography.body.medium, color: colors.textLight, fontWeight: '600' },
-  executiveHeader: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 12,
-    gap: 12,
-  },
-  executiveSubtitle: { ...typography.body.small, color: colors.textSecondary },
-  statusBadge: {
-    ...typography.label.small,
-    color: colors.textSecondary,
-    backgroundColor: colors.background,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  sectionTitle: { ...typography.heading.h3, color: colors.textPrimary, marginBottom: 12 },
+  infoValue: { fontSize: 14, color: colors.textPrimary },
+  rejectedText: { color: colors.error },
 });

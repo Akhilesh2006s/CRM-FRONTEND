@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, Platform } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { colors, radii, spacing } from '../../theme/colors';
-import { typography } from '../../theme/typography';
+import { colors, spacing } from '../../theme/colors';
 import { apiService } from '../../services/api';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
+import { Card, CardTitle, InfoRow, EmptyState, SectionTitle } from '../../ui/Kit';
 
 import { ymdToDmy } from '../../utils/dateFormat';
 /** Same subject list as web /dashboard/training/request (validated by the API). */
@@ -73,17 +73,6 @@ function fmtDate(value?: string) {
   if (!value) return '—';
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
-function statusColors(status?: string) {
-  switch (status) {
-    case 'Approved':
-      return { bg: colors.successLight, fg: colors.success };
-    case 'Rejected':
-      return { bg: colors.errorLight, fg: colors.error };
-    default:
-      return { bg: colors.warningLight, fg: colors.warning };
-  }
 }
 
 function DateField({
@@ -291,31 +280,25 @@ export default function TrainingRequestScreen() {
         />
       </PageSection>
 
-      <Text style={styles.sectionTitle}>My requests</Text>
+      <SectionTitle>My requests</SectionTitle>
       {loading ? (
         <Text style={styles.empty}>Loading…</Text>
       ) : items.length === 0 ? (
-        <Text style={styles.empty}>No training requests yet</Text>
+        <EmptyState icon="🎓" title="No training requests yet" />
       ) : (
-        items.map((item) => {
-          const sc = statusColors(item.status);
-          return (
-            <View key={item._id} style={styles.card}>
-              <View style={styles.cardHead}>
-                <Text style={styles.cardTitle}>
-                  {item.schoolName}
-                  {item.schoolCode ? ` (${item.schoolCode})` : ''}
-                </Text>
-                <View style={[styles.badge, { backgroundColor: sc.bg }]}>
-                  <Text style={[styles.badgeText, { color: sc.fg }]}>{item.status}</Text>
-                </View>
-              </View>
-              <Text style={styles.meta}>Subject: {item.subject}</Text>
-              <Text style={styles.meta}>Preferred date: {fmtDate(item.preferredDate)}</Text>
-              <Text style={styles.note}>Note: {item.rejectionReason || item.remarks || '—'}</Text>
-            </View>
-          );
-        })
+        items.map((item) => (
+          <Card key={item._id}>
+            <CardTitle
+              title={item.schoolName}
+              subtitle={item.schoolCode || undefined}
+              badge={item.status}
+              tone={item.status === 'Approved' ? 'success' : item.status === 'Rejected' ? 'error' : 'warning'}
+            />
+            <InfoRow label="Subject" value={item.subject} />
+            <InfoRow label="Preferred date" value={fmtDate(item.preferredDate)} />
+            <InfoRow label="Note" value={item.rejectionReason || item.remarks || '—'} />
+          </Card>
+        ))
       )}
     </ScreenShell>
   );
@@ -328,28 +311,15 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: 10,
     padding: 12,
-    marginBottom: 8,
+    marginBottom: 12,
+    minHeight: 48,
+    justifyContent: 'center',
     backgroundColor: colors.backgroundLight,
   },
-  dateText: { ...typography.body.medium, color: colors.textPrimary },
+  dateText: { fontSize: 15, color: colors.textPrimary },
   datePlaceholder: { color: colors.textMuted },
   datePickerBox: { backgroundColor: colors.backgroundLight, padding: 16, marginTop: 'auto' },
-  hint: { fontSize: 12, color: colors.textTertiary, marginTop: -6, marginBottom: 12 },
+  hint: { fontSize: 13, color: colors.textTertiary, marginTop: -6, marginBottom: 12 },
   textarea: { minHeight: 80, textAlignVertical: 'top' },
-  sectionTitle: { fontSize: 17, fontWeight: '600', color: colors.textPrimary, marginBottom: spacing.sm },
   empty: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', paddingVertical: spacing.lg },
-  card: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  cardHead: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 6 },
-  cardTitle: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.textPrimary },
-  badge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999 },
-  badgeText: { fontSize: 12, fontWeight: '600' },
-  meta: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
-  note: { fontSize: 13, color: colors.textTertiary, marginTop: 6 },
 });

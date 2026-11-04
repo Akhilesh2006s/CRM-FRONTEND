@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Modal, KeyboardAvoidingView, Platform } from 'react-native';
-import { colors, radii, spacing } from '../../theme/colors';
+import { colors, spacing } from '../../theme/colors';
 import { apiService } from '../../services/api';
-import ScreenShell from '../../ui/ScreenShell';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState } from '../../ui/Kit';
 import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 
@@ -41,17 +42,6 @@ function fmtDate(value?: string) {
   if (!value) return '—';
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
-function statusColors(status?: string) {
-  switch (status) {
-    case 'Approved':
-      return { bg: colors.successLight, fg: colors.success };
-    case 'Rejected':
-      return { bg: colors.errorLight, fg: colors.error };
-    default:
-      return { bg: colors.warningLight, fg: colors.warning };
-  }
 }
 
 export default function TrainingRequestsReviewScreen() {
@@ -132,58 +122,51 @@ export default function TrainingRequestsReviewScreen() {
         <MessageBanner type={banner.type} message={banner.message} onDismiss={() => setBanner(null)} />
       ) : null}
 
-      <WebSelect label="Status" value={status} onValueChange={(v) => setStatus(v || 'Pending')} items={STATUS_ITEMS} />
+      <PageSection title="Filter">
+        <WebSelect label="Status" value={status} onValueChange={(v) => setStatus(v || 'Pending')} items={STATUS_ITEMS} />
+      </PageSection>
 
       {loading ? (
         <Text style={styles.empty}>Loading…</Text>
       ) : items.length === 0 ? (
-        <Text style={styles.empty}>No training requests</Text>
+        <EmptyState icon="🎓" title="No training requests" />
       ) : (
-        items.map((item) => {
-          const sc = statusColors(item.status);
-          return (
-            <View key={item._id} style={styles.card}>
-              <View style={styles.cardHead}>
+        items.map((item) => (
+          <Card key={item._id}>
+            <CardTitle
+              title={item.schoolCode ? `${item.schoolName} (${item.schoolCode})` : item.schoolName}
+              subtitle={item.zone || undefined}
+              badge={item.status}
+              tone={item.status === 'Approved' ? 'success' : item.status === 'Rejected' ? 'error' : 'warning'}
+            />
+            <InfoRow label="Requested by" value={personName(item.requestedBy)} />
+            <InfoRow label="Subject" value={item.subject} />
+            <InfoRow label="Preferred date" value={fmtDate(item.preferredDate)} />
+            <InfoRow
+              label={item.status === 'Rejected' ? 'Reason' : 'Remarks'}
+              value={item.status === 'Rejected' ? item.rejectionReason || '—' : item.remarks || '—'}
+            />
+            {item.status === 'Pending' ? (
+              <ActionRow>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.cardTitle}>
-                    {item.schoolName}
-                    {item.schoolCode ? ` (${item.schoolCode})` : ''}
-                  </Text>
-                  {item.zone ? <Text style={styles.zone}>{item.zone}</Text> : null}
+                  <WebButton title="Approve" variant="success" onPress={() => approve(item._id)} disabled={acting} />
                 </View>
-                <View style={[styles.badge, { backgroundColor: sc.bg }]}>
-                  <Text style={[styles.badgeText, { color: sc.fg }]}>{item.status}</Text>
+                <View style={{ flex: 1 }}>
+                  <WebButton
+                    title="Reject"
+                    variant="destructive"
+                    disabled={acting}
+                    onPress={() => {
+                      setRejectId(item._id);
+                      setRejectionReason('');
+                      setRejectError('');
+                    }}
+                  />
                 </View>
-              </View>
-              <Row label="Requested by" value={personName(item.requestedBy)} />
-              <Row label="Subject" value={item.subject} />
-              <Row label="Preferred date" value={fmtDate(item.preferredDate)} />
-              <Row
-                label={item.status === 'Rejected' ? 'Reason' : 'Remarks'}
-                value={item.status === 'Rejected' ? item.rejectionReason || '—' : item.remarks || '—'}
-              />
-              {item.status === 'Pending' ? (
-                <View style={styles.actions}>
-                  <View style={{ flex: 1 }}>
-                    <WebButton title="Approve" onPress={() => approve(item._id)} disabled={acting} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <WebButton
-                      title="Reject"
-                      variant="destructive"
-                      disabled={acting}
-                      onPress={() => {
-                        setRejectId(item._id);
-                        setRejectionReason('');
-                        setRejectError('');
-                      }}
-                    />
-                  </View>
-                </View>
-              ) : null}
-            </View>
-          );
-        })
+              </ActionRow>
+            ) : null}
+          </Card>
+        ))
       )}
 
       <Modal visible={Boolean(rejectId)} transparent animationType="fade" onRequestClose={() => setRejectId(null)}>
@@ -225,37 +208,12 @@ export default function TrainingRequestsReviewScreen() {
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.row}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={styles.rowValue}>{value}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   empty: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', paddingVertical: spacing.lg },
-  card: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  cardHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 8 },
-  cardTitle: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
-  zone: { fontSize: 12, color: colors.textTertiary, marginTop: 2 },
-  badge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999 },
-  badgeText: { fontSize: 12, fontWeight: '600' },
-  row: { flexDirection: 'row', paddingVertical: 3, gap: 8 },
-  rowLabel: { width: 110, fontSize: 13, color: colors.textTertiary },
-  rowValue: { flex: 1, fontSize: 13, color: colors.textPrimary },
-  actions: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  actions: { flexDirection: 'row', gap: 8, marginTop: 12 },
   overlay: { flex: 1, backgroundColor: 'rgba(15,23,42,0.45)', justifyContent: 'center', padding: spacing.md },
-  dialog: { backgroundColor: colors.backgroundLight, borderRadius: radii.lg, padding: spacing.md },
-  dialogTitle: { fontSize: 17, fontWeight: '600', color: colors.textPrimary, marginBottom: 12 },
+  dialog: { backgroundColor: colors.backgroundLight, borderRadius: 14, padding: spacing.md },
+  dialogTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary, marginBottom: 12 },
   textarea: { minHeight: 80, textAlignVertical: 'top' },
   errorText: { color: colors.error, fontSize: 13, marginTop: -4, marginBottom: 4 },
 });

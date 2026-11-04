@@ -195,11 +195,11 @@ export function TransportDetailsSection({
 export default TransportDetailsSection;
 
 const styles = StyleSheet.create({
-  title: { fontSize: 18, fontWeight: '700', color: colors.textPrimary, marginBottom: 4 },
-  subtitle: { fontSize: 13, color: colors.textSecondary, marginBottom: 8 },
+  title: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, marginBottom: 4 },
+  subtitle: { fontSize: 13, color: colors.textTertiary, marginBottom: 8 },
   actions: { flexDirection: 'row', gap: 8, marginBottom: 8 },
   actionBtn: { flex: 1 },
   field: { marginTop: 10 },
-  label: { fontSize: 13, fontWeight: '600', color: colors.textPrimary, marginBottom: 4 },
+  label: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 6 },
   disabled: { opacity: 0.8 },
 });

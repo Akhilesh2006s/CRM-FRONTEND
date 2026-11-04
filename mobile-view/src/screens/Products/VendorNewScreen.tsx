@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { apiService } from '../../services/api';
-import ScreenShell from '../../ui/ScreenShell';
-import { WebInput, WebLabel } from '../../ui/WebPrimitives';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebLabel, WebButton } from '../../ui/WebPrimitives';
+import { EmptyState } from '../../ui/Kit';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 
@@ -63,50 +64,75 @@ export default function VendorNewScreen({ navigation }: any) {
     }
   };
 
-  return <ScreenShell title="Add Partner" loading={loadingProducts}>
-    <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer} keyboardShouldPersistTaps="handled">
-      <Text style={styles.subtitle}>Create a new partner account and assign products</Text>
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Partner Basic Details</Text>
+  return (
+    <ScreenShell title="Add Partner" subtitle="Create a partner account and assign products" loading={loadingProducts}>
+      <PageSection title="Partner Details">
         <WebLabel>Partner Name *</WebLabel>
         <WebInput value={name} onChangeText={setName} placeholder="Enter partner name" />
         <WebLabel>Partner Email *</WebLabel>
-        <WebInput value={email} onChangeText={setEmail} placeholder="Enter partner email (used for login)" autoCapitalize="none" keyboardType="email-address" />
+        <WebInput value={email} onChangeText={setEmail} placeholder="Used for login" autoCapitalize="none" keyboardType="email-address" />
         <WebLabel>Partner Password *</WebLabel>
         <WebInput value={password} onChangeText={setPassword} placeholder="Min 6 characters" secureTextEntry />
-        <Text style={styles.helper}>Minimum 6 characters required</Text>
+        <Text style={styles.helper}>Minimum 6 characters.</Text>
+      </PageSection>
 
-        <View style={styles.divider} />
+      <PageSection title="Assign Products">
         <View style={styles.productsHeader}>
-          <View><Text style={styles.sectionTitle}>Assign Products</Text><Text style={styles.helper}>Select products to assign to this partner. At least one product is required.</Text></View>
+          <Text style={[styles.helper, { flex: 1 }]}>At least one product is required.</Text>
           <TouchableOpacity style={styles.selectAll} onPress={selectAll} disabled={products.length === 0}>
             <Text style={styles.selectAllText}>{selectedProductIds.length === products.length && products.length ? 'Clear All' : 'Select All'}</Text>
           </TouchableOpacity>
         </View>
-        {loadingProducts ? <ActivityIndicator color={colors.primary} style={styles.loader} /> : products.length === 0 ? <Text style={styles.empty}>No active products available.</Text> : <View style={styles.productList}>
-          {products.map((product) => {
-            const selected = selectedProductIds.includes(product._id);
-            return <TouchableOpacity key={product._id} style={styles.productOption} onPress={() => toggleProduct(product._id)} accessibilityRole="checkbox" accessibilityState={{ checked: selected }}>
-              <View style={[styles.checkbox, selected && styles.checkboxSelected]}>{selected && <Text style={styles.checkmark}>✓</Text>}</View>
-              <Text style={styles.productText}>{product.productName || product.name || 'Unnamed product'}</Text>
-            </TouchableOpacity>;
-          })}
-        </View>}
+        {loadingProducts ? (
+          <ActivityIndicator color={colors.primary} style={styles.loader} />
+        ) : products.length === 0 ? (
+          <EmptyState icon="📦" title="No active products available" />
+        ) : (
+          <View style={styles.productList}>
+            {products.map((product) => {
+              const selected = selectedProductIds.includes(product._id);
+              return (
+                <TouchableOpacity
+                  key={product._id}
+                  style={styles.productOption}
+                  onPress={() => toggleProduct(product._id)}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: selected }}
+                >
+                  <View style={[styles.checkbox, selected && styles.checkboxSelected]}>{selected && <Text style={styles.checkmark}>✓</Text>}</View>
+                  <Text style={styles.productText}>{product.productName || product.name || 'Unnamed product'}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
         <Text style={styles.selectedCount}>Selected: {selectedProductIds.length} product{selectedProductIds.length === 1 ? '' : 's'}</Text>
+      </PageSection>
 
-        <View style={styles.actions}>
-          <TouchableOpacity style={styles.cancelButton} onPress={() => navigation.goBack()} disabled={saving}><Text style={styles.cancelText}>Cancel</Text></TouchableOpacity>
-          <TouchableOpacity style={[styles.saveButton, saving && styles.disabled]} onPress={save} disabled={saving}>{saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>Save Partner</Text>}</TouchableOpacity>
+      <View style={styles.actions}>
+        <View style={{ flex: 1 }}>
+          <WebButton title="Cancel" variant="outline" onPress={() => navigation.goBack()} disabled={saving} />
+        </View>
+        <View style={{ flex: 1.5 }}>
+          <WebButton title="Save Partner" onPress={save} loading={saving} disabled={saving} />
         </View>
       </View>
-    </ScrollView>
-  </ScreenShell>;
+    </ScreenShell>
+  );
 }
 
 const styles = StyleSheet.create({
-  content: { flex: 1 }, contentContainer: { padding: 16, paddingBottom: 32 }, subtitle: { ...typography.body.medium, color: colors.textSecondary, marginBottom: 16 },
-  card: { backgroundColor: colors.backgroundLight, borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: 16 }, sectionTitle: { ...typography.heading.h3, color: colors.textPrimary, marginBottom: 10 }, helper: { ...typography.label.small, color: colors.textSecondary, marginTop: -4, marginBottom: 10 },
-  divider: { height: 1, backgroundColor: colors.border, marginVertical: 10 }, productsHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }, selectAll: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7 }, selectAllText: { ...typography.label.small, color: colors.textPrimary, fontWeight: '600' },
-  productList: { borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 8, marginTop: 4 }, productOption: { flexDirection: 'row', alignItems: 'center', paddingVertical: 9 }, checkbox: { width: 20, height: 20, borderRadius: 4, borderWidth: 1, borderColor: colors.border, marginRight: 10, alignItems: 'center', justifyContent: 'center' }, checkboxSelected: { backgroundColor: colors.primary, borderColor: colors.primary }, checkmark: { color: '#fff', fontWeight: '800', fontSize: 14 }, productText: { ...typography.body.medium, color: colors.textPrimary },
-  selectedCount: { ...typography.label.small, color: colors.textSecondary, marginTop: 10 }, loader: { marginVertical: 20 }, empty: { ...typography.body.medium, color: colors.textSecondary, marginVertical: 16 }, actions: { flexDirection: 'row', gap: 12, marginTop: 20 }, cancelButton: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 13, borderRadius: 10, borderWidth: 1, borderColor: colors.border }, cancelText: { ...typography.body.medium, color: colors.textPrimary, fontWeight: '600' }, saveButton: { flex: 1.5, alignItems: 'center', justifyContent: 'center', padding: 13, borderRadius: 10, backgroundColor: colors.primary }, disabled: { opacity: 0.6 }, saveText: { ...typography.body.medium, color: '#fff', fontWeight: '700' },
+  helper: { fontSize: 13, color: colors.textTertiary, marginTop: -8, marginBottom: 12 },
+  productsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 },
+  selectAll: { borderWidth: 1, borderColor: '#DCE3EC', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
+  selectAllText: { fontSize: 13, color: colors.textPrimary, fontWeight: '600' },
+  productList: { borderWidth: 1, borderColor: '#EEF2F7', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 4 },
+  productOption: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
+  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 1, borderColor: '#CBD5E1', marginRight: 12, alignItems: 'center', justifyContent: 'center' },
+  checkboxSelected: { backgroundColor: colors.primaryDark, borderColor: colors.primaryDark },
+  checkmark: { color: '#fff', fontWeight: '800', fontSize: 14 },
+  productText: { fontSize: 15, color: colors.textPrimary },
+  selectedCount: { fontSize: 13, color: colors.textSecondary, marginTop: 12 },
+  loader: { marginVertical: 20 },
+  actions: { flexDirection: 'row', gap: 8 },
 });

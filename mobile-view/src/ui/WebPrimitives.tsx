@@ -35,7 +35,7 @@ export function WebButton({
 }: {
   title: string;
   onPress: () => void;
-  variant?: 'primary' | 'outline' | 'destructive';
+  variant?: 'primary' | 'outline' | 'destructive' | 'success';
   disabled?: boolean;
   loading?: boolean;
 }) {
@@ -44,13 +44,10 @@ export function WebButton({
       ? styles.btnOutline
       : variant === 'destructive'
         ? styles.btnDestructive
-        : styles.btnPrimary;
-  const t =
-    variant === 'outline'
-      ? styles.btnTextOutline
-      : variant === 'destructive'
-        ? styles.btnTextDestructive
-        : styles.btnTextPrimary;
+        : variant === 'success'
+          ? styles.btnSuccess
+          : styles.btnPrimary;
+  const t = variant === 'outline' ? styles.btnTextOutline : styles.btnTextPrimary;
   return (
     <TouchableOpacity
       style={[styles.btn, v, disabled && styles.btnDisabled]}
@@ -155,6 +152,34 @@ export function DataTable({
   columns: string[];
   rows: React.ReactNode[][];
 }) {
+  if (Platform.OS !== 'web') {
+    if (rows.length === 0) return <Text style={styles.emptyRow}>No records.</Text>;
+    return (
+      <View>
+        {rows.map((row, ri) => (
+          <View key={ri} style={styles.rowCard}>
+            {row.map((cell, ci) => {
+              const empty = cell === null || cell === undefined || (typeof cell === 'string' && cell.trim() === '');
+              if (empty) return null;
+              const first = ci === 0;
+              return (
+                <View key={ci} style={first ? styles.rowCardHead : styles.rowCardLine}>
+                  {!first ? <Text style={styles.rowCardKey}>{columns[ci] || ''}</Text> : null}
+                  <View style={{ flex: 1 }}>
+                    {typeof cell === 'string' || typeof cell === 'number' ? (
+                      <Text style={first ? styles.rowCardTitle : styles.rowCardValue}>{String(cell)}</Text>
+                    ) : (
+                      cell
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        ))}
+      </View>
+    );
+  }
   return (
     <View style={styles.table}>
       <View style={styles.tableHead}>
@@ -182,39 +207,41 @@ export function DataTable({
 }
 
 const styles = StyleSheet.create({
-  label: { fontSize: 13, fontWeight: '500', color: colors.textPrimary, marginBottom: 6 },
+  label: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 6 },
   input: {
     backgroundColor: colors.backgroundLight,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderColor: '#DCE3EC',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minHeight: 48,
     fontSize: 15,
     color: colors.textPrimary,
-    marginBottom: 12,
+    marginBottom: 14,
   },
   btn: {
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: radii.md,
+    paddingVertical: 12,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 40,
+    minHeight: 48,
+    marginVertical: 4,
   },
-  btnPrimary: { backgroundColor: colors.primary },
-  btnOutline: { backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border },
-  btnDestructive: { backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.error },
+  btnPrimary: { backgroundColor: colors.primaryDark },
+  btnSuccess: { backgroundColor: colors.success },
+  btnOutline: { backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: '#DCE3EC' },
+  btnDestructive: { backgroundColor: colors.error },
   btnDisabled: { opacity: 0.5 },
-  btnTextPrimary: { color: colors.primaryForeground, fontWeight: '600', fontSize: 14 },
-  btnTextOutline: { color: colors.textPrimary, fontWeight: '600', fontSize: 14 },
-  btnTextDestructive: { color: colors.error, fontWeight: '600', fontSize: 14 },
-  selectWrap: { marginBottom: 12 },
+  btnTextPrimary: { color: colors.primaryForeground, fontWeight: '700', fontSize: 15 },
+  btnTextOutline: { color: colors.textPrimary, fontWeight: '600', fontSize: 15 },
+  selectWrap: { marginBottom: 14 },
   selectWrapCompact: { marginBottom: 0, width: '100%' },
   pickerBox: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.md,
+    borderColor: '#DCE3EC',
+    borderRadius: 10,
     backgroundColor: colors.backgroundLight,
     overflow: 'hidden',
     justifyContent: 'center',
@@ -237,4 +264,17 @@ const styles = StyleSheet.create({
   tdRight: { alignItems: 'flex-end' },
   tdText: { fontSize: 14, color: colors.textPrimary },
   emptyRow: { padding: 16, fontSize: 13, color: colors.textSecondary, textAlign: 'center' },
+  rowCard: {
+    backgroundColor: colors.backgroundLight,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#EEF2F7',
+    padding: 12,
+    marginBottom: 10,
+  },
+  rowCardHead: { marginBottom: 6 },
+  rowCardTitle: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
+  rowCardLine: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 3, gap: 8 },
+  rowCardKey: { width: 110, fontSize: 13, color: colors.textTertiary },
+  rowCardValue: { fontSize: 14, color: colors.textPrimary },
 });

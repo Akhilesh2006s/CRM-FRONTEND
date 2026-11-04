@@ -18,7 +18,8 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { Picker } from '@react-native-picker/picker';
 import { colors } from '../../theme/colors';
 import ScreenShell from '../../ui/ScreenShell';
-import { WebInput } from '../../ui/WebPrimitives';
+import { CardTitle, InfoRow, EmptyState } from '../../ui/Kit';
+import { WebInput, WebButton } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -787,43 +788,25 @@ export default function WarehouseDCAtWarehouseDetailScreen({ navigation, route }
           </View>
         ) : null}
 
-        <ScrollView horizontal showsHorizontalScrollIndicator>
-          <View style={styles.table}>
-            <View style={styles.tableHead}>
-              {[
-                'Product',
-                'Class',
-                'Product Category',
-                'Specs',
-                'Subject',
-                'Required Quantity',
-                'Level',
-                'Available Qty',
-                'Deliverable Qty',
-                'Remaining Qty',
-              ].map((h) => (
-                <Text key={h} style={styles.th}>
-                  {h}
-                </Text>
-              ))}
-            </View>
-            {productRows.length === 0 ? (
-              <Text style={styles.emptyRow}>No products added</Text>
-            ) : (
-              productRows.map((row, idx) => {
-                const remaining = row.remainingQuantity ?? 0;
-                const remainingStyle =
-                  remaining < 0 ? styles.remainingBad : remaining === 0 ? styles.remainingZero : styles.remainingOk;
-                return (
-                  <View key={`${row.product}-${idx}`} style={styles.tableRow}>
-                    <Text style={styles.td}>{row.product}</Text>
-                    <Text style={styles.td}>{row.class}</Text>
-                    <Text style={styles.td}>{row.productCategory || '-'}</Text>
-                    <Text style={styles.td}>{resolveProductMasterSpec(row.product, row.specs) || '-'}</Text>
-                    <Text style={styles.td}>{row.subject || '-'}</Text>
-                    <Text style={[styles.td, styles.tdStrong]}>{row.quantity || 0}</Text>
-                    <Text style={styles.td}>{row.level || '-'}</Text>
-                    <Text style={styles.td}>{row.availableQuantity ?? 0}</Text>
+        {productRows.length === 0 ? (
+          <EmptyState icon="📦" title="No products added" />
+        ) : (
+          productRows.map((row, idx) => {
+            const remaining = row.remainingQuantity ?? 0;
+            const remainingStyle =
+              remaining < 0 ? styles.remainingBad : remaining === 0 ? styles.remainingZero : styles.remainingOk;
+            return (
+              <View key={`${row.product}-${idx}`} style={styles.productCard}>
+                <CardTitle title={row.product} subtitle={row.class ? `Class ${row.class}` : undefined} />
+                <InfoRow label="Category" value={row.productCategory || '-'} />
+                <InfoRow label="Specs" value={resolveProductMasterSpec(row.product, row.specs) || '-'} />
+                <InfoRow label="Subject" value={row.subject || '-'} />
+                <InfoRow label="Level" value={row.level || '-'} />
+                <InfoRow label="Required" value={String(row.quantity || 0)} bold />
+                <InfoRow label="Available" value={String(row.availableQuantity ?? 0)} />
+                <View style={styles.qtyRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.label}>Deliverable Qty</Text>
                     <WebInput
                       style={[
                         styles.deliverableInput,
@@ -833,19 +816,22 @@ export default function WarehouseDCAtWarehouseDetailScreen({ navigation, route }
                       onChangeText={(v) => updateDeliverable(idx, v)}
                       keyboardType="numeric"
                     />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.label}>Remaining Qty</Text>
                     <View style={[styles.remainingBox, remainingStyle]}>
                       <Text style={styles.remainingText}>{remaining}</Text>
                     </View>
                   </View>
-                );
-              })
-            )}
-            <View style={styles.tableFooter}>
-              <Text style={styles.footerLabel}>Total:</Text>
-              <Text style={styles.footerValue}>{requiredTotal}</Text>
-            </View>
-          </View>
-        </ScrollView>
+                </View>
+              </View>
+            );
+          })
+        )}
+        <View style={styles.tableFooter}>
+          <Text style={styles.footerLabel}>Total:</Text>
+          <Text style={styles.footerValue}>{requiredTotal}</Text>
+        </View>
       </View>
 
       <View style={[styles.section, styles.dcSection]}>
@@ -857,39 +843,38 @@ export default function WarehouseDCAtWarehouseDetailScreen({ navigation, route }
         ) : null}
       </View>
 
-      <View style={styles.buttonCol}>
-        <TouchableOpacity style={styles.cancelBtn} onPress={() => navigation.goBack()} disabled={busy}>
-          <Text style={styles.cancelText}>Cancel</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.holdBtn, busy && styles.btnDisabled]}
-          onPress={handleHold}
-          disabled={busy || productRows.length === 0}
-        >
-          {holding ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Hold DC</Text>}
-        </TouchableOpacity>
+      <View style={styles.buttonRow}>
+        <View style={styles.buttonCell}>
+          <WebButton title="Cancel" variant="outline" onPress={() => navigation.goBack()} disabled={busy} />
+        </View>
+        <View style={styles.buttonCell}>
+          <WebButton
+            title="Hold DC"
+            variant="destructive"
+            onPress={handleHold}
+            loading={holding}
+            disabled={busy || productRows.length === 0}
+          />
+        </View>
         {isChecker && dc?.warehouseStage === 'pending_approval' ? (
-          <TouchableOpacity style={[styles.holdBtn, busy && styles.btnDisabled]} onPress={handleReturn} disabled={busy}>
-            <Text style={styles.primaryText}>Return</Text>
-          </TouchableOpacity>
+          <View style={styles.buttonCell}>
+            <WebButton title="Return" variant="destructive" onPress={handleReturn} disabled={busy} />
+          </View>
         ) : null}
-        <TouchableOpacity
-          style={[styles.submitBtn, (busy || (dc?.warehouseStage !== 'awaiting_receipt' && (insufficientQuantity || productRows.length === 0))) && styles.btnDisabled]}
+      </View>
+      <View style={styles.submitWrap}>
+        <WebButton
+          title={
+            dc?.warehouseStage === 'awaiting_receipt'
+              ? 'Accept DC'
+              : dc?.warehouseStage === 'pending_approval'
+                ? 'Approve'
+                : 'Submit for Approval'
+          }
           onPress={handleUpdateAndSubmit}
+          loading={processing}
           disabled={busy || (dc?.warehouseStage !== 'awaiting_receipt' && (insufficientQuantity || productRows.length === 0))}
-        >
-          {processing ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.primaryText}>
-              {dc?.warehouseStage === 'awaiting_receipt'
-                ? 'Accept DC'
-                : dc?.warehouseStage === 'pending_approval'
-                  ? 'Approve'
-                  : 'Submit for Approval'}
-            </Text>
-          )}
-        </TouchableOpacity>
+        />
       </View>
     </ScreenShell>
   );
@@ -899,27 +884,39 @@ const COL = { width: 110, paddingHorizontal: 6 };
 const styles = StyleSheet.create({
   section: {
     backgroundColor: colors.backgroundLight,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderTopWidth: 4,
-    borderTopColor: colors.primary,
+    borderColor: '#EEF2F7',
     padding: 16,
-    marginBottom: 16,
+    marginBottom: 12,
   },
-  deliverySection: { borderTopColor: '#22C55E' },
-  dcSection: { borderTopColor: colors.primary },
+  deliverySection: {},
+  dcSection: {},
+  productCard: {
+    borderWidth: 1,
+    borderColor: '#EEF2F7',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    backgroundColor: colors.background,
+  },
+  qtyRow: { flexDirection: 'row', gap: 12, marginTop: 8 },
+  buttonRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  buttonCell: { flex: 1 },
+  submitWrap: { marginTop: 4, marginBottom: 24 },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, marginBottom: 12 },
-  dcNo: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, marginBottom: 12 },
+  dcNo: { fontSize: 15, fontWeight: '700', color: colors.textPrimary, marginBottom: 12 },
   field: { marginBottom: 12 },
-  label: { fontSize: 13, fontWeight: '500', color: colors.textSecondary, marginBottom: 6 },
+  label: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 6 },
   required: { color: colors.error },
   input: {
     backgroundColor: colors.backgroundLight,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
+    borderColor: '#DCE3EC',
+    borderRadius: 10,
     padding: 12,
+    minHeight: 48,
+    marginBottom: 0,
     color: colors.textPrimary,
     fontSize: 15,
   },
@@ -986,39 +983,25 @@ const styles = StyleSheet.create({
   td: { ...COL, fontSize: 13, color: colors.textPrimary },
   tdStrong: { fontWeight: '700' },
   emptyRow: { padding: 16, color: colors.textMuted },
-  deliverableInput: {
-    width: 98,
-    marginHorizontal: 6,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    fontSize: 13,
-    backgroundColor: '#fff',
-  },
+  deliverableInput: { marginBottom: 0, minHeight: 44, paddingVertical: 8 },
   deliverableBad: { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5', color: '#991B1B' },
   remainingBox: {
-    width: 98,
-    marginHorizontal: 6,
-    borderRadius: 8,
+    minHeight: 44,
+    borderRadius: 10,
     borderWidth: 1,
-    paddingVertical: 6,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   remainingOk: { backgroundColor: '#EFF6FF', borderColor: '#93C5FD' },
   remainingZero: { backgroundColor: '#FEFCE8', borderColor: '#FDE047' },
   remainingBad: { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5' },
-  remainingText: { fontSize: 13, fontWeight: '700', color: colors.textPrimary },
+  remainingText: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
   tableFooter: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingRight: 12,
+    paddingTop: 8,
     gap: 8,
-    borderTopWidth: 2,
-    borderTopColor: colors.border,
   },
   footerLabel: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
   footerValue: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },

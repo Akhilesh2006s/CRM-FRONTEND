@@ -10,11 +10,10 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
-import ScreenShell from '../../ui/ScreenShell';
-import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 import { LEAVE_DAY_TYPES, HALF_DAY_SESSIONS, formatLeaveDays } from '../../lib/leaveTypes';
 
@@ -161,6 +160,7 @@ export default function LeaveRequestScreen({ navigation }: any) {
           <MessageBanner type="error" message={errorMessage} onDismiss={clearMessages} />
         )}
 
+        <PageSection title="Leave details">
         <WebSelect
           label="Leave Type *"
           value={form.leaveType}
@@ -169,7 +169,7 @@ export default function LeaveRequestScreen({ navigation }: any) {
         />
 
         <View style={styles.fieldContainer}>
-          <Text style={styles.label}>Leave Duration *</Text>
+          <WebLabel>Leave Duration *</WebLabel>
           <View style={styles.segment}>
             {LEAVE_DAY_TYPES.map((t) => {
               const active = form.dayType === t;
@@ -198,6 +198,9 @@ export default function LeaveRequestScreen({ navigation }: any) {
             items={HALF_DAY_SESSION_OPTIONS}
           />
         )}
+        </PageSection>
+
+        <PageSection title="Dates">
 
         <DateField
           label={isHalfDay ? 'Leave Date *' : 'Start Date *'}
@@ -216,9 +219,11 @@ export default function LeaveRequestScreen({ navigation }: any) {
             </Text>
           </View>
         )}
+        </PageSection>
 
-        <View style={styles.fieldContainer}>
-          <Text style={styles.label}>Reason *</Text>
+        <PageSection title="Reason">
+        <View>
+          <WebLabel>Reason *</WebLabel>
           <WebInput
             style={styles.textArea}
             value={form.reason}
@@ -228,6 +233,7 @@ export default function LeaveRequestScreen({ navigation }: any) {
             numberOfLines={4}
           />
         </View>
+        </PageSection>
 
         <WebButton
           title={submitting ? 'Submitting…' : 'Submit Request'}
@@ -286,7 +292,7 @@ function DateField({
 }) {
   return (
     <View style={styles.fieldContainer}>
-      <Text style={styles.label}>{label}</Text>
+      <WebLabel>{label}</WebLabel>
       <TouchableOpacity style={styles.dateTouchable} onPress={onPress}>
         <Text style={[styles.dateText, !value && styles.datePlaceholder]}>
           {value
@@ -354,58 +360,45 @@ function DatePickerModal({
 
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
-  contentContainer: { padding: 20, paddingBottom: 48, gap: 4 },
-  headerLink: { color: colors.primary, fontWeight: '600', fontSize: 14 },
-  fieldContainer: { marginBottom: 16 },
-  label: { ...typography.label.medium, color: colors.textPrimary, marginBottom: 8 },
-  textArea: {
-    ...typography.body.medium,
-    backgroundColor: colors.backgroundLight,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 14,
-    color: colors.textPrimary,
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
+  contentContainer: { padding: 16, paddingBottom: 48 },
+  headerLink: { color: colors.primaryDark, fontWeight: '700', fontSize: 14 },
+  fieldContainer: { marginBottom: 14 },
+  textArea: { minHeight: 100, textAlignVertical: 'top', marginBottom: 0 },
   dateTouchable: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: colors.backgroundLight,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 14,
+    borderColor: '#DCE3EC',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    minHeight: 48,
   },
-  dateText: { ...typography.body.medium, color: colors.textPrimary },
-  datePlaceholder: { color: colors.textSecondary },
+  dateText: { fontSize: 15, color: colors.textPrimary },
+  datePlaceholder: { color: colors.textMuted },
   segment: {
     flexDirection: 'row',
-    backgroundColor: colors.backgroundLight,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
+    backgroundColor: colors.backgroundMuted,
+    borderRadius: 10,
     padding: 4,
     gap: 4,
   },
   segmentItem: { flex: 1, paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
-  segmentItemActive: { backgroundColor: colors.primary },
-  segmentText: { ...typography.body.medium, color: colors.textPrimary, fontWeight: '600' },
-  segmentTextActive: { color: '#fff' },
+  segmentItemActive: { backgroundColor: colors.backgroundLight, shadowColor: '#0F172A', shadowOpacity: 0.08, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
+  segmentText: { fontSize: 14, color: colors.textTertiary, fontWeight: '600' },
+  segmentTextActive: { color: colors.primaryDark },
   daysContainer: {
-    marginBottom: 16,
     padding: 12,
-    backgroundColor: colors.primary + '10',
-    borderRadius: 12,
+    backgroundColor: colors.accent,
+    borderRadius: 10,
   },
-  daysText: { ...typography.body.medium, color: colors.primary, fontWeight: '600', textAlign: 'center' },
+  daysText: { fontSize: 14, color: colors.primaryDark, fontWeight: '700', textAlign: 'center' },
   dateOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
   datePickerBox: {
     backgroundColor: colors.backgroundLight,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
     paddingBottom: 24,
   },
   datePickerHeader: {
@@ -415,6 +408,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  datePickerTitle: { ...typography.heading.h3, color: colors.textPrimary },
-  doneText: { color: colors.primary, fontWeight: '600' },
+  datePickerTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
+  doneText: { color: colors.primaryDark, fontWeight: '700', fontSize: 15 },
 });

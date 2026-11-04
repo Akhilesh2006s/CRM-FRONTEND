@@ -4,6 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { Card, CardTitle, InfoRow, EmptyState } from '../../ui/Kit';
 import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 import { fmtDate, inr, nameOf } from './paymentHelpers';
@@ -19,6 +20,7 @@ export default function PaymentApprovalList({ kind, navigation }: { kind: 'cash'
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [query, setQuery] = useState('');
   const [filters, setFilters] = useState({
     schoolCode: '',
     schoolName: '',
@@ -61,6 +63,28 @@ export default function PaymentApprovalList({ kind, navigation }: { kind: 'cash'
   const detailRoute = kind === 'cash' ? 'PaymentApprovalPendingCashDetail' : 'PaymentApprovalPendingChequesDetail';
   const modes = kind === 'cash' ? CASH_MODES : CHEQUE_MODES;
 
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const visible = words.length
+    ? payments.filter((p) => {
+        const text = [
+          p.customerName,
+          p.schoolCode,
+          p.mobileNumber,
+          p.createdBy?.name,
+          nameOf(p.zone),
+          p.paymentMethod,
+          p.chequeNumber,
+          p.amount,
+          inr(p.amount),
+          fmtDate(p.paymentDate),
+        ]
+          .filter((v) => v !== undefined && v !== null)
+          .join(' ')
+          .toLowerCase();
+        return words.every((w) => text.includes(w));
+      })
+    : payments;
+
   return (
     <ScreenShell
       title={kind === 'cash' ? 'Pending Cash Payments' : 'Pending Cheque Payments'}
@@ -71,96 +95,63 @@ export default function PaymentApprovalList({ kind, navigation }: { kind: 'cash'
         loadData();
       }}
     >
-      <PageSection title="Filters">
-        <WebInput value={filters.schoolCode} onChangeText={(t) => setF('schoolCode', t)} placeholder="By School Code" />
-        <WebInput value={filters.schoolName} onChangeText={(t) => setF('schoolName', t)} placeholder="By School Name" />
-        {showFilters ? (
-          <>
-            <WebInput value={filters.mobileNo} onChangeText={(t) => setF('mobileNo', t)} placeholder="By Mobile No" keyboardType="phone-pad" />
-            <WebSelect
-              value={filters.paymentMode}
-              onValueChange={(v) => setF('paymentMode', v || defaultMode)}
-              items={modes.map((m) => ({ label: m, value: m }))}
-              placeholder="Select Payment Mode"
-            />
-            <DateField placeholder="From date" value={filters.fromDate} onChange={(t) => setF('fromDate', t)} />
-            <DateField placeholder="To date" value={filters.toDate} onChange={(t) => setF('toDate', t)} />
-            <WebInput value={filters.executive} onChangeText={(t) => setF('executive', t)} placeholder="BDE" />
-            <WebInput value={filters.zone} onChangeText={(t) => setF('zone', t)} placeholder="Zone" />
-          </>
-        ) : null}
-        <View style={styles.filterBtns}>
-          <View style={{ flex: 1 }}>
-            <WebButton title={showFilters ? 'Fewer Filters' : 'More Filters'} variant="outline" onPress={() => setShowFilters((s) => !s)} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <WebButton
-              title="Search"
-              onPress={() => {
-                setLoading(true);
-                loadData();
-              }}
-            />
-          </View>
-        </View>
-      </PageSection>
+      <WebInput
+        value={query}
+        onChangeText={setQuery}
+        placeholder="Search school, code, mobile, BDE, zone…"
+        autoCapitalize="none"
+        autoCorrect={false}
+      />
+      {showFilters ? (
+        <PageSection title="Filters">
+          <WebSelect
+            label="Payment Mode"
+            value={filters.paymentMode}
+            onValueChange={(v) => setF('paymentMode', v || defaultMode)}
+            items={modes.map((m) => ({ label: m, value: m }))}
+            placeholder="Select Payment Mode"
+          />
+          <DateField placeholder="From date" value={filters.fromDate} onChange={(t) => setF('fromDate', t)} />
+          <DateField placeholder="To date" value={filters.toDate} onChange={(t) => setF('toDate', t)} />
+          <WebButton
+            title="Apply"
+            onPress={() => {
+              setLoading(true);
+              loadData();
+            }}
+          />
+        </PageSection>
+      ) : null}
+      <View style={styles.filterBtns}>
+        <WebButton title={showFilters ? 'Hide Filters' : 'Mode & Date Filters'} variant="outline" onPress={() => setShowFilters((s) => !s)} />
+      </View>
 
-      {payments.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No pending {kind === 'cash' ? 'cash' : 'cheque'} payments found</Text>
-        </View>
+      {visible.length === 0 ? (
+        <EmptyState icon="💳" title={`No pending ${kind === 'cash' ? 'cash' : 'cheque'} payments found`} />
       ) : (
-        payments.map((p) => (
-          <TouchableOpacity key={p._id} style={styles.card} onPress={() => navigation.navigate(detailRoute, { id: p._id })} activeOpacity={0.7}>
-            <View style={styles.cardHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.customerName}>{p.customerName || 'N/A'}</Text>
-                <Text style={styles.code}>{p.schoolCode || '-'}</Text>
-              </View>
-              <View style={[styles.statusBadge, { backgroundColor: colors.warningLight }]}>
-                <Text style={[styles.statusBadgeText, { color: colors.warning }]}>Pending</Text>
-              </View>
-            </View>
-            <Info label="Amount" value={inr(p.amount)} strong />
-            <Info label="Date" value={fmtDate(p.paymentDate)} />
-            <Info label="Mode" value={p.paymentMethod || '-'} />
+        visible.map((p) => (
+          <Card key={p._id} onPress={() => navigation.navigate(detailRoute, { id: p._id })}>
+            <CardTitle title={p.customerName || 'N/A'} subtitle={p.schoolCode || undefined} badge="Pending" tone="warning" />
+            <InfoRow label="Amount" value={<Text style={styles.amountText}>{inr(p.amount)}</Text>} />
+            <InfoRow label="Date" value={fmtDate(p.paymentDate)} />
+            <InfoRow label="Mode" value={p.paymentMethod || '-'} />
             {p.paymentMethod === 'Cheque' ? (
               <>
-                <Info label="Cheque No" value={p.chequeNumber || '-'} />
-                <Info label="Cheque Date" value={fmtDate(p.chqDate)} />
+                <InfoRow label="Cheque No" value={p.chequeNumber || '-'} />
+                <InfoRow label="Cheque Date" value={fmtDate(p.chqDate)} />
               </>
             ) : null}
-            {p.mobileNumber ? <Info label="Mobile" value={p.mobileNumber} /> : null}
-            <Info label="BDE" value={p.createdBy?.name || '-'} />
-            {nameOf(p.zone) ? <Info label="Zone" value={nameOf(p.zone)} /> : null}
-          </TouchableOpacity>
+            <InfoRow label="Mobile" value={p.mobileNumber} phone />
+            <InfoRow label="BDE" value={p.createdBy?.name || '-'} />
+            <InfoRow label="Zone" value={nameOf(p.zone)} />
+          </Card>
         ))
       )}
     </ScreenShell>
   );
 }
 
-function Info({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
-  return (
-    <View style={styles.infoRow}>
-      <Text style={styles.infoLabel}>{label}:</Text>
-      <Text style={[styles.infoValue, strong && styles.amountText]}>{value}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  filterBtns: { flexDirection: 'row', gap: 8 },
-  emptyContainer: { justifyContent: 'center', alignItems: 'center', paddingVertical: 40 },
-  emptyText: { ...typography.heading.h3, color: colors.textSecondary },
-  card: { backgroundColor: colors.backgroundLight, borderRadius: 12, borderWidth: 1, borderColor: colors.border, padding: 14, marginBottom: 10 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
-  customerName: { ...typography.heading.h3, color: colors.textPrimary },
-  code: { fontSize: 12, color: colors.textTertiary, marginTop: 2 },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginLeft: 8 },
-  statusBadgeText: { fontSize: 12, fontWeight: '600' },
-  infoRow: { flexDirection: 'row', marginBottom: 4 },
-  infoLabel: { ...typography.body.medium, color: colors.textSecondary, width: 100 },
-  infoValue: { ...typography.body.medium, color: colors.textPrimary, flex: 1 },
-  amountText: { color: colors.success, fontWeight: '700' },
+  filterBtns: { flexDirection: 'row', marginBottom: 12 },
+  amountText: { fontSize: 15, color: colors.success, fontWeight: '700' },
 });

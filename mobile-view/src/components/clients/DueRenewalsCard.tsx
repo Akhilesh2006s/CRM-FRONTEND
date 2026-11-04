@@ -3,11 +3,12 @@
  * the chosen window (ended ones included). GET /dc-orders/renewals-due?days=N scopes by role.
  */
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { apiService } from '../../services/api';
-import { colors, radii } from '../../theme/colors';
+import { colors } from '../../theme/colors';
 import { WebButton, WebSelect } from '../../ui/WebPrimitives';
 import { ContractPeriod } from './ContractPeriod';
+import { CardTitle, InfoRow } from '../../ui/Kit';
 
 export type DueRenewalRow = {
   _id: string;
@@ -85,28 +86,25 @@ export function DueRenewalsCard({
       ) : (
         rows.map((row) => (
           <View key={row._id} style={styles.item}>
-            <Text style={styles.school}>{row.school_name || '-'}</Text>
-            <Text style={styles.code}>{row.school_code || row.dc_code || '-'}</Text>
-            <Text style={styles.meta}>
-              <Text style={styles.metaLabel}>BDE: </Text>
-              {row.assigned_to?.name || '-'}
-            </Text>
-            <Text style={styles.meta}>
-              <Text style={styles.metaLabel}>Products: </Text>
-              {(row.productNames || []).join(', ') || '-'}
-            </Text>
+            <CardTitle
+              title={row.school_name || '-'}
+              subtitle={row.school_code || row.dc_code || undefined}
+              badge={row.hasOpenRenewalLead ? 'Renewal lead open' : undefined}
+              tone="info"
+            />
+            <InfoRow label="BDE" value={row.assigned_to?.name || undefined} />
+            <InfoRow label="Mobile" value={row.contact_mobile || undefined} phone />
+            <InfoRow label="Products" value={(row.productNames || []).join(', ') || undefined} />
             <View style={styles.contractRow}>
               <ContractPeriod contract={row} />
             </View>
-            <View style={styles.actionRow}>
-              {row.hasOpenRenewalLead ? (
-                <View style={styles.openBadge}>
-                  <Text style={styles.openBadgeText}>Renewal lead open</Text>
-                </View>
-              ) : (
-                <WebButton title="Start renewal" onPress={() => onStartRenewal(row)} />
-              )}
-            </View>
+            {row.hasOpenRenewalLead ? null : (
+              <View style={styles.actionRow}>
+                <TouchableOpacity style={styles.startBtn} onPress={() => onStartRenewal(row)}>
+                  <Text style={styles.startBtnText}>Start renewal</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         ))
       )}
@@ -118,23 +116,19 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.backgroundLight,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.lg,
-    padding: 14,
-    marginBottom: 16,
+    borderColor: '#EEF2F7',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 12,
   },
-  title: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
-  sub: { fontSize: 12, color: colors.textSecondary, marginTop: 2, marginBottom: 10 },
+  title: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
+  sub: { fontSize: 13, color: colors.textTertiary, marginTop: 2, marginBottom: 12 },
   muted: { fontSize: 13, color: colors.textTertiary, textAlign: 'center', paddingVertical: 16 },
   errorRow: { alignItems: 'center', gap: 8, paddingVertical: 10 },
   error: { fontSize: 13, color: colors.error, textAlign: 'center' },
-  item: { borderTopWidth: 1, borderTopColor: colors.border, paddingVertical: 10 },
-  school: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
-  code: { fontSize: 12, color: '#1D4ED8', fontFamily: 'monospace', marginBottom: 4 },
-  meta: { fontSize: 12, color: colors.textPrimary, marginTop: 2 },
-  metaLabel: { color: colors.textSecondary },
+  item: { borderTopWidth: 1, borderTopColor: colors.borderLight, paddingTop: 12, paddingBottom: 12 },
   contractRow: { marginTop: 6 },
   actionRow: { marginTop: 8, flexDirection: 'row', justifyContent: 'flex-end' },
-  openBadge: { backgroundColor: '#DBEAFE', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
-  openBadgeText: { fontSize: 12, fontWeight: '600', color: '#1D4ED8' },
+  startBtn: { backgroundColor: colors.primaryDark, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
+  startBtnText: { fontSize: 14, fontWeight: '700', color: colors.primaryForeground },
 });

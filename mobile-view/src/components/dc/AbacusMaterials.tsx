@@ -101,6 +101,6 @@ const styles = StyleSheet.create({
   cell: { fontSize: 13, color: colors.textPrimary },
   bold: { flex: 1.2, fontWeight: '600' },
   qty: { flex: 0.6 },
-  muted: { flex: 2, fontSize: 12, color: colors.textSecondary },
-  hint: { fontSize: 12, color: colors.textSecondary },
+  muted: { flex: 2, fontSize: 13, color: colors.textTertiary },
+  hint: { fontSize: 13, color: colors.textTertiary },
 });

@@ -1,10 +1,9 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { confirmLogout } from '../utils/confirmLogout';
-import { colors, gradients } from '../theme/colors';
-import { typography } from '../theme/typography';
+import { colors } from '../theme/colors';
 
 interface HeaderWithLogoutProps {
   title?: string;
@@ -26,16 +25,11 @@ export default function HeaderWithLogout({
   };
 
   return (
-    <LinearGradient
-      colors={gradients.primary}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.header}
-    >
+    <View style={styles.header}>
       <View style={styles.headerContent}>
         {showBack && onBackPress ? (
           <TouchableOpacity onPress={onBackPress} style={styles.backButton}>
-            <Text style={styles.backIcon}>←</Text>
+            <Ionicons name="chevron-back" size={24} color={colors.primary} />
           </TouchableOpacity>
         ) : (
           <View style={styles.placeholder} />
@@ -59,26 +53,22 @@ export default function HeaderWithLogout({
             onPress={handleLogout}
             activeOpacity={0.7}
           >
-            <Text style={styles.logoutIcon}>🚪</Text>
+            <Ionicons name="log-out-outline" size={20} color="#B91C1C" />
           </TouchableOpacity>
         </View>
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   header: {
-    paddingHorizontal: 24,
-    paddingTop: 60,
-    paddingBottom: 20,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    shadowColor: colors.shadowDark,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 12,
+    paddingHorizontal: 12,
+    paddingTop: 48,
+    paddingBottom: 12,
+    backgroundColor: colors.backgroundLight,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEF2F7',
   },
   headerContent: {
     flexDirection: 'row',
@@ -88,39 +78,29 @@ const styles = StyleSheet.create({
   backButton: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
-  },
-  backIcon: {
-    fontSize: 24,
-    color: colors.textLight,
-    fontWeight: 'bold',
   },
   placeholder: {
     width: 40,
   },
   titleContainer: {
     flex: 1,
-    alignItems: 'center',
+    paddingHorizontal: 8,
   },
   title: {
-    ...typography.heading.h2,
-    color: colors.textLight,
-    textAlign: 'center',
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.textPrimary,
   },
   greeting: {
-    ...typography.body.medium,
-    color: colors.textLight,
-    opacity: 0.95,
-    textAlign: 'center',
+    fontSize: 13,
+    color: colors.textTertiary,
   },
   userName: {
-    ...typography.display.small,
-    color: colors.textLight,
-    textAlign: 'center',
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.textPrimary,
   },
   rightContainer: {
     flexDirection: 'row',
@@ -128,16 +108,11 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   logoutButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FEE2E2',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  logoutIcon: {
-    fontSize: 20,
   },
 });

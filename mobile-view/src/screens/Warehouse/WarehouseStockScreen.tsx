@@ -13,7 +13,8 @@ import {
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import ScreenShell from '../../ui/ScreenShell';
-import { WebInput } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState } from '../../ui/Kit';
+import { WebInput, WebButton, WebLabel } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import StockMovementsCard from '../../components/warehouse/StockMovementsCard';
@@ -118,105 +119,72 @@ export default function WarehouseStockScreen({ navigation }: any) {
   };
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((i) =>
-      [i.productName, i.category, i.level, i.specs, i.subject, i.location]
-        .filter(Boolean)
-        .some((v) => v!.toString().toLowerCase().includes(q)),
-    );
+    const words = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (!words.length) return items;
+    return items.filter((i) => {
+      const text = [i.productName, i.category, i.level, i.specs, i.subject, i.location, i.currentStock]
+        .filter((v) => v !== undefined && v !== null)
+        .join(' ')
+        .toLowerCase();
+      return words.every((w) => text.includes(w));
+    });
   }, [items, search]);
 
   return (
-    <ScreenShell
-      title="Inventory Qty List"
-      loading={loading && !refreshing}
-      refreshing={refreshing}
-      onRefresh={onRefresh}
-    >
-      <View style={styles.searchSection}>
-        <Text style={styles.searchLabel}>Search</Text>
-        <WebInput
-          style={styles.searchInput}
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Search by product, category, level, specs, subject"
-        />
-      </View>
+    <ScreenShell title="Inventory Qty List" loading={loading && !refreshing} refreshing={refreshing} onRefresh={onRefresh}>
+      <WebInput
+        style={styles.search}
+        value={search}
+        onChangeText={setSearch}
+        placeholder="Search product, category, level, specs, subject…"
+        autoCapitalize="none"
+        autoCorrect={false}
+      />
 
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={styles.contentContainer}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      >
-        {filtered.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No items found.</Text>
-          </View>
-        ) : (
-          filtered.map((item, idx) => (
-            <View key={item._id} style={styles.card}>
-              <View style={styles.cardTop}>
-                <Text style={styles.serial}>#{idx + 1}</Text>
-                <Text style={styles.productName}>{item.productName || '-'}</Text>
-                <Text style={styles.qtyLabel}>
-                  Available Qty:{' '}
-                  <Text style={styles.qtyValue}>{item.currentStock ?? 0}</Text>
-                </Text>
-              </View>
+      {filtered.length === 0 ? (
+        <EmptyState icon="📦" title="No items found" />
+      ) : (
+        filtered.map((item, idx) => (
+          <Card key={item._id}>
+            <CardTitle
+              title={`#${idx + 1} ${item.productName || '-'}`}
+              badge={`Qty ${item.currentStock ?? 0}`}
+              tone={Number(item.currentStock) > 0 ? 'success' : 'neutral'}
+            />
+            <InfoRow label="Category" value={cell(item.category)} />
+            <InfoRow label="Level" value={cell(item.level || item.location)} />
+            <InfoRow label="Specs" value={cell(item.specs)} />
+            <InfoRow label="Subject" value={cell(item.subject)} />
+            <ActionRow>
+              <WebButton title="Add Item Qty" variant="outline" onPress={() => openAddQty(item)} />
+            </ActionRow>
+          </Card>
+        ))
+      )}
 
-              <View style={styles.grid}>
-                <InfoCell label="Product Category" value={cell(item.category)} />
-                <InfoCell label="Level" value={cell(item.level || item.location)} />
-                <InfoCell label="Specs" value={cell(item.specs)} />
-                <InfoCell label="Subject" value={cell(item.subject)} />
-              </View>
-
-              <TouchableOpacity style={styles.addQtyButton} onPress={() => openAddQty(item)}>
-                <Text style={styles.addQtyButtonText}>Add Item Qty</Text>
-              </TouchableOpacity>
-            </View>
-          ))
-        )}
-
-        <StockMovementsCard refreshKey={movementsKey} />
-      </ScrollView>
+      <StockMovementsCard refreshKey={movementsKey} />
 
       <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Add Item Qty</Text>
             <Text style={styles.modalSubtitle}>{selectedItem?.productName || 'Item'}</Text>
-            <WebInput
-              style={styles.modalInput}
-              value={quantity}
-              onChangeText={setQuantity}
-              placeholder="Enter quantity"
-              keyboardType="decimal-pad"
-            />
+            <WebLabel>Quantity *</WebLabel>
+            <WebInput value={quantity} onChangeText={setQuantity} placeholder="Enter quantity" keyboardType="decimal-pad" />
             {isWarehouseExecutive ? (
-              <WebInput
-                style={styles.modalInput}
-                value={batchLot}
-                onChangeText={setBatchLot}
-                placeholder="Batch / lot number"
-              />
+              <>
+                <WebLabel>Batch / Lot *</WebLabel>
+                <WebInput value={batchLot} onChangeText={setBatchLot} placeholder="Batch / lot number" />
+                <Text style={styles.helper}>Stock is added after Warehouse Manager approval.</Text>
+              </>
             ) : null}
             <View style={styles.modalButtons}>
-              <TouchableOpacity style={styles.modalCancelButton} onPress={() => setModalVisible(false)}>
-                <Text style={styles.modalCancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalSubmitButton, submitting && styles.modalSubmitButtonDisabled]}
-                onPress={submitAddQty}
-                disabled={submitting}
-              >
-                {submitting ? (
-                  <ActivityIndicator color={colors.textLight} />
-                ) : (
-                  <Text style={styles.modalSubmitButtonText}>Add</Text>
-                )}
-              </TouchableOpacity>
+              <View style={{ flex: 1 }}>
+                <WebButton title="Cancel" variant="outline" onPress={() => setModalVisible(false)} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <WebButton title="Add" onPress={submitAddQty} loading={submitting} disabled={submitting} />
+              </View>
             </View>
           </View>
         </View>
@@ -225,103 +193,18 @@ export default function WarehouseStockScreen({ navigation }: any) {
   );
 }
 
-function InfoCell({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.infoCell}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  searchSection: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: colors.backgroundLight,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    gap: 8,
-  },
-  searchLabel: { ...typography.label.medium, color: colors.textPrimary },
-  searchInput: {
-    ...typography.body.medium,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 12,
-    color: colors.textPrimary,
-  },
-  content: { flex: 1 },
-  contentContainer: { padding: 16, paddingBottom: 40 },
-  emptyContainer: { paddingVertical: 48, alignItems: 'center' },
-  emptyText: { ...typography.body.medium, color: colors.textSecondary },
-  card: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    marginBottom: 12,
-  },
-  cardTop: { marginBottom: 12 },
-  serial: { ...typography.label.small, color: colors.textSecondary, marginBottom: 4 },
-  productName: { ...typography.heading.h3, color: colors.textPrimary, marginBottom: 4 },
-  qtyLabel: { ...typography.body.small, color: colors.textSecondary },
-  qtyValue: { fontWeight: '700', color: colors.textPrimary },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 14,
-  },
-  infoCell: { width: '47%' },
-  infoLabel: { ...typography.label.small, color: colors.textSecondary, marginBottom: 2 },
-  infoValue: { ...typography.body.medium, color: colors.textPrimary },
-  addQtyButton: {
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: '#DC2626',
-    alignItems: 'center',
-  },
-  addQtyButtonText: { ...typography.label.medium, color: '#FFFFFF', fontWeight: '600' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' },
+  search: { marginBottom: 12 },
+  helper: { fontSize: 13, color: colors.textTertiary, marginTop: -6, marginBottom: 12 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.45)', justifyContent: 'flex-end' },
   modalContent: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    paddingBottom: 40,
-  },
-  modalTitle: { ...typography.heading.h2, color: colors.textPrimary, marginBottom: 8 },
-  modalSubtitle: { ...typography.body.medium, color: colors.textSecondary, marginBottom: 20 },
-  modalInput: {
-    ...typography.body.medium,
     backgroundColor: colors.backgroundLight,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 14,
-    color: colors.textPrimary,
-    marginBottom: 20,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 16,
+    paddingBottom: 32,
   },
-  modalButtons: { flexDirection: 'row', gap: 12 },
-  modalCancelButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: colors.backgroundLight,
-    alignItems: 'center',
-  },
-  modalCancelButtonText: { ...typography.label.medium, color: colors.textPrimary, fontWeight: '600' },
-  modalSubmitButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: '#DC2626',
-    alignItems: 'center',
-  },
-  modalSubmitButtonDisabled: { opacity: 0.6 },
-  modalSubmitButtonText: { ...typography.label.medium, color: colors.textLight, fontWeight: '600' },
+  modalTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary, marginBottom: 4 },
+  modalSubtitle: { fontSize: 14, color: colors.textSecondary, marginBottom: 16 },
+  modalButtons: { flexDirection: 'row', gap: 12, marginTop: 4 },
 });

@@ -12,7 +12,8 @@ import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
 import { getCurrentLocation } from '../../services/location';
-import ScreenShell from '../../ui/ScreenShell';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { Card, CardTitle, InfoRow, EmptyState, SectionTitle } from '../../ui/Kit';
 import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 
@@ -315,8 +316,8 @@ export default function SchoolVisitScreen({ navigation, route }: any) {
 
         {showForm ? (
           <View style={styles.formCard}>
-            <Text style={styles.sectionTitle}>New visit</Text>
-
+            <PageSection title="School">
+            <WebLabel>School name *</WebLabel>
             <WebInput
               style={styles.input}
               value={form.schoolName}
@@ -340,10 +341,10 @@ export default function SchoolVisitScreen({ navigation, route }: any) {
               items={categories.map((c) => ({ label: c, value: c }))}
               placeholder="Select category"
             />
+            </PageSection>
 
             {form.category === OPERATIONS ? (
-              <View style={styles.opsBox}>
-                <Text style={styles.sectionTitle}>Operations</Text>
+              <PageSection title="Operations">
                 <WebSelect
                   label="Client"
                   value={form.clientId}
@@ -446,9 +447,10 @@ export default function SchoolVisitScreen({ navigation, route }: any) {
                     }))
                   }
                 />
-              </View>
+              </PageSection>
             ) : null}
 
+            <PageSection title="Visit details">
             <WebSelect
               label="Outcome"
               value={form.outcome}
@@ -460,6 +462,7 @@ export default function SchoolVisitScreen({ navigation, route }: any) {
               placeholder="Select outcome"
             />
 
+            <WebLabel>Remarks</WebLabel>
             <WebInput
               style={[styles.input, styles.textArea]}
               value={form.remarks}
@@ -469,10 +472,15 @@ export default function SchoolVisitScreen({ navigation, route }: any) {
               numberOfLines={3}
             />
 
+            <WebLabel>Next visit date</WebLabel>
             <DateField placeholder="Next visit date" value={form.nextVisitDate} onChange={(t) => setForm((f) => ({ ...f, nextVisitDate: t }))} style={styles.input} />
 
+            <WebLabel>Training date</WebLabel>
             <DateField placeholder="Training date" value={form.trainingDate} onChange={(t) => setForm((f) => ({ ...f, trainingDate: t }))} style={styles.input} />
 
+            </PageSection>
+
+            <PageSection title="Location">
             <View style={styles.gpsRow}>
               <TouchableOpacity
                 style={styles.gpsBtn}
@@ -493,6 +501,7 @@ export default function SchoolVisitScreen({ navigation, route }: any) {
                   : 'Location not captured yet'}
               </Text>
             </View>
+            </PageSection>
 
             <WebButton
               title={submitting ? 'Saving…' : 'Save visit'}
@@ -508,39 +517,47 @@ export default function SchoolVisitScreen({ navigation, route }: any) {
           </View>
         ) : (
           <>
-            <Text style={styles.sectionTitle}>My visits ({visits.length})</Text>
+            <SectionTitle>{`My visits (${visits.length})`}</SectionTitle>
             {visits.length === 0 ? (
-              <View style={styles.empty}>
-                <Text style={styles.emptyText}>No visits yet. Tap + New to log one.</Text>
-              </View>
+              <EmptyState icon="🏫" title="No visits yet" message="Tap + New to log one." />
             ) : (
-              visits.map((v) => (
-                <View key={v._id} style={styles.card}>
-                  <Text style={styles.cardTitle}>{v.schoolName || '—'}</Text>
-                  <Text style={styles.cardMeta}>
-                    {v.category || '—'}
-                    {v.outcome ? ` · ${v.outcome}` : ''}
-                  </Text>
-                  <Text style={styles.cardMeta}>Visited {formatDate(v.visitDate)}</Text>
-                  {v.nextVisitDate ? (
-                    <Text style={styles.cardMeta}>Next: {formatDate(v.nextVisitDate)}</Text>
-                  ) : null}
-                  {v.category === OPERATIONS && v.operations ? (
-                    <Text style={styles.remarks} numberOfLines={3}>
-                      {v.operations.deliveryStatus || 'DELIVERED'}
-                      {v.operations.booksDistributed ? ` · Books: ${v.operations.booksDistributed}` : ''}
-                      {v.operations.programsStarted ? ` · Started: ${v.operations.programsStarted}` : ''}
-                      {(v.operations.pagesCompleted || []).length
-                        ? ` · ${(v.operations.pagesCompleted || []).map((row) => `${row.program}: ${row.pages}`).join(', ')}`
-                        : ''}
-                    </Text>
-                  ) : null}
-                  {v.remarks ? <Text style={styles.remarks} numberOfLines={2}>{v.remarks}</Text> : null}
-                  {typeof v.latitude === 'number' && typeof v.longitude === 'number' ? (
-                    <Text style={styles.gpsTag}>GPS ✓</Text>
-                  ) : null}
-                </View>
-              ))
+              visits.map((v) => {
+                const hasGps = typeof v.latitude === 'number' && typeof v.longitude === 'number';
+                return (
+                  <Card key={v._id}>
+                    <CardTitle
+                      title={v.schoolName || '—'}
+                      subtitle={v.category || undefined}
+                      badge={hasGps ? 'GPS ✓' : undefined}
+                      tone="success"
+                    />
+                    <InfoRow label="Outcome" value={v.outcome || undefined} />
+                    <InfoRow label="Visited" value={formatDate(v.visitDate)} />
+                    <InfoRow label="Next visit" value={v.nextVisitDate ? formatDate(v.nextVisitDate) : undefined} />
+                    {v.category === OPERATIONS && v.operations ? (
+                      <InfoRow
+                        label="Operations"
+                        value={
+                          <Text style={styles.remarks} numberOfLines={3}>
+                            {v.operations.deliveryStatus || 'DELIVERED'}
+                            {v.operations.booksDistributed ? ` · Books: ${v.operations.booksDistributed}` : ''}
+                            {v.operations.programsStarted ? ` · Started: ${v.operations.programsStarted}` : ''}
+                            {(v.operations.pagesCompleted || []).length
+                              ? ` · ${(v.operations.pagesCompleted || []).map((row) => `${row.program}: ${row.pages}`).join(', ')}`
+                              : ''}
+                          </Text>
+                        }
+                      />
+                    ) : null}
+                    {v.remarks ? (
+                      <InfoRow
+                        label="Remarks"
+                        value={<Text style={styles.remarks} numberOfLines={2}>{v.remarks}</Text>}
+                      />
+                    ) : null}
+                  </Card>
+                );
+              })
             )}
           </>
         )}
@@ -562,9 +579,7 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     marginBottom: 12,
   },
-  formCard: {
-    gap: 4,
-  },
+  formCard: {},
   input: {
     marginBottom: 10,
   },
@@ -573,14 +588,13 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   gpsRow: {
-    marginVertical: 12,
     gap: 8,
   },
   gpsBtn: {
     alignSelf: 'flex-start',
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 8,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.primary,
     backgroundColor: colors.accent,
@@ -649,9 +663,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   remarks: {
-    fontSize: 13,
-    color: colors.textTertiary,
-    marginTop: 6,
+    fontSize: 14,
+    color: colors.textPrimary,
   },
   gpsTag: {
     marginTop: 8,

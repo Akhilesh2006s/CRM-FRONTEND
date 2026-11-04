@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
+import { Text, StyleSheet, Alert } from 'react-native';
 import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
-import { WebInput, WebButton } from '../../ui/WebPrimitives';
+import { WebInput, WebButton, WebLabel } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 import { phoneDigitsError, sanitizePhoneDigits } from '../../utils/phone';
 
@@ -55,26 +54,31 @@ export default function ExecutiveManagerNewScreen({ navigation }: any) {
 
   return (
     <ScreenShell title="Create Executive Manager">
-      <PageSection title="Manager details">
-        {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
+      {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
+      <PageSection title="Personal">
+        <WebLabel>Full name *</WebLabel>
         <WebInput
-          placeholder="Manager name *"
+          placeholder="Manager name"
           value={form.name}
           onChangeText={(v) => setField('name', v)}
         />
+        <WebLabel>Department</WebLabel>
         <WebInput
-          placeholder="email@company.com *"
+          placeholder="Department"
+          value={form.department}
+          onChangeText={(v) => setField('department', v)}
+        />
+      </PageSection>
+      <PageSection title="Contact">
+        <WebLabel>Email *</WebLabel>
+        <WebInput
+          placeholder="email@company.com"
           value={form.email}
           onChangeText={(v) => setField('email', v)}
           keyboardType="email-address"
           autoCapitalize="none"
         />
-        <WebInput
-          placeholder="Password (default: Password123)"
-          value={form.password}
-          onChangeText={(v) => setField('password', v)}
-          secureTextEntry
-        />
+        <WebLabel>Phone</WebLabel>
         <WebInput
           placeholder="10 to 15 digits"
           value={form.phone}
@@ -82,40 +86,36 @@ export default function ExecutiveManagerNewScreen({ navigation }: any) {
           keyboardType="phone-pad"
           maxLength={15}
         />
-        <WebInput
-          placeholder="Department"
-          value={form.department}
-          onChangeText={(v) => setField('department', v)}
-        />
-        <View style={styles.actions}>
-          <WebButton title="Cancel" variant="outline" onPress={() => navigation.goBack()} />
-          <WebButton
-            title={submitting ? 'Creating…' : 'Create Manager'}
-            onPress={handleSubmit}
-            loading={submitting}
-            disabled={submitting}
-          />
-        </View>
       </PageSection>
+      <PageSection title="Login">
+        <WebLabel>Password</WebLabel>
+        <WebInput
+          placeholder="Password"
+          value={form.password}
+          onChangeText={(v) => setField('password', v)}
+          secureTextEntry
+        />
+        <Text style={styles.help}>Leave empty to use the default: Password123</Text>
+      </PageSection>
+      <WebButton
+        title={submitting ? 'Creating…' : 'Create Manager'}
+        onPress={handleSubmit}
+        loading={submitting}
+        disabled={submitting}
+      />
+      <WebButton title="Cancel" variant="outline" onPress={() => navigation.goBack()} />
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
   error: {
-    ...typography.body.small,
+    fontSize: 13,
     color: colors.error,
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    borderRadius: 8,
-    padding: 10,
+    backgroundColor: colors.errorLight,
+    borderRadius: 10,
+    padding: 12,
     marginBottom: 12,
   },
-  actions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginTop: 8,
-  },
+  help: { fontSize: 13, color: colors.textTertiary, marginTop: -8 },
 });

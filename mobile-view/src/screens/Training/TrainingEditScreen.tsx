@@ -15,8 +15,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
-import ScreenShell from '../../ui/ScreenShell';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { InfoRow } from '../../ui/Kit';
 import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
 import { apiService, getApiUrl } from '../../services/api';
 import { prepareFeedbackUpload } from '../../utils/prepareFeedbackUpload';
@@ -369,39 +369,18 @@ export default function TrainingEditScreen({ navigation, route }: any) {
         contentContainerStyle={styles.contentContainer}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.card}>
-          <WebLabel>School Code</WebLabel>
-          <WebInput value={training?.schoolCode || ''} editable={false} style={styles.readonly} />
+        <PageSection title="Training details">
+          <InfoRow label="School code" value={training?.schoolCode || ''} />
+          <InfoRow label="School name" value={training?.schoolName || ''} bold />
+          <InfoRow label="Address" value={address || ''} />
+          <InfoRow label="Product" value={training?.subject || ''} />
+          <InfoRow label="Trainer" value={training?.trainerId?.name || ''} />
+          <InfoRow label="Prev. scheduled" value="—" />
+          <InfoRow label="Prev. remarks" value="—" />
+          <InfoRow label="Training date" value={formatDateInput(training?.trainingDate)} />
+        </PageSection>
 
-          <WebLabel>School Name</WebLabel>
-          <WebInput value={training?.schoolName || ''} editable={false} style={styles.readonly} />
-
-          <WebLabel>Address</WebLabel>
-          <WebInput value={address || ''} editable={false} style={styles.readonly} />
-
-          <WebLabel>Product</WebLabel>
-          <WebInput value={training?.subject || ''} editable={false} style={styles.readonly} />
-
-          <WebLabel>Trainer</WebLabel>
-          <WebInput
-            value={training?.trainerId?.name || ''}
-            editable={false}
-            style={styles.readonly}
-          />
-
-          <WebLabel>Previous Scheduled Date</WebLabel>
-          <WebInput value="" editable={false} style={styles.readonly} />
-
-          <WebLabel>Previous Schedule Remarks</WebLabel>
-          <WebInput value="" editable={false} style={styles.readonly} />
-
-          <WebLabel>Training Date</WebLabel>
-          <WebInput
-            value={formatDateInput(training?.trainingDate)}
-            editable={false}
-            style={styles.readonly}
-          />
-
+        <PageSection title="Update">
           <WebLabel>Training Status *</WebLabel>
           <WebSelect
             placeholder="Select Training Status"
@@ -432,12 +411,10 @@ export default function TrainingEditScreen({ navigation, route }: any) {
             style={styles.textArea}
           />
 
-          <View style={styles.feedbackBox}>
-            <Text style={styles.feedbackTitle}>Feedback Form (PDF) *</Text>
-            <Text style={styles.feedbackHint}>
-              Upload a signed feedback image or PDF. Images (JPG/PNG) are converted to PDF
-              automatically.
-            </Text>
+        </PageSection>
+
+        <PageSection title="Feedback form (PDF) *">
+            <Text style={styles.feedbackHint}>Signed image or PDF; images are converted to PDF.</Text>
 
             {feedbackPdfUrl ? (
               <View style={styles.uploadedCard}>
@@ -459,26 +436,27 @@ export default function TrainingEditScreen({ navigation, route }: any) {
             {feedbackNotice ? <Text style={styles.noticeText}>{feedbackNotice}</Text> : null}
 
             <View style={styles.feedbackActions}>
-              <TouchableOpacity
-                style={styles.uploadBtn}
-                onPress={pickFeedbackPdf}
-                disabled={uploadingFeedback}
-              >
-                <Ionicons name="cloud-upload-outline" size={16} color="#0F172A" />
-                <Text style={styles.uploadBtnText}>
-                  {uploadingFeedback
+              <WebButton
+                title={
+                  uploadingFeedback
                     ? 'Uploading...'
                     : feedbackPdfUrl
                       ? 'Replace Image / PDF'
-                      : 'Upload Image / PDF'}
-                </Text>
-              </TouchableOpacity>
+                      : 'Upload Image / PDF'
+                }
+                variant="outline"
+                onPress={pickFeedbackPdf}
+                disabled={uploadingFeedback}
+              />
             </View>
             {feedbackError ? <Text style={styles.errorText}>{feedbackError}</Text> : null}
-          </View>
+        </PageSection>
 
-          <View style={styles.footer}>
+        <View style={styles.footer}>
+          <View style={styles.footerCol}>
             <WebButton title="Cancel" variant="outline" onPress={() => navigation.goBack()} />
+          </View>
+          <View style={styles.footerCol}>
             <WebButton
               title={submitting ? 'Updating...' : 'Update Training'}
               onPress={handleSubmit}
@@ -495,121 +473,26 @@ export default function TrainingEditScreen({ navigation, route }: any) {
 const styles = StyleSheet.create({
   content: { flex: 1 },
   contentContainer: { padding: 16, paddingBottom: 40 },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 16,
-    gap: 6,
-  },
-  readonly: {
-    backgroundColor: '#F8FAFC',
-    color: '#0F172A',
-  },
-  textArea: {
-    minHeight: 96,
-    textAlignVertical: 'top',
-    marginBottom: 8,
-  },
-  errorText: {
-    color: '#DC2626',
-    fontSize: 13,
-    marginBottom: 8,
-    marginTop: -2,
-  },
-  feedbackBox: {
-    marginTop: 8,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    backgroundColor: '#F8FAFC',
-    padding: 14,
-    gap: 8,
-  },
-  feedbackTitle: {
-    ...typography.label.medium,
-    color: colors.textPrimary,
-    fontWeight: '700',
-  },
-  feedbackHint: {
-    ...typography.body.small,
-    color: colors.textSecondary,
-  },
-  missingPdf: {
-    ...typography.body.small,
-    color: '#B45309',
-    backgroundColor: '#FFFBEB',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  noticeText: {
-    ...typography.body.small,
-    color: '#047857',
-    backgroundColor: '#ECFDF5',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
+  textArea: { minHeight: 96, textAlignVertical: 'top' },
+  errorText: { color: colors.error, fontSize: 13, marginBottom: 8, marginTop: -6 },
+  feedbackHint: { fontSize: 13, color: colors.textTertiary, marginBottom: 8 },
+  missingPdf: { fontSize: 13, color: '#B45309', marginBottom: 8 },
+  noticeText: { fontSize: 13, color: colors.success, marginBottom: 8 },
   uploadedCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
+    backgroundColor: colors.accent,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,
+    marginBottom: 8,
   },
-  uploadedLabel: {
-    ...typography.label.small,
-    color: '#1E40AF',
-    fontWeight: '700',
-  },
-  uploadedName: {
-    ...typography.body.small,
-    color: '#1E3A8A',
-    marginTop: 2,
-  },
-  feedbackActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 4,
-  },
-  uploadBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
-  },
-  uploadBtnText: {
-    color: '#0F172A',
-    fontWeight: '600',
-    fontSize: 13,
-  },
-  viewBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-  },
-  viewBtnText: {
-    color: '#1D4ED8',
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  footer: {
-    marginTop: 16,
-    gap: 10,
-  },
+  uploadedLabel: { fontSize: 13, color: colors.primaryDark, fontWeight: '700' },
+  uploadedName: { fontSize: 13, color: colors.textPrimary, marginTop: 2 },
+  feedbackActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  viewBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 6 },
+  viewBtnText: { color: colors.primaryDark, fontWeight: '700', fontSize: 13 },
+  footer: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  footerCol: { flex: 1 },
 });

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
-import { colors, radii, spacing } from '../../theme/colors';
+import { colors } from '../../theme/colors';
 import { WebInput, WebButton } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 import { showAlert } from '../../utils/showAlert';
@@ -120,23 +120,24 @@ export default function LeaveDecisionActions({
 
 const styles = StyleSheet.create({
   root: { gap: 8 },
-  waiting: { fontSize: 12, color: colors.textSecondary },
-  roleText: { fontSize: 12, color: colors.textSecondary },
+  waiting: { fontSize: 13, color: colors.textTertiary },
+  roleText: { fontSize: 13, color: colors.textTertiary },
   row: { flexDirection: 'row', gap: 8 },
-  btn: { flex: 1, paddingVertical: 10, borderRadius: radii.md, alignItems: 'center' },
+  btn: { flex: 1, minHeight: 44, justifyContent: 'center', borderRadius: 10, alignItems: 'center' },
   approve: { backgroundColor: colors.success },
   reject: { backgroundColor: colors.error },
-  override: { borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundLight, flex: 0 },
-  btnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+  override: { borderWidth: 1, borderColor: '#DCE3EC', backgroundColor: colors.backgroundLight, flex: 0 },
+  btnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   overrideText: { color: colors.textPrimary, fontWeight: '600', fontSize: 14 },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: colors.backgroundLight,
-    padding: spacing.lg,
-    borderTopLeftRadius: radii.xl,
-    borderTopRightRadius: radii.xl,
+    padding: 16,
+    paddingBottom: 24,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
     gap: 8,
   },
-  sheetTitle: { fontSize: 18, fontWeight: '600', color: colors.textPrimary },
+  sheetTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
   sheetDesc: { fontSize: 13, color: colors.textSecondary, marginBottom: 4 },
 });

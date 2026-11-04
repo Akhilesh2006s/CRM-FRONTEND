@@ -14,9 +14,10 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { documentDirectory, writeAsStringAsync } from 'expo-file-system/legacy';
 import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
-import ScreenShell from '../../ui/ScreenShell';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState, SectionTitle } from '../../ui/Kit';
+import { rk, matchesWords } from '../Reports/ReportKit';
 import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 
@@ -182,15 +183,6 @@ function productsLabel(products?: School['products']): string {
     .join(', ') || '-';
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.infoRow}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value}</Text>
-    </View>
-  );
-}
-
 export default function TrainingAssignScreen({ navigation }: any) {
   const [schools, setSchools] = useState<School[]>([]);
   const [trainers, setTrainers] = useState<Trainer[]>([]);
@@ -324,7 +316,17 @@ export default function TrainingAssignScreen({ navigation }: any) {
     }
     if (f.schoolName) {
       filtered = filtered.filter((s) =>
-        (s.school_name || '').toLowerCase().includes(f.schoolName.toLowerCase()),
+        matchesWords(f.schoolName, [
+          s.school_name,
+          s.school_code,
+          s.school_type,
+          s.contact_person,
+          s.contact_mobile,
+          productsLabel(s.products),
+          s.assigned_to?.name,
+          s.location,
+          s.zone,
+        ]),
       );
     }
     if (f.mobile) {
@@ -610,90 +612,75 @@ export default function TrainingAssignScreen({ navigation }: any) {
           />
         ) : null}
 
-        <View style={styles.filterCard}>
-          <Text style={styles.sectionTitle}>Search filters</Text>
+        <PageSection title="Filters">
           <WebInput
-            placeholder="By School Code"
-            value={draftFilters.schoolCode}
-            onChangeText={(v) => setDraftFilters((f) => ({ ...f, schoolCode: v }))}
-          />
-          <WebInput
-            placeholder="By School Name"
+            placeholder="Search school, code, contact, mobile, town…"
             value={draftFilters.schoolName}
             onChangeText={(v) => setDraftFilters((f) => ({ ...f, schoolName: v }))}
+            returnKeyType="search"
+            onSubmitEditing={onSearch}
           />
-          <WebInput
-            placeholder="By Mobile No"
-            value={draftFilters.mobile}
-            onChangeText={(v) => setDraftFilters((f) => ({ ...f, mobile: v }))}
-            keyboardType="phone-pad"
-          />
-          <WebInput
-            placeholder="By Town"
-            value={draftFilters.town}
-            onChangeText={(v) => setDraftFilters((f) => ({ ...f, town: v }))}
-          />
+          <View style={rk.row2}>
+            <View style={rk.col}>
+              <WebSelect
+                label="Executive"
+                placeholder="All Executives"
+                value={draftFilters.executive}
+                onValueChange={(v) => setDraftFilters((f) => ({ ...f, executive: v }))}
+                items={executives.map((e) => ({ label: e, value: e }))}
+              />
+            </View>
+            <View style={rk.col}>
+              <WebSelect
+                label="Zone"
+                placeholder="All Zones"
+                value={draftFilters.zone}
+                onValueChange={(v) => setDraftFilters((f) => ({ ...f, zone: v }))}
+                items={zones.map((z) => ({ label: z, value: z }))}
+              />
+            </View>
+          </View>
           <PickDateField placeholder="From date" value={draftFilters.fromDate} onChange={(v) => setDraftFilters((f) => ({ ...f, fromDate: v }))} />
           <PickDateField placeholder="To date" value={draftFilters.toDate} onChange={(v) => setDraftFilters((f) => ({ ...f, toDate: v }))} />
-          <WebSelect
-            placeholder="All Executives"
-            value={draftFilters.executive}
-            onValueChange={(v) => setDraftFilters((f) => ({ ...f, executive: v }))}
-            items={executives.map((e) => ({ label: e, value: e }))}
-          />
-          <WebSelect
-            placeholder="All Zones"
-            value={draftFilters.zone}
-            onValueChange={(v) => setDraftFilters((f) => ({ ...f, zone: v }))}
-            items={zones.map((z) => ({ label: z, value: z }))}
-          />
-          <WebButton title="Search" onPress={onSearch} />
-        </View>
+          <View style={rk.btnRow}>
+            <View style={rk.col}>
+              <WebButton title="Search" onPress={onSearch} />
+            </View>
+            <View style={rk.col}>
+              <WebButton title={exporting ? 'Exporting…' : 'Export Excel'} variant="outline" onPress={exportToExcel} disabled={exporting} />
+            </View>
+          </View>
+        </PageSection>
 
-        <View style={styles.listHeader}>
-          <Text style={styles.sectionTitle}>Existing Schools ({filteredSchools.length})</Text>
-          <TouchableOpacity onPress={exportToExcel} disabled={exporting}>
-            <Text style={styles.exportLink}>{exporting ? 'Exporting…' : 'Export to Excel'}</Text>
-          </TouchableOpacity>
-        </View>
+        <SectionTitle>{`Existing schools (${filteredSchools.length})`}</SectionTitle>
 
         {paginatedSchools.length === 0 ? (
-          <View style={styles.emptyBox}>
-            <Text style={styles.emptyText}>No schools found</Text>
-          </View>
+          <EmptyState title="No schools found" />
         ) : (
           paginatedSchools.map((school, index) => {
             const sno = (page - 1) * ITEMS_PER_PAGE + index + 1;
             return (
-              <View key={`${school._id}-${sno}`} style={styles.card}>
-                <View style={styles.cardTop}>
-                  <Text style={styles.schoolName}>{school.school_name || 'Unnamed School'}</Text>
-                  <View style={styles.typeBadge}>
-                    <Text style={styles.typeBadgeText}>{school.school_type || 'Existing'}</Text>
-                  </View>
-                </View>
-                <InfoRow label="S.No" value={String(sno)} />
-                <InfoRow label="School Code" value={school.school_code || '-'} />
-                <InfoRow label="Contact Name" value={school.contact_person || '-'} />
-                <InfoRow label="Mobile" value={school.contact_mobile || '-'} />
+              <Card key={`${school._id}-${sno}`}>
+                <CardTitle
+                  title={`${sno}. ${school.school_name || 'Unnamed School'}`}
+                  subtitle={school.school_code || undefined}
+                  badge={school.school_type || 'Existing'}
+                  tone="success"
+                />
+                <InfoRow label="Contact" value={school.contact_person || '-'} />
+                <InfoRow label="Mobile" value={school.contact_mobile || '-'} phone />
                 <InfoRow label="Products" value={productsLabel(school.products)} />
                 <InfoRow label="Executive" value={school.assigned_to?.name || '-'} />
                 <InfoRow label="Location" value={school.location || '-'} />
-                <View style={styles.actions}>
-                  <TouchableOpacity
-                    style={styles.trainingBtn}
-                    onPress={() => openAssign(school, 'training')}
-                  >
-                    <Text style={styles.trainingBtnText}>Training</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.serviceBtn}
-                    onPress={() => openAssign(school, 'service')}
-                  >
-                    <Text style={styles.serviceBtnText}>Service</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
+                <ActionRow>
+                  <View style={rk.col}>
+                    <WebButton title="Assign Training" onPress={() => openAssign(school, 'training')} />
+                  </View>
+                  <View style={rk.col}>
+                    <WebButton title="Assign Service" variant="outline" onPress={() => openAssign(school, 'service')} />
+                  </View>
+                </ActionRow>
+              </Card>
             );
           })
         )}
@@ -800,13 +787,17 @@ export default function TrainingAssignScreen({ navigation }: any) {
           />
         </ScrollView>
             <View style={styles.modalFooter}>
-              <WebButton title="Cancel" variant="outline" onPress={() => setAssignOpen(false)} disabled={submitting} />
-              <WebButton
-                title={submitting ? 'Assigning…' : 'Assign'}
-                onPress={submitAssign}
-                loading={submitting}
-              />
-      </View>
+              <View style={rk.col}>
+                <WebButton title="Cancel" variant="outline" onPress={() => setAssignOpen(false)} disabled={submitting} />
+              </View>
+              <View style={rk.col}>
+                <WebButton
+                  title={submitting ? 'Assigning…' : 'Assign'}
+                  onPress={submitAssign}
+                  loading={submitting}
+                />
+              </View>
+            </View>
           </View>
           </View>
         </Modal>
@@ -817,172 +808,63 @@ export default function TrainingAssignScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   content: { flex: 1 },
   contentContainer: { padding: 16, paddingBottom: 32 },
-  exportBtn: {
-    backgroundColor: colors.primary,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  exportBtnText: { ...typography.label.small, color: colors.textLight },
-  filterCard: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    gap: 10,
-    marginBottom: 16,
-  },
-  sectionTitle: { ...typography.heading.h3, color: colors.textPrimary, marginBottom: 4 },
-  listHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  exportLink: { ...typography.label.medium, color: colors.primary },
-  emptyBox: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 28,
-    alignItems: 'center',
-  },
-  emptyText: { ...typography.body.medium, color: colors.textSecondary },
-  card: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    marginBottom: 12,
-  },
-  cardTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 10,
-    marginBottom: 10,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
-  },
-  schoolName: { ...typography.heading.h3, color: colors.textPrimary, flex: 1 },
-  typeBadge: {
-    backgroundColor: '#DCFCE7',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    alignSelf: 'flex-start',
-  },
-  typeBadgeText: { ...typography.label.small, color: '#166534' },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 10,
-    marginBottom: 6,
-  },
-  infoLabel: { ...typography.body.small, color: colors.textMuted, minWidth: 96 },
-  infoValue: {
-    ...typography.body.medium,
-    color: colors.textPrimary,
-    flex: 1,
-    textAlign: 'right',
-  },
-  actions: { flexDirection: 'row', gap: 8, marginTop: 12 },
-  trainingBtn: {
-    backgroundColor: '#F97316',
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  trainingBtnText: { ...typography.label.medium, color: '#fff' },
-  serviceBtn: {
-    backgroundColor: '#DC2626',
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  serviceBtnText: { ...typography.label.medium, color: '#fff' },
-  pagination: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 8,
-  },
+  exportBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  exportBtnText: { color: colors.primary, fontWeight: '600', fontSize: 13 },
+  pagination: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 4 },
   pageBtn: {
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
-    paddingHorizontal: 10,
+    borderRadius: 10,
+    paddingHorizontal: 12,
     paddingVertical: 8,
     backgroundColor: colors.backgroundLight,
   },
   pageBtnDisabled: { opacity: 0.45 },
-  pageBtnText: { ...typography.label.medium, color: colors.textPrimary },
+  pageBtnText: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
   pageNumBtn: {
-    minWidth: 34,
+    minWidth: 36,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
+    borderRadius: 10,
     paddingVertical: 8,
     alignItems: 'center',
     backgroundColor: colors.backgroundLight,
   },
-  pageNumBtnActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  pageNumText: { ...typography.label.medium, color: colors.textPrimary },
+  pageNumBtnActive: { backgroundColor: colors.primaryDark, borderColor: colors.primaryDark },
+  pageNumText: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
   pageNumTextActive: { color: colors.textLight },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15,23,42,0.45)',
-    justifyContent: 'flex-end',
-  },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(15,23,42,0.45)', justifyContent: 'flex-end' },
   modalCard: {
     backgroundColor: colors.backgroundLight,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
     maxHeight: '90%',
     padding: 16,
     gap: 8,
   },
-  modalTitle: { ...typography.heading.h2, color: colors.textPrimary },
-  modalSub: { ...typography.body.medium, color: colors.textSecondary, marginBottom: 8 },
+  modalTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
+  modalSub: { fontSize: 13, color: colors.textTertiary, marginBottom: 8 },
   lastSchedule: {
-    ...typography.body.medium,
-    color: '#065f46',
-    backgroundColor: '#ecfdf5',
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 8,
-  },
-  pickerWrap: {
-    borderWidth: 1,
-    borderColor: colors.border,
+    fontSize: 14,
+    color: colors.textPrimary,
+    backgroundColor: colors.backgroundMuted,
     borderRadius: 10,
-    marginBottom: 8,
-    overflow: 'hidden',
+    padding: 12,
+    marginBottom: 12,
   },
-  picker: { height: 48 },
   fieldBlock: { marginBottom: 4 },
   dateTouchable: {
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#DCE3EC',
     borderRadius: 10,
     padding: 12,
-    marginBottom: 8,
-    backgroundColor: colors.background,
-  },
-  dateText: { ...typography.body.medium, color: colors.textPrimary },
-  datePlaceholder: { color: colors.textMuted },
-  modalFooter: { flexDirection: 'row', gap: 10, marginTop: 8 },
-  datePickerBox: {
+    minHeight: 48,
+    justifyContent: 'center',
+    marginBottom: 12,
     backgroundColor: colors.backgroundLight,
-    padding: 16,
-    marginTop: 'auto',
   },
+  dateText: { fontSize: 15, color: colors.textPrimary },
+  datePlaceholder: { color: colors.textMuted },
+  modalFooter: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  datePickerBox: { backgroundColor: colors.backgroundLight, padding: 16, marginTop: 'auto' },
 });

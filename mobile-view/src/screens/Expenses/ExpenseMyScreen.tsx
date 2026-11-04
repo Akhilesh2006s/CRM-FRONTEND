@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, radii, spacing } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import ScreenShell from '../../ui/ScreenShell';
+import { Card, InfoRow, EmptyState } from '../../ui/Kit';
 import { apiService } from '../../services/api';
 import {
   type ApprovalExpense,
@@ -201,38 +202,29 @@ export default function ExpenseMyScreen({ navigation, route }: any) {
         </View>
 
         {shown.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>
-              {MY_EXPENSE_VIEW_EMPTY[view]}
-            </Text>
-          </View>
+          <EmptyState icon="🧾" title={MY_EXPENSE_VIEW_EMPTY[view]} />
         ) : (
           shown.map((expense, index) => (
-            <TouchableOpacity key={expense._id} style={styles.card} onPress={() => setViewing(expense)} activeOpacity={0.8}>
+            <Card key={expense._id} onPress={() => setViewing(expense)}>
               <View style={styles.cardHeader}>
-                <Text style={styles.expenseTitle}>
-                  {index + 1}. {getExpenseType(expense.category)}
-                </Text>
-                <Text style={styles.dateText}>{formatDate(expense.date)}</Text>
-              </View>
-              <View style={styles.amountRow}>
-                <View>
-                  <Text style={styles.amountLabel}>Amount</Text>
-                  <Text style={styles.amountText}>{Number(expense.employeeAmount ?? expense.amount).toFixed(2)}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.expenseTitle}>
+                    {index + 1}. {getExpenseType(expense.category)}
+                  </Text>
+                  <Text style={styles.dateText}>{formatDate(expense.date)}</Text>
                 </View>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={styles.amountLabel}>Approved Amount</Text>
-                  <Text style={styles.amountText}>{expense.approvedAmount != null ? expense.approvedAmount.toFixed(2) : '-'}</Text>
-                </View>
+                <StatusBadge expense={expense} />
               </View>
+              <InfoRow label="Amount" value={Number(expense.employeeAmount ?? expense.amount).toFixed(2)} bold />
+              <InfoRow label="Approved" value={expense.approvedAmount != null ? expense.approvedAmount.toFixed(2) : '-'} />
               {expense.status === 'Rejected' && expense.rejectionReason ? (
                 <Text style={styles.rejectionText}>Rejection remarks: {expense.rejectionReason}</Text>
               ) : null}
               <View style={styles.cardFooter}>
-                <StatusBadge expense={expense} />
-                <Ionicons name="eye-outline" size={20} color={colors.primary} />
+                <Text style={styles.viewText}>View details</Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.primaryDark} />
               </View>
-            </TouchableOpacity>
+            </Card>
           ))
         )}
       </ScrollView>
@@ -244,57 +236,63 @@ export default function ExpenseMyScreen({ navigation, route }: any) {
 const styles = StyleSheet.create({
   content: { flex: 1 },
   listContent: { padding: 16, paddingBottom: 40 },
-  headerAction: { paddingHorizontal: 8, paddingVertical: 4 },
-  headerActionText: { color: colors.primary, fontWeight: '700', fontSize: 14 },
+  headerAction: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: colors.accent },
+  headerActionText: { color: colors.primaryDark, fontWeight: '700', fontSize: 14 },
   toggleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-  rejectionText: { fontSize: 13, color: colors.error, marginBottom: 8 },
+  rejectionText: { fontSize: 13, color: colors.error, marginTop: 6 },
   toggleBtn: {
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: radii.md,
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#DCE3EC',
     backgroundColor: colors.backgroundLight,
   },
-  toggleBtnActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  toggleBtnActive: { backgroundColor: colors.primaryDark, borderColor: colors.primaryDark },
   toggleText: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
   toggleTextActive: { color: colors.primaryForeground },
-  emptyContainer: { alignItems: 'center', paddingVertical: 48 },
-  emptyText: { ...typography.body.medium, color: colors.textSecondary },
-  card: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    marginBottom: 10,
+  cardHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 8 },
+  expenseTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
+  dateText: { fontSize: 13, color: colors.textTertiary, marginTop: 2 },
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#EEF2F7',
   },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  expenseTitle: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
-  dateText: { fontSize: 13, color: colors.textSecondary },
-  amountRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  amountLabel: { fontSize: 11, color: colors.textSecondary },
-  amountText: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
-  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
-  badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: radii.sm, flexShrink: 1 },
-  badgeText: { fontSize: 12, fontWeight: '500' },
-  modalRoot: { flex: 1, backgroundColor: colors.backgroundLight },
+  viewText: { fontSize: 14, fontWeight: '600', color: colors.primaryDark },
+  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, flexShrink: 1, maxWidth: 170 },
+  badgeText: { fontSize: 12, fontWeight: '700' },
+  modalRoot: { flex: 1, backgroundColor: colors.background },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingTop: 48,
     paddingBottom: 12,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: 16,
+    backgroundColor: colors.backgroundLight,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: '#EEF2F7',
   },
-  modalTitle: { fontSize: 18, fontWeight: '600', color: colors.textPrimary },
-  modalSub: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
-  modalBody: { padding: spacing.md, paddingBottom: 40 },
-  detailRow: { flexDirection: 'row', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
-  detailLabel: { width: 130, fontSize: 13, color: colors.textSecondary },
-  detailValue: { flex: 1, fontSize: 13, color: colors.textPrimary },
-  sectionTitle: { fontSize: 14, fontWeight: '600', color: colors.textPrimary, marginTop: spacing.md, marginBottom: 4 },
-  historyItem: { fontSize: 13, color: colors.textSecondary, marginBottom: 4 },
-  billRow: { flexDirection: 'row', marginTop: spacing.md },
+  modalTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
+  modalSub: { fontSize: 13, color: colors.textTertiary, marginTop: 2 },
+  modalBody: { padding: 16, paddingBottom: 40 },
+  detailRow: { flexDirection: 'row', paddingVertical: 8, gap: 8, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
+  detailLabel: { width: 120, fontSize: 13, color: colors.textTertiary },
+  detailValue: { flex: 1, fontSize: 14, color: colors.textPrimary },
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  historyItem: { fontSize: 13, color: colors.textSecondary, marginBottom: 6, lineHeight: 18 },
+  billRow: { flexDirection: 'row', gap: 8, marginTop: 16 },
 });

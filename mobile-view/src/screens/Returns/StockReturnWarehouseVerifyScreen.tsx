@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
-import ScreenShell from '../../ui/ScreenShell';
+import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebLabel, WebSelect } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 import { phoneDigitsError, sanitizePhoneDigits } from '../../utils/phone';
@@ -372,12 +372,7 @@ export default function StockReturnWarehouseVerifyScreen({ navigation, route }: 
   };
 
   if (loading || !detail) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading return…</Text>
-      </View>
-    );
+    return <ScreenShell title="Stock Return Update" loading>{null}</ScreenShell>;
   }
 
   return (
@@ -387,15 +382,8 @@ export default function StockReturnWarehouseVerifyScreen({ navigation, route }: 
         readOnly ? ` (${returnStatus} — view only)` : ''
       }`}
       loading={false}
-      noScroll
     >
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={styles.contentContainer}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>School Information</Text>
+        <PageSection title="School Information">
           <WebLabel>School Name</WebLabel>
           <WebInput value={schoolName} editable={false} style={styles.readonly} />
           <WebLabel>School Code</WebLabel>
@@ -422,10 +410,9 @@ export default function StockReturnWarehouseVerifyScreen({ navigation, route }: 
             placeholder="10 to 15 digits"
             style={readOnly ? styles.readonly : undefined}
           />
-        </View>
+        </PageSection>
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>More Information</Text>
+        <PageSection title="More Information">
           <WebLabel>Town</WebLabel>
           <WebInput
             value={town}
@@ -468,10 +455,9 @@ export default function StockReturnWarehouseVerifyScreen({ navigation, route }: 
             editable={!readOnly}
             style={[styles.textArea, readOnly ? styles.readonly : null]}
           />
-        </View>
+        </PageSection>
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Stock Return Information Update</Text>
+        <PageSection title="Return Details">
 
           {readOnly ? (
             <View style={styles.readOnlyBanner}>
@@ -578,17 +564,21 @@ export default function StockReturnWarehouseVerifyScreen({ navigation, route }: 
               ))}
             </View>
           )}
-        </View>
+        </PageSection>
 
-        <View style={styles.footer}>
-          <WebButton title="Print Return Slip" variant="outline" onPress={handlePrint} />
-          <WebButton
-            title="Back to list"
-            variant="outline"
-            onPress={() => navigation.navigate('ReturnsWarehouseExecutive')}
-          />
+        <View style={styles.footerRow}>
+          <View style={styles.footerCell}>
+            <WebButton title="Print Slip" variant="outline" onPress={handlePrint} />
+          </View>
+          <View style={styles.footerCell}>
+            <WebButton
+              title="Back to list"
+              variant="outline"
+              onPress={() => navigation.navigate('ReturnsWarehouseExecutive')}
+            />
+          </View>
           {!readOnly ? (
-            <>
+            <View style={styles.footerCell}>
               <WebButton
                 title={saving ? 'Saving…' : 'Save'}
                 variant="outline"
@@ -596,99 +586,46 @@ export default function StockReturnWarehouseVerifyScreen({ navigation, route }: 
                 disabled={saving || submitting}
                 loading={saving}
               />
-              <WebButton
-                title={submitting ? 'Submitting…' : 'Submit to Warehouse Manager'}
-                onPress={handleSubmitToAdmin}
-                disabled={saving || submitting}
-                loading={submitting}
-              />
-            </>
+            </View>
           ) : null}
         </View>
-      </ScrollView>
+        {!readOnly ? (
+          <WebButton
+            title={submitting ? 'Submitting…' : 'Submit to Warehouse Manager'}
+            onPress={handleSubmitToAdmin}
+            disabled={saving || submitting}
+            loading={submitting}
+          />
+        ) : null}
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.background,
-  },
-  loadingText: { marginTop: 12, ...typography.body.medium, color: colors.textSecondary },
-  content: { flex: 1 },
-  contentContainer: { padding: 16, paddingBottom: 40, gap: 12 },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
-    gap: 6,
-  },
-  sectionTitle: {
-    ...typography.heading.h3,
-    color: colors.textPrimary,
-    marginBottom: 8,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  readonly: {
-    backgroundColor: '#F8FAFC',
-    color: '#0F172A',
-  },
-  textArea: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
+  readonly: { backgroundColor: colors.backgroundMuted, color: colors.textPrimary },
+  textArea: { minHeight: 80, textAlignVertical: 'top' },
   readOnlyBanner: {
     backgroundColor: '#FFFBEB',
     borderWidth: 1,
     borderColor: '#FDE68A',
-    borderRadius: 8,
+    borderRadius: 10,
     padding: 12,
-    marginBottom: 8,
+    marginBottom: 12,
   },
-  readOnlyBannerText: {
-    fontSize: 13,
-    color: '#78350F',
-    lineHeight: 18,
-  },
-  helpText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: -2,
-    marginBottom: 6,
-  },
-  instruction: {
-    ...typography.body.small,
-    color: colors.textSecondary,
-    marginTop: 8,
-    marginBottom: 8,
-  },
-  emptyProducts: {
-    textAlign: 'center',
-    color: colors.textSecondary,
-    paddingVertical: 16,
-  },
-  productList: { gap: 10 },
-  productCard: { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 12, backgroundColor: '#F8FAFC' },
-  productName: { ...typography.body.medium, color: colors.textPrimary, fontWeight: '700', marginBottom: 10 },
-  productFields: { flexDirection: 'row', gap: 10 },
+  readOnlyBannerText: { fontSize: 13, color: '#78350F', lineHeight: 18 },
+  helpText: { fontSize: 13, color: colors.textTertiary, marginTop: -8, marginBottom: 12 },
+  instruction: { fontSize: 13, color: colors.textSecondary, marginTop: 4, marginBottom: 12 },
+  emptyProducts: { textAlign: 'center', fontSize: 14, color: colors.textSecondary, paddingVertical: 16 },
+  productList: { gap: 12 },
+  productCard: { borderWidth: 1, borderColor: '#EEF2F7', borderRadius: 12, padding: 12, backgroundColor: colors.background },
+  productName: { fontSize: 15, color: colors.textPrimary, fontWeight: '700', marginBottom: 6 },
+  productFields: { flexDirection: 'row', gap: 12, marginBottom: 12 },
   receivedField: { width: '34%' },
   conditionField: { flex: 1 },
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 2 },
-  metaText: { fontSize: 12, color: colors.textSecondary },
-  fieldLabel: { ...typography.label.small, color: colors.textSecondary, marginBottom: 5 },
-  qtyInput: {
-    borderColor: '#059669',
-    backgroundColor: '#FFFFFF',
-  },
-  footer: {
-    gap: 10,
-    marginTop: 4,
-  },
+  metaText: { fontSize: 13, color: colors.textSecondary },
+  fieldLabel: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 6 },
+  qtyInput: { borderColor: colors.success, backgroundColor: '#FFFFFF', marginBottom: 0 },
+  footerRow: { flexDirection: 'row', gap: 8 },
+  footerCell: { flex: 1 },
 });

@@ -16,6 +16,7 @@ import { useAuth } from '../../context/AuthContext';
 import { colors } from '../../theme/colors';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
+import { Card, CardTitle, Badge, InfoRow, ActionRow, EmptyState, SectionTitle, toneFor, type Tone } from '../../ui/Kit';
 import { navigateRoot } from '../../navigation/navigationRef';
 import { DueRenewalsCard, type DueRenewalRow } from '../../components/clients/DueRenewalsCard';
 import { ContractEditor } from '../../components/clients/ContractEditor';
@@ -137,6 +138,12 @@ function schoolDisplayCode(row: DcOrderRow | null) {
   return (row.school_code || row.dc_code || '').trim() || '-';
 }
 
+/** Same as displayField but empty for blank values (InfoRow hides it). */
+function optField(v?: string | number | null) {
+  const d = displayField(v);
+  return d === '—' ? undefined : d;
+}
+
 function displayField(v?: string | number | null) {
   if (v === undefined || v === null) return '—';
   const s = String(v).trim();
@@ -166,6 +173,14 @@ function formatRenewalProductMeta(p: {
     parts.push(`Chance: ${Number(raw)}%`);
   }
   return parts.join(' · ');
+}
+
+function renewalPriorityTone(priority?: string): Tone {
+  const p = String(priority || 'Warm').toLowerCase();
+  if (p === 'hot') return 'error';
+  if (p === 'warm') return 'warning';
+  if (p === 'cold') return 'info';
+  return toneFor(priority);
 }
 
 function priorityColor(priority?: string) {
@@ -280,8 +295,19 @@ export default function LeadsRenewalListScreen() {
       filtered = filtered.filter((l) => l.zone?.toLowerCase().includes(zoneFilter.toLowerCase()));
     }
     if (mobileFilter) filtered = filtered.filter((l) => l.contact_mobile?.includes(mobileFilter));
-    if (schoolFilter) {
-      filtered = filtered.filter((l) => l.school_name?.toLowerCase().includes(schoolFilter.toLowerCase()));
+    const words = schoolFilter.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (words.length) {
+      filtered = filtered.filter((l: any) => {
+        const hay = [
+          l.school_name, l.school_code, l.dc_code, l.contact_person, l.contact_mobile, l.zone, l.location,
+          l.city, l.area, l.address, l.remarks, l.priority, l.status,
+          ...(Array.isArray(l.products) ? l.products.map((p: any) => p?.product_name || p?.product) : []),
+        ]
+          .map((v) => String(v || ''))
+          .join(' ')
+          .toLowerCase();
+        return words.every((w) => hay.includes(w));
+      });
     }
     filtered.sort((a, b) => {
       const aT = a.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -591,44 +617,16 @@ export default function LeadsRenewalListScreen() {
           <View style={styles.selectedBox}>
             <Text style={styles.selectedTitle}>Selected school</Text>
             {schoolDetailLoading ? <Text style={styles.hint}>Loading full record…</Text> : null}
-            <Text style={styles.detailLine}>
-              <Text style={styles.detailLabel}>Name: </Text>
-              {selectedSchool.school_name}
-            </Text>
-            <Text style={styles.detailLine}>
-              <Text style={styles.detailLabel}>Code: </Text>
-              {schoolDisplayCode(selectedSchool)}
-            </Text>
-            <Text style={styles.detailLine}>
-              <Text style={styles.detailLabel}>Zone: </Text>
-              {displayField(selectedSchool.zone)}
-            </Text>
-            <Text style={styles.detailLine}>
-              <Text style={styles.detailLabel}>Address: </Text>
-              {displayField(selectedSchool.address)}
-            </Text>
-            <Text style={styles.detailLine}>
-              <Text style={styles.detailLabel}>Pincode: </Text>
-              {displayField(selectedSchool.pincode)}
-              {'  '}
-              <Text style={styles.detailLabel}>City: </Text>
-              {displayField(selectedSchool.city)}
-            </Text>
-            <Text style={styles.detailLine}>
-              <Text style={styles.detailLabel}>State: </Text>
-              {displayField(selectedSchool.state)}
-              {'  '}
-              <Text style={styles.detailLabel}>Region: </Text>
-              {displayField(selectedSchool.region)}
-            </Text>
-            <Text style={styles.detailLine}>
-              <Text style={styles.detailLabel}>Area: </Text>
-              {displayField(selectedSchool.area)}
-            </Text>
-            <Text style={styles.detailLine}>
-              <Text style={styles.detailLabel}>Location: </Text>
-              {displayField(selectedSchool.location)}
-            </Text>
+            <InfoRow label="Name" value={selectedSchool.school_name} />
+            <InfoRow label="Code" value={schoolDisplayCode(selectedSchool)} />
+            <InfoRow label="Zone" value={optField(selectedSchool.zone)} />
+            <InfoRow label="Address" value={optField(selectedSchool.address)} />
+            <InfoRow label="Pincode" value={optField(selectedSchool.pincode)} />
+            <InfoRow label="City" value={optField(selectedSchool.city)} />
+            <InfoRow label="State" value={optField(selectedSchool.state)} />
+            <InfoRow label="Region" value={optField(selectedSchool.region)} />
+            <InfoRow label="Area" value={optField(selectedSchool.area)} />
+            <InfoRow label="Location" value={optField(selectedSchool.location)} />
             <View style={{ marginTop: 6 }}>
               <Text style={styles.detailLabel}>Contract:</Text>
               <ContractEditor
@@ -664,8 +662,7 @@ export default function LeadsRenewalListScreen() {
 
         <View style={styles.infoBanner}>
           <Text style={styles.infoBannerText}>
-            For each product choose Renewed, Not Renewed or Cross-Sale. Renewed and Cross-Sale need
-            Strength, Price (per student) and Chance %; Not Renewed needs the reason.
+            Renewed / Cross-Sale: Strength, Price and Chance %. Not Renewed: reason.
           </Text>
         </View>
 
@@ -779,140 +776,111 @@ export default function LeadsRenewalListScreen() {
         />
       </PageSection>
 
-      <PageSection title="Filters">
-        <WebSelect
-          label="Zone"
-          value={zoneFilter}
-          onValueChange={setZoneFilter}
-          placeholder="All Zones"
-          items={[
-            { label: 'All Zones', value: 'all' },
-            ...zones.map((z) => ({ label: z, value: z })),
-          ]}
-        />
-        <WebLabel>School Name</WebLabel>
-        <WebInput placeholder="Filter…" value={schoolFilter} onChangeText={setSchoolFilter} />
-        <WebLabel>Contact Mobile</WebLabel>
-        <WebInput
-          placeholder="Filter…"
-          value={mobileFilter}
-          onChangeText={setMobileFilter}
-          keyboardType="phone-pad"
-        />
-        <WebButton
-          title="Refresh"
-          variant="outline"
+      <SectionTitle>{`Active leads (${leads.length})`}</SectionTitle>
+      <WebInput
+        placeholder="Search school, code, mobile, contact, town, product…"
+        value={schoolFilter}
+        onChangeText={setSchoolFilter}
+      />
+      <View style={styles.filterRow}>
+        <View style={{ flex: 1 }}>
+          <WebSelect
+            value={zoneFilter}
+            onValueChange={setZoneFilter}
+            placeholder="All Zones"
+            items={[
+              { label: 'All Zones', value: 'all' },
+              ...zones.map((z) => ({ label: z, value: z })),
+            ]}
+          />
+        </View>
+        <TouchableOpacity
+          style={styles.refreshBtn}
           onPress={() => {
             setRefreshing(true);
             loadLeads();
           }}
-        />
-      </PageSection>
+        >
+          <Text style={styles.refreshText}>Refresh</Text>
+        </TouchableOpacity>
+      </View>
 
-      <PageSection title={`Active leads (${leads.length})`}>
-        {leads.map((lead) => {
-          const pColor = priorityColor(lead.priority);
-          const followUpPast =
-            lead.follow_up_date && new Date(lead.follow_up_date).getTime() < Date.now();
-          return (
-            <View key={lead._id} style={styles.leadCard}>
-              <View style={styles.leadHeader}>
-                <View style={styles.leadTitleRow}>
-                  <Text style={styles.leadTitle}>{lead.school_name || '—'}</Text>
-                  <View style={styles.renewalBadge}>
-                    <Text style={styles.renewalBadgeText}>Renewal</Text>
-                  </View>
-                </View>
-                <Text style={styles.codeText}>Code: {leadSchoolCode(lead)}</Text>
-                {lead.location ? <Text style={styles.hint}>{lead.location}</Text> : null}
-              </View>
-
-              <View style={styles.metaGrid}>
-                <Text style={styles.metaLine}>
-                  <Text style={styles.detailLabel}>Contact: </Text>
-                  {lead.contact_person || '—'}
-                </Text>
-                <Text style={styles.metaLine}>
-                  <Text style={styles.detailLabel}>Mobile: </Text>
-                  {lead.contact_mobile || '—'}
-                </Text>
-                {lead.remarks ? (
-                  <Text style={styles.metaLine}>
-                    <Text style={styles.detailLabel}>Remarks: </Text>
-                    {lead.remarks}
-                  </Text>
-                ) : null}
-                {lead.recommendations ? (
-                  <Text style={styles.metaLine}>
-                    <Text style={styles.detailLabel}>Recommendations: </Text>
-                    {lead.recommendations}
-                  </Text>
-                ) : null}
-                {lead.follow_up_date ? (
+      {leads.map((lead) => {
+        const followUpPast =
+          lead.follow_up_date && new Date(lead.follow_up_date).getTime() < Date.now();
+        return (
+          <Card key={lead._id}>
+            <CardTitle
+              title={lead.school_name || '—'}
+              subtitle={`Code: ${leadSchoolCode(lead)}`}
+              badge="Renewal"
+              tone="success"
+            />
+            <InfoRow label="Location" value={lead.location || undefined} />
+            <InfoRow label="Contact" value={lead.contact_person || undefined} />
+            <InfoRow label="Mobile" value={lead.contact_mobile || undefined} phone />
+            <InfoRow
+              label="Priority"
+              value={<Badge label={lead.priority || 'Warm'} tone={renewalPriorityTone(lead.priority)} />}
+            />
+            <InfoRow label="Status" value={lead.status || undefined} />
+            <InfoRow
+              label="Follow up"
+              value={
+                lead.follow_up_date ? (
                   <Text style={[styles.metaLine, followUpPast ? styles.overdue : null]}>
-                    <Text style={styles.detailLabel}>Follow up: </Text>
                     {new Date(lead.follow_up_date).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
                   </Text>
-                ) : null}
-                <View style={styles.priorityRow}>
-                  <Text style={styles.detailLabel}>Priority: </Text>
-                  <View style={[styles.priorityChip, { backgroundColor: pColor.bg }]}>
-                    <Text style={[styles.priorityChipText, { color: pColor.text }]}>
-                      {lead.priority || 'Warm'}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={styles.metaLine}>
-                  <Text style={styles.detailLabel}>Status: </Text>
-                  {lead.status || '—'}
-                </Text>
-                {Array.isArray(lead.products) && lead.products.length > 0 ? (
-                  <View style={styles.productChips}>
-                    {lead.products.map((p: any, idx: number) => {
-                      const name = p.product_name || p.product || 'Product';
-                      const meta = formatRenewalProductMeta(p);
-                      return (
-                        <View key={idx} style={styles.productChip}>
-                          <Text style={styles.productChipText}>
-                            {name}
-                            {meta ? ` · ${meta}` : ''}
-                          </Text>
-                        </View>
-                      );
-                    })}
-                  </View>
-                ) : null}
+                ) : undefined
+              }
+            />
+            <InfoRow label="Remarks" value={lead.remarks || undefined} />
+            <InfoRow label="Recommend." value={lead.recommendations || undefined} />
+            {Array.isArray(lead.products) && lead.products.length > 0 ? (
+              <View style={styles.productChips}>
+                {lead.products.map((p: any, idx: number) => {
+                  const name = p.product_name || p.product || 'Product';
+                  const meta = formatRenewalProductMeta(p);
+                  return (
+                    <View key={idx} style={styles.productChip}>
+                      <Text style={styles.productChipText}>
+                        {name}
+                        {meta ? ` · ${meta}` : ''}
+                      </Text>
+                    </View>
+                  );
+                })}
               </View>
+            ) : null}
 
-              <View style={styles.leadActions}>
-                <WebButton
-                  title="Close Lead"
-                  variant="outline"
-                  onPress={() => navigateRoot('LeadClose', { id: lead._id })}
-                />
-                <WebButton
-                  title="Edit Details"
-                  variant="outline"
-                  onPress={() => navigateRoot('LeadEdit', { id: lead._id })}
-                />
-                <WebButton title="Create Follow-up" onPress={() => openUpdateModal(lead)} />
-                <WebButton
-                  title="View History"
-                  variant="outline"
-                  onPress={() => openHistoryModal(lead)}
-                />
-              </View>
-            </View>
-          );
-        })}
-        {leads.length === 0 ? (
-          <Text style={styles.hint}>
-            {allLeads.length === 0
+            <ActionRow>
+              <TouchableOpacity style={[styles.actBtn, styles.actPrimary]} onPress={() => openUpdateModal(lead)}>
+                <Text style={styles.actPrimaryText}>Create Follow-up</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actBtn} onPress={() => navigateRoot('LeadEdit', { id: lead._id })}>
+                <Text style={styles.actText}>Edit Details</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actBtn} onPress={() => openHistoryModal(lead)}>
+                <Text style={styles.actText}>View History</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.actBtn, styles.actSuccess]} onPress={() => navigateRoot('LeadClose', { id: lead._id })}>
+                <Text style={styles.actPrimaryText}>Close Lead</Text>
+              </TouchableOpacity>
+            </ActionRow>
+          </Card>
+        );
+      })}
+      {leads.length === 0 ? (
+        <EmptyState
+          icon="🔁"
+          title="No renewal leads"
+          message={
+            allLeads.length === 0
               ? 'No active renewal leads. Create one above or check Closed in reports.'
-              : 'No leads match filters.'}
-          </Text>
-        ) : null}
-      </PageSection>
+              : 'No leads match filters.'
+          }
+        />
+      ) : null}
 
       <Modal visible={updateOpen} animationType="slide" transparent onRequestClose={() => setUpdateOpen(false)}>
         <View style={styles.modalOverlay}>
@@ -1112,15 +1080,40 @@ export default function LeadsRenewalListScreen() {
 
 const styles = StyleSheet.create({
   infoBanner: {
-    backgroundColor: '#FEF9C3',
-    borderWidth: 1,
-    borderColor: '#FDE047',
+    backgroundColor: colors.accent,
     borderRadius: 10,
-    padding: 12,
-    marginVertical: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginVertical: 8,
   },
-  infoBannerText: { fontSize: 13, color: '#854D0E', lineHeight: 18 },
-  hint: { fontSize: 13, color: colors.textSecondary, marginTop: 4 },
+  infoBannerText: { fontSize: 13, color: colors.accentForeground, lineHeight: 18 },
+  hint: { fontSize: 13, color: colors.textTertiary, marginTop: 4 },
+  filterRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  refreshBtn: {
+    minHeight: 48,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.backgroundLight,
+    justifyContent: 'center',
+  },
+  refreshText: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+  actBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.backgroundLight,
+    minWidth: '47%',
+    flexGrow: 1,
+    alignItems: 'center',
+  },
+  actPrimary: { backgroundColor: colors.primaryDark, borderColor: colors.primaryDark },
+  actSuccess: { backgroundColor: colors.success, borderColor: colors.success },
+  actText: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+  actPrimaryText: { fontSize: 14, fontWeight: '700', color: colors.primaryForeground },
   block: { marginTop: 8, marginBottom: 8 },
   sectionLabel: { fontSize: 15, fontWeight: '600', color: colors.textPrimary, marginBottom: 4 },
   rowBetween: {
@@ -1132,19 +1125,27 @@ const styles = StyleSheet.create({
   },
   productRowInline: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end' },
   numField: { width: 100 },
-  searchHit: { padding: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
-  searchName: { fontWeight: '600', color: colors.textPrimary },
+  searchHit: { paddingVertical: 10, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
+  searchName: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
   selectedBox: {
     padding: 12,
-    backgroundColor: colors.successLight,
-    borderRadius: 8,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
     marginVertical: 8,
-    gap: 4,
   },
-  selectedTitle: { fontWeight: '600', color: '#166534', marginBottom: 4 },
+  selectedTitle: { fontSize: 13, fontWeight: '700', color: colors.success, marginBottom: 6, textTransform: 'uppercase' },
   detailLine: { fontSize: 13, color: colors.textPrimary, marginTop: 2 },
   detailLabel: { color: colors.textSecondary },
-  productRow: { marginVertical: 8, gap: 8 },
+  productRow: {
+    marginVertical: 6,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    backgroundColor: colors.background,
+  },
   productLabel: { fontWeight: '500', marginBottom: 4, color: colors.textPrimary },
   priorTag: { color: '#15803D', fontWeight: '500', fontSize: 12 },
   leadCard: {
@@ -1170,7 +1171,7 @@ const styles = StyleSheet.create({
   priorityRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
   priorityChip: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
   priorityChipText: { fontSize: 12, fontWeight: '600' },
-  productChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
+  productChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
   productChip: {
     backgroundColor: '#ECFDF5',
     borderWidth: 1,
@@ -1179,26 +1180,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
-  productChipText: { fontSize: 11, color: '#065F46' },
+  productChipText: { fontSize: 12, color: '#065F46' },
   leadActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   modalBox: {
     backgroundColor: colors.backgroundLight,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
-    padding: 20,
+    padding: 16,
     maxHeight: '92%',
   },
-  modalTitle: { fontSize: 18, fontWeight: '600', marginBottom: 4 },
+  modalTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary, marginBottom: 4 },
   modalFooter: { flexDirection: 'row', gap: 12, marginTop: 16, marginBottom: 24 },
-  dateBtn: { color: colors.primary, marginVertical: 12, fontWeight: '500' },
+  dateBtn: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    marginVertical: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#DCE3EC',
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
   historyItem: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
   historyDate: { fontWeight: '600', marginBottom: 4 },
   lineFields: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   lineField: { flexGrow: 1, flexBasis: 140, minWidth: 140 },
   optionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginVertical: 6 },
-  optionChip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1, borderColor: '#D4D4D4', backgroundColor: '#fff' },
-  optionChipOn: { backgroundColor: '#2563EB', borderColor: '#2563EB' },
-  optionText: { fontSize: 13, color: '#262626' },
-  optionTextOn: { color: '#fff', fontWeight: '600' },
+  optionChip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundLight },
+  optionChipOn: { backgroundColor: colors.primaryDark, borderColor: colors.primaryDark },
+  optionText: { fontSize: 13, color: colors.textPrimary },
+  optionTextOn: { color: colors.textLight, fontWeight: '600' },
 });

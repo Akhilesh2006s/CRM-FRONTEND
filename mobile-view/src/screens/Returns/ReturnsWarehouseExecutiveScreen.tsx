@@ -13,7 +13,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import ScreenShell from '../../ui/ScreenShell';
-import { WebSelect, WebLabel } from '../../ui/WebPrimitives';
+import { WebSelect, WebLabel, WebButton } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState, ChipRow, toneFor } from '../../ui/Kit';
 import { apiService } from '../../services/api';
 
 type DcOrderRef = {
@@ -106,15 +107,6 @@ function statusStyle(status: string) {
 function canWarehouseEdit(row: StockReturn) {
   const s = resolveStatus(row);
   return s === 'Submitted' || s === 'Sent Back';
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.infoRow}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value}</Text>
-    </View>
-  );
 }
 
 export default function ReturnsWarehouseExecutiveScreen({ navigation }: any) {
@@ -218,202 +210,84 @@ export default function ReturnsWarehouseExecutiveScreen({ navigation }: any) {
   return (
     <ScreenShell
       title="Return Stock List"
-      subtitle="Warehouse executive return dashboard — open a row to verify and submit to manager"
+      subtitle="Open a return to verify and submit to manager"
       loading={loading && !refreshing}
       refreshing={refreshing}
       onRefresh={onRefresh}
-      noScroll
     >
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={styles.contentContainer}
-        keyboardShouldPersistTaps="handled"
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      >
-        <View style={styles.sortCard}>
-          <WebLabel>Sort by</WebLabel>
+      <View style={styles.sortRow}>
+        <View style={{ flex: 1 }}>
           <WebSelect
             value={sortKey}
             onValueChange={(v) => setSortKey(v as SortKey)}
+            placeholder="Sort by"
             items={[
-              { label: 'Return No', value: 'returnNo' },
-              { label: 'LR No', value: 'lrNo' },
-              { label: 'Fin Year', value: 'finYear' },
-              { label: 'School Name', value: 'schoolName' },
-              { label: 'School Code', value: 'schoolCode' },
-              { label: 'Executive', value: 'executive' },
-              { label: 'Return Date', value: 'returnDate' },
-              { label: 'Remarks', value: 'remarks' },
-              { label: 'Status', value: 'status' },
+              { label: 'Sort: Return No', value: 'returnNo' },
+              { label: 'Sort: LR No', value: 'lrNo' },
+              { label: 'Sort: Fin Year', value: 'finYear' },
+              { label: 'Sort: School Name', value: 'schoolName' },
+              { label: 'Sort: School Code', value: 'schoolCode' },
+              { label: 'Sort: Executive', value: 'executive' },
+              { label: 'Sort: Return Date', value: 'returnDate' },
+              { label: 'Sort: Remarks', value: 'remarks' },
+              { label: 'Sort: Status', value: 'status' },
             ]}
           />
-          <TouchableOpacity
-            style={styles.sortDirBtn}
-            onPress={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
-          >
-            <Ionicons
-              name={sortDir === 'asc' ? 'arrow-up-outline' : 'arrow-down-outline'}
-              size={16}
-              color="#0F172A"
-            />
-            <Text style={styles.sortDirText}>
-              {sortDir === 'asc' ? 'Ascending' : 'Descending'}
-            </Text>
-          </TouchableOpacity>
         </View>
+        <TouchableOpacity style={styles.sortDirBtn} onPress={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}>
+          <Ionicons name={sortDir === 'asc' ? 'arrow-up-outline' : 'arrow-down-outline'} size={16} color={colors.textPrimary} />
+          <Text style={styles.sortDirText}>{sortDir === 'asc' ? 'Asc' : 'Desc'}</Text>
+        </TouchableOpacity>
+      </View>
 
-        {sortedReturns.length === 0 ? (
-          <View style={styles.emptyBox}>
-            <Text style={styles.emptyText}>No returns found</Text>
-          </View>
-        ) : (
-          sortedReturns.map((row, index) => {
-            const status = resolveStatus(row);
-            const badge = statusStyle(status);
-            const editable = canWarehouseEdit(row);
-            return (
-              <View key={row._id} style={styles.card}>
-                <View style={styles.cardTop}>
-                  <Text style={styles.returnNo}>
-                    #{row.returnNumber ?? row.returnId ?? index + 1}
-                  </Text>
-                  <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
-                    <Text style={[styles.statusBadgeText, { color: badge.fg }]}>{status}</Text>
-                  </View>
-                </View>
-                <InfoRow label="S.No" value={String(index + 1)} />
-                <InfoRow label="LR No" value={row.lrNumber || '-'} />
-                <InfoRow label="Fin Year" value={row.finYear || '-'} />
-                <InfoRow label="School Name" value={resolveSchoolName(row)} />
-                <InfoRow label="School Code" value={resolveSchoolCode(row)} />
-                <InfoRow label="Executive" value={resolveExecutive(row)} />
-                <InfoRow label="Return Date" value={formatReturnDate(row.returnDate)} />
-                <InfoRow label="Remarks" value={resolveRemarks(row)} />
-
-                <TouchableOpacity
-                  style={[styles.actionBtn, !editable && styles.actionBtnMuted]}
+      {sortedReturns.length === 0 ? (
+        <EmptyState icon="↩️" title="No returns found" />
+      ) : (
+        sortedReturns.map((row, index) => {
+          const status = resolveStatus(row);
+          const editable = canWarehouseEdit(row);
+          return (
+            <Card key={row._id}>
+              <CardTitle
+                title={`#${row.returnNumber ?? row.returnId ?? index + 1}`}
+                subtitle={resolveSchoolName(row) !== '-' ? resolveSchoolName(row) : undefined}
+                badge={status}
+                tone={toneFor(status)}
+              />
+              <InfoRow label="S.No" value={String(index + 1)} />
+              <InfoRow label="LR No" value={row.lrNumber || '-'} />
+              <InfoRow label="Fin Year" value={row.finYear || '-'} />
+              <InfoRow label="School Code" value={resolveSchoolCode(row)} />
+              <InfoRow label="Executive" value={resolveExecutive(row)} />
+              <InfoRow label="Return Date" value={formatReturnDate(row.returnDate)} />
+              <InfoRow label="Remarks" value={resolveRemarks(row)} />
+              <ActionRow>
+                <WebButton
+                  title={editable ? 'Verify / Update' : 'View'}
+                  variant={editable ? 'primary' : 'outline'}
                   onPress={() => openReturn(row)}
-                >
-                  <Ionicons
-                    name="create-outline"
-                    size={18}
-                    color={editable ? '#B45309' : '#64748B'}
-                  />
-                  <Text
-                    style={[
-                      styles.actionBtnText,
-                      { color: editable ? '#B45309' : '#64748B' },
-                    ]}
-                  >
-                    {editable ? 'Verify / Update' : 'View'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            );
-          })
-        )}
-      </ScrollView>
+                />
+              </ActionRow>
+            </Card>
+          );
+        })
+      )}
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { flex: 1 },
-  contentContainer: { padding: 16, paddingBottom: 32, gap: 12 },
-  sortCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
-    gap: 8,
-  },
+  sortRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   sortDirBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    alignSelf: 'flex-start',
+    minHeight: 48,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#F8FAFC',
+    borderColor: '#DCE3EC',
+    backgroundColor: colors.backgroundLight,
   },
-  sortDirText: { fontSize: 13, fontWeight: '600', color: '#0F172A' },
-  emptyBox: {
-    paddingVertical: 48,
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  emptyText: { ...typography.body.medium, color: colors.textSecondary },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
-  },
-  cardTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-    gap: 8,
-  },
-  returnNo: {
-    ...typography.heading.h3,
-    color: colors.textPrimary,
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  statusBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  infoRow: {
-    flexDirection: 'row',
-    marginBottom: 6,
-    gap: 8,
-  },
-  infoLabel: {
-    width: 110,
-    ...typography.body.small,
-    color: colors.textSecondary,
-  },
-  infoValue: {
-    flex: 1,
-    ...typography.body.medium,
-    color: colors.textPrimary,
-  },
-  actionBtn: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: '#FFFBEB',
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-  },
-  actionBtnMuted: {
-    backgroundColor: '#F8FAFC',
-    borderColor: '#E2E8F0',
-  },
-  actionBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
+  sortDirText: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
 });

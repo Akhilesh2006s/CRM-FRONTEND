@@ -18,7 +18,8 @@ import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import MessageBanner from '../../components/MessageBanner';
 import ScreenShell from '../../ui/ScreenShell';
-import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
+import { WebInput, WebSelect } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState, toneFor, type Tone } from '../../ui/Kit';
 import { navigateRoot } from '../../navigation/navigationRef';
 import SchoolVisitActions, { useFieldDay } from '../../components/SchoolVisitActions';
 import {
@@ -187,13 +188,29 @@ function ProductStatusTable({ rows }: { rows: { name: string; chance?: string | 
 
 /** One search box: school, code, mobile, contact person, zone, town or BDE. */
 const leadMatches = (l: any, query: string) => {
-  const q = query.trim().toLowerCase();
-  if (!q) return true;
-  return [
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  const hay = [
     l.school_name, l.school_code, l.contact_mobile, l.contact_mobile2, l.contact_person, l.contact_person2,
-    l.zone, l.location, l.town, l.city, l.area, l.assignedToName, l.assigned_to?.name, l.createdBy?.name,
-  ].some((v) => String(v || '').toLowerCase().includes(q));
+    l.zone, l.location, l.town, l.city, l.area, l.address, l.assignedToName, l.assigned_to?.name, l.createdBy?.name,
+    l.remarks,
+    ...(Array.isArray(l.products) ? l.products.map((p: any) => p?.product_name) : []),
+    ...(Array.isArray(l.productsInterested) ? l.productsInterested.map((p: any) => p?.product_name) : []),
+  ]
+    .map((v) => String(v || ''))
+    .join(' ')
+    .toLowerCase();
+  return words.every((w) => hay.includes(w));
 };
+
+function priorityTone(p?: string): Tone {
+  const s = String(p || '').toLowerCase();
+  if (s === 'hot') return 'error';
+  if (s === 'warm') return 'warning';
+  if (s === 'cold' || s === 'yet to visit' || s === 'visit again') return 'info';
+  if (s === 'not interested') return 'neutral';
+  return toneFor(p);
+}
 
 export default function LeadFollowupScreen({ navigation }: any) {
   const { user } = useAuth();
@@ -714,216 +731,180 @@ export default function LeadFollowupScreen({ navigation }: any) {
       refreshing={refreshing}
       onRefresh={onRefresh}
     >
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={styles.contentContainer}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
-        }
-      >
-        {successMessage && (
-          <MessageBanner type="success" message={successMessage} onDismiss={clearMessages} />
-        )}
-        {errorMessage && (
-          <MessageBanner type="error" message={errorMessage} onDismiss={clearMessages} />
-        )}
+      {successMessage && (
+        <MessageBanner type="success" message={successMessage} onDismiss={clearMessages} />
+      )}
+      {errorMessage && (
+        <MessageBanner type="error" message={errorMessage} onDismiss={clearMessages} />
+      )}
 
-        <View style={styles.filtersCard}>
-          {seesAllFollowups && (
-            <WebSelect
-              label="BDE"
-              value={employeeFilter || 'all'}
-              onValueChange={(v) => setEmployeeFilter(v === 'all' ? '' : v)}
-              items={[
-                { label: 'All BDEs', value: 'all' },
-                ...bdeOptions.map((e) => ({ label: e.name, value: e._id })),
-              ]}
-              placeholder="All BDEs"
-            />
-          )}
-          <WebInput
-            style={styles.filterInput}
-            placeholder="Search school, code, mobile, contact, zone or town"
-            value={schoolFilter}
-            onChangeText={setSchoolFilter}
+      <View style={styles.filtersCard}>
+        {seesAllFollowups && (
+          <WebSelect
+            label="BDE"
+            value={employeeFilter || 'all'}
+            onValueChange={(v) => setEmployeeFilter(v === 'all' ? '' : v)}
+            items={[
+              { label: 'All BDEs', value: 'all' },
+              ...bdeOptions.map((e) => ({ label: e.name, value: e._id })),
+            ]}
+            placeholder="All BDEs"
           />
-          <WebButton title="Refresh" onPress={loadLeads} variant="outline" />
-        </View>
-
-        {leads.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>📞</Text>
-            <Text style={styles.emptyTitle}>No Follow-up Leads</Text>
-            <Text style={styles.emptySubtitle}>
-              {allLeads.length === 0
-                ? 'Only open leads (not yet converted to clients) appear here.'
-                : 'No leads match the current filters.'}
-            </Text>
-          </View>
-        ) : (
-          leads.map((lead) => {
-            const isOverdue = isFollowUpDateOverdue(lead.follow_up_date);
-            const productRows = groupInterestedRowsForDisplay(leadProductsToInterestedRows(lead));
-            const productsOpen = expandedLeads.has(String(lead._id));
-
-            return (
-              <View key={lead._id} style={[styles.card, lead.isChain && styles.cardChain]}>
-                <View style={styles.cardTop}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.schoolInfo}>
-                      <Text style={styles.schoolName} numberOfLines={2}>
-                        {lead.school_name || 'Unnamed School'}
-                      </Text>
-                      {lead.school_code || leadTown(lead) ? (
-                        <View style={styles.schoolTagRow}>
-                          {lead.school_code ? (
-                            <Text style={styles.schoolCodeBadge}>{lead.school_code}</Text>
-                          ) : null}
-                          {/* Town / area next to the code, so schools with similar names are easy to tell apart. */}
-                          {leadTown(lead) ? (
-                            <Text style={styles.schoolTownBadge}>{leadTown(lead)}</Text>
-                          ) : null}
-                        </View>
-                      ) : null}
-                      {seesAllFollowups && (lead.assignedToName || lead.assignedToId) ? (
-                        <Text style={styles.locationText}>
-                          BDE:{' '}
-                          {lead.assignedToName ||
-                            bdeOptions.find((e) => e._id === lead.assignedToId)?.name ||
-                            'Assigned'}
-                        </Text>
-                      ) : null}
-                      {lead.location ? (
-                        <View style={styles.locationRow}>
-                          <Text style={styles.locationIcon}>📍</Text>
-                          <Text style={styles.locationText}>{lead.location}</Text>
-                        </View>
-                      ) : null}
-                    </View>
-                    <TouchableOpacity
-                      style={styles.closeLeadTop}
-                      accessibilityRole="button"
-                      onPress={() => {
-                        const id = lead?._id ? String(lead._id) : '';
-                        if (!id) {
-                          setErrorMessage('This lead has no id, so it cannot be closed.');
-                          return;
-                        }
-                        if (!navigateRoot('LeadClose', { id })) {
-                          navigation.navigate('LeadClose', { id });
-                        }
-                      }}
-                    >
-                      <Text style={styles.actionButtonText}>Close Lead</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                <View style={styles.divider} />
-
-                <View style={styles.cardBody}>
-                  <View style={styles.infoGrid}>
-                    <View style={styles.infoItem}>
-                      <Text style={styles.infoLabel}>Contact</Text>
-                      <Text style={styles.infoValue}>{lead.contact_person || '—'}</Text>
-                    </View>
-                    <View style={styles.infoItem}>
-                      <Text style={styles.infoLabel}>Mobile</Text>
-                      <Text style={styles.infoValue}>{lead.contact_mobile || '—'}</Text>
-                    </View>
-                  </View>
-
-                  <View
-                    style={[
-                      styles.dateContainer,
-                      isOverdue && styles.dateContainerOverdue,
-                    ]}
-                  >
-                    <Text style={styles.dateLabel}>Follow-up date: </Text>
-                    <Text style={[styles.dateValue, isOverdue && styles.dateValueOverdue]}>
-                      {formatDateOnly(lead.follow_up_date)}
-                    </Text>
-                  </View>
-
-                  <View style={styles.productsBlock}>
-                    <View style={styles.productsHeader}>
-                      <Text style={[styles.productsLabel, { marginBottom: 0 }]}>
-                        Products interested ({productRows.length})
-                      </Text>
-                      {productRows.length > 0 ? (
-                        <TouchableOpacity
-                          accessibilityRole="button"
-                          onPress={() => toggleProducts(String(lead._id))}
-                        >
-                          <Text style={styles.productsToggle}>{productsOpen ? 'Hide' : 'Show'}</Text>
-                        </TouchableOpacity>
-                      ) : null}
-                    </View>
-                    {productRows.length === 0 ? (
-                      <Text style={styles.productsEmpty}>—</Text>
-                    ) : !productsOpen ? (
-                      <Text style={styles.productsEmpty} numberOfLines={2}>
-                        {productRows.map((p) => p.product_name).join(', ')}
-                      </Text>
-                    ) : (
-                      <ProductStatusTable
-                        rows={productRows.map((p) => ({
-                          name: p.product_name,
-                          chance: p.chance,
-                          status: p.status,
-                          detail: [
-                            p.strength > 0 ? `Str ${p.strength}` : null,
-                            p.classes.length > 1 ? `Classes ${p.classes.join(', ')}` : null,
-                          ]
-                            .filter(Boolean)
-                            .join(' · '),
-                        }))}
-                      />
-                    )}
-                  </View>
-
-                  {lead.remarks ? (
-                    <View style={styles.remarksContainer}>
-                      <Text style={styles.remarksLabel}>Remarks:</Text>
-                      <Text style={styles.remarksText} numberOfLines={3}>
-                        {lead.remarks}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-
-                <View style={styles.cardFooter}>
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.editButton]}
-                    onPress={() => navigation.navigate('LeadEdit', { id: lead._id })}
-                  >
-                    <Text style={styles.actionButtonText}>Edit Lead</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.updateButton]}
-                    onPress={() => openUpdateModal(lead)}
-                  >
-                    <Text style={styles.actionButtonText}>Create Follow-up</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.historyButton]}
-                    onPress={() => openHistoryModal(lead)}
-                  >
-                    <Text style={styles.actionButtonText}>View History</Text>
-                  </TouchableOpacity>
-                  <View style={{ alignSelf: 'stretch' }}>
-                    <SchoolVisitActions
-                      day={fieldDay.day}
-                      reload={fieldDay.reload}
-                      school={{ schoolName: lead.school_name || 'School', schoolCode: lead.school_code || undefined, leadId: lead._id }}
-                    />
-                  </View>
-                </View>
-              </View>
-            );
-          })
         )}
-      </ScrollView>
+        <View style={styles.searchRow}>
+          <View style={{ flex: 1 }}>
+            <WebInput
+              style={styles.filterInput}
+              placeholder="Search school, code, mobile, contact, town…"
+              value={schoolFilter}
+              onChangeText={setSchoolFilter}
+            />
+          </View>
+          <TouchableOpacity style={styles.refreshBtn} onPress={loadLeads}>
+            <Text style={styles.refreshText}>Refresh</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {leads.length === 0 ? (
+        <EmptyState
+          icon="📞"
+          title="No Follow-up Leads"
+          message={
+            allLeads.length === 0
+              ? 'Only open leads (not yet converted to clients) appear here.'
+              : 'No leads match the current filters.'
+          }
+        />
+      ) : (
+        leads.map((lead) => {
+          const isOverdue = isFollowUpDateOverdue(lead.follow_up_date);
+          const productRows = groupInterestedRowsForDisplay(leadProductsToInterestedRows(lead));
+          const productsOpen = expandedLeads.has(String(lead._id));
+          const priority = displayLeadDealPriority(lead);
+          const town = leadTown(lead);
+
+          return (
+            <Card key={lead._id} style={lead.isChain ? styles.cardChain : undefined}>
+              <CardTitle
+                title={lead.school_name || 'Unnamed School'}
+                subtitle={[lead.school_code, town].filter(Boolean).join(' · ') || undefined}
+                badge={priority}
+                tone={priorityTone(priority)}
+              />
+              {seesAllFollowups && (lead.assignedToName || lead.assignedToId) ? (
+                <InfoRow
+                  label="BDE"
+                  value={
+                    lead.assignedToName ||
+                    bdeOptions.find((e) => e._id === lead.assignedToId)?.name ||
+                    'Assigned'
+                  }
+                />
+              ) : null}
+              <InfoRow label="Location" value={lead.location || undefined} />
+              <InfoRow label="Contact" value={lead.contact_person || undefined} />
+              <InfoRow label="Mobile" value={lead.contact_mobile || undefined} phone />
+              <InfoRow
+                label="Follow-up"
+                value={
+                  <Text style={[styles.dateValue, isOverdue && styles.dateValueOverdue]}>
+                    {formatDateOnly(lead.follow_up_date)}
+                    {isOverdue ? '  (overdue)' : ''}
+                  </Text>
+                }
+              />
+              <InfoRow
+                label={`Products (${productRows.length})`}
+                value={
+                  productRows.length === 0 ? (
+                    <Text style={styles.productsEmpty}>—</Text>
+                  ) : (
+                    <View style={styles.productsHeader}>
+                      <Text style={[styles.productsEmpty, { flex: 1 }]} numberOfLines={2}>
+                        {productsOpen ? '' : productRows.map((p) => p.product_name).join(', ')}
+                      </Text>
+                      <TouchableOpacity accessibilityRole="button" onPress={() => toggleProducts(String(lead._id))}>
+                        <Text style={styles.productsToggle}>{productsOpen ? 'Hide' : 'Show'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )
+                }
+              />
+              {productsOpen && productRows.length > 0 ? (
+                <ProductStatusTable
+                  rows={productRows.map((p) => ({
+                    name: p.product_name,
+                    chance: p.chance,
+                    status: p.status,
+                    detail: [
+                      p.strength > 0 ? `Str ${p.strength}` : null,
+                      p.classes.length > 1 ? `Classes ${p.classes.join(', ')}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · '),
+                  }))}
+                />
+              ) : null}
+              {lead.remarks ? (
+                <InfoRow
+                  label="Remarks"
+                  value={
+                    <Text style={styles.remarksText} numberOfLines={3}>
+                      {lead.remarks}
+                    </Text>
+                  }
+                />
+              ) : null}
+
+              <View style={{ marginTop: 8 }}>
+                <SchoolVisitActions
+                  day={fieldDay.day}
+                  reload={fieldDay.reload}
+                  school={{ schoolName: lead.school_name || 'School', schoolCode: lead.school_code || undefined, leadId: lead._id }}
+                />
+              </View>
+
+              <ActionRow>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.updateButton]}
+                  onPress={() => openUpdateModal(lead)}
+                >
+                  <Text style={styles.actionButtonText}>Create Follow-up</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.outlineButton]}
+                  onPress={() => navigation.navigate('LeadEdit', { id: lead._id })}
+                >
+                  <Text style={styles.outlineButtonText}>Edit Lead</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.outlineButton]}
+                  onPress={() => openHistoryModal(lead)}
+                >
+                  <Text style={styles.outlineButtonText}>View History</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.closeButton]}
+                  accessibilityRole="button"
+                  onPress={() => {
+                    const id = lead?._id ? String(lead._id) : '';
+                    if (!id) {
+                      setErrorMessage('This lead has no id, so it cannot be closed.');
+                      return;
+                    }
+                    if (!navigateRoot('LeadClose', { id })) {
+                      navigation.navigate('LeadClose', { id });
+                    }
+                  }}
+                >
+                  <Text style={styles.actionButtonText}>Close Lead</Text>
+                </TouchableOpacity>
+              </ActionRow>
+            </Card>
+          );
+        })
+      )}
 
       {/* Create Follow-up Modal */}
       <Modal visible={showUpdateModal} animationType="slide" transparent>
@@ -1295,28 +1276,25 @@ export default function LeadFollowupScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   content: { flex: 1 },
   contentContainer: { padding: 16, paddingBottom: 32 },
-  filtersCard: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+  filtersCard: { marginBottom: 4 },
+  searchRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  refreshBtn: {
+    minHeight: 48,
+    paddingHorizontal: 14,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.border,
+    backgroundColor: colors.backgroundLight,
+    justifyContent: 'center',
   },
+  refreshText: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
   filterLabel: {
     ...typography.body.small,
     color: colors.textSecondary,
     marginBottom: 6,
     marginTop: 8,
   },
-  filterInput: {
-    backgroundColor: colors.background,
-    borderRadius: 10,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 4,
-  },
+  filterInput: { marginBottom: 12 },
   emptyContainer: { alignItems: 'center', paddingVertical: 48 },
   emptyIcon: { fontSize: 48, marginBottom: 12 },
   emptyTitle: { ...typography.heading.h2, color: colors.textPrimary, marginBottom: 8 },
@@ -1363,7 +1341,7 @@ const styles = StyleSheet.create({
   },
   dateContainerOverdue: { backgroundColor: colors.error + '08' },
   dateLabel: { ...typography.body.small, color: colors.textSecondary },
-  dateValue: { ...typography.body.medium, color: colors.textPrimary, fontWeight: '500' },
+  dateValue: { fontSize: 14, color: colors.textPrimary, fontWeight: '500' },
   dateValueOverdue: { color: colors.error, fontWeight: '600' },
   productsBlock: { marginBottom: 10 },
   productsLabel: {
@@ -1372,14 +1350,14 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     fontWeight: '600',
   },
-  productsEmpty: { ...typography.body.medium, color: colors.textSecondary },
+  productsEmpty: { fontSize: 14, color: colors.textPrimary },
   productsHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
+    alignItems: 'flex-start',
+    gap: 8,
   },
-  pTable: { borderWidth: 1, borderColor: colors.border, borderRadius: 10, overflow: 'hidden', marginTop: 4 },
+  pTable: { borderWidth: 1, borderColor: colors.border, borderRadius: 10, overflow: 'hidden', marginTop: 4, marginBottom: 4 },
   pRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1426,7 +1404,7 @@ const styles = StyleSheet.create({
   },
   remarksContainer: { marginTop: 4 },
   remarksLabel: { ...typography.body.small, color: colors.textSecondary, marginBottom: 4 },
-  remarksText: { ...typography.body.medium, color: colors.textPrimary },
+  remarksText: { fontSize: 14, color: colors.textPrimary },
   cardFooter: {
     padding: 12,
     borderTopWidth: 1,
@@ -1436,17 +1414,18 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   actionButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
     minWidth: '47%',
+    flexGrow: 1,
     alignItems: 'center',
   },
-  updateButton: { backgroundColor: colors.primary },
-  editButton: { backgroundColor: '#7c3aed' },
-  historyButton: { backgroundColor: colors.info },
+  updateButton: { backgroundColor: colors.primaryDark },
+  outlineButton: { backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border },
+  outlineButtonText: { fontSize: 14, color: colors.textPrimary, fontWeight: '600' },
   closeButton: { backgroundColor: colors.success },
-  actionButtonText: { ...typography.body.small, color: colors.textLight, fontWeight: '600' },
+  actionButtonText: { fontSize: 14, color: colors.textLight, fontWeight: '700' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: {
     backgroundColor: colors.backgroundLight,
@@ -1458,42 +1437,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  modalTitle: { ...typography.heading.h2, color: colors.textPrimary },
+  modalTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
   modalClose: { fontSize: 24, color: colors.textSecondary },
-  modalBody: { padding: 20, maxHeight: 480 },
-  modalSchool: { ...typography.body.medium, color: colors.textSecondary, marginBottom: 16 },
-  modalLabel: {
-    ...typography.body.medium,
-    color: colors.textPrimary,
-    marginBottom: 8,
-    fontWeight: '600',
-  },
-  input: {
-    backgroundColor: colors.background,
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 12,
-  },
+  modalBody: { padding: 16, maxHeight: 480 },
+  modalSchool: { fontSize: 15, fontWeight: '600', color: colors.textPrimary, marginBottom: 12 },
+  modalLabel: { fontSize: 13, color: colors.textSecondary, marginBottom: 6, fontWeight: '600' },
+  input: { marginBottom: 12 },
   textArea: { minHeight: 90, textAlignVertical: 'top' },
-  hint: { ...typography.body.small, color: colors.textSecondary, marginBottom: 12 },
+  hint: { fontSize: 13, color: colors.textTertiary, marginBottom: 12, lineHeight: 18 },
   dateTouchable: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.background,
-    borderRadius: 12,
-    padding: 14,
+    backgroundColor: colors.backgroundLight,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    minHeight: 48,
     borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 16,
+    borderColor: '#DCE3EC',
+    marginBottom: 14,
   },
-  dateText: { ...typography.body.medium, color: colors.textPrimary },
+  dateText: { fontSize: 15, color: colors.textPrimary },
   datePlaceholder: { color: colors.textSecondary },
   dateOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
   datePickerBox: {
@@ -1511,7 +1479,7 @@ const styles = StyleSheet.create({
   },
   datePickerTitle: { ...typography.heading.h3, color: colors.textPrimary },
   doneText: { color: colors.primary, fontWeight: '600' },
-  cardChain: { borderWidth: 1, borderColor: '#93C5FD', backgroundColor: '#DBEAFE' },
+  cardChain: { borderColor: '#93C5FD', backgroundColor: colors.accent },
   schoolTagRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
   schoolTownBadge: {
     alignSelf: 'flex-start',
@@ -1568,20 +1536,20 @@ const styles = StyleSheet.create({
   removeLink: { color: colors.error, fontSize: 13 },
   modalFooter: {
     flexDirection: 'row',
-    padding: 20,
+    padding: 16,
     borderTopWidth: 1,
     borderTopColor: colors.border,
     gap: 12,
   },
-  modalButton: { flex: 1, padding: 16, borderRadius: 12, alignItems: 'center' },
+  modalButton: { flex: 1, paddingVertical: 14, borderRadius: 10, alignItems: 'center' },
   modalButtonCancel: {
     backgroundColor: colors.background,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  modalButtonSubmit: { backgroundColor: colors.primary },
-  modalButtonTextCancel: { ...typography.body.medium, color: colors.textPrimary, fontWeight: '600' },
-  modalButtonTextSubmit: { ...typography.body.medium, color: colors.textLight, fontWeight: '600' },
+  modalButtonSubmit: { backgroundColor: colors.primaryDark },
+  modalButtonTextCancel: { fontSize: 15, color: colors.textPrimary, fontWeight: '600' },
+  modalButtonTextSubmit: { fontSize: 15, color: colors.textLight, fontWeight: '700' },
   historyCard: {
     borderWidth: 1,
     borderColor: colors.border,

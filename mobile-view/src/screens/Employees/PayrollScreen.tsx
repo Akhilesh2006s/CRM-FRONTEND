@@ -2,9 +2,10 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { documentDirectory, downloadAsync } from 'expo-file-system/legacy';
-import { colors, radii, spacing } from '../../theme/colors';
+import { colors } from '../../theme/colors';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebButton } from '../../ui/WebPrimitives';
+import { Card, EmptyState } from '../../ui/Kit';
 import MessageBanner from '../../components/MessageBanner';
 import { apiService, getApiUrl } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -236,10 +237,14 @@ export default function PayrollScreen() {
     setInputs((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
 
   const shown = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return (data?.rows || []).filter(
-      (r) => !q || [r.name, r.empCode, r.designation, r.department, r.zone].some((v) => String(v || '').toLowerCase().includes(q)),
-    );
+    const words = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    return (data?.rows || []).filter((r) => {
+      if (!words.length) return true;
+      const text = [r.name, r.empCode, r.designation, r.department, r.zone, r.uanNumber, r.esiNumber]
+        .map((v) => String(v || '').toLowerCase())
+        .join(' ');
+      return words.every((w) => text.includes(w));
+    });
   }, [data, search]);
 
   const t = data?.totals || {};
@@ -300,13 +305,12 @@ export default function PayrollScreen() {
               <WebButton title={busy === 'save' ? 'Saving…' : 'Save & recalculate'} variant="outline" onPress={save} disabled={!!busy} />
             </View>
             <View style={styles.actionFull}>
-              <TouchableOpacity
-                style={[styles.finalizeBtn, (!!busy || !data?.rows.length) && styles.disabled]}
+              <WebButton
+                title={busy === 'finalize' ? 'Finalizing…' : 'Finalize & issue pay slips'}
+                variant="success"
                 onPress={finalize}
                 disabled={!!busy || !data?.rows.length}
-              >
-                <Text style={styles.finalizeText}>{busy === 'finalize' ? 'Finalizing…' : 'Finalize & issue pay slips'}</Text>
-              </TouchableOpacity>
+              />
             </View>
           </>
         ) : null}
@@ -327,11 +331,11 @@ export default function PayrollScreen() {
             ['Gross earned', inr(t.earnedGross)],
             ['Deductions', inr(t.totalDeductions)],
             ['Net pay', inr(t.netPay)],
-            ['Total CTC (with employer PF/ESI)', inr(t.ctcComputed)],
+            ['Total CTC (incl. employer PF/ESI)', inr(t.ctcComputed)],
           ].map(([label, value]) => (
             <View key={label} style={styles.statCard}>
-              <Text style={styles.statLabel}>{label}</Text>
               <Text style={styles.statValue}>{value}</Text>
+              <Text style={styles.statLabel}>{label}</Text>
             </View>
           ))}
         </View>
@@ -355,17 +359,17 @@ export default function PayrollScreen() {
         </View>
       ) : null}
 
-      <WebInput placeholder="Search name, code, department, zone" value={search} onChangeText={setSearch} />
+      <WebInput placeholder="Search name, code, department, zone…" value={search} onChangeText={setSearch} />
       <Text style={styles.help}>
         Paid days are automatic: days in month minus loss-of-pay days (Mon–Sat with no check-in and no approved leave; Sundays paid; no
         check-ins all month = full month). Edit paid days, TDS, advances or PT, then Save & recalculate. Clear a paid-days box to go back
         to automatic.
       </Text>
 
-      {!loading && !shown.length ? <Text style={styles.empty}>No employees with a CTC for this month.</Text> : null}
+      {!loading && !shown.length ? <EmptyState title="No employees with a CTC for this month." /> : null}
 
       {shown.map((r) => (
-        <View key={r.employeeId} style={styles.card}>
+        <Card key={r.employeeId}>
           <View style={styles.cardHead}>
             <View style={{ flex: 1 }}>
               <Text style={styles.name}>{r.name}</Text>
@@ -431,91 +435,72 @@ export default function PayrollScreen() {
           <KV label="Deductions" value={inr(r.totalDeductions)} />
           <KV label="Net pay" value={inr(r.netPay)} strong />
           <KV label="Employer PF / ESI" value={`${inr(r.employerPf)} / ${inr(r.employerEsi)}`} />
-        </View>
+        </Card>
       ))}
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  help: { fontSize: 12, color: colors.textSecondary, marginBottom: spacing.sm, lineHeight: 17 },
+  help: { fontSize: 13, color: colors.textSecondary, marginBottom: 12, lineHeight: 18 },
   monthRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 4 },
   monthBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: radii.md,
+    width: 48,
+    height: 48,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#DCE3EC',
     backgroundColor: colors.backgroundLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   monthBtnText: { fontSize: 22, color: colors.textPrimary, fontWeight: '600' },
-  monthInput: { marginBottom: 2, textAlign: 'center' },
-  monthLabel: { fontSize: 12, color: colors.textMuted, textAlign: 'center', marginBottom: spacing.sm },
-  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.sm },
+  monthInput: { marginBottom: 4, textAlign: 'center' },
+  monthLabel: { fontSize: 13, color: colors.textTertiary, textAlign: 'center', marginBottom: 12 },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
   actionItem: { flexGrow: 1, flexBasis: '45%' },
   actionFull: { flexBasis: '100%' },
-  finalizeBtn: {
-    backgroundColor: colors.success,
-    borderRadius: radii.md,
-    minHeight: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-  },
-  finalizeText: { color: '#fff', fontWeight: '600', fontSize: 14 },
-  disabled: { opacity: 0.5 },
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.sm },
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
   statCard: {
     flexGrow: 1,
     flexBasis: '45%',
     backgroundColor: colors.backgroundLight,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    padding: 10,
-  },
-  statLabel: { fontSize: 11, color: colors.textMuted },
-  statValue: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, marginTop: 2 },
-  notice: { borderWidth: 1, borderRadius: radii.md, padding: 10, marginBottom: spacing.sm },
-  noticeGreen: { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' },
-  noticeGreenText: { fontSize: 13, color: '#166534' },
-  noticeAmber: { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' },
-  noticeAmberText: { fontSize: 13, color: '#92400E' },
-  empty: { textAlign: 'center', color: colors.textSecondary, paddingVertical: 32 },
-  card: {
-    backgroundColor: colors.backgroundLight,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.lg,
+    borderColor: '#EEF2F7',
+    borderRadius: 12,
     padding: 12,
-    marginBottom: 10,
   },
+  statValue: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
+  statLabel: { fontSize: 13, color: colors.textTertiary, marginTop: 2 },
+  notice: { borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 12 },
+  noticeGreen: { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' },
+  noticeGreenText: { fontSize: 13, color: '#166534', lineHeight: 18 },
+  noticeAmber: { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' },
+  noticeAmberText: { fontSize: 13, color: '#92400E', lineHeight: 18 },
   cardHead: {
     flexDirection: 'row',
-    gap: 10,
-    paddingBottom: 8,
+    gap: 12,
+    paddingBottom: 12,
     marginBottom: 8,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderLight,
   },
-  name: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
-  sub: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-  subMuted: { fontSize: 11, color: colors.textMuted, marginTop: 1 },
+  name: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
+  sub: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
+  subMuted: { fontSize: 13, color: colors.textTertiary, marginTop: 2 },
   netBox: { alignItems: 'flex-end' },
-  netLabel: { fontSize: 11, color: colors.textMuted },
-  netValue: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
-  kv: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3, gap: 12 },
-  kvLabel: { fontSize: 13, color: colors.textMuted },
-  kvValue: { fontSize: 13, color: colors.textPrimary, textAlign: 'right', flexShrink: 1 },
+  netLabel: { fontSize: 13, color: colors.textTertiary },
+  netValue: { fontSize: 17, fontWeight: '700', color: colors.success },
+  kv: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, gap: 12 },
+  kvLabel: { fontSize: 13, color: colors.textTertiary },
+  kvValue: { fontSize: 14, color: colors.textPrimary, textAlign: 'right', flexShrink: 1 },
   kvStrong: { fontWeight: '700' },
-  breakdown: { fontSize: 11, color: colors.textMuted, textAlign: 'right', marginBottom: 2 },
+  breakdown: { fontSize: 13, color: colors.textTertiary, textAlign: 'right', marginBottom: 4 },
   inputsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 8 },
   inputCell: { flexGrow: 1, flexBasis: '45%' },
-  inputLabel: { fontSize: 12, color: colors.textSecondary, marginBottom: 4 },
-  numInput: { marginBottom: 2, paddingVertical: 8, textAlign: 'right' },
+  inputLabel: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 6 },
+  numInput: { marginBottom: 4, textAlign: 'right' },
   inputDisabled: { backgroundColor: colors.backgroundMuted, color: colors.textSecondary },
-  edited: { fontSize: 11, color: '#B45309' },
-  auto: { fontSize: 11, color: colors.textMuted },
+  edited: { fontSize: 13, color: '#B45309' },
+  auto: { fontSize: 13, color: colors.textMuted },
 });

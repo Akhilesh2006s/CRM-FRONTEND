@@ -20,7 +20,8 @@ import { typography } from '../../theme/typography';
 import { apiService, getApiUrl } from '../../services/api';
 import { phoneDigitsError, sanitizePhoneDigits } from '../../utils/phone';
 import ScreenShell from '../../ui/ScreenShell';
-import { WebInput, WebSelect } from '../../ui/WebPrimitives';
+import { WebInput, WebSelect, WebButton } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, EmptyState, SectionTitle, toneFor } from '../../ui/Kit';
 import { useAuth } from '../../context/AuthContext';
 import { findMatchingOrderProduct } from '../../lib/crm/clientDcProductRows';
 import { printReturnSlip } from '../../lib/returnSlip';
@@ -764,12 +765,7 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
   };
 
   if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading...</Text>
-      </View>
-    );
+    return <ScreenShell title="Stock Return" loading>{null}</ScreenShell>;
   }
 
   if (isViewMode && existingReturn) {
@@ -780,119 +776,82 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
     const statusDisplay = existingReturn.status || '—';
 
     return (
-      <ScreenShell title="View Stock Return" loading={false}>
-        <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-          <Text style={viewStyles.subtitle}>Return details (read-only)</Text>
+      <ScreenShell title="View Stock Return" subtitle="Return details (read-only)" loading={false}>
+        <Card>
+          <CardTitle title={displayReturnId || '—'} subtitle={customerName || undefined} badge={statusDisplay} tone={toneFor(statusDisplay)} />
+          <InfoRow label="Sale ID" value={saleIdDisplay} />
+          <InfoRow label="Return Type" value={cell(returnType)} />
+          <InfoRow label="Executive" value={executiveDisplay} />
+          <InfoRow label="LR No" value={cell(existingReturn.lrNumber)} />
+          <InfoRow label="Fin Year" value={cell(existingReturn.finYear)} />
+          <InfoRow label="School Code" value={cell(existingReturn.schoolCode)} />
+          <InfoRow label="Transport" value={cell(existingReturn.transport)} />
+          <InfoRow label="Remarks" value={cell(existingReturn.remarks)} />
+          <InfoRow label="Return Date" value={returnDate ? formatDate(returnDate) : '—'} />
+          <InfoRow label="Total Qty" value={String(totalQty)} bold />
+          <InfoRow label="Created" value={formatDateTime(existingReturn.createdAt)} />
+          <InfoRow label="Updated" value={formatDateTime(existingReturn.updatedAt)} />
+        </Card>
 
-          <View style={viewStyles.grid}>
-            <ReadOnlyField label="Return ID" value={displayReturnId || '—'} />
-            <ReadOnlyField label="Sale ID" value={saleIdDisplay} />
-            <ReadOnlyField label="Return Type" value={cell(returnType)} />
-            <ReadOnlyField label="Return Status" value={statusDisplay} />
-            <ReadOnlyField label="Executive Name" value={executiveDisplay} />
-            <ReadOnlyField label="Customer Name" value={cell(customerName)} />
-            <ReadOnlyField label="LR No" value={cell(existingReturn.lrNumber)} />
-            <ReadOnlyField label="Fin Year" value={cell(existingReturn.finYear)} />
-            <ReadOnlyField label="School Code" value={cell(existingReturn.schoolCode)} />
-            <ReadOnlyField label="Transport" value={cell(existingReturn.transport)} />
-            <ReadOnlyField label="Remarks" value={cell(existingReturn.remarks)} />
-            <ReadOnlyField
-              label="Return Date"
-              value={returnDate ? formatDate(returnDate) : '—'}
-            />
-            <ReadOnlyField label="Total Quantity" value={String(totalQty)} />
-          </View>
+        <SectionTitle>Products</SectionTitle>
+        {productRows.length === 0 ? (
+          <EmptyState icon="📦" title="No products" />
+        ) : (
+          productRows.map((row) => (
+            <Card key={row.id}>
+              <CardTitle title={row.product || '—'} subtitle={row.class ? `Class ${row.class}` : undefined} />
+              <InfoRow label="Series" value={row.productCategory || '-'} />
+              <InfoRow label="Term / Level" value={row.level || '-'} />
+              <InfoRow label="Deliverables" value={row.subject || row.specs || '-'} />
+              <InfoRow label="Sold Qty" value={String(row.soldQty)} />
+              <InfoRow label="Return Qty" value={row.returnQty || '0'} bold />
+              <InfoRow label="Reason" value={row.reason || '—'} />
+              <InfoRow label="Remarks" value={row.remarks || '—'} />
+            </Card>
+          ))
+        )}
 
-          <Text style={styles.sectionTitle}>Products</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator>
-          <View style={[viewStyles.tableCard, { minWidth: 640 }]}>
-            <View style={styles.tableHeader}>
-              <Text style={[styles.th, viewStyles.colProduct]}>Product</Text>
-              <Text style={[styles.th, viewStyles.colMeta]}>Class</Text>
-              <Text style={[styles.th, viewStyles.colMetaWide]}>Series</Text>
-              <Text style={[styles.th, viewStyles.colMeta]}>Term / Level</Text>
-              <Text style={[styles.th, viewStyles.colMetaWide]}>Deliverables</Text>
-              <Text style={[styles.th, viewStyles.colQty]}>Sold Qty</Text>
-              <Text style={[styles.th, viewStyles.colQty]}>Return Qty</Text>
-              <Text style={[styles.th, viewStyles.colReason]}>Reason</Text>
-              <Text style={[styles.th, viewStyles.colRemarks]}>Remarks</Text>
-            </View>
-            {productRows.length === 0 ? (
-              <Text style={styles.emptyText}>No products</Text>
-            ) : (
-              productRows.map((row) => (
-                <View key={row.id} style={styles.tableRow}>
-                  <Text style={[styles.td, viewStyles.colProduct]} numberOfLines={1}>
-                    {row.product}
-                  </Text>
-                  <Text style={[styles.td, viewStyles.colMeta]}>{row.class || '-'}</Text>
-                  <Text style={[styles.td, viewStyles.colMetaWide]}>{row.productCategory || '-'}</Text>
-                  <Text style={[styles.td, viewStyles.colMeta]}>{row.level || '-'}</Text>
-                  <Text style={[styles.td, viewStyles.colMetaWide]}>{row.subject || row.specs || '-'}</Text>
-                  <Text style={[styles.td, viewStyles.colQty]}>{row.soldQty}</Text>
-                  <Text style={[styles.td, viewStyles.colQty]}>{row.returnQty || '0'}</Text>
-                  <Text style={[styles.td, viewStyles.colReason]} numberOfLines={2}>
-                    {row.reason || '—'}
-                  </Text>
-                  <Text style={[styles.td, viewStyles.colRemarks]} numberOfLines={2}>
-                    {row.remarks || '—'}
-                  </Text>
-                </View>
-              ))
+        <SectionTitle>Evidence Photos</SectionTitle>
+        {evidencePhotos.length > 0 ? (
+          <FlatList
+            horizontal
+            data={evidencePhotos}
+            keyExtractor={(item, i) => `${item}-${i}`}
+            renderItem={({ item, index }) => (
+              <View style={styles.photoWrap}>
+                <Image
+                  source={{ uri: resolvePhotoUrl(item) }}
+                  style={viewStyles.evidencePhoto}
+                />
+                <Text style={viewStyles.photoCaption}>Evidence {index + 1}</Text>
+              </View>
             )}
+          />
+        ) : (
+          <View style={viewStyles.noPhotoBox}>
+            <Text style={viewStyles.noPhotoText}>No photos</Text>
           </View>
-          </ScrollView>
+        )}
 
-          <Text style={styles.sectionTitle}>Evidence Photos</Text>
-          {evidencePhotos.length > 0 ? (
-            <FlatList
-              horizontal
-              data={evidencePhotos}
-              keyExtractor={(item, i) => `${item}-${i}`}
-              renderItem={({ item, index }) => (
-                <View style={styles.photoWrap}>
-                  <Image
-                    source={{ uri: resolvePhotoUrl(item) }}
-                    style={viewStyles.evidencePhoto}
-                  />
-                  <Text style={viewStyles.photoCaption}>Evidence {index + 1}</Text>
-                </View>
-              )}
-            />
-          ) : (
-            <View style={viewStyles.noPhotoBox}>
-              <Text style={viewStyles.noPhotoText}>No photos</Text>
-            </View>
-          )}
-
-          <View style={viewStyles.grid}>
-            <ReadOnlyField
-              label="Created At"
-              value={formatDateTime(existingReturn.createdAt)}
-            />
-            <ReadOnlyField
-              label="Updated At"
-              value={formatDateTime(existingReturn.updatedAt)}
+        <View style={formStyles.actionsRow}>
+          <View style={{ flex: 1 }}>
+            <WebButton
+              title="Print Slip"
+              variant="outline"
+              onPress={() =>
+                printReturnSlip({
+                  ...existingReturn,
+                  returnId: displayReturnId || existingReturn.returnId,
+                  saleId: saleIdDisplay,
+                  products: productRows.map((r) => ({ ...r, returnQty: parseInt(r.returnQty, 10) || 0 })),
+                }).catch((e: any) => Alert.alert('Print', e?.message || 'Could not create the return slip'))
+              }
             />
           </View>
-
-          <TouchableOpacity
-            style={[viewStyles.closeButton, viewStyles.printButton]}
-            onPress={() =>
-              printReturnSlip({
-                ...existingReturn,
-                returnId: displayReturnId || existingReturn.returnId,
-                saleId: saleIdDisplay,
-                products: productRows.map((r) => ({ ...r, returnQty: parseInt(r.returnQty, 10) || 0 })),
-              }).catch((e: any) => Alert.alert('Print', e?.message || 'Could not create the return slip'))
-            }
-          >
-            <Text style={viewStyles.printButtonText}>Print Return Slip</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={viewStyles.closeButton} onPress={() => navigation.goBack()}>
-            <Text style={viewStyles.closeButtonText}>Close</Text>
-          </TouchableOpacity>
-        </ScrollView>
+          <View style={{ flex: 1 }}>
+            <WebButton title="Close" onPress={() => navigation.goBack()} />
+          </View>
+        </View>
       </ScreenShell>
     );
   }
@@ -900,20 +859,17 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
   return (
     <ScreenShell
       title={returnIdParam ? 'Edit Draft Return' : 'Add Stock Return'}
+      subtitle="Create a new stock return request"
       loading={loading}
     >
       <ScrollView ref={scrollRef} style={styles.content} contentContainerStyle={styles.contentContainer}>
-        <Text style={formStyles.subtitle}>
-          Fill in the details to create a new stock return request
-        </Text>
 
         {/* Basic Return Information */}
         <View style={formStyles.section}>
           <Text style={styles.sectionTitle}>Basic Return Information</Text>
-          <Text style={styles.readOnlyLabel}>Return ID *</Text>
-          <Text style={styles.readOnlyValue}>{displayReturnId || '—'}</Text>
-          <Text style={styles.readOnlyLabel}>Executive Name *</Text>
-          <Text style={styles.readOnlyValue}>{user?.name || '—'}</Text>
+          <InfoRow label="Return ID" value={displayReturnId || '—'} />
+          <InfoRow label="Executive" value={user?.name || '—'} />
+          <View style={{ height: 8 }} />
 
           <ReadOnlyField label="Customer / Outlet *" value={customerName || '—'} />
 
@@ -953,10 +909,7 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
         {/* School & dispatch details */}
         <View style={formStyles.section}>
           <Text style={styles.sectionTitle}>School & dispatch details</Text>
-          <Text style={styles.hint}>
-            School fields are filled from the selected DC. Hand stock to your delivery partner for return
-            to Main Warehouse; enter the LR No from their lorry receipt before you submit (required).
-          </Text>
+          <Text style={styles.hint}>School fields come from the selected DC. LR No from the delivery partner's lorry receipt is required.</Text>
 
           <Text style={formStyles.label}>LR No *</Text>
           <WebInput
@@ -1036,120 +989,103 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
             </View>
           ) : null}
 
-          <ScrollView horizontal showsHorizontalScrollIndicator>
-            <View style={formStyles.productTable}>
-              <View style={formStyles.productTableHeader}>
-                <Text style={[formStyles.productTh, formStyles.colProductName]}>Product</Text>
-                <Text style={[formStyles.productTh, formStyles.colMetaCell]}>Class</Text>
-                <Text style={[formStyles.productTh, formStyles.colMetaWideCell]}>Series</Text>
-                <Text style={[formStyles.productTh, formStyles.colMetaCell]}>Term / Level</Text>
-                <Text style={[formStyles.productTh, formStyles.colMetaWideCell]}>Deliverables</Text>
-                <Text style={[formStyles.productTh, formStyles.colSoldQty]}>Sold Qty</Text>
-                <Text style={[formStyles.productTh, formStyles.colReturnQty]}>Return Qty</Text>
-                <Text style={[formStyles.productTh, formStyles.colUnitPrice]}>Unit Price</Text>
-                <Text style={[formStyles.productTh, formStyles.colReasonCell]}>Reason</Text>
-                <Text style={[formStyles.productTh, formStyles.colRemarksCell]}>Remarks</Text>
-                <Text style={[formStyles.productTh, formStyles.colActionCell]}>Action</Text>
-              </View>
-              {visibleRows.length === 0 ? (
-                <View style={formStyles.productTableEmpty}>
-                  <Text style={styles.emptyText}>
-                    {dcProductNames.length > 0 && !returnProduct
-                      ? 'Select the product to return.'
-                      : selectedCompletedDcId
-                        ? 'No products on this DC. Tap + Add Product to add a row.'
-                        : 'Select Sale/DC Order above to load products, or tap + Add Product.'}
-                  </Text>
-                </View>
-              ) : (
-                visibleRows.map((row) => (
-                  <View key={row.id} style={formStyles.productTableRow}>
-                    <View style={formStyles.colProductName}>
-                      {row.product ? (
-                        <Text style={formStyles.productNameText} numberOfLines={1}>
-                          {row.product}
-                        </Text>
-                      ) : (
-                        <WebSelect
-                          label=""
-                          value={row.product}
-                          onValueChange={(v) => {
-                            updateProductRow(row.id, 'product', v);
-                            const dcOrder = completedDcs.find((o) => o._id === selectedCompletedDcId);
-                            const op = dcOrder?.products?.find(
-                              (p: any) => (p.product_name || p.product || '') === v,
-                            );
-                            if (op) {
-                              updateProductRow(row.id, 'soldQty', productQuantity(op));
-                              updateProductRow(row.id, 'unitPrice', String(productUnitPrice(op)));
-                              updateProductRow(row.id, 'class', String(op.class || ''));
-                              updateProductRow(row.id, 'level', String(op.level || ''));
-                              updateProductRow(row.id, 'subject', String(op.subject || ''));
-                              updateProductRow(row.id, 'productCategory', String(op.productCategory || ''));
-                              updateProductRow(row.id, 'specs', String(op.specs || ''));
-                            }
-                          }}
-                          placeholder="Select product"
-                          items={availableProducts.map((p) => ({ label: p, value: p }))}
-                        />
-                      )}
-                    </View>
-                    <Text style={[formStyles.metaText, formStyles.colMetaCell]}>{row.class || '-'}</Text>
-                    <Text style={[formStyles.metaText, formStyles.colMetaWideCell]}>{row.productCategory || '-'}</Text>
-                    <Text style={[formStyles.metaText, formStyles.colMetaCell]}>{row.level || '-'}</Text>
-                    <Text style={[formStyles.metaText, formStyles.colMetaWideCell]}>{row.subject || row.specs || '-'}</Text>
-                    <View style={formStyles.colSoldQty}>
-                      <WebInput
-                        style={[formStyles.tableInput, formStyles.readOnlyInput]}
-                        value={String(row.soldQty)}
-                        editable={false}
-                      />
-                    </View>
-                    <View style={formStyles.colReturnQty}>
-                      <WebInput
-                        style={formStyles.tableInput}
-                        value={row.returnQty}
-                        onChangeText={(v) => /^\d*$/.test(v) && updateProductRow(row.id, 'returnQty', v)}
-                        keyboardType="numeric"
-                        placeholder="0"
-                      />
-                    </View>
-                    <View style={formStyles.colUnitPrice}>
-                      <WebInput
-                        style={formStyles.tableInput}
-                        value={row.unitPrice}
-                        onChangeText={(v) => /^\d*\.?\d*$/.test(v) && updateProductRow(row.id, 'unitPrice', v)}
-                        keyboardType="decimal-pad"
-                        placeholder=""
-                      />
-                    </View>
-                    <View style={formStyles.colReasonCell}>
+          {visibleRows.length === 0 ? (
+            <Text style={styles.emptyText}>
+              {dcProductNames.length > 0 && !returnProduct
+                ? 'Select the product to return.'
+                : selectedCompletedDcId
+                  ? 'No products on this DC. Tap + Add Product to add a row.'
+                  : 'Select Sale/DC Order above to load products, or tap + Add Product.'}
+            </Text>
+          ) : (
+            visibleRows.map((row) => (
+              <View key={row.id} style={formStyles.productCard}>
+                <View style={formStyles.productCardHead}>
+                  <View style={{ flex: 1 }}>
+                    {row.product ? (
+                      <Text style={formStyles.productNameText} numberOfLines={2}>
+                        {row.product}
+                      </Text>
+                    ) : (
                       <WebSelect
                         label=""
-                        value={row.reason}
-                        onValueChange={(v) => updateProductRow(row.id, 'reason', v)}
-                        placeholder="Select reason"
-                        items={RETURN_REASONS.map((r) => ({ label: r, value: r }))}
+                        value={row.product}
+                        onValueChange={(v) => {
+                          updateProductRow(row.id, 'product', v);
+                          const dcOrder = completedDcs.find((o) => o._id === selectedCompletedDcId);
+                          const op = dcOrder?.products?.find(
+                            (p: any) => (p.product_name || p.product || '') === v,
+                          );
+                          if (op) {
+                            updateProductRow(row.id, 'soldQty', productQuantity(op));
+                            updateProductRow(row.id, 'unitPrice', String(productUnitPrice(op)));
+                            updateProductRow(row.id, 'class', String(op.class || ''));
+                            updateProductRow(row.id, 'level', String(op.level || ''));
+                            updateProductRow(row.id, 'subject', String(op.subject || ''));
+                            updateProductRow(row.id, 'productCategory', String(op.productCategory || ''));
+                            updateProductRow(row.id, 'specs', String(op.specs || ''));
+                          }
+                        }}
+                        placeholder="Select product"
+                        items={availableProducts.map((p) => ({ label: p, value: p }))}
                       />
-                    </View>
-                    <View style={formStyles.colRemarksCell}>
-                      <WebInput
-                        style={formStyles.tableInput}
-                        value={row.remarks}
-                        onChangeText={(v) => updateProductRow(row.id, 'remarks', v)}
-                        placeholder="Optional remarks"
-                      />
-                    </View>
-                    <View style={formStyles.colActionCell}>
-                      <TouchableOpacity onPress={() => removeProductRow(row.id)} style={formStyles.removeBtn}>
-                        <Text style={formStyles.removeBtnText}>×</Text>
-                      </TouchableOpacity>
-                    </View>
+                    )}
                   </View>
-                ))
-              )}
-            </View>
-          </ScrollView>
+                  <TouchableOpacity onPress={() => removeProductRow(row.id)} style={formStyles.removeBtn} accessibilityLabel="Remove product">
+                    <Text style={formStyles.removeBtnText}>×</Text>
+                  </TouchableOpacity>
+                </View>
+                <InfoRow label="Class" value={row.class || '-'} />
+                <InfoRow label="Series" value={row.productCategory || '-'} />
+                <InfoRow label="Term / Level" value={row.level || '-'} />
+                <InfoRow label="Deliverables" value={row.subject || row.specs || '-'} />
+                <View style={formStyles.qtyRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={formStyles.label}>Sold Qty</Text>
+                    <WebInput
+                      style={[formStyles.tableInput, formStyles.readOnlyInput]}
+                      value={String(row.soldQty)}
+                      editable={false}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={formStyles.label}>Return Qty *</Text>
+                    <WebInput
+                      style={formStyles.tableInput}
+                      value={row.returnQty}
+                      onChangeText={(v) => /^\d*$/.test(v) && updateProductRow(row.id, 'returnQty', v)}
+                      keyboardType="numeric"
+                      placeholder="0"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={formStyles.label}>Unit Price</Text>
+                    <WebInput
+                      style={formStyles.tableInput}
+                      value={row.unitPrice}
+                      onChangeText={(v) => /^\d*\.?\d*$/.test(v) && updateProductRow(row.id, 'unitPrice', v)}
+                      keyboardType="decimal-pad"
+                      placeholder=""
+                    />
+                  </View>
+                </View>
+                <WebSelect
+                  label="Reason *"
+                  value={row.reason}
+                  onValueChange={(v) => updateProductRow(row.id, 'reason', v)}
+                  placeholder="Select reason"
+                  items={RETURN_REASONS.map((r) => ({ label: r, value: r }))}
+                />
+                <Text style={formStyles.label}>Remarks</Text>
+                <WebInput
+                  style={[formStyles.tableInput, { marginBottom: 0 }]}
+                  value={row.remarks}
+                  onChangeText={(v) => updateProductRow(row.id, 'remarks', v)}
+                  placeholder="Optional remarks"
+                />
+              </View>
+            ))
+          )}
         </View>
 
         {/* Evidence & Remarks */}
@@ -1225,39 +1161,14 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
         {/* Actions */}
         <View style={formStyles.actions}>
           <View style={formStyles.actionsRow}>
-            <TouchableOpacity
-              style={[styles.btn, styles.btnDraft, formStyles.actionBtnHalf]}
-              onPress={() => navigation.goBack()}
-            >
-              <Text style={formStyles.actionBtnText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.btn, styles.btnDraft, formStyles.actionBtnHalf]}
-              onPress={saveDraft}
-              disabled={saving}
-            >
-              {saving ? (
-                <ActivityIndicator color={colors.textPrimary} />
-              ) : (
-                <Text style={formStyles.actionBtnText} numberOfLines={1}>
-                  Save as Draft
-                </Text>
-              )}
-            </TouchableOpacity>
+            <View style={formStyles.actionBtnHalf}>
+              <WebButton title="Cancel" variant="outline" onPress={() => navigation.goBack()} />
+            </View>
+            <View style={formStyles.actionBtnHalf}>
+              <WebButton title="Save as Draft" variant="outline" onPress={saveDraft} disabled={saving} loading={saving} />
+            </View>
           </View>
-          <TouchableOpacity
-            style={[styles.btn, styles.btnSubmit, formStyles.actionBtnFull]}
-            onPress={submitReturn}
-            disabled={saving || !canSubmit}
-          >
-            {saving ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={formStyles.actionBtnTextPrimary} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
-                Submit Return Request
-              </Text>
-            )}
-          </TouchableOpacity>
+          <WebButton title="Submit Return Request" onPress={submitReturn} disabled={saving || !canSubmit} loading={saving} />
         </View>
         {!canSubmit && (
           <Text style={[styles.hint, { marginBottom: 24 }]}>
@@ -1286,14 +1197,14 @@ const styles = StyleSheet.create({
   content: { flex: 1 },
   contentContainer: { padding: 16, paddingBottom: 40 },
   section: { marginBottom: 24 },
-  sectionTitle: { ...typography.heading.h3, color: colors.textPrimary, marginBottom: 12 },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, marginBottom: 12 },
   label: { ...typography.body.medium, color: colors.textPrimary, fontWeight: '600', marginBottom: 6 },
-  readOnlyLabel: { ...typography.body.small, color: colors.textSecondary, marginBottom: 4 },
+  readOnlyLabel: { fontSize: 13, color: colors.textTertiary, marginBottom: 4 },
   readOnlyValue: { ...typography.body.medium, color: colors.textPrimary, marginBottom: 12 },
-  hint: { ...typography.body.small, color: colors.textSecondary, marginBottom: 12 },
-  warningText: { ...typography.body.small, color: colors.warning, marginBottom: 12 },
-  emptyText: { ...typography.body.medium, color: colors.textSecondary, fontStyle: 'italic', marginVertical: 12 },
-  input: { backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, ...typography.body.medium, color: colors.textPrimary, marginBottom: 12 },
+  hint: { fontSize: 13, color: colors.textTertiary, marginBottom: 12, lineHeight: 18 },
+  warningText: { fontSize: 13, color: '#B45309', marginBottom: 12 },
+  emptyText: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', marginVertical: 16 },
+  input: {},
   textArea: { minHeight: 100, textAlignVertical: 'top' },
   pickerWrap: { backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border, borderRadius: 12, marginBottom: 12 },
   picker: { height: 48 },
@@ -1306,15 +1217,15 @@ const styles = StyleSheet.create({
   colReason: { flex: 1, minWidth: 70 },
   colRemarks: { flex: 1, minWidth: 60 },
   inputSmall: { backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border, borderRadius: 6, padding: 6, fontSize: 12, color: colors.textPrimary },
-  photoButton: { backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 12 },
-  photoButtonText: { ...typography.body.medium, color: colors.primary },
+  photoButton: { backgroundColor: colors.backgroundLight, borderWidth: 1, borderStyle: 'dashed', borderColor: '#DCE3EC', borderRadius: 10, padding: 14, alignItems: 'center', marginBottom: 12 },
+  photoButtonText: { fontSize: 15, fontWeight: '600', color: colors.primary },
   photoWrap: { marginRight: 12, position: 'relative' },
-  photoThumb: { width: 80, height: 80, borderRadius: 8 },
+  photoThumb: { width: 80, height: 80, borderRadius: 10 },
   photoRemove: { position: 'absolute', top: 4, right: 4, backgroundColor: colors.error, width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   photoRemoveText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
-  summaryLabel: { ...typography.body.medium, color: colors.textSecondary },
-  summaryValue: { ...typography.body.medium, color: colors.textPrimary, fontWeight: '600' },
+  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
+  summaryLabel: { fontSize: 14, color: colors.textSecondary },
+  summaryValue: { fontSize: 14, color: colors.textPrimary, fontWeight: '600' },
   actions: { flexDirection: 'row', gap: 12, marginTop: 20 },
   btn: { flex: 1, padding: 14, borderRadius: 12, alignItems: 'center', minWidth: 90 },
   btnDraft: { backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border },
@@ -1334,23 +1245,30 @@ const formStyles = StyleSheet.create({
     marginBottom: 16,
   },
   section: {
-    marginBottom: 24,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    backgroundColor: colors.backgroundLight,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#EEF2F7',
+    padding: 16,
+    marginBottom: 12,
   },
+  productCard: {
+    borderWidth: 1,
+    borderColor: '#EEF2F7',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    backgroundColor: colors.background,
+  },
+  productCardHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 4 },
+  qtyRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 12,
   },
-  label: {
-    ...typography.body.medium,
-    color: colors.textPrimary,
-    fontWeight: '600',
-    marginBottom: 6,
-  },
+  label: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 6 },
   emptyBox: {
     backgroundColor: colors.backgroundLight,
     borderRadius: 8,
@@ -1360,16 +1278,12 @@ const formStyles = StyleSheet.create({
   addProductBtn: {
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
+    borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 8,
     backgroundColor: colors.backgroundLight,
   },
-  addProductBtnText: {
-    ...typography.body.small,
-    color: colors.primary,
-    fontWeight: '600',
-  },
+  addProductBtnText: { fontSize: 13, color: colors.primary, fontWeight: '600' },
   productRow: {
     paddingVertical: 10,
     borderBottomWidth: 1,
@@ -1381,15 +1295,15 @@ const formStyles = StyleSheet.create({
     gap: 6,
   },
   removeBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.error,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.errorLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   removeBtnText: {
-    color: '#fff',
+    color: colors.error,
     fontSize: 18,
     fontWeight: 'bold',
     lineHeight: 20,
@@ -1428,13 +1342,7 @@ const formStyles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textPrimary,
   },
-  productNameText: {
-    ...typography.body.medium,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    paddingVertical: 10,
-    paddingHorizontal: 4,
-  },
+  productNameText: { fontSize: 15, fontWeight: '700', color: colors.textPrimary, paddingVertical: 6 },
   colProductName: { width: 100, paddingRight: 8 },
   colMetaCell: { width: 70, paddingRight: 8 },
   colMetaWideCell: { width: 110, paddingRight: 8 },
@@ -1448,31 +1356,24 @@ const formStyles = StyleSheet.create({
   tableInput: {
     backgroundColor: colors.backgroundLight,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    paddingHorizontal: 8,
+    borderColor: '#DCE3EC',
+    borderRadius: 10,
+    paddingHorizontal: 10,
     paddingVertical: 8,
-    fontSize: 13,
+    fontSize: 14,
     color: colors.textPrimary,
-    minHeight: 38,
+    minHeight: 44,
+    marginBottom: 12,
   },
   readOnlyInput: {
     backgroundColor: '#F8FAFC',
   },
-  actions: {
-    gap: 10,
-    marginTop: 8,
-    marginBottom: 8,
-  },
+  actions: { marginTop: 4, marginBottom: 8 },
   actionsRow: {
     flexDirection: 'row',
     gap: 10,
   },
-  actionBtnHalf: {
-    flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-  },
+  actionBtnHalf: { flex: 1 },
   actionBtnFull: {
     width: '100%',
     paddingVertical: 14,
@@ -1504,21 +1405,15 @@ const viewStyles = StyleSheet.create({
     gap: 12,
     marginBottom: 20,
   },
-  fieldWrap: {
-    marginBottom: 4,
-  },
-  fieldLabel: {
-    ...typography.body.small,
-    color: colors.textSecondary,
-    marginBottom: 4,
-  },
+  fieldWrap: { marginBottom: 14 },
+  fieldLabel: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 6 },
   fieldBox: {
     backgroundColor: colors.backgroundLight,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
+    borderColor: '#DCE3EC',
+    borderRadius: 10,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
   },
   fieldValue: {
     ...typography.body.medium,
@@ -1557,10 +1452,10 @@ const viewStyles = StyleSheet.create({
     backgroundColor: colors.backgroundLight,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
+    borderRadius: 12,
     padding: 24,
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   noPhotoText: {
     ...typography.body.medium,

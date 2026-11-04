@@ -1,20 +1,12 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  RefreshControl,
-  Alert,
-  Linking,
-  Modal,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert, Linking, Modal } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
-import ScreenShell, { PageSection } from '../../ui/ScreenShell';
-import { WebInput, WebButton, WebLabel } from '../../ui/WebPrimitives';
+import ScreenShell from '../../ui/ScreenShell';
+import { WebButton } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState } from '../../ui/Kit';
+import DateField from '../../ui/DateField';
+import { SearchBar, Act, FilterRow, FilterCell, matchesWords, ui } from '../../components/dc/DcUi';
 import { apiService, getApiUrl } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -168,22 +160,9 @@ export default function DCSavedScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const [schoolName, setSchoolName] = useState('');
-  const [mobile, setMobile] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
-  const [zone, setZone] = useState('');
-  const [executive, setExecutive] = useState('');
-  const [town, setTown] = useState('');
-  const [applied, setApplied] = useState({
-    schoolName: '',
-    mobile: '',
-    fromDate: '',
-    toDate: '',
-    zone: '',
-    executive: '',
-    town: '',
-  });
 
   const [locationDeal, setLocationDeal] = useState<DcOrder | null>(null);
   const { user } = useAuth();
@@ -255,49 +234,30 @@ export default function DCSavedScreen({ navigation }: any) {
     loadData();
   };
 
-  const onSearch = () => {
-    setApplied({
-      schoolName: schoolName.trim(),
-      mobile: mobile.trim(),
-      fromDate: fromDate.trim(),
-      toDate: toDate.trim(),
-      zone: zone.trim(),
-      executive: executive.trim(),
-      town: town.trim(),
-    });
-  };
-
   const filteredItems = useMemo(() => {
-    const from = parseFilterDate(applied.fromDate, false);
-    const to = parseFilterDate(applied.toDate, true);
+    const from = parseFilterDate(fromDate, false);
+    const to = parseFilterDate(toDate, true);
 
     return items.filter((item) => {
-      if (applied.schoolName) {
-        const name = (item.school_name || '').toLowerCase();
-        if (!name.includes(applied.schoolName.toLowerCase())) return false;
-      }
-      if (applied.mobile) {
-        const m = (item.contact_mobile || '').replace(/\D/g, '');
-        if (!m.includes(applied.mobile.replace(/\D/g, ''))) return false;
-      }
-      if (applied.zone) {
-        const z = (item.zone || '').toLowerCase();
-        if (!z.includes(applied.zone.toLowerCase())) return false;
-      }
-      if (applied.executive) {
-        const e = executiveName(item).toLowerCase();
-        if (!e.includes(applied.executive.toLowerCase())) return false;
-      }
-      if (applied.town) {
-        const t = townOf(item).toLowerCase();
-        if (!t.includes(applied.town.toLowerCase())) return false;
-      }
+      if (
+        !matchesWords(searchQuery, [
+          item.school_name,
+          item.contact_mobile,
+          item.school_type,
+          item.zone,
+          executiveName(item),
+          townOf(item),
+          item.address,
+          productsSummary(item, dealDCs[item._id]),
+        ])
+      )
+        return false;
       const created = new Date(item.createdAt || item.created_at || 0);
       if (from && !Number.isNaN(created.getTime()) && created < from) return false;
       if (to && !Number.isNaN(created.getTime()) && created > to) return false;
       return true;
     });
-  }, [items, applied]);
+  }, [items, dealDCs, searchQuery, fromDate, toDate]);
 
   const openPo = async (item: DcOrder) => {
     const linked = dealDCs[item._id];
@@ -335,122 +295,42 @@ export default function DCSavedScreen({ navigation }: any) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         keyboardShouldPersistTaps="handled"
       >
-        <PageSection title="Search filters">
-          <View style={styles.filterCard}>
-            <WebInput
-              placeholder="By School Name"
-              value={schoolName}
-              onChangeText={setSchoolName}
-              style={styles.filterInput}
-            />
-            <WebInput
-              placeholder="By Contact Mobile No"
-              value={mobile}
-              onChangeText={setMobile}
-              keyboardType="phone-pad"
-              style={styles.filterInput}
-            />
-            <WebInput
-              placeholder="dd-mm-yyyy (From)"
-              value={fromDate}
-              onChangeText={setFromDate}
-              style={styles.filterInput}
-            />
-            <WebInput
-              placeholder="dd-mm-yyyy (To)"
-              value={toDate}
-              onChangeText={setToDate}
-              style={styles.filterInput}
-            />
-            <WebInput
-              placeholder="Select Zone"
-              value={zone}
-              onChangeText={setZone}
-              style={styles.filterInput}
-            />
-            <WebInput
-              placeholder="Select Executive"
-              value={executive}
-              onChangeText={setExecutive}
-              style={styles.filterInput}
-            />
-            <WebInput
-              placeholder="By Town"
-              value={town}
-              onChangeText={setTown}
-              style={styles.filterInput}
-            />
-            <WebButton title="Search" onPress={onSearch} />
-          </View>
-        </PageSection>
+        <SearchBar placeholder="Search school, mobile, zone, town, executive, product…" value={searchQuery} onChangeText={setSearchQuery} />
+        <FilterRow>
+          <FilterCell><DateField placeholder="From date" value={fromDate} onChange={setFromDate} /></FilterCell>
+          <FilterCell><DateField placeholder="To date" value={toDate} onChange={setToDate} /></FilterCell>
+        </FilterRow>
+        {fromDate || toDate ? (
+          <WebButton title="Clear dates" variant="outline" onPress={() => { setFromDate(''); setToDate(''); }} />
+        ) : null}
 
-        <PageSection title={`Saved DCs (${filteredItems.length})`}>
-          {filteredItems.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No saved deals found.</Text>
-            </View>
-          ) : (
-            filteredItems.map((item) => {
-              const linked = dealDCs[item._id];
-              const hasPo = !!(linked?.poPhotoUrl || item.pod_proof_url);
-              return (
-                <View key={item._id} style={styles.card}>
-                  <Text style={styles.schoolName}>{item.school_name || 'Unnamed School'}</Text>
-
-                  <View style={styles.metaRow}>
-                    <Text style={styles.metaLabel}>Created On</Text>
-                    <Text style={styles.metaValue}>{formatDateTime(item.createdAt || item.created_at)}</Text>
-                  </View>
-                  <View style={styles.metaRow}>
-                    <Text style={styles.metaLabel}>School Type</Text>
-                    <Text style={styles.metaValue}>{item.school_type || '-'}</Text>
-                  </View>
-                  <View style={styles.metaRow}>
-                    <Text style={styles.metaLabel}>Zone</Text>
-                    <Text style={styles.metaValue}>{item.zone || '-'}</Text>
-                  </View>
-                  <View style={styles.metaRow}>
-                    <Text style={styles.metaLabel}>Town</Text>
-                    <Text style={styles.metaValue}>{townOf(item)}</Text>
-                  </View>
-                  <View style={styles.metaRow}>
-                    <Text style={styles.metaLabel}>Executive</Text>
-                    <Text style={styles.metaValue}>{executiveName(item)}</Text>
-                  </View>
-                  <View style={styles.metaRow}>
-                    <Text style={styles.metaLabel}>Mobile</Text>
-                    <Text style={styles.metaValue}>{item.contact_mobile || '-'}</Text>
-                  </View>
-                  <View style={styles.metaRow}>
-                    <Text style={styles.metaLabel}>Products</Text>
-                    <Text style={[styles.metaValue, styles.productsValue]}>
-                      {productsSummary(item, linked)}
-                    </Text>
-                  </View>
-
-                  <View style={styles.actions}>
-                    {hasPo ? (
-                      <TouchableOpacity onPress={() => openPo(item)} style={styles.poLinkWrap}>
-                        <Text style={styles.poLink}>View PO</Text>
-                      </TouchableOpacity>
-                    ) : (
-                      <Text style={styles.poMissing}>PO: -</Text>
-                    )}
-                    <WebButton
-                      title={linked ? 'Update DC' : 'Raise DC'}
-                      onPress={() => openUpdateDC(item)}
-                    />
-                    <WebButton
-                      title="View Location"
-                      variant="outline"
-                      onPress={() => setLocationDeal(item)}
-                    />
-                  </View>
-                </View>
-              );
-            })
-          )}
-        </PageSection>
+        <Text style={ui.count}>{filteredItems.length} saved DC{filteredItems.length === 1 ? '' : 's'}</Text>
+        {filteredItems.length === 0 ? (
+          <EmptyState title="No saved deals found" message="Try a different search or date range." />
+        ) : (
+          filteredItems.map((item) => {
+            const linked = dealDCs[item._id];
+            const hasPo = !!(linked?.poPhotoUrl || item.pod_proof_url);
+            return (
+              <Card key={item._id}>
+                <CardTitle title={item.school_name || 'Unnamed School'} badge={linked ? 'DC raised' : 'Saved'} tone={linked ? 'info' : 'neutral'} />
+                <InfoRow label="Created on" value={formatDateTime(item.createdAt || item.created_at)} />
+                <InfoRow label="School type" value={item.school_type} />
+                <InfoRow label="Zone" value={item.zone} />
+                <InfoRow label="Town" value={townOf(item)} />
+                <InfoRow label="Executive" value={executiveName(item)} />
+                <InfoRow label="Mobile" value={item.contact_mobile} phone />
+                <InfoRow label="Products" value={productsSummary(item, linked)} />
+                {!hasPo ? <InfoRow label="PO" value="Not uploaded" /> : null}
+                <ActionRow>
+                  {hasPo ? <Act title="View PO" variant="outline" onPress={() => openPo(item)} /> : null}
+                  <Act title="Location" variant="outline" onPress={() => setLocationDeal(item)} />
+                  <Act title={linked ? 'Update DC' : 'Raise DC'} onPress={() => openUpdateDC(item)} />
+                </ActionRow>
+              </Card>
+            );
+          })
+        )}
       </ScrollView>
 
       <Modal
@@ -463,16 +343,10 @@ export default function DCSavedScreen({ navigation }: any) {
           <View style={styles.modalCard}>
             <ScrollView keyboardShouldPersistTaps="handled">
             <Text style={styles.modalTitle}>View Location</Text>
-            <WebLabel>School</WebLabel>
-            <Text style={styles.modalBody}>{locationDeal?.school_name || '-'}</Text>
-            <WebLabel>Town / Location</WebLabel>
-            <Text style={styles.modalBody}>
-              {locationDeal ? townOf(locationDeal) : '-'}
-            </Text>
-            <WebLabel>Address</WebLabel>
-            <Text style={styles.modalBody}>{locationDeal?.address || locationDeal?.location || '-'}</Text>
-            <WebLabel>Zone</WebLabel>
-            <Text style={styles.modalBody}>{locationDeal?.zone || '-'}</Text>
+            <InfoRow label="School" value={locationDeal?.school_name || '-'} bold />
+            <InfoRow label="Town" value={locationDeal ? townOf(locationDeal) : '-'} />
+            <InfoRow label="Address" value={locationDeal?.address || locationDeal?.location || '-'} />
+            <InfoRow label="Zone" value={locationDeal?.zone || '-'} />
             {locationDeal ? (
               <View style={styles.transportSection}>
                 <TransportDetailsSection
@@ -500,117 +374,22 @@ export default function DCSavedScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   content: { flex: 1 },
-  contentContainer: { paddingBottom: 32 },
-  filterCard: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    gap: 10,
-  },
-  filterInput: { marginBottom: 0 },
-  emptyContainer: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingVertical: 40,
-    alignItems: 'center',
-  },
-  emptyText: { ...typography.body.medium, color: colors.textSecondary },
-  card: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    marginBottom: 12,
-  },
-  schoolName: {
-    ...typography.heading.h3,
-    color: colors.textPrimary,
-    marginBottom: 12,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginBottom: 6,
-  },
-  metaLabel: {
-    ...typography.body.small,
-    color: colors.textMuted,
-    minWidth: 90,
-  },
-  metaValue: {
-    ...typography.body.medium,
-    color: colors.textPrimary,
-    flex: 1,
-    textAlign: 'right',
-  },
-  productsValue: {
-    ...typography.body.small,
-  },
-  actions: {
-    marginTop: 14,
-    gap: 8,
-  },
-  poLinkWrap: {
-    alignSelf: 'flex-start',
-    marginBottom: 4,
-  },
-  poLink: {
-    ...typography.body.medium,
-    color: colors.primary,
-    textDecorationLine: 'underline',
-    fontWeight: '600',
-  },
-  poMissing: {
-    ...typography.body.small,
-    color: colors.textMuted,
-    marginBottom: 4,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  modalCard: {
-    backgroundColor: colors.backgroundLight,
-    borderRadius: 16,
-    padding: 20,
-    gap: 6,
-    maxHeight: '90%',
-  },
-  modalTitle: {
-    ...typography.heading.h2,
-    color: colors.textPrimary,
-    marginBottom: 10,
-  },
-  modalBody: {
-    ...typography.body.medium,
-    color: colors.textPrimary,
-    marginBottom: 10,
-  },
-  modalActions: {
-    marginTop: 8,
-  },
-  transportSection: {
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: 12,
-    marginTop: 4,
-  },
+  contentContainer: { padding: 16, paddingBottom: 32 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.5)', justifyContent: 'center', padding: 16 },
+  modalCard: { backgroundColor: colors.backgroundLight, borderRadius: 14, padding: 16, maxHeight: '90%' },
+  modalTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary, marginBottom: 10 },
+  modalActions: { marginTop: 8 },
+  transportSection: { borderTopWidth: 1, borderTopColor: '#EEF2F7', paddingTop: 12, marginTop: 8 },
   input: {
-    ...typography.body.medium,
+    fontSize: 15,
     backgroundColor: colors.backgroundLight,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 12,
+    borderColor: '#DCE3EC',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minHeight: 48,
     color: colors.textPrimary,
   },
-  inputDisabled: { backgroundColor: colors.background, opacity: 0.8 },
+  inputDisabled: { backgroundColor: colors.backgroundMuted, opacity: 0.8 },
 });

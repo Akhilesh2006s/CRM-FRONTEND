@@ -4,6 +4,7 @@ import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebSelect } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, EmptyState, toneFor } from '../../ui/Kit';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { ALL_PAYMENT_MODES, fmtDate, inr, paymentDetailsText, paymentRemarks, statusColors } from './paymentHelpers';
@@ -51,13 +52,29 @@ export default function PaymentDoneScreen() {
 
   const filtered = useMemo(() => {
     let list = statusFilter ? payments.filter((p) => p.status === statusFilter) : [...payments];
-    const term = search.trim().toLowerCase();
-    if (term) {
-      list = list.filter((p) =>
-        [p.customerName, p.schoolCode, p.paymentMethod, p.referenceNumber, p.refNo, p.description].some((v) =>
-          String(v || '').toLowerCase().includes(term)
-        )
-      );
+    const words = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (words.length) {
+      list = list.filter((p) => {
+        const text = [
+          p.customerName,
+          p.schoolCode,
+          p.paymentMethod,
+          p.referenceNumber,
+          p.refNo,
+          p.description,
+          p.status,
+          p.financialYear,
+          p.amount,
+          inr(p.amount),
+          fmtDate(p.paymentDate),
+          paymentDetailsText(p),
+          paymentRemarks(p),
+        ]
+          .map((v) => String(v ?? ''))
+          .join(' ')
+          .toLowerCase();
+        return words.every((w) => text.includes(w));
+      });
     }
     if (methodFilter) list = list.filter((p) => p.paymentMethod === methodFilter);
     list.sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime());
@@ -65,10 +82,12 @@ export default function PaymentDoneScreen() {
   }, [payments, statusFilter, search, methodFilter]);
 
   const filteredBalances = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return balances.filter(
-      (b) => !q || String(b.schoolName || '').toLowerCase().includes(q) || String(b.schoolCode || '').toLowerCase().includes(q)
-    );
+    const words = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    return balances.filter((b) => {
+      if (!words.length) return true;
+      const text = `${b.schoolName || ''} ${b.schoolCode || ''}`.toLowerCase();
+      return words.every((w) => text.includes(w));
+    });
   }, [balances, search]);
 
   const sum = (rows: any[]) => rows.reduce((s, p) => s + (Number(p.amount) || 0), 0);
@@ -91,19 +110,29 @@ export default function PaymentDoneScreen() {
         <StatCard label="Pending" count={pending.length} amount={sum(pending)} color={colors.warning} />
       </View>
 
-      <PageSection title="Filters">
-        <WebInput placeholder="Search by school, code, method, ref..." value={search} onChangeText={setSearch} />
-        <WebSelect value={statusFilter} onValueChange={setStatusFilter} items={STATUS_ITEMS} placeholder="All Status" />
-        <WebSelect
-          value={methodFilter}
-          onValueChange={setMethodFilter}
-          items={ALL_PAYMENT_MODES.map((m) => ({ label: m, value: m }))}
-          placeholder="All Methods"
-        />
-      </PageSection>
+      <WebInput
+        placeholder="Search school, code, method, ref, remarks…"
+        value={search}
+        onChangeText={setSearch}
+        autoCapitalize="none"
+        autoCorrect={false}
+      />
+      <View style={styles.filterRow}>
+        <View style={{ flex: 1 }}>
+          <WebSelect value={statusFilter} onValueChange={setStatusFilter} items={STATUS_ITEMS} placeholder="All Status" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <WebSelect
+            value={methodFilter}
+            onValueChange={setMethodFilter}
+            items={ALL_PAYMENT_MODES.map((m) => ({ label: m, value: m }))}
+            placeholder="All Methods"
+          />
+        </View>
+      </View>
 
       {filteredBalances.length > 0 && (
-        <PageSection title="School Balances" description="Order total, approved payments and what is still due for each school.">
+        <PageSection title="School Balances" description="Order total, approved and still due per school.">
           <View style={styles.balHead}>
             <Text style={[styles.balTh, { flex: 2 }]}>School</Text>
             <Text style={styles.balTh}>Total</Text>
@@ -125,32 +154,24 @@ export default function PaymentDoneScreen() {
       )}
 
       {filtered.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No payments found</Text>
-        </View>
+        <EmptyState icon="💳" title="No payments found" />
       ) : (
-        filtered.map((p) => {
-          const sc = statusColors(p.status);
-          return (
-            <View key={p._id} style={styles.card}>
-              <View style={styles.cardHeader}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.customerName}>{p.customerName || '-'}</Text>
-                  <Text style={styles.code}>{p.schoolCode || '-'}</Text>
-                </View>
-                <View style={[styles.statusBadge, { backgroundColor: sc.bg }]}>
-                  <Text style={[styles.statusBadgeText, { color: sc.fg }]}>{p.status || 'Pending'}</Text>
-                </View>
-              </View>
-              <Info label="Amount" value={inr(p.amount)} strong />
-              <Info label="Date" value={fmtDate(p.paymentDate)} />
-              <Info label="Method" value={p.paymentMethod || '-'} />
-              <Info label="Details" value={paymentDetailsText(p)} />
-              <Info label="Fin. Year" value={p.financialYear || '-'} />
-              <Info label={p.status === 'Hold' || p.status === 'Rejected' ? 'Reason' : 'Remarks'} value={paymentRemarks(p)} />
-            </View>
-          );
-        })
+        filtered.map((p) => (
+          <Card key={p._id}>
+            <CardTitle
+              title={p.customerName || '-'}
+              subtitle={p.schoolCode || undefined}
+              badge={p.status || 'Pending'}
+              tone={toneFor(p.status || 'Pending')}
+            />
+            <InfoRow label="Amount" value={<Text style={styles.amountText}>{inr(p.amount)}</Text>} />
+            <InfoRow label="Date" value={fmtDate(p.paymentDate)} />
+            <InfoRow label="Method" value={p.paymentMethod || '-'} />
+            <InfoRow label="Details" value={paymentDetailsText(p)} />
+            <InfoRow label="Fin. Year" value={p.financialYear || '-'} />
+            <InfoRow label={p.status === 'Hold' || p.status === 'Rejected' ? 'Reason' : 'Remarks'} value={paymentRemarks(p)} />
+          </Card>
+        ))
       )}
     </ScreenShell>
   );
@@ -166,38 +187,19 @@ function StatCard({ label, count, amount, color }: { label: string; count: numbe
   );
 }
 
-function Info({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
-  return (
-    <View style={styles.infoRow}>
-      <Text style={styles.infoLabel}>{label}:</Text>
-      <Text style={[styles.infoValue, strong && styles.amountText]}>{value}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   statsRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  stat: { flex: 1, backgroundColor: colors.backgroundLight, borderRadius: 12, borderWidth: 1, borderColor: colors.border, padding: 10 },
-  statLabel: { fontSize: 12, color: colors.textSecondary },
-  statCount: { fontSize: 20, fontWeight: '700', marginTop: 2 },
-  statAmount: { fontSize: 12, color: colors.textTertiary, marginTop: 2 },
+  stat: { flex: 1, backgroundColor: colors.backgroundLight, borderRadius: 12, borderWidth: 1, borderColor: '#EEF2F7', padding: 12 },
+  statLabel: { fontSize: 13, color: colors.textSecondary },
+  statCount: { fontSize: 17, fontWeight: '700', marginTop: 2 },
+  statAmount: { fontSize: 13, color: colors.textTertiary, marginTop: 2 },
+  filterRow: { flexDirection: 'row', gap: 8 },
   balHead: { flexDirection: 'row', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: colors.border },
-  balTh: { flex: 1, fontSize: 12, fontWeight: '600', color: colors.textSecondary, textAlign: 'right' },
+  balTh: { flex: 1, fontSize: 13, fontWeight: '600', color: colors.textSecondary, textAlign: 'right' },
   balRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
-  balSchool: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
-  balCode: { fontSize: 11, color: colors.textTertiary },
-  balTd: { flex: 1, fontSize: 12, color: colors.textPrimary, textAlign: 'right' },
+  balSchool: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+  balCode: { fontSize: 13, color: colors.textTertiary },
+  balTd: { flex: 1, fontSize: 13, color: colors.textPrimary, textAlign: 'right' },
   bold: { fontWeight: '700' },
-  emptyContainer: { justifyContent: 'center', alignItems: 'center', paddingVertical: 40 },
-  emptyText: { ...typography.heading.h3, color: colors.textSecondary },
-  card: { backgroundColor: colors.backgroundLight, borderRadius: 12, borderWidth: 1, borderColor: colors.border, padding: 14, marginBottom: 10 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
-  customerName: { ...typography.heading.h3, color: colors.textPrimary },
-  code: { fontSize: 12, color: colors.textTertiary, marginTop: 2 },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginLeft: 8 },
-  statusBadgeText: { fontSize: 12, fontWeight: '600' },
-  infoRow: { flexDirection: 'row', marginBottom: 4 },
-  infoLabel: { ...typography.body.medium, color: colors.textSecondary, width: 90 },
-  infoValue: { ...typography.body.medium, color: colors.textPrimary, flex: 1 },
-  amountText: { color: colors.success, fontWeight: '700' },
+  amountText: { fontSize: 15, color: colors.success, fontWeight: '700' },
 });

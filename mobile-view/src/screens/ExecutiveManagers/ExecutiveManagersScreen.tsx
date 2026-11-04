@@ -12,10 +12,10 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
-import { typography } from '../../theme/typography';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebButton } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState } from '../../ui/Kit';
 
 type ExecutiveManager = {
   _id: string;
@@ -71,11 +71,15 @@ export default function ExecutiveManagersScreen({ navigation }: any) {
     loadData();
   };
 
-  const filteredManagers = managers.filter(
-    (manager) =>
-      manager.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      manager.email.toLowerCase().includes(searchTerm.toLowerCase()),
-  );
+  /** Every typed word must appear in one of the visible fields. */
+  const searchWords = searchTerm.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const filteredManagers = managers.filter((manager) => {
+    const text = [manager.name, manager.email, manager.phone, manager.mobile, manager.department]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    return searchWords.every((w) => text.includes(w));
+  });
 
   const openAssignDialog = async (manager: ExecutiveManager) => {
     setSelectedManager(manager);
@@ -151,66 +155,39 @@ export default function ExecutiveManagersScreen({ navigation }: any) {
       onRefresh={onRefresh}
       headerRight={createManagerButton}
     >
-      <View style={styles.panel}>
-        <WebInput
-          style={styles.searchInput}
-          placeholder="Search Executive Managers..."
-          value={searchTerm}
-          onChangeText={setSearchTerm}
-        />
+      <WebInput
+        placeholder="Search name, email, phone, department…"
+        value={searchTerm}
+        onChangeText={setSearchTerm}
+      />
 
-        {filteredManagers.length === 0 ? (
-          <View style={styles.emptyWrap}>
-            <Text style={styles.emptyText}>No Executive Managers found.</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('ExecutiveManagerNew')}>
-              <Text style={styles.emptyLink}>Create one</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={styles.grid}>
-            {filteredManagers.map((manager) => (
-              <View key={manager._id} style={styles.card}>
-                <View style={styles.cardBody}>
-                  <Text style={styles.managerName}>{manager.name}</Text>
-                  <Text style={styles.managerMeta}>{manager.email}</Text>
-                  {(manager.phone || manager.mobile) ? (
-                    <Text style={styles.managerMeta}>{manager.phone || manager.mobile}</Text>
-                  ) : null}
-                  {manager.department ? (
-                    <Text style={styles.managerDept}>{manager.department}</Text>
-                  ) : null}
-                </View>
-
-                <View style={styles.countRow}>
-                  <Ionicons name="people-outline" size={16} color="#64748B" />
-                  <Text style={styles.countText}>{manager.employeeCount || 0} Employees</Text>
-                </View>
-
-                <View style={styles.actionsRow}>
-                  <TouchableOpacity
-                    style={styles.outlineBtn}
-                    onPress={() =>
-                      navigation.navigate('ExecutiveManagerDashboard', { managerId: manager._id })
-                    }
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="eye-outline" size={16} color="#334155" />
-                    <Text style={styles.outlineBtnText}>View Dashboard</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.outlineBtn}
-                    onPress={() => openAssignDialog(manager)}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="person-add-outline" size={16} color="#334155" />
-                    <Text style={styles.outlineBtnText}>Assign Employees</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-      </View>
+      {filteredManagers.length === 0 ? (
+        <>
+          <EmptyState icon="👥" title="No Executive Managers found" />
+          <WebButton title="Create one" variant="outline" onPress={() => navigation.navigate('ExecutiveManagerNew')} />
+        </>
+      ) : (
+        filteredManagers.map((manager) => (
+          <Card key={manager._id}>
+            <CardTitle
+              title={manager.name}
+              subtitle={manager.department || undefined}
+              badge={`${manager.employeeCount || 0} Employees`}
+              tone="neutral"
+            />
+            <InfoRow label="Email" value={manager.email || ''} />
+            <InfoRow label="Phone" value={manager.phone || manager.mobile || ''} phone />
+            <ActionRow>
+              <WebButton
+                title="View Dashboard"
+                variant="outline"
+                onPress={() => navigation.navigate('ExecutiveManagerDashboard', { managerId: manager._id })}
+              />
+              <WebButton title="Assign Employees" variant="outline" onPress={() => openAssignDialog(manager)} />
+            </ActionRow>
+          </Card>
+        ))
+      )}
 
       <Modal visible={assignOpen} animationType="slide" transparent onRequestClose={() => setAssignOpen(false)}>
         <View style={styles.modalOverlay}>
@@ -281,185 +258,44 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#2563EB',
-    borderRadius: 8,
+    backgroundColor: colors.primaryDark,
+    borderRadius: 10,
     paddingVertical: 8,
     paddingHorizontal: 12,
   },
-  createBtnText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 13,
-  },
-  panel: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
-  },
-  searchInput: {
-    backgroundColor: '#fff',
-    marginBottom: 14,
-  },
-  grid: {
-    gap: 12,
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 16,
-  },
-  cardBody: {
-    marginBottom: 12,
-  },
-  managerName: {
-    ...typography.heading.h3,
-    color: '#0F172A',
-    marginBottom: 4,
-  },
-  managerMeta: {
-    ...typography.body.small,
-    color: '#475569',
-    marginBottom: 2,
-  },
-  managerDept: {
-    ...typography.body.small,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  countRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 12,
-  },
-  countText: {
-    ...typography.body.small,
-    color: '#475569',
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  outlineBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: '#fff',
-  },
-  outlineBtnText: {
-    ...typography.label.small,
-    color: '#334155',
-    fontWeight: '600',
-  },
-  emptyWrap: {
-    alignItems: 'center',
-    paddingVertical: 32,
-  },
-  emptyText: {
-    ...typography.body.medium,
-    color: '#64748B',
-    marginBottom: 8,
-  },
-  emptyLink: {
-    ...typography.body.medium,
-    color: '#2563EB',
-    fontWeight: '600',
-    textDecorationLine: 'underline',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
-    justifyContent: 'center',
-    padding: 16,
-  },
-  modalCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    maxHeight: '85%',
-  },
-  modalTitle: {
-    ...typography.heading.h3,
-    color: '#0F172A',
-    marginBottom: 4,
-  },
-  modalSubtitle: {
-    ...typography.body.small,
-    color: '#64748B',
-    marginBottom: 12,
-  },
-  employeeList: {
-    maxHeight: 320,
-    marginBottom: 12,
-  },
+  createBtnText: { color: colors.primaryForeground, fontWeight: '700', fontSize: 13 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.45)', justifyContent: 'center', padding: 16 },
+  modalCard: { backgroundColor: colors.backgroundLight, borderRadius: 14, padding: 16, maxHeight: '85%' },
+  modalTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary, marginBottom: 4 },
+  modalSubtitle: { fontSize: 13, color: colors.textTertiary, marginBottom: 12 },
+  employeeList: { maxHeight: 320, marginBottom: 12 },
   employeeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    padding: 10,
+    borderColor: colors.border,
+    borderRadius: 10,
+    padding: 12,
     marginBottom: 8,
-    backgroundColor: '#fff',
+    backgroundColor: colors.backgroundLight,
   },
-  employeeRowChecked: {
-    backgroundColor: '#F8FAFC',
-  },
+  employeeRowChecked: { backgroundColor: colors.accent, borderColor: colors.primaryLight },
   checkbox: {
     width: 20,
     height: 20,
-    borderRadius: 4,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: '#CBD5E1',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkboxChecked: {
-    backgroundColor: '#2563EB',
-    borderColor: '#2563EB',
-  },
-  employeeInfo: {
-    flex: 1,
-  },
-  employeeName: {
-    ...typography.label.medium,
-    color: '#0F172A',
-    fontWeight: '600',
-  },
-  employeeEmail: {
-    ...typography.body.small,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  modalEmpty: {
-    alignItems: 'center',
-    paddingVertical: 16,
-  },
-  modalEmptyText: {
-    ...typography.body.small,
-    color: '#64748B',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  modalEmptyActions: {
-    gap: 8,
-    width: '100%',
-  },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
+  checkboxChecked: { backgroundColor: colors.primaryDark, borderColor: colors.primaryDark },
+  employeeInfo: { flex: 1 },
+  employeeName: { fontSize: 15, color: colors.textPrimary, fontWeight: '600' },
+  employeeEmail: { fontSize: 13, color: colors.textTertiary, marginTop: 2 },
+  modalEmpty: { alignItems: 'center', paddingVertical: 16 },
+  modalEmptyText: { fontSize: 14, color: colors.textTertiary, marginBottom: 12, textAlign: 'center' },
+  modalEmptyActions: { gap: 8, width: '100%' },
+  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' },
 });

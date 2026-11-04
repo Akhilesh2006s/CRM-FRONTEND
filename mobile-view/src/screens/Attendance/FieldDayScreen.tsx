@@ -8,7 +8,7 @@ import { WebButton, WebInput, WebLabel } from '../../ui/WebPrimitives';
 import { useAuth } from '../../context/AuthContext';
 import { navigateRoot } from '../../navigation/navigationRef';
 import MissedExitCard from '../../components/MissedExitCard';
-import { colors, radii } from '../../theme/colors';
+import { colors } from '../../theme/colors';
 import { apiService } from '../../services/api';
 import { getCurrentLocation } from '../../services/location';
 import { takeLivePhoto } from '../../services/photo';
@@ -197,7 +197,7 @@ export default function FieldDayScreen() {
   return (
     <ScreenShell
       title="My Field Day"
-      subtitle="Check in at each school, update the work done, and check out. GPS runs from Start Day to End Day."
+      subtitle="Check in at each school, update work, check out."
       loading={loading && !refreshing}
       refreshing={refreshing}
       onRefresh={() => {
@@ -519,50 +519,73 @@ function Stat({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.backgroundLight,
-    borderRadius: radii.md,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
+    borderColor: '#EEF2F7',
+    padding: 16,
     marginBottom: 12,
     gap: 8,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 1,
   },
-  cardTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
-  muted: { fontSize: 13, color: colors.textSecondary },
+  cardTitle: { flexShrink: 1, fontSize: 16, fontWeight: '700', color: colors.textPrimary },
+  muted: { fontSize: 13, color: colors.textTertiary, lineHeight: 18 },
   error: { fontSize: 13, color: colors.error },
-  hint: { fontSize: 13, color: colors.warning, marginBottom: 12 },
-  badge: { fontSize: 12, fontWeight: '600', color: colors.success },
-  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  hint: { fontSize: 13, color: '#B45309', backgroundColor: '#FEF3C7', borderRadius: 10, padding: 12, marginBottom: 12, overflow: 'hidden' },
+  badge: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#15803D',
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   statsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
   stat: {
     flexGrow: 1,
     minWidth: '22%',
     backgroundColor: colors.backgroundLight,
-    borderRadius: radii.md,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.border,
-    paddingVertical: 10,
+    borderColor: '#EEF2F7',
+    paddingVertical: 12,
     alignItems: 'center',
   },
   statValue: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
-  statLabel: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
+  statLabel: { fontSize: 12, color: colors.textTertiary, marginTop: 2 },
   chips: { flexDirection: 'row', gap: 8 },
-  wrapChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  smallChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border },
-  smallChipText: { color: colors.textPrimary, fontSize: 12, fontWeight: '600' },
-  activeCard: { borderColor: colors.success, borderWidth: 2 },
-  required: { fontSize: 12, fontWeight: '600', color: colors.warning },
-  link: { color: colors.primary, fontWeight: '600', textAlign: 'center', paddingVertical: 6 },
-  selected: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderRadius: radii.md, backgroundColor: colors.borderLight },
+  wrapChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
+  smallChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: '#DCE3EC', backgroundColor: colors.backgroundLight },
+  smallChipText: { color: colors.textPrimary, fontSize: 13, fontWeight: '600' },
+  activeCard: { borderColor: colors.success, borderWidth: 1.5, backgroundColor: '#F0FDF4' },
+  required: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#B45309',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  link: { color: colors.primaryDark, fontSize: 14, fontWeight: '600', textAlign: 'center', paddingVertical: 8 },
+  selected: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 10, backgroundColor: colors.accent },
   selectedName: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
-  result: { paddingVertical: 8, paddingHorizontal: 10, borderRadius: radii.md, borderWidth: 1, borderColor: colors.borderLight },
-  resultOn: { borderColor: colors.primary, backgroundColor: '#EFF6FF' },
+  result: { paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: '#EEF2F7', backgroundColor: colors.backgroundLight },
+  resultOn: { borderColor: colors.primary, backgroundColor: colors.accent },
   resultName: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
-  chip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border },
-  chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { color: colors.textPrimary, fontWeight: '600' },
+  chip: { flex: 1, alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: '#DCE3EC' },
+  chipOn: { backgroundColor: colors.primaryDark, borderColor: colors.primaryDark },
+  chipText: { color: colors.textPrimary, fontSize: 14, fontWeight: '600' },
   chipTextOn: { color: '#fff' },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: 6 },
-  timelineRow: { flexDirection: 'row', gap: 10, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
+  timelineRow: { flexDirection: 'row', gap: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
   timelineIcon: { fontSize: 18 },
   timelineTitle: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
 });

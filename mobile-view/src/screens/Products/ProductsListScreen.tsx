@@ -15,7 +15,8 @@ import { colors } from '../../theme/colors';
 import { typography } from '../../theme/typography';
 import { apiService } from '../../services/api';
 import ScreenShell from '../../ui/ScreenShell';
-import { WebInput } from '../../ui/WebPrimitives';
+import { WebInput, WebButton } from '../../ui/WebPrimitives';
+import { Card, CardTitle, InfoRow, ChipRow, ActionRow, EmptyState } from '../../ui/Kit';
 import { useAuth } from '../../context/AuthContext';
 
 type Product = {
@@ -45,15 +46,6 @@ function formatList(items?: string[] | string | null) {
   if (Array.isArray(items)) return items.length ? items.join(', ') : '-';
   if (typeof items === 'string' && items.trim()) return items;
   return '-';
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.infoRow}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value}</Text>
-    </View>
-  );
 }
 
 export default function ProductsListScreen({ navigation }: any) {
@@ -118,9 +110,22 @@ export default function ProductsListScreen({ navigation }: any) {
     }
   };
 
-  const filtered = products.filter((p) =>
-    (p.productName || '').toLowerCase().includes(searchTerm.toLowerCase()),
-  );
+  const words = searchTerm.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const filtered = products.filter((p) => {
+    if (!words.length) return true;
+    const text = [
+      p.productName,
+      formatList(p.productLevels),
+      p.hasSubjects ? formatList(p.subjects) : '',
+      p.hasSpecs ? formatList(p.specs) : '',
+      p.hasCategory ? formatList(p.categories) : '',
+      p.prodStatus === 1 ? 'available' : 'not available',
+      formatCreatedDate(p.createdAt),
+    ]
+      .join(' ')
+      .toLowerCase();
+    return words.every((w) => text.includes(w));
+  });
 
   return (
     <ScreenShell
@@ -128,115 +133,62 @@ export default function ProductsListScreen({ navigation }: any) {
       loading={loading && !refreshing}
       refreshing={refreshing}
       onRefresh={onRefresh}
-      noScroll
       headerRight={
         <TouchableOpacity
           onPress={() => navigation.navigate('ProductNew')}
           hitSlop={8}
-          style={styles.headerAdd}
+          accessibilityLabel="Add Product"
         >
-          <Ionicons name="add" size={24} color={colors.primary} />
+          <Ionicons name="add-circle" size={28} color={colors.primary} />
         </TouchableOpacity>
       }
     >
-      <View style={styles.filterContainer}>
-        <WebInput
-          style={styles.searchInput}
-          value={searchTerm}
-          onChangeText={setSearchTerm}
-          placeholder="Search products..."
-        />
-        <View style={styles.filterTabs}>
-          {(['all', '1', '0'] as const).map((filterType) => (
-            <TouchableOpacity
-              key={filterType}
-              style={[styles.filterTab, statusFilter === filterType && styles.filterTabActive]}
-              onPress={() => setStatusFilter(filterType)}
-            >
-              <Text
-                style={[
-                  styles.filterTabText,
-                  statusFilter === filterType && styles.filterTabTextActive,
-                ]}
-              >
-                {filterType === 'all' ? 'All' : filterType === '1' ? 'Available' : 'Not Available'}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
+      <WebInput
+        value={searchTerm}
+        onChangeText={setSearchTerm}
+        placeholder="Search name, level, deliverables, specs, series..."
+        autoCorrect={false}
+      />
+      <ChipRow
+        items={[
+          { key: 'all', label: 'All' },
+          { key: '1', label: 'Available' },
+          { key: '0', label: 'Not Available' },
+        ]}
+        value={statusFilter}
+        onChange={(k: string) => setStatusFilter(k as 'all' | '1' | '0')}
+      />
+      <View style={{ height: 12 }} />
 
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={styles.contentContainer}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      >
-        {filtered.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No products found</Text>
-          </View>
-        ) : (
-          filtered.map((product) => {
-            const available = product.prodStatus === 1;
-            return (
-              <View key={product._id} style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <Text style={styles.productName}>{product.productName || 'N/A'}</Text>
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      { backgroundColor: available ? '#DCFCE7' : '#F1F5F9' },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.statusBadgeText,
-                        { color: available ? '#15803D' : '#64748B' },
-                      ]}
-                    >
-                      {available ? 'Available' : 'Not Available'}
-                    </Text>
-                  </View>
-                </View>
-
-                <InfoRow label="Term / Level" value={formatList(product.productLevels)} />
-                <InfoRow
-                  label="Deliverables"
-                  value={
-                    product.hasSubjects ? formatList(product.subjects) : '-'
-                  }
+      {filtered.length === 0 ? (
+        <EmptyState icon="📦" title="No products found" />
+      ) : (
+        filtered.map((product) => {
+          const available = product.prodStatus === 1;
+          return (
+            <Card key={product._id}>
+              <CardTitle
+                title={product.productName || 'N/A'}
+                badge={available ? 'Available' : 'Not Available'}
+                tone={available ? 'success' : 'neutral'}
+              />
+              <InfoRow label="Term / Level" value={formatList(product.productLevels)} />
+              <InfoRow label="Deliverables" value={product.hasSubjects ? formatList(product.subjects) : '-'} />
+              <InfoRow label="Specs" value={product.hasSpecs ? formatList(product.specs) : '-'} />
+              <InfoRow label="Series" value={product.hasCategory ? formatList(product.categories) : '-'} />
+              <InfoRow label="Created" value={formatCreatedDate(product.createdAt)} />
+              <ActionRow>
+                <WebButton
+                  title="Edit"
+                  variant="outline"
+                  onPress={() => navigation.navigate('ProductEdit', { id: product._id })}
                 />
-                <InfoRow
-                  label="Specs"
-                  value={product.hasSpecs ? formatList(product.specs) : '-'}
-                />
-                <InfoRow
-                  label="Series"
-                  value={product.hasCategory ? formatList(product.categories) : '-'}
-                />
-                <InfoRow label="Created Date" value={formatCreatedDate(product.createdAt)} />
-
-                <View style={styles.actionRow}>
-                  <TouchableOpacity
-                    style={styles.editBtn}
-                    onPress={() => navigation.navigate('ProductEdit', { id: product._id })}
-                  >
-                    <Ionicons name="create-outline" size={16} color="#FFFFFF" />
-                    <Text style={styles.editBtnText}>Edit</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.deleteBtn}
-                    onPress={() => handleDelete(product)}
-                  >
-                    <Ionicons name="trash-outline" size={16} color="#FFFFFF" />
-                    <Text style={styles.deleteBtnText}>Delete</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            );
-          })
-        )}
-      </ScrollView>
+                <WebButton title="Delete" variant="destructive" onPress={() => handleDelete(product)} />
+              </ActionRow>
+            </Card>
+          );
+        })
+      )}
 
       <Modal visible={!!productToDelete} transparent animationType="fade" onRequestClose={() => !deleting && setProductToDelete(null)}>
         <View style={styles.modalOverlay}>
@@ -246,12 +198,12 @@ export default function ProductsListScreen({ navigation }: any) {
               Are you sure you want to delete “{productToDelete?.productName || 'this product'}”?
             </Text>
             <View style={styles.confirmActions}>
-              <TouchableOpacity style={styles.cancelButton} onPress={() => setProductToDelete(null)} disabled={deleting}>
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.confirmDeleteButton, deleting && styles.confirmDeleteButtonDisabled]} onPress={confirmDelete} disabled={deleting}>
-                {deleting ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.confirmDeleteButtonText}>Delete</Text>}
-              </TouchableOpacity>
+              <View style={{ flex: 1 }}>
+                <WebButton title="Cancel" variant="outline" onPress={() => setProductToDelete(null)} disabled={deleting} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <WebButton title="Delete" variant="destructive" onPress={confirmDelete} loading={deleting} disabled={deleting} />
+              </View>
             </View>
           </View>
         </View>
@@ -261,88 +213,14 @@ export default function ProductsListScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  headerAdd: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15,23,42,0.45)',
     justifyContent: 'center',
-  },
-  filterContainer: {
-    backgroundColor: '#FFFFFF',
     padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
   },
-  searchInput: { marginBottom: 12 },
-  filterTabs: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  filterTab: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#F1F5F9',
-  },
-  filterTabActive: { backgroundColor: colors.primary },
-  filterTabText: { ...typography.label.medium, color: colors.textSecondary },
-  filterTabTextActive: { color: '#FFFFFF', fontWeight: '600' },
-  content: { flex: 1 },
-  contentContainer: { padding: 16, paddingBottom: 32 },
-  emptyContainer: { paddingVertical: 60, alignItems: 'center' },
-  emptyText: { ...typography.heading.h3, color: colors.textSecondary },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
-    marginBottom: 12,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 10,
-  },
-  productName: { ...typography.heading.h3, color: colors.textPrimary, flex: 1 },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  statusBadgeText: { ...typography.label.small, fontWeight: '600' },
-  infoRow: { flexDirection: 'row', marginBottom: 6, gap: 8 },
-  infoLabel: { width: 100, ...typography.body.small, color: colors.textSecondary },
-  infoValue: { flex: 1, ...typography.body.medium, color: colors.textPrimary },
-  editBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#2563EB',
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 8,
-  },
-  editBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
-  actionRow: {
-    marginTop: 12,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  deleteBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#DC2626',
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 8,
-  },
-  deleteBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
-  modalOverlay: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: 'rgba(15, 23, 42, 0.55)' },
-  confirmDialog: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20 },
-  confirmTitle: { ...typography.heading.h3, color: colors.textPrimary, marginBottom: 10 },
-  confirmMessage: { ...typography.body.medium, color: colors.textSecondary, lineHeight: 21 },
-  confirmActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 22 },
-  cancelButton: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: colors.border },
-  cancelButtonText: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
-  confirmDeleteButton: { minWidth: 82, minHeight: 40, paddingHorizontal: 16, borderRadius: 8, backgroundColor: '#DC2626', justifyContent: 'center', alignItems: 'center' },
-  confirmDeleteButtonDisabled: { opacity: 0.6 },
-  confirmDeleteButtonText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
+  confirmDialog: { backgroundColor: colors.backgroundLight, borderRadius: 14, padding: 16 },
+  confirmTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary, marginBottom: 8 },
+  confirmMessage: { fontSize: 15, color: colors.textSecondary, marginBottom: 16 },
+  confirmActions: { flexDirection: 'row', gap: 8 },
 });
