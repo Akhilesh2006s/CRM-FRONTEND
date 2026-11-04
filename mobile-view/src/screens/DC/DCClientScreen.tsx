@@ -23,6 +23,7 @@ import { isTransportComplete, TRANSPORT_REQUIRED_MESSAGE } from '../../utils/dcT
 import { showAlert, showConfirm } from '../../utils/showAlert';
 import { navigateRoot } from '../../navigation/navigationRef';
 import SchoolOverview from '../../components/SchoolOverview';
+import SchoolVisitActions, { useFieldDay } from '../../components/SchoolVisitActions';
 
 /** Academic years run April to March, e.g. 2026-27. */
 const academicYearFor = (date: string | Date = new Date()) => {
@@ -36,6 +37,7 @@ import { resolveMyClientsDcStatus } from '../../utils/myClientsDcStatus';
 
 export default function DCClientScreen({ navigation }: any) {
   const { user } = useAuth();
+  const fieldDay = useFieldDay();
   const [dcs, setDcs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -515,6 +517,14 @@ export default function DCClientScreen({ navigation }: any) {
                     PO can only be changed before requesting DC. Use View Invoice for clients in the DC process.
                   </Text>
                 )}
+                <SchoolVisitActions
+                  day={fieldDay.day}
+                  reload={fieldDay.reload}
+                  school={{
+                    schoolName: dc.customerName || dc.dcOrderId?.school_name || 'School',
+                    schoolCode: getSchoolCode(dc) !== '-' ? getSchoolCode(dc) : undefined,
+                  }}
+                />
               </View>
             );
           })

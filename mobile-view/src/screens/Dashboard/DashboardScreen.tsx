@@ -140,7 +140,7 @@ export default function DashboardScreen({ navigation }: { navigation?: any }) {
     return (
       <View style={styles.container}>
         <BirthdayWishCard role={user?.role} style={styles.wishWrap} />
-        <ProductManagerScreen embedded managerId={user._id} navigation={navigation} />
+        <ProductManagerScreen embedded managerId={user._id} navigation={navigation} header={<AttendanceCard />} />
       </View>
     );
   }

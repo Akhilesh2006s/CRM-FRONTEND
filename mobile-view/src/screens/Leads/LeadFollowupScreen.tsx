@@ -20,6 +20,7 @@ import MessageBanner from '../../components/MessageBanner';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
 import { navigateRoot } from '../../navigation/navigationRef';
+import SchoolVisitActions, { useFieldDay } from '../../components/SchoolVisitActions';
 import {
   DROPPED_LINE_STATUSES,
   PRICED_LINE_STATUSES,
@@ -196,6 +197,7 @@ const leadMatches = (l: any, query: string) => {
 
 export default function LeadFollowupScreen({ navigation }: any) {
   const { user } = useAuth();
+  const fieldDay = useFieldDay();
   const seesAllFollowups =
     user?.role === 'Super Admin' || Boolean((user as any)?.isSuperAdmin);
   const [allLeads, setAllLeads] = useState<any[]>([]);
@@ -909,6 +911,13 @@ export default function LeadFollowupScreen({ navigation }: any) {
                   >
                     <Text style={styles.actionButtonText}>View History</Text>
                   </TouchableOpacity>
+                  <View style={{ alignSelf: 'stretch' }}>
+                    <SchoolVisitActions
+                      day={fieldDay.day}
+                      reload={fieldDay.reload}
+                      school={{ schoolName: lead.school_name || 'School', schoolCode: lead.school_code || undefined, leadId: lead._id }}
+                    />
+                  </View>
                 </View>
               </View>
             );

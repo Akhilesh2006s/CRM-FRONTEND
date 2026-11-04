@@ -186,25 +186,14 @@ export default function DailySelfieCheckInScreen({ onDone, onClose }: { onDone: 
         )
       )}
 
-      <Text style={styles.label}>Location</Text>
-      <View style={styles.row}>
-        <Text style={[styles.muted, { flex: 1 }]}>
-          {locating
-            ? 'Getting your location…'
-            : location
-              ? `${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}`
-              : 'Location not captured'}
-        </Text>
-        <TouchableOpacity style={styles.smallBtn} onPress={locate} disabled={locating}>
-          <Text style={styles.secondaryText}>{location ? 'Refresh' : 'Capture'}</Text>
-        </TouchableOpacity>
-      </View>
-
-      <Text style={styles.label}>Area</Text>
-      <Text style={[styles.input, styles.inputLocked]}>
-        {locating ? 'Detecting from your location…' : [town, pincode].filter(Boolean).join(' - ') || (location ? 'Taken from your GPS location' : '—')}
-      </Text>
-      <Text style={styles.muted}>Taken from your phone's location. Nothing to type.</Text>
+      {!locating && !location ? (
+        <View style={styles.row}>
+          <Text style={[styles.muted, { flex: 1 }]}>Could not get your location. Turn on GPS, then tap Try again.</Text>
+          <TouchableOpacity style={styles.smallBtn} onPress={locate}>
+            <Text style={styles.secondaryText}>Try again</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       <Text style={styles.label}>Starting from</Text>
       <View style={styles.chips}>

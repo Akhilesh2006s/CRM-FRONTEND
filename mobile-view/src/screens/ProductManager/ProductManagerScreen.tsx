@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { apiService } from '../../services/api';
 import { colors } from '../../theme/colors';
 import ScreenShell from '../../ui/ScreenShell';
@@ -24,7 +24,8 @@ type Dashboard = {
   trainers: Array<{ _id: string; name: string; completionRate: number; completed: number; feedbackOnFile: number }>;
 };
 
-export default function ProductManagerScreen({ embedded, managerId }: { embedded?: boolean; managerId?: string; navigation?: any }) {
+export default function ProductManagerScreen({ embedded, managerId, header }: { embedded?: boolean; managerId?: string; navigation?: any; header?: React.ReactNode }) {
+  const [showSchools, setShowSchools] = useState(!embedded);
   const { user } = useAuth();
   const id = managerId || user?._id;
   const [data, setData] = useState<Dashboard | null>(null);
@@ -51,19 +52,25 @@ export default function ProductManagerScreen({ embedded, managerId }: { embedded
     };
   }, [id]);
 
-  const body = loading ? (
-    <ActivityIndicator color={colors.primary} style={{ marginTop: 24 }} />
-  ) : error ? (
-    <Text style={styles.error}>{error}</Text>
-  ) : !data ? null : (
+  const body = loading || error || !data ? (
     <ScrollView contentContainerStyle={styles.content}>
+      {header}
+      {loading ? <ActivityIndicator color={colors.primary} style={{ marginTop: 24 }} /> : error ? <Text style={styles.error}>{error}</Text> : null}
+    </ScrollView>
+  ) : (
+    <ScrollView contentContainerStyle={styles.content}>
+      {header}
       <PendingAdvanceApprovalsCard />
       <Text style={styles.title}>{data.manager?.name || 'Product Manager'}</Text>
       <Text style={styles.meta}>
         {(data.products || []).map((item) => item.name).join(', ') || 'No products assigned yet'}
       </Text>
-      <Text style={styles.section}>Schools ({data.schools?.length || 0})</Text>
-      {(data.schools || []).map((school) => (
+      <TouchableOpacity onPress={() => setShowSchools((v) => !v)}>
+        <Text style={styles.section}>
+          Schools ({data.schools?.length || 0}) <Text style={{ color: colors.primary, fontSize: 14 }}>{showSchools ? 'Hide ▲' : 'Show ▼'}</Text>
+        </Text>
+      </TouchableOpacity>
+      {(showSchools ? data.schools || [] : []).map((school) => (
         <View key={`${school.schoolCode}-${school.schoolName}`} style={styles.card}>
           <Text style={styles.cardTitle}>{school.schoolName}</Text>
           <Text style={styles.meta}>
