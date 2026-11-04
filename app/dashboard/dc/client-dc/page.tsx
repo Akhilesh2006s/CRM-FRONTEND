@@ -67,6 +67,7 @@ import {
   type RequestDcTermRouting,
 } from '@/lib/clientDcTermPartition'
 import { useRouter } from 'next/navigation'
+import SchoolOverview from '@/components/SchoolOverviewPanel'
 
 /** Academic years run April to March, e.g. 2026-27. */
 const academicYearFor = (date: string | Date = new Date()) => {
@@ -614,6 +615,8 @@ export default function ClientDCPage() {
 
   // New academic year for this school: a new PO row; earlier years' POs stay as they are.
   const [addingYear, setAddingYear] = useState<string | null>(null)
+  // Full information for one client: DCs, payments, returns, trainings, visits.
+  const [overviewFor, setOverviewFor] = useState<{ id: string; name: string } | null>(null)
   const addNextYearPo = async (d: any) => {
     const orderId = typeof d.dcOrderId === 'object' ? d.dcOrderId?._id : d.dcOrderId || (d._isConvertedLead ? d._id : null)
     if (!orderId) return
@@ -3742,6 +3745,20 @@ export default function ClientDCPage() {
                         </TableCell>
                         <TableCell className="text-center">
                           {!d._isConvertedLead && d.dcType !== 'shortage' && <Link className="mb-2 block text-xs font-medium text-blue-700 underline" href={`/dashboard/dc/grid?dc=${d._id}`}>Main DC / Sub DC history</Link>}
+                          {d.dcOrderId || d._isConvertedLead ? (
+                            <button
+                              type="button"
+                              className="mb-2 block w-full rounded border border-sky-600 px-2 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-50"
+                              onClick={() =>
+                                setOverviewFor({
+                                  id: String((typeof d.dcOrderId === 'object' ? d.dcOrderId?._id : d.dcOrderId) || d._id),
+                                  name: d.customerName || d.dcOrderId?.school_name || 'School',
+                                })
+                              }
+                            >
+                              Full info
+                            </button>
+                          ) : null}
                           {d.dcType !== 'shortage' && (d.dcOrderId || d._isConvertedLead) ? (
                             <button
                               type="button"
@@ -5919,6 +5936,15 @@ export default function ClientDCPage() {
               Close
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={Boolean(overviewFor)} onOpenChange={(open) => !open && setOverviewFor(null)}>
+        <DialogContent className="max-h-[90vh] max-w-5xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{overviewFor?.name}</DialogTitle>
+            <DialogDescription>DCs, payments, returns, trainings, services and visits for this school.</DialogDescription>
+          </DialogHeader>
+          {overviewFor ? <SchoolOverview leadId={overviewFor.id} /> : null}
         </DialogContent>
       </Dialog>
     </div>

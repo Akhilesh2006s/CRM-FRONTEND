@@ -41,26 +41,14 @@ export default function AttendanceCard({ onChange }: { onChange?: () => void } =
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [gps, setGps] = useState<LiveGpsState | null>(null);
-  const [forgot, setForgot] = useState(false);
   const [currentAttendance, setCurrentAttendance] = useState<any>(null);
-  const [isFirstTime, setIsFirstTime] = useState(false);
+  // A day left open from an earlier date is ended by entering the time; today's day uses End Day.
+  const oldDay = Boolean(currentAttendance) && istDate(currentAttendance.startTime) !== istDate(new Date());
+  // Start Day (selfie) is taken once, right after login (CheckInGate); the card only opens it on tap.
+  const isFirstTime = false;
 
   useEffect(() => {
     checkCurrentAttendance();
-    if (user) {
-      if (!user.hasCompletedFirstTimeSetup) {
-        // Only auto-open modal for first-time users (not already open)
-        setIsFirstTime(true);
-        if (!showModal) {
-          setShowModal(true);
-        }
-      } else {
-        // User has completed setup
-        setIsFirstTime(false);
-        // Close modal if it was open for first-time setup
-        // (user.hasCompletedFirstTimeSetup is true in this else block)
-      }
-    }
   }, [user]);
 
   const checkCurrentAttendance = async () => {
@@ -95,7 +83,6 @@ export default function AttendanceCard({ onChange }: { onChange?: () => void } =
     } catch (e: any) {
       throw new Error(e?.response?.data?.message || e?.message || 'Could not save.');
     }
-    setForgot(false);
     await stopDayTracking();
     await checkCurrentAttendance();
     onChange?.();
@@ -140,7 +127,7 @@ export default function AttendanceCard({ onChange }: { onChange?: () => void } =
         <View style={styles.cardHeader}>
           <Text style={styles.cardIcon}>⏰</Text>
           <Text style={[styles.cardTitle, { flex: 1 }]}>Attendance</Text>
-          {currentAttendance ? (
+          {currentAttendance && !oldDay ? (
             <TouchableOpacity style={styles.endDayTop} onPress={handleCheckOut} disabled={loading} activeOpacity={0.7}>
               <Text style={styles.checkOutButtonText}>{loading ? 'Ending…' : 'End Day'}</Text>
             </TouchableOpacity>
@@ -155,16 +142,13 @@ export default function AttendanceCard({ onChange }: { onChange?: () => void } =
             <Text style={styles.statusTime}>
               Started: {new Date(currentAttendance.startTime).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
             </Text>
-            {istDate(currentAttendance.startTime) !== istDate(new Date()) ? (
-              <Text style={styles.oldDay}>This day was not ended. Enter the time you ended it below.</Text>
-            ) : null}
-            <TouchableOpacity onPress={() => setForgot((f) => !f)}>
-              <Text style={styles.forgotLink}>{forgot ? 'Cancel' : 'Forgot to End Day? Enter the time'}</Text>
-            </TouchableOpacity>
-            {forgot ? (
-              <View style={{ alignSelf: 'stretch', marginTop: 8 }}>
-                <MissedExitCard title="End Day" startAt={currentAttendance.startTime} onSubmit={reportMissedEndDay} />
-              </View>
+            {oldDay ? (
+              <>
+                <Text style={styles.oldDay}>This day was not ended. Enter the time you ended it.</Text>
+                <View style={{ alignSelf: 'stretch' }}>
+                  <MissedExitCard title="End Day" startAt={currentAttendance.startTime} onSubmit={reportMissedEndDay} />
+                </View>
+              </>
             ) : null}
           </View>
         ) : (
@@ -208,7 +192,6 @@ const styles = StyleSheet.create({
   gpsWarnText: { color: '#7F1D1D', fontSize: 13, marginTop: 4 },
   endDayTop: { backgroundColor: colors.error, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 18 },
   oldDay: { color: '#B45309', fontWeight: '600', fontSize: 13, marginBottom: 12 },
-  forgotLink: { color: '#2563EB', fontWeight: '600', fontSize: 14 },
   gpsOn: { color: '#15803D', fontWeight: '600', fontSize: 13, marginBottom: 12 },
   card: {
     backgroundColor: colors.backgroundLight,

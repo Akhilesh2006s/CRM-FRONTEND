@@ -410,7 +410,7 @@ export default function DCClientScreen({ navigation }: any) {
                     <Text style={styles.customerName} numberOfLines={2}>
                       {dc.customerName || dc.dcOrderId?.school_name || 'Unknown Customer'}
                     </Text>
-                    <Text style={styles.fullInfoLink}>{openId === dc._id ? 'Hide full info ▲' : 'Tap for full info ▼'}</Text>
+                    <Text style={styles.fullInfoLink}>{openId === dc._id ? 'Hide ▲' : 'DCs, payments, returns, trainings & visits ▼'}</Text>
                   </View>
                   <View style={styles.statusBadge}>
                     <Text style={styles.statusText}>{statusLabel}</Text>

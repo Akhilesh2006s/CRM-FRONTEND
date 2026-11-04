@@ -706,7 +706,7 @@ export default function EditLeadPage() {
           </div>
           <div>
             <Label>School code</Label>
-            <Input className="bg-neutral-100" value={loadedLead?.school_code || 'Assigned automatically from the pincode, zone, and cluster'} readOnly />
+            <Input className="bg-neutral-100" value={loadedLead?.school_code || 'Auto-generated'} readOnly />
           </div>
           <div>
             <Label>School Type</Label>

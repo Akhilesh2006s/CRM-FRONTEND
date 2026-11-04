@@ -572,7 +572,7 @@ export default function NewSchoolPage() {
             <Label>School code</Label>
             <Input
               className="bg-neutral-100 text-neutral-700"
-              value="Assigned automatically from the pincode, zone, and cluster"
+              value="Auto-generated"
               readOnly
               disabled
             />

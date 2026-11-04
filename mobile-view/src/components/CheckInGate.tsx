@@ -22,7 +22,7 @@ type Missed = {
  * or End Day forgotten on an earlier day must first be filled in with a reason and exit time.
  */
 export default function CheckInGate({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, checkAuth } = useAuth();
   const exempt = !user || NO_CHECK_IN_ROLES.has(String(user.role || ''));
   const [state, setState] = useState<'checking' | 'missed' | 'needed' | 'done'>(exempt ? 'done' : 'checking');
   const [missed, setMissed] = useState<Missed | null>(null);
@@ -113,6 +113,8 @@ export default function CheckInGate({ children }: { children: React.ReactNode })
       <DailySelfieCheckInScreen
         onDone={() => {
           void startDayTracking();
+          // The server marks first-time setup done at check-in; refresh so nothing asks again.
+          void checkAuth().catch(() => undefined);
           setState('done');
         }}
       />

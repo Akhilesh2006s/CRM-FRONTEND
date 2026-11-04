@@ -568,7 +568,7 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
 
         <FormField
           label="School code"
-          value="Assigned automatically from the pincode, zone, and cluster"
+          value="Auto-generated"
           onChangeText={() => {}}
           editable={false}
         />
