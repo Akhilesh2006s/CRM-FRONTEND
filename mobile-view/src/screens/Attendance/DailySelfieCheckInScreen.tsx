@@ -16,15 +16,7 @@ import LogoutButton from '../../components/LogoutButton';
 import { apiService } from '../../services/api';
 import { getCurrentLocation, getPincodeFromLocation, getTownFromPincode } from '../../services/location';
 
-type Home = { latitude?: number; longitude?: number; address?: string };
-type Homes = { home1?: Home; home2?: Home };
 
-/** Field days start from Home 1 (address at joining), Home 2 (work location) or Others. */
-const START_LOCATIONS = [
-  { value: 'home1', label: 'Home 1' },
-  { value: 'home2', label: 'Home 2' },
-  { value: 'other', label: 'Others' },
-] as const;
 
 const ATTENDANCE_REASONS = [
   { label: 'Employee', value: 'employee' },
@@ -52,22 +44,10 @@ export default function DailySelfieCheckInScreen({ onDone, onClose }: { onDone: 
   const [town, setTown] = useState('');
   const [remarks, setRemarks] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [homes, setHomes] = useState<Homes>({});
-  const [startType, setStartType] = useState<'' | 'home1' | 'home2' | 'other'>('');
+  // Home 1 (address on the employee form) / Home 2 / Others is decided by the server from GPS.
+  // Details are asked only when the employee is away from both homes.
+  const [needDetails, setNeedDetails] = useState(false);
   const [startDetails, setStartDetails] = useState('');
-
-  useEffect(() => {
-    apiService
-      .get('/field-day/my-homes')
-      .then((res: any) => setHomes((res?.data ?? res) || {}))
-      .catch(() => setHomes({}));
-  }, []);
-
-  const homeNote = (key: 'home1' | 'home2') => {
-    const home = homes[key];
-    if (home?.latitude == null) return 'Not saved yet. It is saved from this Start Day.';
-    return home.address ? `Saved: ${home.address}` : 'Saved. Start within 200 m of it.';
-  };
 
   const locate = async () => {
     setLocating(true);
@@ -115,8 +95,8 @@ export default function DailySelfieCheckInScreen({ onDone, onClose }: { onDone: 
   const submit = async () => {
     if (!photo) return Alert.alert('Selfie needed', 'Take a selfie to check in.');
     if (!location) return Alert.alert('Location needed', 'Turn on location (GPS) on your phone, then tap Refresh.');
-    if (startType === 'other' && startDetails.trim().length < 3) {
-      return Alert.alert('Location details needed', 'Enter the hotel name, address or location details.');
+    if (needDetails && startDetails.trim().length < 3) {
+      return Alert.alert('Where are you starting from?', 'Enter the hotel name, address or place.');
     }
     setSubmitting(true);
     try {
@@ -130,13 +110,19 @@ export default function DailySelfieCheckInScreen({ onDone, onClose }: { onDone: 
         town: town.trim(),
         remarks: remarks.trim(),
         // At the office this is ignored (office day); elsewhere the server asks for it.
-        startLocationType: startType,
-        startLocationDetails: startType === 'other' ? startDetails.trim() : '',
+        startLocationType: 'auto',
+        startLocationDetails: needDetails ? startDetails.trim() : '',
         source: 'login_selfie',
       });
       onDone();
     } catch (error: any) {
-      Alert.alert('Error', error?.message || 'Failed to check in');
+      const message = error?.message || 'Failed to check in';
+      if (/away from Home 1 and Home 2/i.test(message)) {
+        setNeedDetails(true);
+        Alert.alert('Where are you starting from?', 'You are away from Home 1 and Home 2. Enter the hotel, address or place, then tap Start Day again.');
+        return;
+      }
+      Alert.alert('Error', message);
     } finally {
       setSubmitting(false);
     }
@@ -195,31 +181,19 @@ export default function DailySelfieCheckInScreen({ onDone, onClose }: { onDone: 
         </View>
       ) : null}
 
-      <Text style={styles.label}>Starting from</Text>
-      <View style={styles.chips}>
-        {START_LOCATIONS.map((s) => (
-          <TouchableOpacity
-            key={s.value}
-            style={[styles.chip, startType === s.value && styles.chipOn]}
-            onPress={() => setStartType(s.value)}
-          >
-            <Text style={[styles.chipText, startType === s.value && styles.chipTextOn]}>{s.label}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      {startType === 'home1' || startType === 'home2' ? (
-        <Text style={[styles.muted, { marginTop: 6 }]}>{homeNote(startType)}</Text>
+      {needDetails ? (
+        <>
+          <Text style={styles.label}>Where are you starting from? *</Text>
+          <Text style={styles.muted}>You are away from Home 1 and Home 2.</Text>
+          <TextInput
+            style={[styles.input, { marginTop: 8, minHeight: 60 }]}
+            value={startDetails}
+            onChangeText={setStartDetails}
+            placeholder="Hotel name, address or place"
+            multiline
+          />
+        </>
       ) : null}
-      {startType === 'other' ? (
-        <TextInput
-          style={[styles.input, { marginTop: 8, minHeight: 60 }]}
-          value={startDetails}
-          onChangeText={setStartDetails}
-          placeholder="Hotel name, address or location details"
-          multiline
-        />
-      ) : null}
-      <Text style={[styles.muted, { marginTop: 6, fontSize: 12 }]}>Not needed when you start at the office.</Text>
 
       <Text style={styles.label}>Reason</Text>
       <View style={styles.chips}>

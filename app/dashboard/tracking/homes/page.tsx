@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { apiRequest } from '@/lib/api'
 import { toast } from 'sonner'
 
-type Home = { latitude?: number; longitude?: number; address?: string; radiusM?: number; source?: string; setAt?: string }
+type Home = { latitude?: number; longitude?: number; address?: string; radiusM?: number; source?: string; approx?: boolean; setAt?: string }
 type Employee = {
   _id: string
   name?: string
@@ -93,7 +93,8 @@ export default function HomeLocationsPage() {
           <div>
             <div>{h.address || `${h.latitude.toFixed(5)}, ${h.longitude?.toFixed(5)}`}</div>
             <div className="text-xs text-neutral-500">
-              {h.radiusM || 200} m · {h.source === 'admin' ? 'set by Admin' : 'from first Start Day'} ·{' '}
+              {h.radiusM || 300} m ·{' '}
+              {h.source === 'admin' ? 'set by Admin' : h.source === 'address' ? (h.approx ? 'from employee address (approximate until first Start Day)' : 'from employee address, confirmed at Start Day') : 'from first Start Day'} ·{' '}
               <a className="text-sky-700 underline" target="_blank" rel="noreferrer" href={`https://www.google.com/maps?q=${h.latitude},${h.longitude}`}>
                 Map
               </a>
