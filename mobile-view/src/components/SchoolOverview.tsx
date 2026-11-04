@@ -18,7 +18,10 @@ const date = (v?: string) => (v ? new Date(v).toLocaleDateString('en-IN', { day:
 const money = (n?: number) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
 
 /** All of one school's information, shown inside the school's card in My Schools. */
-export default function SchoolOverview({ leadId, onEdit }: { leadId: string; onEdit?: () => void }) {
+export type OverviewSection = 'details' | 'deals' | 'dcs' | 'payments' | 'returns' | 'trainings' | 'visits';
+
+export default function SchoolOverview({ leadId, onEdit, only }: { leadId: string; onEdit?: () => void; only?: OverviewSection }) {
+  const show = (key: OverviewSection) => !only || only === key;
   const [data, setData] = useState<Overview | null>(null);
   const [error, setError] = useState('');
 
@@ -63,6 +66,7 @@ export default function SchoolOverview({ leadId, onEdit }: { leadId: string; onE
 
   return (
     <View style={styles.wrap}>
+      {show('details') ? (
       <Section title="School details">
         {details
           .filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== '')
@@ -87,8 +91,10 @@ export default function SchoolOverview({ leadId, onEdit }: { leadId: string; onE
           </TouchableOpacity>
         ) : null}
       </Section>
+      ) : null}
 
-      <Section title={`Deals (${data.orders.length})`}>
+      {show('deals') ? (
+      <Section title={`Deals / POs (${data.orders.length})`}>
         {data.orders.map((o) => (
           <Line
             key={o._id}
@@ -97,19 +103,25 @@ export default function SchoolOverview({ leadId, onEdit }: { leadId: string; onE
           />
         ))}
       </Section>
+      ) : null}
 
+      {show('dcs') ? (
       <Section title={`DCs / Material & Kits (${data.dcs.length})`}>
         {data.dcs.map((d) => (
           <Line key={d._id} main={`${d.dc_code || 'DC'} · ${d.status || ''}`} sub={date(d.createdAt)} />
         ))}
       </Section>
+      ) : null}
 
+      {show('payments') ? (
       <Section title={`Payments (${data.payments.length})`}>
         {data.payments.map((p) => (
           <Line key={p._id} main={`${money(p.amount)} · ${p.status || ''}`} sub={[p.paymentMethod, date(p.paymentDate || p.createdAt)].filter(Boolean).join(' · ')} />
         ))}
       </Section>
+      ) : null}
 
+      {show('visits') ? (
       <Section title={`Visits (${data.visits.length})`}>
         {data.visits.map((v) => (
           <Line
@@ -119,13 +131,17 @@ export default function SchoolOverview({ leadId, onEdit }: { leadId: string; onE
           />
         ))}
       </Section>
+      ) : null}
 
+      {show('returns') ? (
       <Section title={`Returns (${data.returns.length})`}>
         {data.returns.map((r) => (
           <Line key={r._id} main={`Return #${r.returnNumber} · ${r.status || ''}`} sub={date(r.createdAt)} />
         ))}
       </Section>
+      ) : null}
 
+      {show('trainings') ? (
       <Section title={`Trainings & Services (${data.trainings.length + data.services.length})`}>
         {data.trainings.map((t) => (
           <Line key={t._id} main={`Training · ${t.subject} · ${t.status}`} sub={[t.term, date(t.trainingDate)].filter(Boolean).join(' · ')} />
@@ -134,6 +150,7 @@ export default function SchoolOverview({ leadId, onEdit }: { leadId: string; onE
           <Line key={s._id} main={`Service · ${s.subject} · ${s.status}`} sub={[s.term, date(s.serviceDate)].filter(Boolean).join(' · ')} />
         ))}
       </Section>
+      ) : null}
     </View>
   );
 }
@@ -158,7 +175,7 @@ function Line({ main, sub }: { main: string; sub?: string }) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { marginTop: 10, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 10, gap: 12 },
+  wrap: { marginTop: 8, backgroundColor: '#F8FAFC', borderRadius: 10, padding: 10, gap: 12 },
   section: { gap: 4 },
   sectionTitle: { fontSize: 14, fontWeight: '700', color: colors.primary, marginBottom: 2 },
   row: { flexDirection: 'row', gap: 8, paddingVertical: 2 },

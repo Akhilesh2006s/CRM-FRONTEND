@@ -146,14 +146,11 @@ export default function FieldDayScreen() {
   const onCheckIn = () =>
     run('entry', async () => {
       if (!school) throw new Error('Select the school first.');
-      const photo = await takeLivePhoto();
-      if (!photo) return;
       const here = await getCurrentLocation();
       await apiService.post('/field-day/visits/entry', {
         schoolName: school.schoolName,
         schoolCode: school.schoolCode,
         leadId: school.leadId,
-        photo,
         latitude: here.latitude,
         longitude: here.longitude,
         accuracy: here.accuracy,
@@ -165,11 +162,8 @@ export default function FieldDayScreen() {
   const onCheckOut = () =>
     run('exit', async () => {
       if (!day?.openVisit) return;
-      const photo = await takeLivePhoto();
-      if (!photo) return;
       const here = await getCurrentLocation();
       await apiService.post(`/field-day/visits/${day.openVisit._id}/exit`, {
-        photo,
         latitude: here.latitude,
         longitude: here.longitude,
         accuracy: here.accuracy,
@@ -321,7 +315,7 @@ export default function FieldDayScreen() {
                 {!searching && query.trim().length >= 2 && !schools.length ? <Text style={styles.muted}>No school found.</Text> : null}
               </>
             )}
-            <WebButton title="Check In (entry photo)" onPress={onCheckIn} loading={busy === 'entry'} disabled={!school} />
+            <WebButton title="Check In" onPress={onCheckIn} loading={busy === 'entry'} disabled={!school} />
           </View>
         )
       ) : null}

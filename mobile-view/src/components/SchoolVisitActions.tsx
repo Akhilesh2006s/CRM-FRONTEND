@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } fr
 import { useFocusEffect } from '@react-navigation/native';
 import { apiService } from '../services/api';
 import { getCurrentLocation } from '../services/location';
-import { takeLivePhoto } from '../services/photo';
 
 type OpenVisit = { _id: string; schoolName: string; schoolCode?: string; leadId?: string | null };
 export type FieldDayState = { checkedIn: boolean; fieldWorkAllowed: boolean; openVisit: OpenVisit | null } | null;
@@ -36,7 +35,7 @@ const sameSchool = (v: OpenVisit, s: VisitSchool) =>
   (norm(s.schoolCode) && norm(v.schoolCode) === norm(s.schoolCode)) ||
   (!norm(s.schoolCode) && norm(v.schoolName) === norm(s.schoolName));
 
-/** School visit Check In (entry photo) / Check Out (exit photo) right on a school card. */
+/** School visit Check In / Check Out right on a school card. */
 export default function SchoolVisitActions({ school, day, reload }: { school: VisitSchool; day: FieldDayState; reload: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);
   if (!day) return null;
@@ -55,14 +54,11 @@ export default function SchoolVisitActions({ school, day, reload }: { school: Vi
 
   const checkIn = () =>
     run(async () => {
-      const photo = await takeLivePhoto();
-      if (!photo) return;
       const here = await getCurrentLocation();
       await apiService.post('/field-day/visits/entry', {
         schoolName: school.schoolName,
         schoolCode: school.schoolCode,
         leadId: school.leadId,
-        photo,
         latitude: here.latitude,
         longitude: here.longitude,
         accuracy: here.accuracy,
@@ -72,11 +68,8 @@ export default function SchoolVisitActions({ school, day, reload }: { school: Vi
 
   const checkOut = (visit: OpenVisit) =>
     run(async () => {
-      const photo = await takeLivePhoto();
-      if (!photo) return;
       const here = await getCurrentLocation();
       await apiService.post(`/field-day/visits/${visit._id}/exit`, {
-        photo,
         latitude: here.latitude,
         longitude: here.longitude,
         accuracy: here.accuracy,
@@ -93,7 +86,7 @@ export default function SchoolVisitActions({ school, day, reload }: { school: Vi
   } else if (visit && sameSchool(visit, school)) {
     body = (
       <TouchableOpacity style={[styles.btn, styles.out]} onPress={() => checkOut(visit)} disabled={busy} activeOpacity={0.8}>
-        {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Check Out (exit photo)</Text>}
+        {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Check Out</Text>}
       </TouchableOpacity>
     );
   } else if (visit) {
@@ -101,7 +94,7 @@ export default function SchoolVisitActions({ school, day, reload }: { school: Vi
   } else {
     body = (
       <TouchableOpacity style={[styles.btn, styles.in]} onPress={checkIn} disabled={busy} activeOpacity={0.8}>
-        {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Check In (entry photo)</Text>}
+        {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Check In</Text>}
       </TouchableOpacity>
     );
   }

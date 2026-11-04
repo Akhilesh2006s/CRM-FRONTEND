@@ -11,6 +11,7 @@ import {
   TextInput,
   Modal,
   Image,
+  Linking,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { colors } from '../../theme/colors';
@@ -22,7 +23,18 @@ import { useAuth } from '../../context/AuthContext';
 import { isTransportComplete, TRANSPORT_REQUIRED_MESSAGE } from '../../utils/dcTransport';
 import { showAlert, showConfirm } from '../../utils/showAlert';
 import { navigateRoot } from '../../navigation/navigationRef';
-import SchoolOverview from '../../components/SchoolOverview';
+import SchoolOverview, { OverviewSection } from '../../components/SchoolOverview';
+
+/** School modules on each client card (same as the web's school info). */
+const MODULES: { key: OverviewSection; label: string }[] = [
+  { key: 'details', label: 'Details' },
+  { key: 'deals', label: 'POs' },
+  { key: 'dcs', label: 'Material/Kits' },
+  { key: 'payments', label: 'Payments' },
+  { key: 'returns', label: 'Returns' },
+  { key: 'trainings', label: 'Trainings' },
+  { key: 'visits', label: 'Visits' },
+];
 import SchoolVisitActions, { useFieldDay } from '../../components/SchoolVisitActions';
 
 /** Academic years run April to March, e.g. 2026-27. */
@@ -85,6 +97,27 @@ export default function DCClientScreen({ navigation }: any) {
   };
 
   const [openId, setOpenId] = useState<string | null>(null);
+  const [openSection, setOpenSection] = useState<OverviewSection>('details');
+
+  const orderOf = (dc: any) => (dc?.dcOrderId && typeof dc.dcOrderId === 'object' ? dc.dcOrderId : {});
+  const schoolName = (dc: any) => dc.customerName || orderOf(dc).school_name || 'Unknown school';
+  /** Address line: street address, area / town, pincode. */
+  const placeText = (dc: any) => {
+    const o = orderOf(dc);
+    const parts = [o.address || dc.customerAddress, o.area, o.location, o.city, o.pincode].map((v: any) => String(v || '').trim()).filter(Boolean);
+    return Array.from(new Set(parts)).join(', ');
+  };
+  /** Everything a user may search a school by. */
+  const searchText = (dc: any) => {
+    const o = orderOf(dc);
+    return [
+      schoolName(dc), o.school_code, o.dc_code, o.contact_person, o.contact_mobile, o.contact_mobile2, dc.customerPhone,
+      o.email, o.address, dc.customerAddress, o.area, o.location, o.city, o.pincode, o.zone, o.cluster, o.school_type,
+      dealYear(dc), getProductsText(dc), formatDcStatusLabel(getDcStatus(dc)),
+    ]
+      .map((v: any) => String(v || '').toLowerCase())
+      .join(' | ');
+  };
   const [addingYear, setAddingYear] = useState<string | null>(null);
 
   /** The deal's academic year: saved year, else when it was created. */
@@ -345,8 +378,10 @@ export default function DCClientScreen({ navigation }: any) {
 
   const filteredDCs = dcs
     .filter((dc) => {
-      const customerName = dc.customerName || dc.dcOrderId?.school_name || '';
-      return customerName.toLowerCase().includes(searchQuery.toLowerCase());
+      const words = searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      if (!words.length) return true;
+      const text = searchText(dc);
+      return words.every((w) => text.includes(w));
     })
     .slice()
     .sort((a, b) => {
@@ -372,7 +407,7 @@ export default function DCClientScreen({ navigation }: any) {
 <View style={styles.searchContainer}>
         <WebInput
           style={styles.searchInput}
-          placeholder="Search by customer name..."
+          placeholder="Search name, code, area, town, mobile, product…"
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
@@ -403,128 +438,125 @@ export default function DCClientScreen({ navigation }: any) {
 
             return (
               <View key={dc._id} style={styles.card}>
-                <TouchableOpacity
-                  style={styles.cardHeader}
-                  activeOpacity={0.7}
-                  onPress={() => setOpenId(openId === dc._id ? null : dc._id)}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.customerName} numberOfLines={2}>
-                      {dc.customerName || dc.dcOrderId?.school_name || 'Unknown Customer'}
-                    </Text>
-                    <Text style={styles.fullInfoLink}>{openId === dc._id ? 'Hide ▲' : 'DCs, payments, returns, trainings & visits ▼'}</Text>
-                  </View>
+                <View style={styles.cardTop}>
+                  <Text style={styles.customerName} numberOfLines={2}>{schoolName(dc)}</Text>
                   <View style={styles.statusBadge}>
                     <Text style={styles.statusText}>{statusLabel}</Text>
                   </View>
-                </TouchableOpacity>
-                {openId === dc._id ? <SchoolOverview leadId={orderId || dc._id} /> : null}
-                <View style={styles.cardBody}>
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Academic Year:</Text>
-                    <Text style={[styles.infoValue, { fontWeight: '700' }]}>{dealYear(dc)}</Text>
-                  </View>
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>School Code:</Text>
-                    <Text style={styles.infoValue}>{getSchoolCode(dc)}</Text>
-                  </View>
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Phone:</Text>
-                    <Text style={styles.infoValue}>{getPhone(dc)}</Text>
-                  </View>
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Product:</Text>
-                    <Text style={styles.infoValue}>{getProductsText(dc)}</Text>
-                  </View>
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Created:</Text>
-                    <Text style={styles.infoValue}>{createdDate}</Text>
-                  </View>
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Turned:</Text>
-                    <Text style={styles.infoValue}>{turnedDate}</Text>
-                  </View>
-                  {dc.poPhotoUrl ? (
-                    <TouchableOpacity onPress={() => openDCModal(dc)}>
-                      <Text style={styles.viewPoLink}>View PO document</Text>
-                    </TouchableOpacity>
-                  ) : null}
                 </View>
-                <View style={styles.cardActions}>
+
+                <View style={styles.kv}>
+                  <Text style={styles.k}>School code</Text>
+                  <Text style={[styles.v, styles.code]}>{getSchoolCode(dc)}</Text>
+                </View>
+                <View style={styles.kv}>
+                  <Text style={styles.k}>Year</Text>
+                  <Text style={styles.v}>{dealYear(dc)}</Text>
+                </View>
+                {getPhone(dc) && getPhone(dc) !== '-' ? (
+                  <View style={styles.kv}>
+                    <Text style={styles.k}>Mobile</Text>
+                    <TouchableOpacity style={{ flex: 1 }} onPress={() => Linking.openURL(`tel:${getPhone(dc)}`)}>
+                      <Text style={[styles.v, styles.phone]}>{getPhone(dc)}</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+                {placeText(dc) ? (
+                  <View style={styles.kv}>
+                    <Text style={styles.k}>Address</Text>
+                    <Text style={styles.v}>{placeText(dc)}</Text>
+                  </View>
+                ) : null}
+                <View style={styles.kv}>
+                  <Text style={styles.k}>Products</Text>
+                  <Text style={styles.v}>{getProductsText(dc)}</Text>
+                </View>
+                <View style={styles.kv}>
+                  <Text style={styles.k}>Client since</Text>
+                  <Text style={styles.v}>{turnedDate}</Text>
+                </View>
+                {dc.poPhotoUrl ? (
+                  <TouchableOpacity onPress={() => openDCModal(dc)}>
+                    <Text style={styles.viewPoLink}>View PO document</Text>
+                  </TouchableOpacity>
+                ) : null}
+
+                <View style={styles.chipRow}>
+                  {MODULES.map((m) => {
+                    const on = openId === dc._id && openSection === m.key;
+                    return (
+                      <TouchableOpacity
+                        key={m.key}
+                        style={[styles.chip, on && styles.chipOn]}
+                        onPress={() => {
+                          if (on) return setOpenId(null);
+                          setOpenId(dc._id);
+                          setOpenSection(m.key);
+                        }}
+                      >
+                        <Text style={[styles.chipText, on && styles.chipTextOn]}>{m.label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                {openId === dc._id ? <SchoolOverview leadId={orderId || dc._id} only={openSection} /> : null}
+
+                <SchoolVisitActions
+                  day={fieldDay.day}
+                  reload={fieldDay.reload}
+                  school={{
+                    schoolName: schoolName(dc),
+                    schoolCode: getSchoolCode(dc) !== '-' ? getSchoolCode(dc) : undefined,
+                  }}
+                />
+
+                <View style={styles.actionRow}>
                   {canEditRequest ? (
                     <>
                       <TouchableOpacity
-                        style={[styles.cardButton, styles.cardButtonEdit]}
+                        style={styles.actionBtn}
                         onPress={() => orderId && navigation.navigate('ClientEditPO', { orderId, dcId: dc._isConvertedLead ? undefined : dc._id })}
                         disabled={!orderId}
                       >
-                        <Text style={styles.cardButtonTextEdit}>Edit PO</Text>
+                        <Text style={styles.actionText}>Edit PO</Text>
                       </TouchableOpacity>
                       {isDcRequested(dc) ? (
-                        <View style={[styles.cardButton, styles.cardButtonRequest, styles.cardButtonDisabled]}>
-                          <Text style={styles.cardButtonTextRequestDisabled}>Awaiting Closed Sales</Text>
+                        <View style={[styles.actionBtn, styles.actionMuted]}>
+                          <Text style={styles.actionMutedText}>Awaiting Closed Sales</Text>
                         </View>
                       ) : (
                         <TouchableOpacity
-                          style={[
-                            styles.cardButton,
-                            styles.cardButtonRequest,
-                            (!canRequestDC(dc) || !orderId) && styles.cardButtonDisabled,
-                          ]}
+                          style={[styles.actionBtn, styles.actionPrimary, (!canRequestDC(dc) || !orderId) && styles.cardButtonDisabled]}
                           onPress={() => handleRequestDC(dc)}
                           disabled={!orderId || !canRequestDC(dc)}
                         >
-                          <Text style={styles.cardButtonTextRequest}>
-                            {isPoChangePending(dc)
-                              ? 'Waiting for Approval'
-                              : isPendingPoEdit(dc)
-                                ? 'Waiting for Manager'
-                                : 'Request DC'}
+                          <Text style={styles.actionPrimaryText}>
+                            {isPoChangePending(dc) ? 'Waiting for Approval' : isPendingPoEdit(dc) ? 'Waiting for Manager' : 'Request DC'}
                           </Text>
                         </TouchableOpacity>
                       )}
                     </>
                   ) : (
                     <>
-                      <TouchableOpacity
-                        style={[styles.cardButton, styles.cardButtonInvoice]}
-                        onPress={() => openInvoiceView(dc)}
-                      >
-                        <Text style={styles.cardButtonTextInvoice}>View Invoice</Text>
+                      <TouchableOpacity style={styles.actionBtn} onPress={() => openInvoiceView(dc)}>
+                        <Text style={styles.actionText}>View Invoice</Text>
                       </TouchableOpacity>
                       {orderId ? (
                         <TouchableOpacity
-                          style={[styles.cardButton, styles.cardButtonEdit]}
+                          style={styles.actionBtn}
                           onPress={() => navigation.navigate('ClientEditPO', { orderId, dcId: dc._isConvertedLead ? undefined : dc._id })}
                         >
-                          <Text style={styles.cardButtonTextEdit}>Edit PO</Text>
+                          <Text style={styles.actionText}>Edit PO</Text>
                         </TouchableOpacity>
                       ) : null}
                     </>
                   )}
+                  {orderId ? (
+                    <TouchableOpacity style={styles.actionBtn} onPress={() => addNextYearPo(dc)} disabled={addingYear === dc._id}>
+                      <Text style={[styles.actionText, { color: '#15803D' }]}>{addingYear === dc._id ? 'Adding…' : '+ New Year PO'}</Text>
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
-                {orderId ? (
-                  <TouchableOpacity
-                    style={styles.nextYearButton}
-                    onPress={() => addNextYearPo(dc)}
-                    disabled={addingYear === dc._id}
-                  >
-                    <Text style={styles.nextYearText}>{addingYear === dc._id ? 'Adding…' : '+ New Year PO'}</Text>
-                  </TouchableOpacity>
-                ) : null}
-                {!canEditRequest && (
-                  <Text style={styles.cardDcFlowMessageText}>
-                    PO can only be changed before requesting DC. Use View Invoice for clients in the DC process.
-                  </Text>
-                )}
-                <SchoolVisitActions
-                  day={fieldDay.day}
-                  reload={fieldDay.reload}
-                  school={{
-                    schoolName: dc.customerName || dc.dcOrderId?.school_name || 'School',
-                    schoolCode: getSchoolCode(dc) !== '-' ? getSchoolCode(dc) : undefined,
-                  }}
-                />
               </View>
             );
           })
@@ -689,6 +721,24 @@ const styles = StyleSheet.create({
   modalButton: { flex: 1, padding: 16, borderRadius: 12, alignItems: 'center' },
   modalButtonCancel: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },
   modalButtonTextCancel: { ...typography.body.medium, color: colors.textPrimary, fontWeight: '600' },
+  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 10 },
+  kv: { flexDirection: 'row', paddingVertical: 3 },
+  k: { width: 100, fontSize: 13, color: colors.textSecondary },
+  v: { flex: 1, fontSize: 14, color: colors.textPrimary },
+  code: { fontWeight: '700' },
+  phone: { color: '#2563EB', textDecorationLine: 'underline' },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#E0F2FE' },
+  chipOn: { backgroundColor: '#0284C7' },
+  chipText: { fontSize: 13, fontWeight: '600', color: '#0369A1' },
+  chipTextOn: { color: '#fff' },
+  actionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border },
+  actionBtn: { flexGrow: 1, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', backgroundColor: '#fff' },
+  actionText: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
+  actionPrimary: { backgroundColor: '#2563EB', borderColor: '#2563EB' },
+  actionPrimaryText: { fontSize: 13, fontWeight: '700', color: '#fff' },
+  actionMuted: { backgroundColor: '#F1F5F9' },
+  actionMutedText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
 });
 
 
