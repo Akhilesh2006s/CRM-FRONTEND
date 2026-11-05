@@ -25,6 +25,71 @@ const blank = (): Office => ({ name: '', address: '', latitude: '', longitude: '
  * Office locations. Checking in within an office's radius (200 m by default) is an office day;
  * anywhere else is a field day.
  */
+/** School visits: check-in and visit updates are allowed only this close to the school (Super Admin). */
+function SchoolVisitDistanceCard() {
+  const [radius, setRadius] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    apiRequest<{ radiusM: number }>('/settings/school-visit')
+      .then((d) => setRadius(String(d?.radiusM ?? 200)))
+      .catch(() => setRadius('200'))
+  }, [])
+
+  const save = async () => {
+    const r = Number(radius)
+    if (!Number.isFinite(r) || r < 25 || r > 5000) return toast.error('Enter a distance between 25 and 5000 metres')
+    setSaving(true)
+    try {
+      const d = await apiRequest<{ radiusM: number }>('/settings/school-visit', {
+        method: 'PUT',
+        body: JSON.stringify({ radiusM: Math.round(r) }),
+      })
+      setRadius(String(d?.radiusM ?? Math.round(r)))
+      toast.success('School visit distance saved')
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Could not save')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Card className="p-4 md:p-5 space-y-3">
+      <div>
+        <h2 className="text-lg font-semibold text-neutral-900">School visit distance</h2>
+        <p className="text-sm text-neutral-600 mt-1">
+          Employees can check in to a school and submit visit details only within this distance of the school&apos;s
+          registered GPS point. Outside it they see &quot;You are outside the permitted school location.&quot; and a visit
+          submitted from there is marked as an Invalid Visit. Only the Super Admin can change this.
+        </p>
+      </div>
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="space-y-1">
+          <Label htmlFor="school-radius">Permitted distance (metres)</Label>
+          <Input
+            id="school-radius"
+            type="number"
+            min={25}
+            max={5000}
+            className="w-40"
+            value={radius}
+            onChange={(e) => setRadius(e.target.value)}
+          />
+        </div>
+        {[100, 200, 300, 500].map((v) => (
+          <Button key={v} type="button" variant="outline" size="sm" onClick={() => setRadius(String(v))}>
+            {v} m
+          </Button>
+        ))}
+        <Button type="button" onClick={save} disabled={saving || radius === ''}>
+          {saving ? 'Saving…' : 'Save distance'}
+        </Button>
+      </div>
+    </Card>
+  )
+}
+
 export default function OfficeLocationsSettingsPage() {
   const [offices, setOffices] = useState<Office[]>([])
   const [loading, setLoading] = useState(true)
@@ -112,6 +177,8 @@ export default function OfficeLocationsSettingsPage() {
           there. Anywhere else is a field day. Stand in the office and use &quot;Use my location&quot; to fill the exact point.
         </p>
       </div>
+
+      <SchoolVisitDistanceCard />
 
       {loading ? (
         <p className="text-sm text-neutral-500">Loading…</p>

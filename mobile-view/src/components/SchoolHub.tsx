@@ -7,7 +7,8 @@ import { colors } from '../theme/colors';
 import { Badge, toneFor, InfoRow } from '../ui/Kit';
 import { WebButton } from '../ui/WebPrimitives';
 import SchoolOverview, { type Overview } from './SchoolOverview';
-import SchoolVisitActions, { type FieldDayState } from './SchoolVisitActions';
+import SchoolVisitActions, { type FieldDayState, sameSchool } from './SchoolVisitActions';
+import SchoolVisitForm, { VisitHistory, type VisitRecord } from './SchoolVisitForm';
 
 type IonName = React.ComponentProps<typeof Ionicons>['name'];
 type TileKey = 'info' | 'dc' | 'raise' | 'request' | 'returns' | 'payments' | 'visits' | 'renewal' | 'training';
@@ -176,32 +177,42 @@ export default function SchoolHub({
             </Buttons>
           </>
         );
-      case 'visits':
+      case 'visits': {
+        const history = (data.checkIns || []) as VisitRecord[];
+        const open = fieldDay.day?.openVisit;
+        const openHere = open && sameSchool(open, { schoolName, schoolCode: code, leadId }) ? open : null;
+        const refresh = async () => {
+          await fieldDay.reload();
+          await load();
+        };
         return (
           <>
-            <SchoolVisitActions day={fieldDay.day} reload={async () => { await fieldDay.reload(); await load(); }} school={{ schoolName, schoolCode: code }} />
-            <Text style={[styles.sectionTitle, { marginTop: 14 }]}>Check-ins ({data.checkIns?.length || 0})</Text>
-            {!data.checkIns?.length ? <Text style={styles.muted}>None yet</Text> : null}
-            {(data.checkIns || []).map((v) => (
-              <View key={v._id} style={styles.line}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.lineMain}>
-                    {date(v.entryAt)} · {time(v.entryAt)}
-                    {v.exitAt ? ` – ${time(v.exitAt)}` : ' · inside now'}
-                  </Text>
-                  <Text style={styles.muted}>
-                    {[v.employeeId?.name, v.durationMinutes ? `${v.durationMinutes} min` : ''].filter(Boolean).join(' · ')}
-                  </Text>
-                </View>
+            {openHere ? (
+              <View style={styles.inside}>
+                <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                <Text style={styles.insideText}>
+                  Checked in{(() => { const v = history.find((h) => h._id === openHere._id); return v?.entryAt ? ` at ${time(v.entryAt)}` : ''; })()}. Fill the visit details and submit.
+                </Text>
               </View>
-            ))}
-            <View style={{ height: 12 }} />
-            <SchoolOverview leadId={id} data={data} only="visits" />
-            <Buttons>
-              <WebButton title="+ Record Visit" variant="outline" onPress={() => go('SchoolVisits', { leadId, schoolName })} />
-            </Buttons>
+            ) : (
+              <>
+                <Text style={styles.muted}>Step 1: Check in at the school. The visit form opens after check-in.</Text>
+                <View style={{ height: 8 }} />
+                <SchoolVisitActions day={fieldDay.day} reload={refresh} school={{ schoolName, schoolCode: code, leadId }} />
+              </>
+            )}
+            {openHere ? <SchoolVisitForm visitId={openHere._id} schoolName={schoolName} history={history} onDone={refresh} /> : null}
+            <Text style={[styles.sectionTitle, { marginTop: 18 }]}>Visit history ({history.length})</Text>
+            <VisitHistory history={history} />
+            {data.visits?.length ? (
+              <>
+                <Text style={[styles.sectionTitle, { marginTop: 18 }]}>Earlier visit notes</Text>
+                <SchoolOverview leadId={id} data={data} only="visits" />
+              </>
+            ) : null}
           </>
         );
+      }
       case 'renewal':
         return (
           <>
@@ -300,6 +311,8 @@ function Buttons({ children }: { children: React.ReactNode }) {
 }
 
 const styles = StyleSheet.create({
+  inside: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#ECFDF5', borderRadius: 10, padding: 10, marginBottom: 12 },
+  insideText: { flex: 1, fontSize: 13, color: '#065F46', fontWeight: '600' },
   root: { flex: 1, backgroundColor: colors.background },
   topBar: {
     flexDirection: 'row',

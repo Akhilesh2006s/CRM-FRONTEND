@@ -30,7 +30,7 @@ export function useFieldDay() {
   return { day, reload };
 }
 
-const sameSchool = (v: OpenVisit, s: VisitSchool) =>
+export const sameSchool = (v: OpenVisit, s: VisitSchool) =>
   (s.leadId && v.leadId && String(v.leadId) === String(s.leadId)) ||
   (norm(s.schoolCode) && norm(v.schoolCode) === norm(s.schoolCode)) ||
   (!norm(s.schoolCode) && norm(v.schoolName) === norm(s.schoolName));

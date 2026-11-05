@@ -11,6 +11,7 @@ import { stopDayTracking } from './src/services/tracking';
 import LoginScreen from './src/screens/Auth/LoginScreen';
 import FirstTimeAttendanceScreen from './src/screens/Attendance/FirstTimeAttendanceScreen';
 import CheckInGate from './src/components/CheckInGate';
+import TermsGate from './src/components/TermsGate';
 import DashboardScreen from './src/screens/Dashboard/DashboardScreen';
 import DCCaptureScreen from './src/screens/DC/DCCaptureScreen';
 import DCListScreen from './src/screens/DC/DCListScreen';
@@ -500,7 +501,7 @@ function AppNavigator() {
     <View style={{ flex: 1 }}>
       <NavigationContainer ref={rootNavigationRef}>
         <StatusBar style="dark" />
-        {user ? <CheckInGate><AuthenticatedStack /></CheckInGate> : <AuthStack />}
+        {user ? <TermsGate><CheckInGate><AuthenticatedStack /></CheckInGate></TermsGate> : <AuthStack />}
       </NavigationContainer>
       {loading && !user ? (
         <View
