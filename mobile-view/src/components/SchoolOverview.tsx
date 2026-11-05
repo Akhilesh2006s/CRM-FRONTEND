@@ -3,7 +3,7 @@ import { ActivityIndicator, Linking, StyleSheet, Text, TouchableOpacity, View } 
 import { apiService } from '../services/api';
 import { colors } from '../theme/colors';
 
-type Overview = {
+export type Overview = {
   lead: Record<string, any>;
   orders: any[];
   dcs: any[];
@@ -12,6 +12,7 @@ type Overview = {
   returns: any[];
   trainings: any[];
   services: any[];
+  checkIns?: any[];
 };
 
 const date = (v?: string) => (v ? new Date(v).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
@@ -20,12 +21,25 @@ const money = (n?: number) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
 /** All of one school's information, shown inside the school's card in My Schools. */
 export type OverviewSection = 'details' | 'deals' | 'dcs' | 'payments' | 'returns' | 'trainings' | 'visits';
 
-export default function SchoolOverview({ leadId, onEdit, only }: { leadId: string; onEdit?: () => void; only?: OverviewSection }) {
+export default function SchoolOverview({
+  leadId,
+  onEdit,
+  only,
+  data: given,
+}: {
+  leadId: string;
+  onEdit?: () => void;
+  only?: OverviewSection;
+  /** Already-loaded overview (School page); skips the fetch. */
+  data?: Overview | null;
+}) {
   const show = (key: OverviewSection) => !only || only === key;
-  const [data, setData] = useState<Overview | null>(null);
+  const [loaded, setData] = useState<Overview | null>(null);
   const [error, setError] = useState('');
+  const data = given || loaded;
 
   useEffect(() => {
+    if (given) return undefined;
     let alive = true;
     apiService
       .get(`/leads/${leadId}/overview`)
@@ -34,7 +48,7 @@ export default function SchoolOverview({ leadId, onEdit, only }: { leadId: strin
     return () => {
       alive = false;
     };
-  }, [leadId]);
+  }, [leadId, given]);
 
   if (error) return <Text style={styles.error}>{error}</Text>;
   if (!data) return <ActivityIndicator color={colors.primary} style={{ marginVertical: 12 }} />;

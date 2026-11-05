@@ -459,6 +459,14 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
     }
   };
 
+  // Opened from a school's page: pick that school's latest completed DC.
+  const presetCode: string = String(route?.params?.schoolCode || '').trim();
+  useEffect(() => {
+    if (!presetCode || selectedCompletedDcId || route?.params?.returnId) return;
+    const match = completedDcs.find((o) => String(o.school_code || '').trim() === presetCode);
+    if (match) void handleCompletedDcSelect(match._id);
+  }, [presetCode, completedDcs]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const totalItemsReturned = productRows.filter((r) => parseInt(r.returnQty, 10) > 0).length;
   const totalQuantity = productRows.reduce((s, r) => s + (parseInt(r.returnQty, 10) || 0), 0);
 

@@ -5,7 +5,6 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DashboardScreen from '../screens/Dashboard/DashboardScreen';
-import WorkHubScreen from '../screens/Navigation/WorkHubScreen';
 import ReportsLeadsScreen from '../screens/Reports/ReportsLeadsScreen';
 import MoreHubScreen from '../screens/Navigation/MoreHubScreen';
 import { colors } from '../theme/colors';
@@ -98,7 +97,6 @@ export default function MainTabs() {
       })}
     >
       <Tab.Screen name="Home" component={DashboardScreen} options={{ tabBarLabel: 'Home' }} />
-      <Tab.Screen name="Menu" component={WorkHubScreen} options={{ tabBarLabel: 'Menu' }} />
       {showReports ? <Tab.Screen name="Reports" component={ReportsLeadsScreen} options={{ tabBarLabel: 'Reports' }} /> : null}
       <Tab.Screen name="More" component={MoreHubScreen} options={{ tabBarLabel: 'More' }} />
     </Tab.Navigator>

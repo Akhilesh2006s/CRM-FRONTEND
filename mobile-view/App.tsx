@@ -44,6 +44,7 @@ import DCAdminMyScreen from './src/screens/DC/DCAdminMyScreen';
 import DCEditScreen from './src/screens/DC/DCEditScreen';
 import DCManagerScreen from './src/screens/DC/DCManagerScreen';
 import DCClientScreen from './src/screens/DC/DCClientScreen';
+import ModuleHubScreen from './src/screens/Navigation/ModuleHubScreen';
 import DCRequestSummaryScreen from './src/screens/DC/DCRequestSummaryScreen';
 import ClientEditPOScreen from './src/screens/Clients/ClientEditPOScreen';
 import DCEmpScreen from './src/screens/DC/DCEmpScreen';
@@ -292,6 +293,7 @@ function AuthenticatedStack() {
         <Stack.Screen name="DCEdit" component={DCEditScreen} />
         <Stack.Screen name="DCManager" component={DCManagerScreen} />
         <Stack.Screen name="DCClient" component={DCClientScreen} />
+        <Stack.Screen name="ModuleHub" component={ModuleHubScreen} />
         <Stack.Screen name="DCRequestSummary" component={DCRequestSummaryScreen} />
         <Stack.Screen name="ClientEditPO" component={ClientEditPOScreen} />
         <Stack.Screen name="DCEmp" component={DCEmpScreen} />

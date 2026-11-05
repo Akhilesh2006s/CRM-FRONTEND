@@ -54,7 +54,8 @@ const EMPTY_DETAILS = {
   otherDetails: '',
 };
 
-export default function PaymentAddScreen({ navigation }: any) {
+export default function PaymentAddScreen({ navigation, route }: any) {
+  const presetCode: string = String(route?.params?.schoolCode || '').trim();
   const { user } = useAuth();
   const [schools, setSchools] = useState<School[]>([]);
   const [loadingSchools, setLoadingSchools] = useState(true);
@@ -147,6 +148,11 @@ export default function PaymentAddScreen({ navigation }: any) {
       cancelled = true;
     };
   }, [user?._id, user?.role]);
+
+  // Opened from a school's page: that school is already selected.
+  useEffect(() => {
+    if (presetCode && !school && schools.some((s) => s.schoolCode === presetCode)) setSchool(presetCode);
+  }, [presetCode, schools]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const schoolItems = useMemo(
     () =>

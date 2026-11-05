@@ -154,7 +154,8 @@ function DateField({
   );
 }
 
-export default function TrainingRequestScreen() {
+export default function TrainingRequestScreen({ route }: any) {
+  const presetCode: string = String(route?.params?.schoolCode || '').trim();
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [items, setItems] = useState<TrainingRequest[]>([]);
@@ -207,6 +208,13 @@ export default function TrainingRequestScreen() {
       setSubmitting(false);
     }
   };
+
+  // Opened from a school's page: that school is already selected.
+  useEffect(() => {
+    if (!presetCode || form.schoolId) return;
+    const match = schools.find((s) => String(s.code || '').trim() === presetCode);
+    if (match) onSelectSchool(match.id);
+  }, [presetCode, schools]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onSelectSchool = (schoolId: string) => {
     const school = schools.find((s) => s.id === schoolId);

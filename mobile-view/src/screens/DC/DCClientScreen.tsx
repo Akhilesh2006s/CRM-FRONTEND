@@ -35,7 +35,8 @@ const MODULES: { key: OverviewSection; label: string }[] = [
   { key: 'trainings', label: 'Trainings' },
   { key: 'visits', label: 'Visits' },
 ];
-import SchoolVisitActions, { useFieldDay } from '../../components/SchoolVisitActions';
+import { useFieldDay } from '../../components/SchoolVisitActions';
+import SchoolHub from '../../components/SchoolHub';
 
 /** Academic years run April to March, e.g. 2026-27. */
 const academicYearFor = (date: string | Date = new Date()) => {
@@ -98,6 +99,8 @@ export default function DCClientScreen({ navigation }: any) {
 
   const [openId, setOpenId] = useState<string | null>(null);
   const [openSection, setOpenSection] = useState<OverviewSection>('details');
+  /** The school whose page (all modules) is open. */
+  const [hubDc, setHubDc] = useState<any>(null);
 
   const orderOf = (dc: any) => (dc?.dcOrderId && typeof dc.dcOrderId === 'object' ? dc.dcOrderId : {});
   const schoolName = (dc: any) => dc.customerName || orderOf(dc).school_name || 'Unknown school';
@@ -437,7 +440,7 @@ export default function DCClientScreen({ navigation }: any) {
             const canEditRequest = showEditAndRequest(dc);
 
             return (
-              <View key={dc._id} style={styles.card}>
+              <TouchableOpacity key={dc._id} style={styles.card} activeOpacity={0.85} onPress={() => setHubDc(dc)}>
                 <View style={styles.cardTop}>
                   <Text style={styles.customerName} numberOfLines={2}>{schoolName(dc)}</Text>
                   <View style={styles.statusBadge}>
@@ -481,87 +484,51 @@ export default function DCClientScreen({ navigation }: any) {
                   </TouchableOpacity>
                 ) : null}
 
-                <View style={styles.chipRow}>
-                  {MODULES.map((m) => {
-                    const on = openId === dc._id && openSection === m.key;
-                    return (
-                      <TouchableOpacity
-                        key={m.key}
-                        style={[styles.chip, on && styles.chipOn]}
-                        onPress={() => {
-                          if (on) return setOpenId(null);
-                          setOpenId(dc._id);
-                          setOpenSection(m.key);
-                        }}
-                      >
-                        <Text style={[styles.chipText, on && styles.chipTextOn]}>{m.label}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
+                <View style={styles.openRow}>
+                  <Text style={styles.openText}>Open school · DC, returns, payments, visits, training</Text>
+                  <Text style={styles.openArrow}>›</Text>
                 </View>
-                {openId === dc._id ? <SchoolOverview leadId={orderId || dc._id} only={openSection} /> : null}
-
-                <SchoolVisitActions
-                  day={fieldDay.day}
-                  reload={fieldDay.reload}
-                  school={{
-                    schoolName: schoolName(dc),
-                    schoolCode: getSchoolCode(dc) !== '-' ? getSchoolCode(dc) : undefined,
-                  }}
-                />
-
-                <View style={styles.actionRow}>
-                  {canEditRequest ? (
-                    <>
-                      <TouchableOpacity
-                        style={styles.actionBtn}
-                        onPress={() => orderId && navigation.navigate('ClientEditPO', { orderId, dcId: dc._isConvertedLead ? undefined : dc._id })}
-                        disabled={!orderId}
-                      >
-                        <Text style={styles.actionText}>Edit PO</Text>
-                      </TouchableOpacity>
-                      {isDcRequested(dc) ? (
-                        <View style={[styles.actionBtn, styles.actionMuted]}>
-                          <Text style={styles.actionMutedText}>Awaiting Closed Sales</Text>
-                        </View>
-                      ) : (
-                        <TouchableOpacity
-                          style={[styles.actionBtn, styles.actionPrimary, (!canRequestDC(dc) || !orderId) && styles.cardButtonDisabled]}
-                          onPress={() => handleRequestDC(dc)}
-                          disabled={!orderId || !canRequestDC(dc)}
-                        >
-                          <Text style={styles.actionPrimaryText}>
-                            {isPoChangePending(dc) ? 'Waiting for Approval' : isPendingPoEdit(dc) ? 'Waiting for Manager' : 'Request DC'}
-                          </Text>
-                        </TouchableOpacity>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <TouchableOpacity style={styles.actionBtn} onPress={() => openInvoiceView(dc)}>
-                        <Text style={styles.actionText}>View Invoice</Text>
-                      </TouchableOpacity>
-                      {orderId ? (
-                        <TouchableOpacity
-                          style={styles.actionBtn}
-                          onPress={() => navigation.navigate('ClientEditPO', { orderId, dcId: dc._isConvertedLead ? undefined : dc._id })}
-                        >
-                          <Text style={styles.actionText}>Edit PO</Text>
-                        </TouchableOpacity>
-                      ) : null}
-                    </>
-                  )}
-                  {orderId ? (
-                    <TouchableOpacity style={styles.actionBtn} onPress={() => addNextYearPo(dc)} disabled={addingYear === dc._id}>
-                      <Text style={[styles.actionText, { color: '#15803D' }]}>{addingYear === dc._id ? 'Adding…' : '+ New Year PO'}</Text>
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
-              </View>
+              </TouchableOpacity>
             );
           })
         )}
       </ScrollView>
+
+      {hubDc ? (() => {
+        const dc = hubDc;
+        const orderId = getOrderId(dc);
+        const canEditRequest = showEditAndRequest(dc);
+        const editPO = orderId
+          ? () => navigation.navigate('ClientEditPO', { orderId, dcId: dc._isConvertedLead ? undefined : dc._id })
+          : undefined;
+        return (
+          <SchoolHub
+            visible
+            onClose={() => setHubDc(null)}
+            id={orderId || dc._id}
+            orderId={orderId || undefined}
+            dcId={dc._isConvertedLead ? undefined : dc._id}
+            schoolName={schoolName(dc)}
+            schoolCode={getSchoolCode(dc)}
+            year={dealYear(dc)}
+            status={formatDcStatusLabel(getDcStatus(dc))}
+            fieldDay={fieldDay}
+            actions={{
+              editPO,
+              viewInvoice: canEditRequest ? undefined : () => openInvoiceView(dc),
+              newYearPO: orderId ? () => addNextYearPo(dc) : undefined,
+              requestDC:
+                canEditRequest && !isDcRequested(dc)
+                  ? {
+                      label: isPoChangePending(dc) ? 'Waiting for Approval' : isPendingPoEdit(dc) ? 'Waiting for Manager' : 'Request DC',
+                      disabled: !orderId || !canRequestDC(dc),
+                      onPress: () => handleRequestDC(dc),
+                    }
+                  : undefined,
+            }}
+          />
+        );
+      })() : null}
 
       <Modal visible={showModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
@@ -739,6 +706,9 @@ const styles = StyleSheet.create({
   actionPrimaryText: { fontSize: 13, fontWeight: '700', color: '#fff' },
   actionMuted: { backgroundColor: '#F1F5F9' },
   actionMutedText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
+  openRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border },
+  openText: { flex: 1, fontSize: 13, fontWeight: '600', color: colors.primaryDark },
+  openArrow: { fontSize: 22, color: colors.primaryDark, marginLeft: 8 },
 });
 
 
