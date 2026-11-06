@@ -28,6 +28,8 @@ type Expense = ApprovalExpense & {
   date: string;
   /** Distance tracked by the employee's device (LocationPing) on the expense date */
   trackedDistanceKm?: number;
+  /** Bike / Car amount at the policy rate for the GPS km */
+  gpsAmount?: number | null;
   expItemId?: string;
   receipt?: string;
   ticketReceipt?: string;
@@ -273,12 +275,21 @@ export default function ExpenseManagerUpdateScreen({ navigation, route }: any) {
               <Text style={styles.statusLine}>{expenseStatusText(exp)}</Text>
               <Text style={styles.meta}>Date of expense: {formatDate(exp.date)}</Text>
               {isTravel(exp) ? (
-                <View style={styles.rowBetween}>
-                  <Text style={styles.gps}>GPS: {gpsKm(exp)} Kms</Text>
-                  <Text style={styles.meta}>
-                    Claimed:{' '}
-                    {exp.approxKms ? `${exp.approxKms} Kms${exp.transportType ? ` · ${exp.transportType}` : ''}${exp.tripId ? ' · GPS trip' : ''}` : '-'}
-                  </Text>
+                <View style={styles.kmBox}>
+                  <View style={styles.kmCell}>
+                    <Text style={styles.kmLabel}>GPS KM</Text>
+                    <Text style={styles.kmValue}>{gpsKm(exp).toFixed(2)}</Text>
+                    <Text style={styles.kmSub}>Start Day → End Day</Text>
+                  </View>
+                  <View style={styles.kmCell}>
+                    <Text style={styles.kmLabel}>Employee KM</Text>
+                    <Text style={[styles.kmValue, Number(exp.approxKms || 0) > gpsKm(exp) * 1.1 + 1 ? styles.kmOver : null]}>
+                      {exp.approxKms ? Number(exp.approxKms).toFixed(2) : '-'}
+                    </Text>
+                    <Text style={styles.kmSub}>
+                      {[exp.transportType, exp.tripId ? 'GPS trip' : ''].filter(Boolean).join(' · ') || 'Claimed'}
+                    </Text>
+                  </View>
                 </View>
               ) : null}
               {describe(exp) ? <Text style={styles.desc}>{describe(exp)}</Text> : null}
@@ -292,6 +303,22 @@ export default function ExpenseManagerUpdateScreen({ navigation, route }: any) {
                     {firstBy?.role ? ` (${firstBy.role})` : ''} · Rs. {(firstLevelAmount(exp) ?? claimedAmount(exp)).toFixed(2)}
                   </Text>
                   {exp.managerRemarks ? <Text style={styles.meta}>“{exp.managerRemarks}”</Text> : null}
+                  <View style={[styles.kmBox, { marginTop: 8 }]}>
+                    <View style={styles.kmCell}>
+                      <Text style={styles.kmLabel}>BDE amount</Text>
+                      <Text style={styles.kmValue}>{claimedAmount(exp).toFixed(2)}</Text>
+                    </View>
+                    <View style={styles.kmCell}>
+                      <Text style={styles.kmLabel}>Manager approved</Text>
+                      <Text style={styles.kmValue}>{(firstLevelAmount(exp) ?? claimedAmount(exp)).toFixed(2)}</Text>
+                    </View>
+                    {isTravel(exp) ? (
+                      <View style={styles.kmCell}>
+                        <Text style={styles.kmLabel}>GPS amount</Text>
+                        <Text style={styles.kmValue}>{typeof exp.gpsAmount === 'number' ? exp.gpsAmount.toFixed(2) : '-'}</Text>
+                      </View>
+                    ) : null}
+                  </View>
                 </View>
               ) : null}
 
@@ -369,6 +396,12 @@ export default function ExpenseManagerUpdateScreen({ navigation, route }: any) {
 }
 
 const styles = StyleSheet.create({
+  kmBox: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  kmCell: { flex: 1, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 8 },
+  kmLabel: { fontSize: 11, fontWeight: '700', color: colors.textTertiary, textTransform: 'uppercase' },
+  kmValue: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, marginTop: 2 },
+  kmOver: { color: colors.error },
+  kmSub: { fontSize: 11, color: colors.textTertiary, marginTop: 2 },
   filterCard: {
     backgroundColor: colors.backgroundLight,
     borderWidth: 1,

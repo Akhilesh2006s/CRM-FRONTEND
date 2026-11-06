@@ -93,6 +93,20 @@ export default function ExpenseCreateScreen({ navigation }: any) {
   }, []);
 
   const isTravelType = form.type === 'travel';
+  // GPS km recorded between Start Day and End Day on the expense date (read-only, from the server).
+  const [gps, setGps] = useState<{ gpsKm: number; window?: string; signInAt?: string | null; signOutAt?: string | null } | null>(null);
+  useEffect(() => {
+    if (!isTravelType || !form.date) return;
+    let live = true;
+    setGps(null);
+    apiService
+      .get(`/expenses/gps-km?date=${encodeURIComponent(form.date)}`)
+      .then((d: any) => live && setGps(d || { gpsKm: 0 }))
+      .catch(() => live && setGps({ gpsKm: 0 }));
+    return () => {
+      live = false;
+    };
+  }, [isTravelType, form.date]);
   const needsHotel = form.type === 'food' || form.type === 'accommodation';
   const isStay = form.type === 'accommodation';
   const amountLocked = isTravelType && isPerKmMode(form.transportType);
@@ -332,11 +346,23 @@ export default function ExpenseCreateScreen({ navigation }: any) {
               />
               <FormField label="From *" value={form.travelFrom} onChangeText={(t) => update({ travelFrom: t })} placeholder="Enter origin location" />
               <FormField label="To *" value={form.travelTo} onChangeText={(t) => update({ travelTo: t })} placeholder="Enter destination location" />
+              <View style={styles.fieldContainer}>
+                <Text style={styles.label}>GPS recorded KM (Start Day → End Day)</Text>
+                <View style={[styles.input, styles.inputLocked, styles.gpsBox]}>
+                  <Text style={styles.gpsKm}>{gps ? `${Number(gps.gpsKm || 0).toFixed(2)} km` : 'Loading…'}</Text>
+                  <Text style={styles.gpsTag}>Read-only</Text>
+                </View>
+                <Text style={styles.hint}>
+                  {gps?.window === 'sign_in_out'
+                    ? `Recorded by GPS on ${ymdToDmy(form.date)}${gps.signOutAt ? '' : ' (day not ended yet)'}. Your manager sees this with your claimed km.`
+                    : 'No Start Day on this date; GPS points of the whole day are counted.'}
+                </Text>
+              </View>
               <FormField
-                label={`Kilometres${amountLocked ? ' *' : ''}`}
+                label={`Kilometres claimed${amountLocked ? ' *' : ''}`}
                 value={form.approxKms}
                 onChangeText={(t) => update({ approxKms: t })}
-                placeholder="Enter kilometres travelled"
+                placeholder="Enter kilometres you are claiming"
                 keyboardType="decimal-pad"
                 error={fieldErrors.approxKms}
               />
@@ -581,6 +607,9 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   inputLocked: { backgroundColor: colors.backgroundMuted, fontWeight: '600' },
+  gpsBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  gpsKm: { fontSize: 16, fontWeight: '700', color: colors.primaryDark },
+  gpsTag: { fontSize: 11, fontWeight: '700', color: colors.textTertiary, textTransform: 'uppercase' },
   inputError: { borderColor: colors.error },
   fieldError: { fontSize: 13, color: colors.error, marginTop: 4 },
   textArea: { minHeight: 70, textAlignVertical: 'top' },

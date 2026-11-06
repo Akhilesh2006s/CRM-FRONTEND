@@ -19,6 +19,9 @@ type Expense = ApprovalExpense & {
   /** Backend-resolved employee: employeeId, else trainerId, else submitter */
   employee?: ExpensePerson | null;
   pendingMonth?: string;
+  approxKms?: number;
+  trackedDistanceKm?: number;
+  gpsAmount?: number | null;
 };
 
 const money = (v?: number) => (typeof v === 'number' && Number.isFinite(v) ? v.toFixed(2) : '-');
@@ -152,6 +155,13 @@ export default function ExpenseFinancePendingScreen({ navigation }: any) {
             <InfoRow label="Raised" value={formatDate(expense.createdAt)} />
             <InfoRow label="Claimed" value={`₹${money(expense.employeeAmount ?? expense.amount)}`} />
             <InfoRow label="First level" value={`${firstLevelApprovedBy(expense)?.name || '-'} · ₹${money(expense.firstLevelApprovedAmount)}`} />
+            {expense.category?.toLowerCase() === 'travel' ? (
+              <>
+                <InfoRow label="GPS KM" value={money(expense.trackedDistanceKm ?? 0)} />
+                <InfoRow label="Employee KM" value={money(expense.approxKms)} />
+                <InfoRow label="GPS amount" value={typeof expense.gpsAmount === 'number' ? `₹${money(expense.gpsAmount)}` : '-'} />
+              </>
+            ) : null}
             <InfoRow label="Finance" value={expense.approvedBy?.name || '-'} />
             <InfoRow label="Finance remarks" value={expense.financeRemarks} />
           </Card>

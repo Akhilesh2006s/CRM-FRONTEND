@@ -20,6 +20,9 @@ type Expense = ApprovalExpense & {
   /** Backend-resolved employee: employeeId, else trainerId, else submitter */
   employee?: ExpensePerson | null
   pendingMonth?: string
+  approxKms?: number
+  trackedDistanceKm?: number
+  gpsAmount?: number | null
 }
 
 const money = (v?: number) => (typeof v === 'number' && Number.isFinite(v) ? v.toFixed(2) : '-')
@@ -154,6 +157,9 @@ export default function FinancePendingExpensesPage() {
                 <TableHead className="font-semibold text-right">Emp.Amount</TableHead>
                 <TableHead className="font-semibold">First-level Approver</TableHead>
                 <TableHead className="font-semibold text-right">First-level Amount</TableHead>
+                <TableHead className="font-semibold text-right">GPS KM</TableHead>
+                <TableHead className="font-semibold text-right">Employee KM</TableHead>
+                <TableHead className="font-semibold text-right">GPS Amount</TableHead>
                 <TableHead className="font-semibold">Finance Approver</TableHead>
                 <TableHead className="font-semibold text-right">Final Amount</TableHead>
                 <TableHead className="font-semibold">Finance Remarks</TableHead>
@@ -163,13 +169,13 @@ export default function FinancePendingExpensesPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-neutral-500">
+                  <TableCell colSpan={12} className="text-center py-8 text-neutral-500">
                     Loading expenses...
                   </TableCell>
                 </TableRow>
               ) : expenses.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8">
+                  <TableCell colSpan={12} className="text-center py-8">
                     <div className="flex flex-col items-center gap-2">
                       <p className="text-neutral-500 font-medium">No finance approved expenses found</p>
                       <p className="text-sm text-neutral-400">
@@ -193,6 +199,9 @@ export default function FinancePendingExpensesPage() {
                     </TableCell>
                     <TableCell>{firstLevelApprovedBy(expense)?.name || '-'}</TableCell>
                     <TableCell className="text-right">{money(expense.firstLevelApprovedAmount)}</TableCell>
+                    <TableCell className="text-right">{expense.category?.toLowerCase() === 'travel' ? money(expense.trackedDistanceKm ?? 0) : '-'}</TableCell>
+                    <TableCell className="text-right">{expense.category?.toLowerCase() === 'travel' ? money(expense.approxKms) : '-'}</TableCell>
+                    <TableCell className="text-right">{typeof expense.gpsAmount === 'number' ? money(expense.gpsAmount) : '-'}</TableCell>
                     <TableCell>{expense.approvedBy?.name || '-'}</TableCell>
                     <TableCell className="text-right font-medium">{money(expense.approvedAmount)}</TableCell>
                     <TableCell className="max-w-[220px] whitespace-pre-wrap">{expense.financeRemarks || '-'}</TableCell>

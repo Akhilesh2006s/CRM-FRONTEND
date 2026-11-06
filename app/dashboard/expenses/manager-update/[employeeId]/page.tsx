@@ -33,6 +33,8 @@ type Expense = ApprovalExpense & {
   gpsDistance?: number
   /** Distance tracked by the employee's device (LocationPing) on the expense date */
   trackedDistanceKm?: number
+  /** Bike / Car amount at the policy rate for the GPS km */
+  gpsAmount?: number | null
   expItemId?: string
   receipt?: string
   ticketReceipt?: string
@@ -365,7 +367,7 @@ export default function ManagerExpenseUpdatePage() {
                 <TableHead className="font-semibold">S.No</TableHead>
                 <SortHead k="expItemId" label="Exp Item ID" />
                 <SortHead k="category" label="Expense Type" />
-                <SortHead k="gps" label="GPS Dist" />
+                <SortHead k="gps" label="GPS KM" />
                 <TableHead className="font-semibold whitespace-nowrap">Kms Travelled</TableHead>
                 <TableHead className="font-semibold">Description</TableHead>
                 <SortHead k="date" label="Date of Expense" />
@@ -445,7 +447,11 @@ export default function ManagerExpenseUpdatePage() {
                             {stage === 'finance' ? (
                               <div className="space-y-0.5">
                                 <div className="font-medium">{firstBy?.name || 'Unknown'}{firstBy?.role ? ` (${firstBy.role})` : ''}</div>
-                                <div>Rs. {(firstLevelAmount(expense) ?? claimedAmount(expense)).toFixed(2)}</div>
+                                <div>Manager approved: Rs. {(firstLevelAmount(expense) ?? claimedAmount(expense)).toFixed(2)}</div>
+                                <div>BDE amount: Rs. {claimedAmount(expense).toFixed(2)}</div>
+                                {isTravel(expense) && (
+                                  <div>GPS amount: {typeof expense.gpsAmount === 'number' ? `Rs. ${expense.gpsAmount.toFixed(2)}` : '-'}</div>
+                                )}
                                 {expense.managerRemarks && <div className="text-neutral-600">“{expense.managerRemarks}”</div>}
                               </div>
                             ) : (

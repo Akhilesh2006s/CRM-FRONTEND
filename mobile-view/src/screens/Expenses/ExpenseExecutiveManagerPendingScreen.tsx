@@ -20,6 +20,8 @@ type Expense = ApprovalExpense & {
   createdAt: string;
   date?: string;
   pendingMonth?: string;
+  approxKms?: number;
+  trackedDistanceKm?: number;
   employeeId?: Person | null;
   trainerId?: Person | null;
   /** Backend-resolved employee: employeeId, else trainerId, else submitter */
@@ -183,6 +185,12 @@ export default function ExpenseExecutiveManagerPendingScreen({ navigation, route
             <CardTitle title={`${i + 1}. ${getEmployee(exp)?.name || '-'}`} badge="Pending" tone="warning" />
             <InfoRow label="Amount" value={Number(exp.amount).toFixed(2)} bold />
             <InfoRow label="Type" value={getExpenseType(exp.category)} />
+            {exp.category?.toLowerCase() === 'travel' ? (
+              <InfoRow
+                label="GPS KM / Employee KM"
+                value={`${Number(exp.trackedDistanceKm ?? 0).toFixed(2)} / ${exp.approxKms ? Number(exp.approxKms).toFixed(2) : '-'}`}
+              />
+            ) : null}
             <InfoRow label="Raised" value={formatDateTime(exp.createdAt)} />
             <InfoRow label="Pending month" value={getPendingMonth(exp)} />
             <ActionRow>

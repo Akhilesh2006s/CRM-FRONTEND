@@ -56,6 +56,20 @@ export default function CreateExpensePage() {
       .catch(() => setRates({}))
   }, [])
 
+  // GPS km recorded between Start Day and End Day on the expense date (read-only, from the server).
+  const [gps, setGps] = useState<{ gpsKm: number; window?: string; signOutAt?: string | null } | null>(null)
+  useEffect(() => {
+    if (form.type !== 'travel' || !form.date) return
+    let live = true
+    setGps(null)
+    apiRequest<{ gpsKm: number; window?: string; signOutAt?: string | null }>(`/expenses/gps-km?date=${encodeURIComponent(form.date)}`)
+      .then((d) => live && setGps(d || { gpsKm: 0 }))
+      .catch(() => live && setGps({ gpsKm: 0 }))
+    return () => {
+      live = false
+    }
+  }, [form.type, form.date])
+
   const amountLocked = isTravelAmountLocked(form.type, form.transportType)
   const autoAmount = amountLocked ? calcTravelAmount(form.transportType, Number(form.approxKms) || 0, rates) : ''
   const amountValue = amountLocked ? autoAmount : form.amount
@@ -277,7 +291,22 @@ export default function CreateExpensePage() {
                 <Input id="travelTo" value={form.travelTo} onChange={(e) => update({ travelTo: e.target.value })} required className="bg-white" placeholder="Enter destination location" />
               </div>
               <div>
-                <Label htmlFor="approxKms">Kilometres{amountLocked ? ' *' : ''}</Label>
+                <Label htmlFor="gpsKm">GPS recorded KM (Start Day → End Day)</Label>
+                <Input
+                  id="gpsKm"
+                  readOnly
+                  tabIndex={-1}
+                  value={gps ? `${Number(gps.gpsKm || 0).toFixed(2)} km` : 'Loading…'}
+                  className="bg-neutral-100 font-semibold cursor-not-allowed"
+                />
+                <p className="text-xs text-neutral-500 mt-1">
+                  {gps?.window === 'sign_in_out'
+                    ? `Read-only. Recorded by GPS on this date${gps.signOutAt ? '' : ' (day not ended yet)'}.`
+                    : 'Read-only. No Start Day on this date; GPS points of the whole day are counted.'}
+                </p>
+              </div>
+              <div>
+                <Label htmlFor="approxKms">Kilometres claimed{amountLocked ? ' *' : ''}</Label>
                 <Input
                   id="approxKms"
                   type="number"
@@ -286,7 +315,7 @@ export default function CreateExpensePage() {
                   value={form.approxKms}
                   onChange={(e) => update({ approxKms: e.target.value })}
                   className={`bg-white ${errorClass('approxKms')}`}
-                  placeholder="Enter kilometres travelled"
+                  placeholder="Enter kilometres you are claiming"
                 />
                 {errorText('approxKms')}
               </div>
