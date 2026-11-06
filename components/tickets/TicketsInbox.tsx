@@ -20,6 +20,7 @@ type Ticket = {
   description: string
   schoolName?: string
   schoolCode?: string
+  town?: string
   status: 'Open' | 'Resolved'
   resolutionNote?: string
   createdAt: string
@@ -151,6 +152,7 @@ export function TicketsInbox({ view }: { view: TicketsView }) {
                     <td className="py-2 px-3">
                       {item.schoolName || '—'}
                       {item.schoolCode ? ` (${item.schoolCode})` : ''}
+                      {item.town ? <div className="text-xs text-neutral-500">{item.town}</div> : null}
                     </td>
                     <td className="py-2 px-3">
                       <span className={item.status === 'Resolved' ? 'text-green-700' : 'text-amber-700'}>

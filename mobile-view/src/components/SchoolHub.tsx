@@ -9,9 +9,10 @@ import { WebButton } from '../ui/WebPrimitives';
 import SchoolOverview, { type Overview } from './SchoolOverview';
 import SchoolVisitActions, { type FieldDayState, sameSchool } from './SchoolVisitActions';
 import SchoolVisitForm, { VisitHistory, type VisitRecord } from './SchoolVisitForm';
+import SchoolTicket from './SchoolTicket';
 
 type IonName = React.ComponentProps<typeof Ionicons>['name'];
-type TileKey = 'info' | 'dc' | 'raise' | 'request' | 'returns' | 'payments' | 'visits' | 'renewal' | 'training';
+type TileKey = 'info' | 'dc' | 'raise' | 'request' | 'returns' | 'payments' | 'visits' | 'renewal' | 'training' | 'ticket';
 
 const TILES: { key: TileKey; label: string; icon: IonName; color: string }[] = [
   { key: 'info', label: 'View Info', icon: 'information-circle-outline', color: '#2563EB' },
@@ -23,6 +24,7 @@ const TILES: { key: TileKey; label: string; icon: IonName; color: string }[] = [
   { key: 'visits', label: 'Visits', icon: 'location-outline', color: '#DC2626' },
   { key: 'renewal', label: 'Renewal / Cross-Sale', icon: 'repeat-outline', color: '#D97706' },
   { key: 'training', label: 'Training & Service', icon: 'school-outline', color: '#0D9488' },
+  { key: 'ticket', label: 'Raise Ticket', icon: 'help-buoy-outline', color: '#BE185D' },
 ];
 
 const date = (v?: string) => (v ? new Date(v).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
@@ -253,6 +255,10 @@ export default function SchoolHub({
             </Buttons>
           </>
         );
+      case 'ticket': {
+        const l: any = data.lead || {};
+        return <SchoolTicket schoolCode={code || l.school_code} schoolName={l.school_name || schoolName} town={l.location || l.town || l.area} />;
+      }
       default:
         return null;
     }

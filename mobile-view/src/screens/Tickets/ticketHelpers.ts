@@ -8,6 +8,7 @@ export type Ticket = {
   description: string;
   schoolName?: string;
   schoolCode?: string;
+  town?: string;
   status: 'Open' | 'Resolved';
   resolutionNote?: string;
   createdAt: string;

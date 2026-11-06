@@ -397,7 +397,6 @@ function CreateSaleForm({ navigation }: { navigation: any }) {
   return (
     <ScreenShell
       title="Create Deal (Sale)"
-      subtitle="A DC is created automatically with the deal."
     >
       {error ? <MessageBanner type="error" message={error} onDismiss={() => setError(null)} /> : null}
       {success ? <MessageBanner type="success" message={success} onDismiss={() => setSuccess(null)} /> : null}

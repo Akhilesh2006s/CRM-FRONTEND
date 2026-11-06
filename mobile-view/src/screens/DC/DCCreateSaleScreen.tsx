@@ -490,7 +490,6 @@ export default function DCCreateSaleScreen({ navigation }: any) {
   return (
     <ScreenShell
       title="Create Deal (Sale)"
-      subtitle="A DC is created automatically with the deal."
     >
       {error ? <MessageBanner type="error" message={error} onDismiss={() => setError(null)} /> : null}
       {success ? <MessageBanner type="success" message={success} onDismiss={() => setSuccess(null)} /> : null}
@@ -505,7 +504,7 @@ export default function DCCreateSaleScreen({ navigation }: any) {
       <WebLabel>School code</WebLabel>
       <View style={styles.autoBox}>
         <Text style={styles.autoValue}>Auto-generated</Text>
-        <Text style={styles.autoNote}>Made from pincode and cluster on save.</Text>
+        <Text style={styles.autoNote}>Created when the deal is saved, from the pincode and cluster.</Text>
       </View>
       <WebSelect
         label="School Type"

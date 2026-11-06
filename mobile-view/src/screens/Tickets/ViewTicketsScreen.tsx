@@ -135,6 +135,7 @@ export default function ViewTicketsScreen({ route }: any) {
               label="School"
               value={item.schoolName ? `${item.schoolName}${item.schoolCode ? ` (${item.schoolCode})` : ''}` : item.schoolCode || ''}
             />
+            <InfoRow label="Area / Town" value={item.town || ''} />
             <InfoRow label="Raised on" value={fmtTicketDate(item.createdAt)} />
             <InfoRow label="Note" value={item.resolutionNote || ''} />
             {item.status === 'Open' ? (
