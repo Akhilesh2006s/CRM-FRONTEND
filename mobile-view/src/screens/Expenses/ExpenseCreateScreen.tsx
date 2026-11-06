@@ -96,7 +96,7 @@ export default function ExpenseCreateScreen({ navigation }: any) {
   // GPS km recorded between Start Day and End Day on the expense date (read-only, from the server).
   const [gps, setGps] = useState<{ gpsKm: number; window?: string; signInAt?: string | null; signOutAt?: string | null } | null>(null);
   useEffect(() => {
-    if (!isTravelType || !form.date) return;
+    if (!form.date) return;
     let live = true;
     setGps(null);
     apiService
@@ -106,7 +106,7 @@ export default function ExpenseCreateScreen({ navigation }: any) {
     return () => {
       live = false;
     };
-  }, [isTravelType, form.date]);
+  }, [form.date]);
   const needsHotel = form.type === 'food' || form.type === 'accommodation';
   const isStay = form.type === 'accommodation';
   const amountLocked = isTravelType && isPerKmMode(form.transportType);
@@ -305,6 +305,17 @@ export default function ExpenseCreateScreen({ navigation }: any) {
           nestedScrollEnabled
         >
           {errorMessage && <MessageBanner type="error" message={errorMessage} onDismiss={() => setErrorMessage(null)} />}
+          <View style={styles.gpsCard}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.gpsTitle}>GPS recorded KM · {ymdToDmy(isStay ? form.checkInDate || form.date : form.date)}</Text>
+              <Text style={styles.hint}>
+                {gps?.window === 'sign_in_out'
+                  ? `Start Day → ${gps.signOutAt ? 'End Day' : 'now (day not ended)'}. Read-only; your manager sees it with your claimed km.`
+                  : 'No Start Day on this date; GPS points of the whole day are counted. Read-only.'}
+              </Text>
+            </View>
+            <Text style={styles.gpsKm}>{gps ? `${Number(gps.gpsKm || 0).toFixed(2)} km` : '…'}</Text>
+          </View>
 
           <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Expense</Text>
@@ -346,18 +357,6 @@ export default function ExpenseCreateScreen({ navigation }: any) {
               />
               <FormField label="From *" value={form.travelFrom} onChangeText={(t) => update({ travelFrom: t })} placeholder="Enter origin location" />
               <FormField label="To *" value={form.travelTo} onChangeText={(t) => update({ travelTo: t })} placeholder="Enter destination location" />
-              <View style={styles.fieldContainer}>
-                <Text style={styles.label}>GPS recorded KM (Start Day → End Day)</Text>
-                <View style={[styles.input, styles.inputLocked, styles.gpsBox]}>
-                  <Text style={styles.gpsKm}>{gps ? `${Number(gps.gpsKm || 0).toFixed(2)} km` : 'Loading…'}</Text>
-                  <Text style={styles.gpsTag}>Read-only</Text>
-                </View>
-                <Text style={styles.hint}>
-                  {gps?.window === 'sign_in_out'
-                    ? `Recorded by GPS on ${ymdToDmy(form.date)}${gps.signOutAt ? '' : ' (day not ended yet)'}. Your manager sees this with your claimed km.`
-                    : 'No Start Day on this date; GPS points of the whole day are counted.'}
-                </Text>
-              </View>
               <FormField
                 label={`Kilometres claimed${amountLocked ? ' *' : ''}`}
                 value={form.approxKms}
@@ -607,9 +606,9 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   inputLocked: { backgroundColor: colors.backgroundMuted, fontWeight: '600' },
-  gpsBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  gpsKm: { fontSize: 16, fontWeight: '700', color: colors.primaryDark },
-  gpsTag: { fontSize: 11, fontWeight: '700', color: colors.textTertiary, textTransform: 'uppercase' },
+  gpsCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE', borderRadius: 12, padding: 12, marginBottom: 14 },
+  gpsTitle: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
+  gpsKm: { fontSize: 20, fontWeight: '800', color: colors.primaryDark },
   inputError: { borderColor: colors.error },
   fieldError: { fontSize: 13, color: colors.error, marginTop: 4 },
   textArea: { minHeight: 70, textAlignVertical: 'top' },

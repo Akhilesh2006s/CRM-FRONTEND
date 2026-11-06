@@ -59,7 +59,7 @@ export default function CreateExpensePage() {
   // GPS km recorded between Start Day and End Day on the expense date (read-only, from the server).
   const [gps, setGps] = useState<{ gpsKm: number; window?: string; signOutAt?: string | null } | null>(null)
   useEffect(() => {
-    if (form.type !== 'travel' || !form.date) return
+    if (!form.date) return
     let live = true
     setGps(null)
     apiRequest<{ gpsKm: number; window?: string; signOutAt?: string | null }>(`/expenses/gps-km?date=${encodeURIComponent(form.date)}`)
@@ -68,7 +68,7 @@ export default function CreateExpensePage() {
     return () => {
       live = false
     }
-  }, [form.type, form.date])
+  }, [form.date])
 
   const amountLocked = isTravelAmountLocked(form.type, form.transportType)
   const autoAmount = amountLocked ? calcTravelAmount(form.transportType, Number(form.approxKms) || 0, rates) : ''
@@ -227,6 +227,17 @@ export default function CreateExpensePage() {
 
       <Card className="p-6 shadow-sm">
         <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-blue-200 bg-blue-50 p-4">
+            <div>
+              <div className="text-sm font-semibold text-neutral-900">GPS recorded KM · {form.date}</div>
+              <p className="text-xs text-neutral-600 mt-1">
+                {gps?.window === 'sign_in_out'
+                  ? `Start Day → ${gps.signOutAt ? 'End Day' : 'now (day not ended)'}. Read-only; your manager sees it with your claimed km.`
+                  : 'No Start Day on this date; GPS points of the whole day are counted. Read-only.'}
+              </p>
+            </div>
+            <div className="text-2xl font-bold text-blue-700 whitespace-nowrap">{gps ? `${Number(gps.gpsKm || 0).toFixed(2)} km` : '…'}</div>
+          </div>
           <div>
             <Label htmlFor="type">Type *</Label>
             <Select
@@ -289,21 +300,6 @@ export default function CreateExpensePage() {
               <div>
                 <Label htmlFor="travelTo">To *</Label>
                 <Input id="travelTo" value={form.travelTo} onChange={(e) => update({ travelTo: e.target.value })} required className="bg-white" placeholder="Enter destination location" />
-              </div>
-              <div>
-                <Label htmlFor="gpsKm">GPS recorded KM (Start Day → End Day)</Label>
-                <Input
-                  id="gpsKm"
-                  readOnly
-                  tabIndex={-1}
-                  value={gps ? `${Number(gps.gpsKm || 0).toFixed(2)} km` : 'Loading…'}
-                  className="bg-neutral-100 font-semibold cursor-not-allowed"
-                />
-                <p className="text-xs text-neutral-500 mt-1">
-                  {gps?.window === 'sign_in_out'
-                    ? `Read-only. Recorded by GPS on this date${gps.signOutAt ? '' : ' (day not ended yet)'}.`
-                    : 'Read-only. No Start Day on this date; GPS points of the whole day are counted.'}
-                </p>
               </div>
               <div>
                 <Label htmlFor="approxKms">Kilometres claimed{amountLocked ? ' *' : ''}</Label>
