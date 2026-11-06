@@ -431,7 +431,7 @@ export default function DCClientScreen({ navigation }: any) {
           filteredDCs.map((dc) => {
             const orderId = getOrderId(dc);
             const dcStatus = getDcStatus(dc);
-            const statusLabel = formatDcStatusLabel(dcStatus);
+            const statusLabel = dc.workflow?.label || formatDcStatusLabel(dcStatus);
             const createdDate = formatDate(dc.createdAt);
             const turnedDate =
               typeof dc.dcOrderId === 'object' && dc.dcOrderId?.createdAt
@@ -447,6 +447,12 @@ export default function DCClientScreen({ navigation }: any) {
                     <Text style={styles.statusText}>{statusLabel}</Text>
                   </View>
                 </View>
+                {dc.workflow?.nextAction || dc.workflow?.nextActorRole ? (
+                  <View style={styles.nextBox}>
+                    <Text style={styles.nextRole}>Next: {dc.workflow?.nextActorRole || 'BDE'}</Text>
+                    {dc.workflow?.nextAction ? <Text style={styles.nextAction}>{dc.workflow.nextAction}</Text> : null}
+                  </View>
+                ) : null}
 
                 <View style={styles.kv}>
                   <Text style={styles.k}>School code</Text>
@@ -511,7 +517,12 @@ export default function DCClientScreen({ navigation }: any) {
             schoolName={schoolName(dc)}
             schoolCode={getSchoolCode(dc)}
             year={dealYear(dc)}
-            status={formatDcStatusLabel(getDcStatus(dc))}
+            status={dc.workflow?.label || formatDcStatusLabel(getDcStatus(dc))}
+            nextStep={
+              dc.workflow?.nextAction || dc.workflow?.nextActorRole
+                ? `Next: ${dc.workflow?.nextActorRole || 'BDE'}${dc.workflow?.nextAction ? ` · ${dc.workflow.nextAction}` : ''}`
+                : undefined
+            }
             fieldDay={fieldDay}
             actions={{
               editPO,
@@ -644,6 +655,9 @@ const styles = StyleSheet.create({
   customerName: { ...typography.heading.h3, color: colors.textPrimary, flex: 1, marginRight: 12 },
   statusBadge: { backgroundColor: colors.info + '15', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
   statusText: { ...typography.body.small, color: colors.info, fontWeight: '600' },
+  nextBox: { backgroundColor: '#F8FAFC', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, marginBottom: 6 },
+  nextRole: { fontSize: 12, fontWeight: '700', color: colors.textPrimary },
+  nextAction: { fontSize: 12, color: colors.textTertiary, marginTop: 2 },
   cardBody: { marginBottom: 12 },
   infoRow: { flexDirection: 'row', marginBottom: 6 },
   infoLabel: { ...typography.body.small, color: colors.textSecondary, width: 80 },

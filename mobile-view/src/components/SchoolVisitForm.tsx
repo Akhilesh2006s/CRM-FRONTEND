@@ -44,10 +44,9 @@ export const VISIT_PURPOSES = [
   'Follow-up',
   'Other',
 ];
-const VERIFIED = ['Yes', 'Partly', 'No'];
+// Same options as the web Client DC page.
 const YES_NO = ['Yes', 'No'];
-const PROGRAM_STATUS = ['Not started', 'Started', 'Running well', 'Needs support', 'Stopped'];
-const TRAINING_STATUS = ['Not scheduled', 'Scheduled', 'In progress', 'Completed'];
+const TRAINING_STATUS = ['Completed', 'Not completed'];
 
 const date = (v?: string) => (v ? new Date(v).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
 const time = (v?: string) => (v ? new Date(v).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '');
@@ -64,7 +63,7 @@ function lastValues(history: VisitRecord[]) {
     };
     put('booksDistributed', d.booksDistributed);
     put('booksVerified', [d.booksVerified, d.booksVerifiedDetails].filter(Boolean).join(' – '));
-    put('programStarted', [d.programStarted, d.programStatus].filter(Boolean).join(' – '));
+    put('programStarted', d.programStarted);
     put('trainingStatus', [d.trainingStatus, d.trainingDetails].filter(Boolean).join(' – '));
     put('pagesCompleted', d.pagesCompleted);
   }
@@ -104,7 +103,6 @@ export default function SchoolVisitForm({
           booksVerified: f.booksVerified,
           booksVerifiedDetails: f.booksVerifiedDetails,
           programStarted: f.programStarted,
-          programStatus: f.programStatus,
           trainingStatus: f.trainingStatus,
           trainingDetails: f.trainingDetails,
           pagesCompleted: f.pagesCompleted,
@@ -149,15 +147,14 @@ export default function SchoolVisitForm({
       <Field label="Books distributed" value={f.booksDistributed} onChange={(v) => set('booksDistributed', v.replace(/[^0-9]/g, ''))} placeholder="Number of books" numeric last={last.booksDistributed} />
 
       <Text style={styles.label}>Client verified books</Text>
-      <Chips options={VERIFIED} value={f.booksVerified} onPick={(v) => toggle('booksVerified', v)} />
-      <Field value={f.booksVerifiedDetails} onChange={(v) => set('booksVerifiedDetails', v)} placeholder="Verification details (who checked, shortages…)" last={last.booksVerified} />
+      <Chips options={YES_NO} value={f.booksVerified} onPick={(v) => toggle('booksVerified', v)} />
+      <Field value={f.booksVerifiedDetails} onChange={(v) => set('booksVerifiedDetails', v)} placeholder="Verification note" last={last.booksVerified} />
 
-      <Text style={styles.label}>Program started</Text>
+      <Text style={styles.label}>Programs started</Text>
       <Chips options={YES_NO} value={f.programStarted} onPick={(v) => toggle('programStarted', v)} />
-      <Chips options={PROGRAM_STATUS} value={f.programStatus} onPick={(v) => toggle('programStatus', v)} />
       {last.programStarted ? <Last item={last.programStarted} /> : null}
 
-      <Text style={styles.label}>Training status</Text>
+      <Text style={styles.label}>Training</Text>
       <Chips options={TRAINING_STATUS} value={f.trainingStatus} onPick={(v) => toggle('trainingStatus', v)} />
       <Field value={f.trainingDetails} onChange={(v) => set('trainingDetails', v)} placeholder="Training details (topic, teachers trained…)" last={last.trainingStatus} />
 
@@ -184,8 +181,8 @@ export function VisitHistory({ history }: { history: VisitRecord[] }) {
           ['Purpose', d.purpose],
           ['Remarks', d.remarks],
           ['Books distributed', d.booksDistributed],
-          ['Books verified', [d.booksVerified, d.booksVerifiedDetails].filter(Boolean).join(' – ')],
-          ['Program', [d.programStarted ? `Started: ${d.programStarted}` : '', d.programStatus].filter(Boolean).join(' – ')],
+          ['Client verified books', [d.booksVerified, d.booksVerifiedDetails].filter(Boolean).join(' – ')],
+          ['Programs started', [d.programStarted, d.programStatus].filter(Boolean).join(' – ')],
           ['Training', [d.trainingStatus, d.trainingDetails].filter(Boolean).join(' – ')],
           ['Pages completed', d.pagesCompleted],
           ['Final remarks', d.finalRemarks],

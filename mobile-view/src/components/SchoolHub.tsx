@@ -51,6 +51,7 @@ export default function SchoolHub({
   schoolCode,
   year,
   status,
+  nextStep,
   fieldDay,
   actions,
 }: {
@@ -64,6 +65,8 @@ export default function SchoolHub({
   schoolCode?: string;
   year?: string;
   status?: string;
+  /** DC workflow, as on the web Client DC page: who acts next and what to do. */
+  nextStep?: string;
   fieldDay: { day: FieldDayState; reload: () => Promise<void> };
   actions: SchoolHubActions;
 }) {
@@ -283,6 +286,12 @@ export default function SchoolHub({
         </View>
 
         <ScrollView contentContainerStyle={styles.content}>
+          {nextStep ? (
+            <View style={styles.nextStep}>
+              <Ionicons name="arrow-forward-circle-outline" size={18} color={colors.primaryDark} />
+              <Text style={styles.nextStepText}>{nextStep}</Text>
+            </View>
+          ) : null}
           <View style={styles.grid}>
             {TILES.map((t) => {
               const on = tile === t.key;
@@ -317,6 +326,8 @@ function Buttons({ children }: { children: React.ReactNode }) {
 }
 
 const styles = StyleSheet.create({
+  nextStep: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#EFF6FF', borderRadius: 10, padding: 10, marginBottom: 12 },
+  nextStepText: { flex: 1, fontSize: 13, color: colors.textPrimary, fontWeight: '600' },
   inside: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#ECFDF5', borderRadius: 10, padding: 10, marginBottom: 12 },
   insideText: { flex: 1, fontSize: 13, color: '#065F46', fontWeight: '600' },
   root: { flex: 1, backgroundColor: colors.background },
