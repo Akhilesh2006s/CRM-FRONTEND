@@ -21,6 +21,7 @@ import {
   UserCircle2,
   Users,
   CalendarCheck2,
+  CalendarDays,
   GraduationCap,
   Boxes,
   RefreshCw,
@@ -277,7 +278,8 @@ function ensureLeaveManagementNav(nav: NavItem[], role: string | undefined): Nav
   }
   wanted.push(
     { label: 'Apply for Leave', href: '/dashboard/leaves/request', icon: PlusCircle },
-    { label: 'My Leaves', href: '/dashboard/leaves/approved', icon: CheckCircle2 }
+    { label: 'My Leaves', href: '/dashboard/leaves/approved', icon: CheckCircle2 },
+    { label: 'Holiday Calendar', href: '/dashboard/leaves/holidays', icon: CalendarDays }
   )
 
   const index = nav.findIndex((item) => item.label === 'Leave Management')
@@ -975,6 +977,7 @@ export function Sidebar() {
           { label: 'Leaves Report', href: '/dashboard/leaves/report', icon: FileText },
           { label: 'Leave Request', href: '/dashboard/leaves/request', icon: PlusCircle },
           { label: 'My Leaves', href: '/dashboard/leaves/approved', icon: CheckCircle2 },
+          { label: 'Holiday Calendar', href: '/dashboard/leaves/holidays', icon: CalendarDays },
         ],
       },
       {
@@ -1029,6 +1032,7 @@ export function Sidebar() {
         children: [
           { label: 'Leave Request', href: '/dashboard/leaves/request', icon: PlusCircle },
           { label: 'Leaves', href: '/dashboard/leaves/approved', icon: CheckCircle2 },
+          { label: 'Holiday Calendar', href: '/dashboard/leaves/holidays', icon: CalendarDays },
           { label: 'My Pay Slips', href: '/dashboard/payslips', icon: FileText },
         ],
       },
@@ -1272,6 +1276,7 @@ export function Sidebar() {
         children: [
           { label: 'Apply for Leave', href: '/dashboard/leaves/request', icon: PlusCircle },
           { label: 'My Leaves', href: '/dashboard/leaves/approved', icon: CheckCircle2 },
+          { label: 'Holiday Calendar', href: '/dashboard/leaves/holidays', icon: CalendarDays },
         ],
       },
       {
@@ -1334,6 +1339,7 @@ export function Sidebar() {
         children: [
           { label: 'Leave Request', href: '/dashboard/leaves/request', icon: PlusCircle },
           { label: 'My Leaves', href: '/dashboard/leaves/approved', icon: CheckCircle2 },
+          { label: 'Holiday Calendar', href: '/dashboard/leaves/holidays', icon: CalendarDays },
         ],
       },
       {

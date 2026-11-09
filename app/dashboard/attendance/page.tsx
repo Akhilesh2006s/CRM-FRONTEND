@@ -22,6 +22,10 @@ type AttendanceRow = {
   checkoutMode?: 'office' | 'field' | null
   reviewStatus?: 'none' | 'pending' | 'approved' | 'rejected'
   reviewRemarks?: string
+  /** Sunday / company holiday worked (earns a comp-off once End Day is done). */
+  holidayWorked?: boolean
+  holidayName?: string
+  compOffEarned?: boolean
 }
 
 const REVIEW_LABELS: Record<string, string> = {
@@ -294,7 +298,15 @@ export default function MyAttendancePage() {
             <tbody>
               {rows.map((row) => (
                 <tr key={row._id} className="border-t">
-                  <td className="py-2 px-3">{when(row.startTime)}</td>
+                  <td className="py-2 px-3">
+                    {when(row.startTime)}
+                    {row.holidayWorked && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        <span className="text-xs rounded bg-amber-50 text-amber-800 px-2 py-0.5">Holiday Worked · {row.holidayName}</span>
+                        {row.compOffEarned && <span className="text-xs rounded bg-emerald-50 text-emerald-700 px-2 py-0.5">Comp-Off Earned</span>}
+                      </div>
+                    )}
+                  </td>
                   <td className="py-2 px-3">{when(row.endTime)}</td>
                   <td className="py-2 px-3">
                     {row.mode === 'office' ? 'Office' : 'Field'}

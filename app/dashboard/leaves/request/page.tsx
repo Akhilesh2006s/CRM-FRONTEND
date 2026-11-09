@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { apiRequest } from '@/lib/api'
@@ -13,13 +13,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner'
 import { todayDateString, isBeforeToday } from '@/lib/todayDate'
 import { LEAVE_TYPE_OPTIONS, LEAVE_DAY_TYPES, HALF_DAY_SESSIONS, leaveDayCount, formatLeaveDays } from '@/lib/leaveTypes'
+import type { LeaveAllocation, LeaveBalance } from '@/lib/leavePolicy'
+import { LeaveBalanceCard } from '@/components/leaves/LeaveBalanceCard'
+import { LeavePaymentBreakdown } from '@/components/leaves/LeavePaymentBreakdown'
 
 const LEAVE_REQUEST_PATH = '/dashboard/leaves/request'
 
 export default function LeaveRequestPage() {
   const router = useRouter()
   const [form, setForm] = useState({
-    leaveType: 'Casual Leave',
+    leaveType: 'Sick Leave',
     dayType: 'Full Day',
     halfDaySession: 'First Half',
     startDate: '',
@@ -35,6 +38,35 @@ export default function LeaveRequestPage() {
       : 0
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [balance, setBalance] = useState<LeaveBalance | null>(null)
+  const [preview, setPreview] = useState<LeaveAllocation | null>(null)
+
+  useEffect(() => {
+    apiRequest<LeaveBalance>('/leaves/balance').then(setBalance).catch(() => setBalance(null))
+  }, [])
+
+  // How the chosen days would be paid (monthly leave, comp-off, loss of pay, sandwich days).
+  useEffect(() => {
+    if (dayCount <= 0) {
+      setPreview(null)
+      return
+    }
+    const timer = setTimeout(() => {
+      apiRequest<LeaveAllocation & { balance: LeaveBalance }>('/leaves/preview', {
+        method: 'POST',
+        body: JSON.stringify({
+          leaveType: form.leaveType,
+          dayType: form.dayType,
+          ...(isHalfDay ? { halfDaySession: form.halfDaySession } : {}),
+          startDate: form.startDate,
+          endDate: effectiveEndDate,
+        }),
+      })
+        .then((p) => setPreview(p))
+        .catch(() => setPreview(null))
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [form.leaveType, form.dayType, form.halfDaySession, form.startDate, effectiveEndDate, dayCount, isHalfDay])
 
   const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -93,6 +125,10 @@ export default function LeaveRequestPage() {
         </Link>
       </div>
 
+      <div className="max-w-2xl">
+        <LeaveBalanceCard balance={balance} />
+      </div>
+
       <Card className="p-6 shadow-sm max-w-2xl">
         <form onSubmit={onSubmit} className="space-y-4">
           {error && (
@@ -116,6 +152,9 @@ export default function LeaveRequestPage() {
                 ))}
               </SelectContent>
             </Select>
+            <p className="text-xs text-neutral-500 mt-1">
+              {LEAVE_TYPE_OPTIONS.find((o) => o.value === form.leaveType)?.hint}
+            </p>
           </div>
 
           <div>
@@ -196,6 +235,8 @@ export default function LeaveRequestPage() {
               {isHalfDay ? ` (${form.halfDaySession})` : ''}
             </p>
           )}
+
+          <LeavePaymentBreakdown allocation={preview} />
 
           <div>
             <Label htmlFor="reason">Reason</Label>

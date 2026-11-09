@@ -15,7 +15,10 @@ import { useAuth } from '../../context/AuthContext';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
-import { LEAVE_DAY_TYPES, HALF_DAY_SESSIONS, formatLeaveDays } from '../../lib/leaveTypes';
+import { LEAVE_DAY_TYPES, HALF_DAY_SESSIONS, formatLeaveDays, LEAVE_TYPE_OPTIONS, LEAVE_TYPE_HINTS } from '../../lib/leaveTypes';
+import type { LeaveAllocation, LeaveBalance } from '../../lib/leavePolicy';
+import LeaveBalanceCard from '../../components/leaves/LeaveBalanceCard';
+import LeavePaymentBreakdown from '../../components/leaves/LeavePaymentBreakdown';
 
 const todayDateString = () => {
   const d = new Date();
@@ -27,20 +30,13 @@ const todayDateString = () => {
 
 const isBeforeToday = (dateStr: string) => dateStr && dateStr < todayDateString();
 
-const LEAVE_TYPE_OPTIONS = [
-  { label: 'Casual Leave', value: 'Casual Leave' },
-  { label: 'Sick Leave', value: 'Sick Leave' },
-  { label: 'Earned Leave', value: 'Annual Leave' },
-  { label: 'Emergency Leave', value: 'Emergency Leave' },
-  { label: 'Other', value: 'Other' },
-];
 
 const HALF_DAY_SESSION_OPTIONS = HALF_DAY_SESSIONS.map((s) => ({ label: s, value: s }));
 
 const emptyForm = () => ({
   startDate: '',
   endDate: '',
-  leaveType: 'Casual Leave',
+  leaveType: 'Sick Leave',
   dayType: 'Full Day' as string,
   halfDaySession: 'First Half' as string,
   reason: '',
@@ -59,6 +55,34 @@ export default function LeaveRequestScreen({ navigation }: any) {
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
+  const [balance, setBalance] = useState<LeaveBalance | null>(null);
+  const [preview, setPreview] = useState<LeaveAllocation | null>(null);
+
+  const loadBalance = () => {
+    apiService.get('/leaves/balance').then((b: any) => setBalance(b || null)).catch(() => setBalance(null));
+  };
+  useEffect(loadBalance, []);
+
+  // How the chosen days would be paid (monthly leave, comp-off, loss of pay, sandwich days).
+  useEffect(() => {
+    if (!(form.days > 0)) {
+      setPreview(null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      apiService
+        .post('/leaves/preview', {
+          leaveType: form.leaveType,
+          dayType: form.dayType,
+          ...(isHalfDay ? { halfDaySession: form.halfDaySession } : {}),
+          startDate: form.startDate,
+          endDate: effectiveEndDate,
+        })
+        .then((p: any) => setPreview(p || null))
+        .catch(() => setPreview(null));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [form.leaveType, form.dayType, form.halfDaySession, form.startDate, effectiveEndDate, form.days, isHalfDay]);
 
   const clearMessages = () => {
     setSuccessMessage(null);
@@ -123,6 +147,7 @@ export default function LeaveRequestScreen({ navigation }: any) {
       });
       setSuccessMessage('Leave request submitted successfully!');
       setForm(emptyForm());
+      loadBalance();
       scrollRef.current?.scrollTo({ y: 0, animated: true });
     } catch (error: any) {
       setErrorMessage(error.message || 'Failed to submit leave request');
@@ -160,13 +185,16 @@ export default function LeaveRequestScreen({ navigation }: any) {
           <MessageBanner type="error" message={errorMessage} onDismiss={clearMessages} />
         )}
 
+        <LeaveBalanceCard balance={balance} />
+
         <PageSection title="Leave details">
         <WebSelect
           label="Leave Type *"
           value={form.leaveType}
           onValueChange={(v) => setForm((f) => ({ ...f, leaveType: v }))}
-          items={LEAVE_TYPE_OPTIONS}
+          items={LEAVE_TYPE_OPTIONS.map((o) => ({ label: o.label, value: o.value }))}
         />
+        <Text style={styles.hint}>{LEAVE_TYPE_HINTS[form.leaveType] || ''}</Text>
 
         <View style={styles.fieldContainer}>
           <WebLabel>Leave Duration *</WebLabel>
@@ -219,6 +247,7 @@ export default function LeaveRequestScreen({ navigation }: any) {
             </Text>
           </View>
         )}
+        <LeavePaymentBreakdown allocation={preview} />
         </PageSection>
 
         <PageSection title="Reason">
@@ -393,6 +422,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
     borderRadius: 10,
   },
+  hint: { fontSize: 12, color: '#6B7280', marginTop: -6, marginBottom: 10 },
   daysText: { fontSize: 14, color: colors.primaryDark, fontWeight: '700', textAlign: 'center' },
   dateOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
   datePickerBox: {

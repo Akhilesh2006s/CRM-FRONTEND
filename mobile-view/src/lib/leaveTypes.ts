@@ -1,13 +1,26 @@
-/** Matches backend `Leave.leaveType` enum in `backend/models/Leave.js`. */
+/**
+ * Request-form leave types (backend `utils/leavePolicy.js` LEAVE_TYPES). Sick Leave / Company Paid Leave
+ * use the monthly paid leave (1 a month), Comp Off uses comp-offs, Unpaid Leave is loss of pay.
+ */
 export const LEAVE_TYPE_OPTIONS = [
-  { label: 'Casual Leave', value: 'Casual Leave' },
   { label: 'Sick Leave', value: 'Sick Leave' },
-  { label: 'Earned Leave', value: 'Annual Leave' },
-  { label: 'Other', value: 'Other' },
+  { label: 'Company Paid Leave', value: 'Company Paid Leave' },
+  { label: 'Comp Off', value: 'Comp Off' },
+  { label: 'Unpaid Leave', value: 'Unpaid Leave' },
 ] as const;
+
+export const LEAVE_TYPE_HINTS: Record<string, string> = {
+  'Sick Leave': 'Paid from monthly leave, then comp-off',
+  'Company Paid Leave': 'Paid from monthly leave, then comp-off',
+  'Comp Off': 'Paid from comp-offs earned on holidays worked',
+  'Unpaid Leave': 'Loss of pay (salary deducted)',
+};
 
 const LABEL_BY_VALUE: Record<string, string> = {
   'Sick Leave': 'Sick Leave',
+  'Company Paid Leave': 'Company Paid Leave',
+  'Comp Off': 'Comp Off',
+  'Unpaid Leave': 'Unpaid Leave',
   'Annual Leave': 'Earned Leave',
   'Casual Leave': 'Casual Leave',
   'Emergency Leave': 'Emergency Leave',

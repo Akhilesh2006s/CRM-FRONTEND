@@ -1,11 +1,11 @@
 import React, { useCallback, useState } from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import ScreenShell from '../../ui/ScreenShell';
 import MessageBanner from '../../components/MessageBanner';
 import AttendanceCard, { attendanceReasonLabel } from '../../components/AttendanceCard';
 import { apiService } from '../../services/api';
-import { Card, CardTitle, InfoRow, EmptyState, SectionTitle } from '../../ui/Kit';
+import { Card, CardTitle, InfoRow, EmptyState, SectionTitle, Badge } from '../../ui/Kit';
 
 type AttendanceRow = {
   _id: string;
@@ -13,6 +13,10 @@ type AttendanceRow = {
   endTime?: string;
   attendanceReason?: string;
   town?: string;
+  /** Sunday / company holiday worked (earns a comp-off once End Day is done). */
+  holidayWorked?: boolean;
+  holidayName?: string;
+  compOffEarned?: boolean;
 };
 
 function when(value?: string) {
@@ -75,6 +79,12 @@ export default function MyAttendanceScreen() {
             />
             <InfoRow label="Start" value={when(row.startTime)} />
             <InfoRow label="End" value={when(row.endTime)} />
+            {row.holidayWorked ? (
+              <View style={styles.badges}>
+                <Badge label={`Holiday Worked · ${row.holidayName || ''}`} tone="warning" />
+                {row.compOffEarned ? <Badge label="Comp-Off Earned" tone="success" /> : null}
+              </View>
+            ) : null}
           </Card>
         ))
       )}
@@ -84,4 +94,5 @@ export default function MyAttendanceScreen() {
 
 const styles = StyleSheet.create({
   card: { padding: 14 },
+  badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
 });

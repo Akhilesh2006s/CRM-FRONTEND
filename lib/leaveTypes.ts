@@ -1,6 +1,9 @@
-/** Matches backend `Leave.leaveType` enum in `backend/models/Leave.js`. */
+/** Matches backend `Leave.leaveType` enum (`backend/utils/leavePolicy.js` ALL_LEAVE_TYPES). */
 export const LEAVE_TYPE_ENUM = [
   'Sick Leave',
+  'Company Paid Leave',
+  'Comp Off',
+  'Unpaid Leave',
   'Annual Leave',
   'Casual Leave',
   'Emergency Leave',
@@ -10,18 +13,21 @@ export const LEAVE_TYPE_ENUM = [
 export type LeaveTypeValue = (typeof LEAVE_TYPE_ENUM)[number]
 
 /**
- * Request-form options: UI label vs stored enum value.
- * "Earned Leave" is the display name for schema value "Annual Leave".
+ * Request-form options. Sick Leave / Company Paid Leave use the monthly paid leave (1 a month),
+ * Comp Off uses comp-offs earned by working Sundays / holidays, Unpaid Leave is loss of pay.
  */
-export const LEAVE_TYPE_OPTIONS: { label: string; value: LeaveTypeValue }[] = [
-  { label: 'Casual Leave', value: 'Casual Leave' },
-  { label: 'Sick Leave', value: 'Sick Leave' },
-  { label: 'Earned Leave', value: 'Annual Leave' },
-  { label: 'Other', value: 'Other' },
+export const LEAVE_TYPE_OPTIONS: { label: string; value: LeaveTypeValue; hint: string }[] = [
+  { label: 'Sick Leave', value: 'Sick Leave', hint: 'Paid from monthly leave, then comp-off' },
+  { label: 'Company Paid Leave', value: 'Company Paid Leave', hint: 'Paid from monthly leave, then comp-off' },
+  { label: 'Comp Off', value: 'Comp Off', hint: 'Paid from comp-offs earned on holidays worked' },
+  { label: 'Unpaid Leave', value: 'Unpaid Leave', hint: 'Loss of pay (salary deducted)' },
 ]
 
 const LABEL_BY_VALUE: Record<string, string> = {
   'Sick Leave': 'Sick Leave',
+  'Company Paid Leave': 'Company Paid Leave',
+  'Comp Off': 'Comp Off',
+  'Unpaid Leave': 'Unpaid Leave',
   'Annual Leave': 'Earned Leave',
   'Casual Leave': 'Casual Leave',
   'Emergency Leave': 'Emergency Leave',
