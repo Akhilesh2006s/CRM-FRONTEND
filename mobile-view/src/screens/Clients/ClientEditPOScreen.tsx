@@ -745,8 +745,8 @@ export default function ClientEditPOScreen({ navigation, route }: any) {
           ? 'PO edit request submitted! Zonal Manager will review and approve.'
           : 'PO updated successfully!',
       );
-      if (!navigateRoot('DCClient')) {
-        navigation.navigate('DCClient');
+      if (!navigateRoot('DCClient', { view: 'orders' })) {
+        navigation.navigate('DCClient', { view: 'orders' });
       }
     } catch (e: any) {
       showAlert('Error', e?.message || 'Failed to update PO');

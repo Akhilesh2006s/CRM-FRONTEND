@@ -456,8 +456,8 @@ export default function LeadCloseScreen({ route }: any) {
       }
     }
 
-    setNotice('Lead converted to client! DC created and submitted to My Clients successfully.');
-    navigateRoot('DCClient', dc?._id ? { newlyConvertedDCId: dc._id } : undefined);
+    setNotice('Lead closed! The order is in My Orders with status DC Pending.');
+    navigateRoot('DCClient', dc?._id ? { view: 'orders', newlyConvertedDCId: dc._id } : { view: 'orders' });
   };
 
   const handleSplitConfirm = async () => {

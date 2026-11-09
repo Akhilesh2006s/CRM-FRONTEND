@@ -145,7 +145,8 @@ function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
       {
         title: 'Clients',
         items: [
-          { label: 'My Clients', screen: 'DCClient' },
+          { label: 'My Orders', screen: 'DCClient', params: { view: 'orders' } },
+          { label: 'My Clients', screen: 'DCClient', params: { view: 'clients' } },
           { label: 'Renewal', screen: 'LeadsRenewalList' },
           { label: 'Term-Wise DC', screen: 'DCTermWise' },
         ],
@@ -208,7 +209,8 @@ function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
       {
         title: 'Clients',
         items: [
-          { label: 'My Clients', screen: 'DCClient' },
+          { label: 'My Orders', screen: 'DCClient', params: { view: 'orders' } },
+          { label: 'My Clients', screen: 'DCClient', params: { view: 'clients' } },
           { label: 'Renewal', screen: 'LeadsRenewalList' },
           { label: 'Term-Wise DC', screen: 'DCTermWise' },
           { label: 'Closed Sales', screen: 'DCClosed' },

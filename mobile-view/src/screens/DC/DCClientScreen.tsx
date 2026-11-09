@@ -36,7 +36,7 @@ const MODULES: { key: OverviewSection; label: string }[] = [
   { key: 'visits', label: 'Visits' },
 ];
 import { useFieldDay } from '../../components/SchoolVisitActions';
-import SchoolHub from '../../components/SchoolHub';
+import SchoolHub, { ORDER_STEPS, orderStepOf } from '../../components/SchoolHub';
 
 /** Academic years run April to March, e.g. 2026-27. */
 const academicYearFor = (date: string | Date = new Date()) => {
@@ -48,7 +48,13 @@ const yearStart = (y: string) => Number(String(y).slice(0, 4)) || 0;
 const yearFrom = (start: number) => `${start}-${String((start + 1) % 100).padStart(2, '0')}`;
 import { resolveMyClientsDcStatus } from '../../utils/myClientsDcStatus';
 
-export default function DCClientScreen({ navigation }: any) {
+/** A DC completed at the warehouse moves from My Orders to My Clients. */
+const isCompletedDc = (dc: any) =>
+  String(dc?.status || '').toLowerCase() === 'completed' || ['delivery_confirmation', 'billing'].includes(dc?.workflow?.stage);
+
+export default function DCClientScreen({ navigation, route }: any) {
+  /** orders = My Orders (PO uploaded, DC on its way); clients = My Clients (DC completed). */
+  const view: 'orders' | 'clients' = route?.params?.view === 'orders' ? 'orders' : 'clients';
   const { user } = useAuth();
   const fieldDay = useFieldDay();
   const [dcs, setDcs] = useState<any[]>([]);
@@ -380,6 +386,7 @@ export default function DCClientScreen({ navigation }: any) {
   };
 
   const filteredDCs = dcs
+    .filter((dc) => (view === 'orders' ? !isCompletedDc(dc) : isCompletedDc(dc)))
     .filter((dc) => {
       const words = searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
       if (!words.length) return true;
@@ -402,7 +409,7 @@ export default function DCClientScreen({ navigation }: any) {
 
   return (
     <ScreenShell
-      title="My Clients"
+      title={view === 'orders' ? 'My Orders' : 'My Clients'}
       loading={loading && !refreshing}
       refreshing={refreshing}
       onRefresh={onRefresh}
@@ -424,14 +431,19 @@ export default function DCClientScreen({ navigation }: any) {
         {filteredDCs.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyIcon}>👥</Text>
-            <Text style={styles.emptyTitle}>No Clients</Text>
-            <Text style={styles.emptySubtitle}>Closed leads will appear here. Request DC when ready.</Text>
+            <Text style={styles.emptyTitle}>{view === 'orders' ? 'No Orders' : 'No Clients'}</Text>
+            <Text style={styles.emptySubtitle}>
+              {view === 'orders'
+                ? 'Closed leads with an uploaded PO appear here. Raise the DC when ready.'
+                : 'Schools move here once their DC is completed at the warehouse.'}
+            </Text>
           </View>
         ) : (
           filteredDCs.map((dc) => {
             const orderId = getOrderId(dc);
             const dcStatus = getDcStatus(dc);
-            const statusLabel = dc.workflow?.label || formatDcStatusLabel(dcStatus);
+            const statusLabel =
+              view === 'orders' ? ORDER_STEPS[orderStepOf(dc.workflow?.stage)] : dc.workflow?.label || formatDcStatusLabel(dcStatus);
             const createdDate = formatDate(dc.createdAt);
             const turnedDate =
               typeof dc.dcOrderId === 'object' && dc.dcOrderId?.createdAt
@@ -523,7 +535,9 @@ export default function DCClientScreen({ navigation }: any) {
             schoolName={schoolName(dc)}
             schoolCode={getSchoolCode(dc)}
             year={dealYear(dc)}
-            status={dc.workflow?.label || formatDcStatusLabel(getDcStatus(dc))}
+            mode={view === 'orders' ? 'order' : 'client'}
+            stage={dc.workflow?.stage}
+            status={view === 'orders' ? ORDER_STEPS[orderStepOf(dc.workflow?.stage)] : dc.workflow?.label || formatDcStatusLabel(getDcStatus(dc))}
             nextStep={
               dc.workflow?.nextAction || dc.workflow?.nextActorRole
                 ? `Next: ${dc.workflow?.nextActorRole || 'BDE'}${dc.workflow?.nextAction ? ` · ${dc.workflow.nextAction}` : ''}`

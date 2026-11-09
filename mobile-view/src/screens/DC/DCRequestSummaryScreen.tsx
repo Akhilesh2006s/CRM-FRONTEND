@@ -414,7 +414,7 @@ export default function DCRequestSummaryScreen({ navigation, route }: any) {
             ? 'Term 1 and Term 2 sent together to Closed Sales for Admin/Coordinator review.'
             : 'Request sent to Closed Sales. Admin/Coordinator will Raise DC; then it moves to Pending DC and warehouse.',
       );
-      if (!navigateRoot('DCClient')) navigation.navigate('DCClient');
+      if (!navigateRoot('DCClient', { view: 'orders' })) navigation.navigate('DCClient', { view: 'orders' });
     } catch (e: any) {
       showAlert('Error', e?.message || 'Failed to submit Client Request');
     } finally {

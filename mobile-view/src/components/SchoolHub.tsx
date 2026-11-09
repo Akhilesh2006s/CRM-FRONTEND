@@ -12,20 +12,56 @@ import SchoolVisitForm, { VisitHistory, type VisitRecord } from './SchoolVisitFo
 import SchoolTicket from './SchoolTicket';
 
 type IonName = React.ComponentProps<typeof Ionicons>['name'];
-type TileKey = 'info' | 'dc' | 'raise' | 'request' | 'returns' | 'payments' | 'visits' | 'renewal' | 'training' | 'ticket';
+type TileKey =
+  | 'info' | 'dc' | 'raise' | 'returns' | 'payments' | 'visits' | 'renewal' | 'training' | 'ticket'
+  | 'editpo' | 'addproduct' | 'target' | 'subdc';
+type Tile = { key: TileKey; label: string; icon: IonName; color: string };
 
-const TILES: { key: TileKey; label: string; icon: IonName; color: string }[] = [
-  { key: 'info', label: 'View Info', icon: 'information-circle-outline', color: '#2563EB' },
+/** My Orders (PO uploaded, DC not completed yet). */
+const ORDER_TILES: Tile[] = [
+  { key: 'info', label: 'Full Info of School', icon: 'information-circle-outline', color: '#2563EB' },
+  { key: 'editpo', label: 'Edit PO / PO Upload', icon: 'create-outline', color: '#0891B2' },
+  { key: 'addproduct', label: 'Add Product', icon: 'add-circle-outline', color: '#16A34A' },
+  { key: 'raise', label: 'Request DC & Raise DC', icon: 'paper-plane-outline', color: '#7C3AED' },
+];
+
+/** My Clients (DC completed at the warehouse). */
+const CLIENT_TILES: Tile[] = [
   { key: 'dc', label: 'DC Info', icon: 'document-text-outline', color: '#0891B2' },
-  { key: 'raise', label: 'Raise DC', icon: 'add-circle-outline', color: '#7C3AED' },
-  { key: 'request', label: 'Request DC', icon: 'paper-plane-outline', color: '#4F46E5' },
-  { key: 'returns', label: 'Returns', icon: 'return-down-back-outline', color: '#EA580C' },
+  { key: 'returns', label: 'Return', icon: 'return-down-back-outline', color: '#EA580C' },
+  { key: 'info', label: 'View Info', icon: 'information-circle-outline', color: '#2563EB' },
   { key: 'payments', label: 'Payments', icon: 'card-outline', color: '#16A34A' },
   { key: 'visits', label: 'Visits', icon: 'location-outline', color: '#DC2626' },
-  { key: 'renewal', label: 'Renewal / Cross-Sale', icon: 'repeat-outline', color: '#D97706' },
   { key: 'training', label: 'Training & Service', icon: 'school-outline', color: '#0D9488' },
   { key: 'ticket', label: 'Raise Ticket', icon: 'help-buoy-outline', color: '#BE185D' },
+  { key: 'target', label: 'Payment Target Month Wise', icon: 'calendar-outline', color: '#4F46E5' },
+  { key: 'subdc', label: 'Sub DC', icon: 'git-branch-outline', color: '#7C3AED' },
+  { key: 'renewal', label: 'Renewal / Cross-Sale', icon: 'repeat-outline', color: '#D97706' },
 ];
+
+/** Where a My Orders DC is, in the BDE's words (from the server's workflow stage). */
+export const ORDER_STEPS = ['DC Pending', 'DC at Coordinator', 'DC at Senior Coordinator', 'DC at Warehouse', 'DC Completed'];
+export function orderStepOf(stage?: string): number {
+  switch (stage) {
+    case 'dc_review':
+      return 1;
+    case 'dc_approval':
+      return 2;
+    case 'warehouse_receipt':
+    case 'warehouse_processing':
+    case 'dispatch_approval':
+      return 3;
+    case 'delivery_confirmation':
+    case 'billing':
+    case 'claim':
+      return 4;
+    default:
+      return 0;
+  }
+}
+
+const money = (n?: number) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
+const MONTHS = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
 
 const date = (v?: string) => (v ? new Date(v).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
 const time = (v?: string) => (v ? new Date(v).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '');
@@ -52,6 +88,8 @@ export default function SchoolHub({
   year,
   status,
   nextStep,
+  mode = 'client',
+  stage,
   fieldDay,
   actions,
 }: {
@@ -67,10 +105,15 @@ export default function SchoolHub({
   status?: string;
   /** DC workflow, as on the web Client DC page: who acts next and what to do. */
   nextStep?: string;
+  /** order = My Orders (PO uploaded, DC on its way); client = My Clients (DC completed). */
+  mode?: 'order' | 'client';
+  /** Server workflow stage of the DC (for the My Orders tracker). */
+  stage?: string;
   fieldDay: { day: FieldDayState; reload: () => Promise<void> };
   actions: SchoolHubActions;
 }) {
-  const [tile, setTile] = useState<TileKey>('info');
+  const TILES = mode === 'order' ? ORDER_TILES : CLIENT_TILES;
+  const [tile, setTile] = useState<TileKey>(TILES[0].key);
   const [data, setData] = useState<Overview | null>(null);
   const [error, setError] = useState('');
 
@@ -85,7 +128,7 @@ export default function SchoolHub({
 
   useEffect(() => {
     if (!visible) return;
-    setTile('info');
+    setTile(TILES[0].key);
     setData(null);
     void load();
   }, [visible, load]);
@@ -123,35 +166,106 @@ export default function SchoolHub({
             </Buttons>
           </>
         );
-      case 'raise':
+      case 'editpo':
         return (
           <>
-            <Text style={styles.help}>Create the Delivery Challan for this school's PO, or update one already raised.</Text>
-            <SchoolOverview leadId={id} data={data} only="dcs" />
+            <Text style={styles.help}>Update the PO details or upload the PO document again.</Text>
+            <Buttons>
+              {actions.editPO ? <WebButton title="Edit PO / PO Upload" onPress={() => { onClose(); actions.editPO?.(); }} /> : <Text style={styles.muted}>No PO to edit yet.</Text>}
+            </Buttons>
+          </>
+        );
+      case 'addproduct':
+        return (
+          <>
+            <Text style={styles.help}>Add products to this order. The price of products already in the PO cannot be changed at this stage.</Text>
+            <Buttons>
+              {orderId ? <WebButton title="Add Product" onPress={() => go('ClientEditPO', { orderId, dcId, addProduct: true })} /> : <Text style={styles.muted}>No order yet.</Text>}
+            </Buttons>
+          </>
+        );
+      case 'raise': {
+        const order = data.orders[0] || {};
+        const products = (order.products || []).map((p: any) => p.product_name).filter(Boolean).join(', ');
+        return (
+          <>
+            <Text style={styles.help}>Check the products, student strength and transport, then Raise DC to send it to the internal team.</Text>
+            <InfoRow label="Products" value={products || '—'} />
+            <InfoRow label="Student strength" value={String(order.strength ?? data.lead?.strength ?? '—')} />
+            <InfoRow label="Transport" value="Check transport details in the DC form" />
+            <InfoRow label="Status" value={status} />
             <Buttons>
               {orderId ? <WebButton title="Raise DC" onPress={() => go('DCCreate', { dealId: orderId })} /> : null}
               {orderId ? <WebButton title="Update DC" variant="outline" onPress={() => go('DCCreate', { dealId: orderId, mode: 'update' })} /> : null}
-            </Buttons>
-          </>
-        );
-      case 'request':
-        return (
-          <>
-            <Text style={styles.help}>Send this school's PO for a DC. You can follow its status under DC Info.</Text>
-            <InfoRow label="Status" value={status} />
-            <Buttons>
               {actions.requestDC ? (
                 <WebButton
                   title={actions.requestDC.label}
+                  variant="outline"
                   disabled={actions.requestDC.disabled}
                   onPress={() => { onClose(); actions.requestDC?.onPress(); }}
                 />
-              ) : (
-                <Text style={styles.help}>A DC has already been requested for this PO.</Text>
-              )}
+              ) : null}
             </Buttons>
           </>
         );
+      }
+      case 'target': {
+        const order = data.orders[0] || {};
+        const total = Number(order.total_amount) || 0;
+        const yearStart = Number(String(order.year || year || '').slice(0, 4)) || new Date().getFullYear();
+        const byMonth = new Map<string, number>();
+        let received = 0;
+        for (const p of data.payments) {
+          if (String(p.status || '').toLowerCase() === 'rejected') continue;
+          const d = new Date(p.paymentDate || p.createdAt);
+          if (Number.isNaN(d.getTime())) continue;
+          const key = `${d.getFullYear()}-${d.getMonth()}`;
+          byMonth.set(key, (byMonth.get(key) || 0) + (Number(p.amount) || 0));
+          received += Number(p.amount) || 0;
+        }
+        return (
+          <>
+            <InfoRow label="Order value" value={money(total)} />
+            <InfoRow label="Received" value={money(received)} />
+            <InfoRow label="Balance" value={money(Math.max(total - received, 0))} />
+            <Text style={[styles.sectionTitle, { marginTop: 12 }]}>Month wise ({yearStart}-{String(yearStart + 1).slice(2)})</Text>
+            {MONTHS.map((m, i) => {
+              const y = i < 9 ? yearStart : yearStart + 1;
+              const month = (i + 3) % 12;
+              const got = byMonth.get(`${y}-${month}`) || 0;
+              return (
+                <View key={m} style={styles.line}>
+                  <Text style={[styles.lineMain, { flex: 1 }]}>{m} {y}</Text>
+                  <Text style={[styles.lineMain, got ? { color: colors.success } : { color: colors.textMuted }]}>{money(got)}</Text>
+                </View>
+              );
+            })}
+            <Buttons>
+              <WebButton title="+ Add Payment" onPress={() => go('PaymentAdd', { schoolCode: code })} />
+            </Buttons>
+          </>
+        );
+      }
+      case 'subdc': {
+        const subs = data.dcs.filter((d: any) => d.parentDcId || d.dcType === 'shortage');
+        return (
+          <>
+            <Text style={styles.help}>Sub DCs are extra delivery challans for this school when a shipment is split or short.</Text>
+            {subs.length === 0 ? <Text style={styles.muted}>No sub DCs.</Text> : null}
+            {subs.map((d: any) => (
+              <View key={d._id} style={styles.line}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.lineMain}>{d.dc_code || 'Sub DC'}</Text>
+                  <Text style={styles.muted}>
+                    {[date(d.createdAt), d.requestedQuantity ? `Qty ${d.requestedQuantity}` : '', d.fulfillmentStatus].filter(Boolean).join(' · ')}
+                  </Text>
+                </View>
+                <Badge label={String(d.status || '—').replace(/_/g, ' ')} />
+              </View>
+            ))}
+          </>
+        );
+      }
       case 'returns':
         return (
           <>
@@ -286,6 +400,25 @@ export default function SchoolHub({
         </View>
 
         <ScrollView contentContainerStyle={styles.content}>
+          {mode === 'order' ? (
+            <View style={styles.tracker}>
+              {ORDER_STEPS.map((s, i) => {
+                const at = orderStepOf(stage);
+                const done = i < at;
+                const now = i === at;
+                return (
+                  <View key={s} style={styles.trackStep}>
+                    <Ionicons
+                      name={done ? 'checkmark-circle' : now ? 'radio-button-on' : 'ellipse-outline'}
+                      size={18}
+                      color={done ? colors.success : now ? colors.primaryDark : colors.textMuted}
+                    />
+                    <Text style={[styles.trackText, now && { color: colors.primaryDark, fontWeight: '700' }, done && { color: colors.success }]}>{s}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          ) : null}
           {nextStep ? (
             <View style={styles.nextStep}>
               <Ionicons name="arrow-forward-circle-outline" size={18} color={colors.primaryDark} />
@@ -326,6 +459,9 @@ function Buttons({ children }: { children: React.ReactNode }) {
 }
 
 const styles = StyleSheet.create({
+  tracker: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#EEF2F7', padding: 12, marginBottom: 12, gap: 6 },
+  trackStep: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  trackText: { fontSize: 13, color: colors.textSecondary },
   nextStep: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#EFF6FF', borderRadius: 10, padding: 10, marginBottom: 12 },
   nextStepText: { flex: 1, fontSize: 13, color: colors.textPrimary, fontWeight: '600' },
   inside: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#ECFDF5', borderRadius: 10, padding: 10, marginBottom: 12 },
