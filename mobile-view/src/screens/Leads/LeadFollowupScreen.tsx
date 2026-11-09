@@ -21,7 +21,7 @@ import ScreenShell from '../../ui/ScreenShell';
 import { WebInput, WebSelect } from '../../ui/WebPrimitives';
 import { Card, CardTitle, InfoRow, ActionRow, EmptyState, toneFor, type Tone } from '../../ui/Kit';
 import { navigateRoot } from '../../navigation/navigationRef';
-import SchoolVisitActions, { useFieldDay } from '../../components/SchoolVisitActions';
+import SchoolVisitActions, { useFieldDay, sameSchool } from '../../components/SchoolVisitActions';
 import {
   DROPPED_LINE_STATUSES,
   PRICED_LINE_STATUSES,
@@ -865,18 +865,23 @@ export default function LeadFollowupScreen({ navigation }: any) {
                 />
               </View>
 
+              {(() => {
+                const open = fieldDay.day?.openVisit;
+                const here = !!open && !!sameSchool(open, { schoolName: lead.school_name || 'School', schoolCode: lead.school_code || undefined, leadId: lead._id });
+                const needCheckIn = () => Alert.alert('Check in first', 'Check in at this school to create a follow-up or edit the lead. You can view the history any time.');
+                return (
               <ActionRow>
                 <TouchableOpacity
-                  style={[styles.actionButton, styles.updateButton]}
-                  onPress={() => openUpdateModal(lead)}
+                  style={[styles.actionButton, styles.updateButton, !here && styles.lockedButton]}
+                  onPress={() => (here ? openUpdateModal(lead) : needCheckIn())}
                 >
-                  <Text style={styles.actionButtonText}>Create Follow-up</Text>
+                  <Text style={styles.actionButtonText}>{here ? 'Create Follow-up' : '🔒 Create Follow-up'}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.actionButton, styles.outlineButton]}
-                  onPress={() => navigation.navigate('LeadEdit', { id: lead._id })}
+                  style={[styles.actionButton, styles.outlineButton, !here && styles.lockedButton]}
+                  onPress={() => (here ? navigation.navigate('LeadEdit', { id: lead._id }) : needCheckIn())}
                 >
-                  <Text style={styles.outlineButtonText}>Edit Lead</Text>
+                  <Text style={styles.outlineButtonText}>{here ? 'Edit Lead' : '🔒 Edit Lead'}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.actionButton, styles.outlineButton]}
@@ -901,6 +906,8 @@ export default function LeadFollowupScreen({ navigation }: any) {
                   <Text style={styles.actionButtonText}>Close Lead</Text>
                 </TouchableOpacity>
               </ActionRow>
+                );
+              })()}
             </Card>
           );
         })
@@ -1423,6 +1430,7 @@ const styles = StyleSheet.create({
   },
   updateButton: { backgroundColor: colors.primaryDark },
   outlineButton: { backgroundColor: colors.backgroundLight, borderWidth: 1, borderColor: colors.border },
+  lockedButton: { opacity: 0.45 },
   outlineButtonText: { fontSize: 14, color: colors.textPrimary, fontWeight: '600' },
   closeButton: { backgroundColor: colors.success },
   actionButtonText: { fontSize: 14, color: colors.textLight, fontWeight: '700' },

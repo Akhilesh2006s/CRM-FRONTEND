@@ -63,7 +63,8 @@ export default function ScreenShell({
                 navigation.goBack();
                 return;
               }
-              navigation.navigate('MainTabs' as never);
+              // Tab pages (Reports, …) have nothing to go back to: go to Home.
+              (navigation as any).navigate('MainTabs', { screen: 'Home' });
             }}
             style={styles.backBtn}
             hitSlop={12}

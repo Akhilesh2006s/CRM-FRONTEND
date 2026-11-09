@@ -28,7 +28,7 @@ const TYPES = [
   { value: 'other', label: 'Other' },
 ]
 
-/** Sales Collateral: Admin / Super Admin upload brochures and videos; everyone else views them. */
+/** Demo Videos (Sales Collateral): Admin / Super Admin upload brochures and videos; everyone else views them. */
 export default function SalesCollateralPage() {
   const [items, setItems] = useState<Item[]>([])
   const [loading, setLoading] = useState(true)
@@ -110,7 +110,7 @@ export default function SalesCollateralPage() {
   return (
     <div className="p-6 space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold">Sales Collateral</h1>
+        <h1 className="text-2xl font-semibold">Demo Videos</h1>
         <p className="text-sm text-neutral-500 mt-1">
           Brochures, videos and PPTs for school visits{canManage ? '' : '. Uploaded by Admin.'}
         </p>

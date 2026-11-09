@@ -803,7 +803,7 @@ function applyExecutiveSidebarOrder(nav: NavItem[]): NavItem[] {
         { label: 'Followup Leads', href: '/dashboard/leads/followup', icon: Phone },
         { label: 'My Schools', href: '/dashboard/leads/my-schools', icon: Building2 },
         { label: 'School Visits', href: '/dashboard/visits', icon: MapPin },
-        { label: 'Sales Collateral', href: '/dashboard/collateral', icon: FileText },
+        { label: 'Demo Videos', href: '/dashboard/collateral', icon: FileText },
     ],
   })
   // Samples are requested inside Emp DC; no separate Request Samples menu.
@@ -1020,7 +1020,7 @@ export function Sidebar() {
             { label: 'Followup Leads', href: '/dashboard/leads/followup', icon: Phone },
             { label: 'My Schools', href: '/dashboard/leads/my-schools', icon: Building2 },
             { label: 'School Visits', href: '/dashboard/visits', icon: MapPin },
-            { label: 'Sales Collateral', href: '/dashboard/collateral', icon: FileText },
+            { label: 'Demo Videos', href: '/dashboard/collateral', icon: FileText },
         ],
       },
       {

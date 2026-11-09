@@ -484,6 +484,12 @@ export default function DCClientScreen({ navigation }: any) {
                   <Text style={styles.k}>Client since</Text>
                   <Text style={styles.v}>{turnedDate}</Text>
                 </View>
+                {dc.poSubmittedAt ? (
+                  <View style={styles.kv}>
+                    <Text style={styles.k}>PO closure date</Text>
+                    <Text style={styles.v}>{formatDate(dc.poSubmittedAt)}</Text>
+                  </View>
+                ) : null}
                 {dc.poPhotoUrl ? (
                   <TouchableOpacity onPress={() => openDCModal(dc)}>
                     <Text style={styles.viewPoLink}>View PO document</Text>

@@ -11,6 +11,7 @@ export const SECTION_ICONS: Record<string, IonName> = {
   Employees: 'id-card-outline',
   'Executive Managers': 'shield-checkmark-outline',
   Leaves: 'calendar-outline',
+  'Leave Management': 'calendar-outline',
   'Training & Services': 'school-outline',
   Training: 'school-outline',
   Warehouse: 'cube-outline',

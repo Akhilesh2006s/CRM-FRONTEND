@@ -71,7 +71,7 @@ export const RBAC_NAV_MODULES: RbacNavModule[] = [
       { label: 'Followup Leads', href: '/dashboard/leads/followup' },
       { label: 'Cross-Sale Leads', href: '/dashboard/leads/cross-sale' },
       { label: 'School Visits', href: '/dashboard/visits' },
-      { label: 'Sales Collateral', href: '/dashboard/collateral' },
+      { label: 'Demo Videos', href: '/dashboard/collateral' },
     ],
   },
   {

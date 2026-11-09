@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import AttendanceCard from '../../components/AttendanceCard';
 import PendingAdvanceApprovalsCard from '../../components/PendingAdvanceApprovalsCard';
 import PartnerDashboard from '../../components/partner/PartnerDashboard';
-import { getNavSections } from '../../config/navConfig';
+import { getNavSections, MY_DATA_TITLE } from '../../config/navConfig';
 import { iconForSection } from '../../config/moduleIcons';
 import { navigateRoot } from '../../navigation/navigationRef';
 import { getRoleFlags } from '../../utils/roles';
@@ -26,7 +26,7 @@ export default function DashboardScreen() {
     return <PartnerDashboard userName={user?.name} role={user?.role} />;
   }
 
-  const sections = getNavSections(user);
+  const sections = getNavSections(user).filter((s) => s.title !== MY_DATA_TITLE);
   // Start Day / End Day for field and office staff, trainers included.
   const showAttendance =
     flags.isTrainer ||

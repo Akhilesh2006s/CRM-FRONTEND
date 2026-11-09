@@ -175,9 +175,8 @@ function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
         ],
       },
       {
-        title: 'More',
+        title: 'Leave Management',
         items: [
-          { label: 'Stock Returns', screen: 'ReturnsEmployee' },
           { label: 'Leave Request', screen: 'LeaveRequest' },
           { label: 'My Leaves', screen: 'LeavesApproved' },
         ],
@@ -681,7 +680,7 @@ const WEB_PORTED_LINKS: { section: string; link: NavLink; allowed: (role: string
     link: { label: 'Training Requests', screen: 'TrainingRequests', icon: '📋' },
     allowed: (r, sa) => sa || r === 'Admin' || COORDINATOR_ROLES.has(r),
   },
-  { section: 'Leads', link: { label: 'Sales Collateral', screen: 'SalesCollateral', icon: '📁' }, allowed: (r, sa) => sa || r === 'Admin' || BDE_ROLES.has(r) },
+  { section: 'Leads', link: { label: 'Demo Videos', screen: 'SalesCollateral', icon: '📁' }, allowed: (r, sa) => sa || r === 'Admin' || BDE_ROLES.has(r) },
   {
     section: 'Reports',
     link: { label: 'Operational Reports', screen: 'ReportsOperational', icon: '📊' },
@@ -729,6 +728,9 @@ function addWebPortedLinks(sections: NavSection[], role: string, superAdmin: boo
  * Completed expenses instead of "My Expenses", own Attendance, Team Attendance for managers,
  * and My Pay Slips.
  */
+/** Attendance, field day, pay slips…: shown on the More tab, not as a Home tile. */
+export const MY_DATA_TITLE = 'My Data';
+
 export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
   const role = String((user as { role?: string } | null | undefined)?.role || '');
   let sections = roleNavSections(user).map((section) => ({
@@ -791,13 +793,14 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
       sections = settingsAt >= 0 ? [...sections.slice(0, settingsAt), expenses, ...sections.slice(settingsAt)] : [...sections, expenses];
     }
   }
-  // Advance sits right after Expenses (every employee has both).
+  // Advance options live inside Expenses (every employee has both).
   if (permittedAdvanceLinks.length) {
-    const advanceSection: NavSection = { title: 'Advance', icon: '💳', items: permittedAdvanceLinks };
     const expensesAt = sections.findIndex((section) => section.items.some((item) => item.screen === 'ExpenseCreate'));
-    sections = expensesAt >= 0
-      ? [...sections.slice(0, expensesAt + 1), advanceSection, ...sections.slice(expensesAt + 1)]
-      : [...sections, advanceSection];
+    if (expensesAt >= 0) {
+      sections[expensesAt] = { ...sections[expensesAt], items: [...sections[expensesAt].items, ...permittedAdvanceLinks] };
+    } else {
+      sections = [...sections, { title: 'Advance', icon: '💳', items: permittedAdvanceLinks }];
+    }
   }
 
   const extra: NavLink[] = [];
@@ -814,7 +817,7 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
   if (!hasScreen(sections, 'MyPayslips')) extra.push({ label: 'My Pay Slips', screen: 'MyPayslips', icon: '🧾' });
   if (extra.length) {
     const settingsAt = sections.findIndex((section) => section.title === 'Settings');
-    const mine: NavSection = { title: 'My Work', icon: I.employees, items: extra };
+    const mine: NavSection = { title: MY_DATA_TITLE, icon: I.employees, items: extra };
     sections = settingsAt >= 0
       ? [...sections.slice(0, settingsAt), mine, ...sections.slice(settingsAt)]
       : [...sections, mine];

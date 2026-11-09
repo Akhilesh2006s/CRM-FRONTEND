@@ -160,7 +160,7 @@ export default function SalesCollateralScreen() {
 
   return (
     <ScreenShell
-      title="Sales Collateral"
+      title="Demo Videos"
       subtitle="Demo videos, PPTs and brochures for field visits"
       refreshing={refreshing}
       onRefresh={() => {

@@ -6,6 +6,7 @@ import { navigateRoot } from '../../navigation/navigationRef';
 import { colors } from '../../theme/colors';
 import { getRoleFlags } from '../../utils/roles';
 import { confirmLogout } from '../../utils/confirmLogout';
+import { getNavSections, MY_DATA_TITLE } from '../../config/navConfig';
 
 type IonName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -25,6 +26,8 @@ export default function MoreHubScreen() {
       : []),
   ];
 
+  const myData = getNavSections(user).find((s) => s.title === MY_DATA_TITLE)?.items || [];
+
   const handleLogout = () => {
     confirmLogout(logout);
   };
@@ -33,7 +36,12 @@ export default function MoreHubScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>More</Text>
+      <View style={styles.titleRow}>
+        <TouchableOpacity onPress={() => navigateRoot('MainTabs', { screen: 'Home' })} hitSlop={12} style={styles.back}>
+          <Ionicons name="chevron-back" size={26} color={colors.primary} />
+        </TouchableOpacity>
+        <Text style={[styles.title, { marginBottom: 0 }]}>More</Text>
+      </View>
       <View style={styles.profileCard}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{initial}</Text>
@@ -54,6 +62,28 @@ export default function MoreHubScreen() {
           ) : null}
         </View>
       </View>
+
+      {myData.length ? (
+        <>
+          <Text style={styles.sectionTitle}>{MY_DATA_TITLE}</Text>
+          <View style={styles.group}>
+            {myData.map((item, i) => (
+              <TouchableOpacity
+                key={`${item.screen}-${i}`}
+                style={[styles.row, i === myData.length - 1 && styles.rowLast]}
+                onPress={() => navigateRoot(item.screen, item.params)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.rowIcon}>
+                  <Ionicons name="folder-open-outline" size={18} color={colors.primaryDark} />
+                </View>
+                <Text style={styles.rowLabel}>{item.label}</Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        </>
+      ) : null}
 
       <Text style={styles.sectionTitle}>Settings</Text>
       <View style={styles.group}>
@@ -82,6 +112,8 @@ export default function MoreHubScreen() {
 }
 
 const styles = StyleSheet.create({
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
+  back: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', marginLeft: -6 },
   container: { flex: 1, backgroundColor: colors.background },
   content: { padding: 16, paddingTop: 56, paddingBottom: 40 },
   title: { fontSize: 17, fontWeight: '700', color: colors.textPrimary, marginBottom: 12 },
