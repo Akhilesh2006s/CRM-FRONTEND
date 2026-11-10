@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { Suspense, useEffect, useState, useMemo } from 'react'
 import Link from 'next/link'
 import { apiRequest, API_BASE_URL, resolveUploadUrl } from '@/lib/api'
 import { chainRowClass } from '@/lib/chainSchool'
@@ -66,7 +66,7 @@ import {
   shouldSplitTerm2ToTermWise,
   type RequestDcTermRouting,
 } from '@/lib/clientDcTermPartition'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import SchoolOverview from '@/components/SchoolOverviewPanel'
 
 /** Academic years run April to March, e.g. 2026-27. */
@@ -251,8 +251,32 @@ function closureFromDc(d: DC): DeliveryClosureDraft {
   }
 }
 
+/** Same stages as the app's My Orders tracker. */
+const ORDER_STEPS = ['DC Pending', 'DC at Coordinator', 'DC at Senior Coordinator', 'DC at Warehouse', 'DC Completed']
+function orderStepOf(stage?: string): number {
+  if (stage === 'dc_review') return 1
+  if (stage === 'dc_approval') return 2
+  if (stage === 'warehouse_receipt' || stage === 'warehouse_processing' || stage === 'dispatch_approval') return 3
+  if (stage === 'delivery_confirmation' || stage === 'billing' || stage === 'claim') return 4
+  return 0
+}
+/** A DC completed at the warehouse moves from My Orders to My Clients. */
+const isCompletedDc = (d: any) =>
+  String(d?.status || '').toLowerCase() === 'completed' || ['delivery_confirmation', 'billing'].includes(d?.workflow?.stage)
+
 export default function ClientDCPage() {
+  return (
+    <Suspense fallback={null}>
+      <ClientDCPageInner />
+    </Suspense>
+  )
+}
+
+function ClientDCPageInner() {
   const router = useRouter()
+  // ?view=orders = My Orders (PO uploaded, DC on its way); ?view=clients = My Clients (DC completed), as in the app.
+  const viewParam = useSearchParams().get('view')
+  const view: 'orders' | 'clients' | 'all' = viewParam === 'orders' ? 'orders' : viewParam === 'clients' ? 'clients' : 'all'
   const currentUser = getCurrentUser()
   const [items, setItems] = useState<DC[]>([])
   const [opsDraft, setOpsDraft] = useState<Record<string, ClientOpsDraft>>({})
@@ -2986,6 +3010,8 @@ export default function ClientDCPage() {
 
   const filteredItems = useMemo(() => {
     let filtered = items
+    if (view === 'orders') filtered = filtered.filter((d) => !isCompletedDc(d))
+    if (view === 'clients') filtered = filtered.filter((d) => isCompletedDc(d))
     
     // Search query filter
     const query = searchQuery.trim().toLowerCase()
@@ -3065,7 +3091,7 @@ export default function ClientDCPage() {
       // Most recent first (descending order)
       return dateB - dateA
     })
-  }, [items, searchQuery, selectedStatus, selectedProduct, selectedYear, dateFrom, dateTo])
+  }, [items, view, searchQuery, selectedStatus, selectedProduct, selectedYear, dateFrom, dateTo])
   
   // Count active filters
   const activeFiltersCount = useMemo(() => {
@@ -3094,10 +3120,14 @@ export default function ClientDCPage() {
       <div className="flex items-center justify-between mb-6">
         <div className="space-y-1">
           <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-neutral-900 via-neutral-800 to-neutral-900 bg-clip-text text-transparent">
-            Client Request
+            {view === 'orders' ? 'My Orders' : view === 'clients' ? 'My Clients' : 'Client Request'}
           </h1>
           <p className="text-sm text-neutral-600 font-medium">
-            Manage products, PO photos, and request details for your clients
+            {view === 'orders'
+              ? 'Schools with an uploaded PO: DC Pending > DC at Coordinator > DC at Senior Coordinator > DC at Warehouse > DC Completed'
+              : view === 'clients'
+                ? 'Schools whose DC is completed at the warehouse'
+                : 'Manage products, PO photos, and request details for your clients'}
           </p>
           <Link href="/dashboard/dc/grid" className="inline-block text-sm font-medium text-blue-700 underline">Create DC / Main DCs</Link>
         </div>
@@ -3433,7 +3463,7 @@ export default function ClientDCPage() {
                         <TableCell>
                           <div className="flex flex-col gap-1 min-w-[210px]">
                             <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 w-fit">
-                              {workflow.label || status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                              {view === 'orders' ? ORDER_STEPS[orderStepOf(workflow.stage)] : workflow.label || status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
                             </span>
                             <span className="text-xs font-medium text-neutral-700">
                               Next: {workflow.nextActorRole || 'BDE'}

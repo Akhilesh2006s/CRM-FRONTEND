@@ -52,6 +52,7 @@ import {
   Phone,
   ChevronDown,
   MapPin,
+  FolderOpen,
 } from 'lucide-react'
 
 function isChildRouteActive(
@@ -252,6 +253,50 @@ const LEAVE_REPORT_NAV_ROLES = new Set(['HR Manager', 'HR Executive', 'Admin', '
  * Admin approves new employees in the same Employee Verification queue as Super Admin and HR
  * (the old "Employee Requests" page read a different, legacy queue).
  */
+/** Advance options live inside Expenses, as in the app. */
+function mergeAdvanceIntoExpenses(nav: NavItem[]): NavItem[] {
+  const advance = nav.find((item) => item.label === 'Advance')
+  const expenses = nav.find((item) => item.label === 'Expenses')
+  if (!advance?.children?.length || !expenses) return nav
+  const expenseChildren = expenses.children || (expenses.href ? [{ label: 'Expenses', href: expenses.href, icon: expenses.icon }] : [])
+  const known = new Set(expenseChildren.map((c) => c.href))
+  const merged: NavItem = { ...expenses, href: undefined, children: [...expenseChildren, ...advance.children.filter((c) => !known.has(c.href))] }
+  return nav.filter((item) => item !== advance).map((item) => (item === expenses ? merged : item))
+}
+
+/** Own attendance and pay slips under "My Data", as in the app's More tab. */
+function groupMyDataNav(nav: NavItem[], role: string | undefined): NavItem[] {
+  if (NON_EMPLOYEE_NAV_ROLES.has(String(role || ''))) return nav
+  const OWN = new Set(['/dashboard/attendance', '/dashboard/payslips'])
+  const picked: NonNullable<NavItem['children']> = []
+  const rest: NavItem[] = []
+  for (const item of nav) {
+    if (item.href && OWN.has(item.href) && !item.children) {
+      picked.push({ label: item.href === '/dashboard/attendance' ? 'Attendance' : 'My Pay Slips', href: item.href, icon: item.icon })
+      continue
+    }
+    if (item.children) {
+      const keep = item.children.filter((c) => {
+        if (c.href && OWN.has(c.href)) {
+          picked.push({ label: c.href === '/dashboard/attendance' ? 'Attendance' : 'My Pay Slips', href: c.href, icon: c.icon })
+          return false
+        }
+        return true
+      })
+      if (!keep.length && !item.href) continue
+      rest.push(keep.length === item.children.length ? item : { ...item, children: keep })
+      continue
+    }
+    rest.push(item)
+  }
+  if (!picked.length) return nav
+  const seen = new Set<string>()
+  const children = picked.filter((c) => (c.href && !seen.has(c.href) ? (seen.add(c.href), true) : false))
+  const at = rest.findIndex((item) => item.label === 'Settings' || item.label === 'Sign out')
+  const myData: NavItem = { label: 'My Data', icon: FolderOpen, children }
+  return at < 0 ? [...rest, myData] : [...rest.slice(0, at), myData, ...rest.slice(at)]
+}
+
 function ensureEmployeeVerificationNav(nav: NavItem[], role: string | undefined): NavItem[] {
   if (String(role || '') !== 'Admin') return nav
   const href = '/dashboard/employees/verification'
@@ -788,7 +833,8 @@ function applyExecutiveSidebarOrder(nav: NavItem[]): NavItem[] {
     label: 'Clients',
     icon: Users,
     children: [
-      { label: 'My Clients', href: '/dashboard/dc/client-dc', icon: Users },
+      { label: 'My Orders', href: '/dashboard/dc/client-dc?view=orders', icon: FileText },
+          { label: 'My Clients', href: '/dashboard/dc/client-dc?view=clients', icon: Users },
       { label: 'Renewal', href: '/dashboard/leads/renewal', icon: RefreshCw },
       { label: 'Term-Wise DC', href: '/dashboard/dc/client-dc/term-wise', icon: FileText },
     ],
@@ -1010,7 +1056,8 @@ export function Sidebar() {
         label: 'Clients',
         icon: Users,
         children: [
-          { label: 'My Clients', href: '/dashboard/dc/client-dc', icon: Users },
+          { label: 'My Orders', href: '/dashboard/dc/client-dc?view=orders', icon: FileText },
+          { label: 'My Clients', href: '/dashboard/dc/client-dc?view=clients', icon: Users },
           { label: 'Renewal', href: '/dashboard/leads/renewal', icon: RefreshCw },
           { label: 'Term-Wise DC', href: '/dashboard/dc/client-dc/term-wise', icon: FileText },
         ],
@@ -1192,7 +1239,8 @@ export function Sidebar() {
         label: 'Clients',
         icon: Users,
         children: [
-          { label: 'My Clients', href: '/dashboard/dc/client-dc', icon: Users },
+          { label: 'My Orders', href: '/dashboard/dc/client-dc?view=orders', icon: FileText },
+          { label: 'My Clients', href: '/dashboard/dc/client-dc?view=clients', icon: Users },
           { label: 'Renewal', href: '/dashboard/leads/renewal', icon: RefreshCw },
           { label: 'Term-Wise DC', href: '/dashboard/dc/client-dc/term-wise', icon: FileText },
           { label: 'Closed Sales', href: '/dashboard/dc/closed', icon: CheckCircle2 },
@@ -1504,6 +1552,7 @@ export function Sidebar() {
     }
   }
   finalNav = ensureEmployeeVerificationNav(finalNav, user?.role || permUser?.role)
+  finalNav = groupMyDataNav(mergeAdvanceIntoExpenses(finalNav), user?.role || permUser?.role)
 
   finalNav = ensureExpenseApprovalNav(
     finalNav,
