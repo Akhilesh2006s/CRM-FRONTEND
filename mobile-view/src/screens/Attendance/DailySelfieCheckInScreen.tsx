@@ -19,7 +19,7 @@ import { getCurrentLocation, getPincodeFromLocation, getTownFromPincode } from '
 
 
 const ATTENDANCE_REASONS = [
-  { label: 'Employee', value: 'employee' },
+  { label: 'Sales', value: 'employee' },
   { label: 'Collection', value: 'collection' },
   { label: 'Service', value: 'service' },
   { label: 'Training', value: 'training' },

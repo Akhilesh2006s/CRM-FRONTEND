@@ -6,8 +6,8 @@ import * as DocumentPicker from 'expo-document-picker';
 import { readAsStringAsync } from 'expo-file-system/legacy';
 import { WebButton, WebInput, WebLabel } from '../../ui/WebPrimitives';
 import { useAuth } from '../../context/AuthContext';
-import { navigateRoot } from '../../navigation/navigationRef';
 import MissedExitCard from '../../components/MissedExitCard';
+import SchoolVisitForm from '../../components/SchoolVisitForm';
 import { colors } from '../../theme/colors';
 import { apiService } from '../../services/api';
 import { getCurrentLocation } from '../../services/location';
@@ -267,17 +267,12 @@ export default function FieldDayScreen() {
               <Text style={styles.muted}>
                 {visit.schoolCode ? `${visit.schoolCode} · ` : ''}since {time(visit.entryAt)}
               </Text>
-              {!isTrainer ? (
-                <WebButton
-                  title="Update School Activities"
-                  variant="outline"
-                  onPress={() => navigateRoot('SchoolVisits', { leadId: visit.leadId || undefined, schoolName: visit.schoolName })}
-                />
-              ) : null}
             </View>
             {isTrainer ? <TrainerActivityForm visit={visit} onSaved={load} /> : null}
+            {/* BDEs check out with the visit form's Submit & Check Out; trainers after their activity. */}
+            {!isTrainer ? <SchoolVisitForm visitId={visit._id} schoolName={visit.schoolName} history={[]} onDone={load} /> : null}
             <View style={styles.card}>
-              <WebButton title="Check Out of School" variant="destructive" onPress={onCheckOut} loading={busy === 'exit'} />
+              {isTrainer ? <WebButton title="Check Out of School" variant="destructive" onPress={onCheckOut} loading={busy === 'exit'} /> : null}
               <TouchableOpacity onPress={() => setForgot((f) => !f)}>
                 <Text style={styles.link}>{forgot ? 'Cancel' : 'Forgot to check out? Enter the exit time'}</Text>
               </TouchableOpacity>

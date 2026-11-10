@@ -1,3 +1,4 @@
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -18,6 +19,8 @@ import { useAuth } from '../../context/AuthContext';
 import { Card, CardTitle, InfoRow, ChipRow, ActionRow, EmptyState } from '../../ui/Kit';
 
 export default function ExecutivesAssignAreasScreen({ navigation }: any) {
+  // Bottom sheets stay above the phone's navigation bar.
+  const sheetBottom = useSafeAreaInsets().bottom;
   const { user } = useAuth();
   const [employees, setEmployees] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -136,7 +139,7 @@ export default function ExecutivesAssignAreasScreen({ navigation }: any) {
 
       <Modal visible={showAssignModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingBottom: sheetBottom }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Assign Area</Text>
               <TouchableOpacity onPress={() => setShowAssignModal(false)}>

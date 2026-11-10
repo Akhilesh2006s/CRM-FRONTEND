@@ -2,6 +2,7 @@
  * Completed DC screen (admin) - shows all DCs with status 'completed' from GET /dc/completed.
  * View PDF and Stock Returns buttons work like navbar-landing completed DC (PDF in modal, stock returns list with doc viewer).
  */
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -59,6 +60,8 @@ function buildPdfUrl(raw: string | undefined): string | null {
 }
 
 export default function DCCompletedScreen({ navigation }: any) {
+  // Bottom sheets stay above the phone's navigation bar.
+  const sheetBottom = useSafeAreaInsets().bottom;
   const [dcs, setDcs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -235,7 +238,7 @@ export default function DCCompletedScreen({ navigation }: any) {
       {/* PDF / Document modal - same as navbar "View PDF" dialog */}
       <Modal visible={pdfModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingBottom: sheetBottom }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle} numberOfLines={1}>{pdfTitle}</Text>
               <TouchableOpacity onPress={closePdfModal} style={styles.modalClose}>
@@ -275,7 +278,7 @@ export default function DCCompletedScreen({ navigation }: any) {
       {/* Stock Returns modal - list returns for this DC, view docs like navbar */}
       <Modal visible={returnsModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingBottom: sheetBottom }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Stock Returns{returnsDc ? ` - ${getCustomerName(returnsDc)}` : ''}</Text>
               <TouchableOpacity onPress={closeReturnsModal} style={styles.modalClose}>

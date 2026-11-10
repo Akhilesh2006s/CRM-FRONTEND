@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Alert, ActivityIndicator, Platform } from 'reac
 import { colors } from '../../theme/colors';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
-import { Card, CardTitle, InfoRow, ActionRow, EmptyState, SectionTitle } from '../../ui/Kit';
+import { Card, CardTitle, InfoRow, ActionRow, EmptyState, SectionTitle, Badge } from '../../ui/Kit';
 import { StatGrid, rk, matchesWords } from './ReportKit';
 import { apiService } from '../../services/api';
 import { exportEmployeeTrackingReport } from '../../utils/exportEmployeeTrackingReport';
@@ -20,6 +20,10 @@ type TrackingData = {
   lastUsed: string;
   lastLocation: string;
   logCount: number;
+  /** Battery % and GPS On/Off reported by the phone (from /tracking/latest). */
+  batteryLevel?: number | null;
+  charging?: boolean | null;
+  gpsStatus?: 'on' | 'off';
 };
 
 type TrackingLatestRow = {
@@ -31,6 +35,9 @@ type TrackingLatestRow = {
   lastUsed?: string;
   lastLocation?: { latitude?: number; longitude?: number } | string;
   pings?: number;
+  batteryLevel?: number | null;
+  charging?: boolean | null;
+  gpsStatus?: 'on' | 'off';
 };
 
 function formatLocation(loc?: TrackingLatestRow['lastLocation']) {
@@ -52,6 +59,9 @@ function mapLatestRows(rows: TrackingLatestRow[]): TrackingData[] {
     lastUsed: row.lastUsed || '',
     lastLocation: formatLocation(row.lastLocation),
     logCount: Number(row.pings) || 0,
+    batteryLevel: row.batteryLevel ?? null,
+    charging: row.charging ?? null,
+    gpsStatus: row.gpsStatus,
   }));
 }
 
@@ -274,6 +284,18 @@ export default function ReportsEmployeeTrackScreen() {
               <InfoRow label="First check-in" value={formatActivityTimestamp(rec.started)} />
               <InfoRow label="Last active" value={formatActivityTimestamp(rec.lastUsed)} />
               <InfoRow label="Last location" value={rec.lastLocation || 'N/A'} />
+              {rec.gpsStatus ? (
+                <InfoRow
+                  label="Battery"
+                  value={rec.batteryLevel == null ? 'Not reported yet' : `${rec.batteryLevel}%${rec.charging ? ' (charging)' : ''}`}
+                />
+              ) : null}
+              {rec.gpsStatus ? (
+                <InfoRow
+                  label="GPS"
+                  value={<Badge label={rec.gpsStatus === 'on' ? 'On' : 'Off'} tone={rec.gpsStatus === 'on' ? 'success' : 'error'} />}
+                />
+              ) : null}
               <InfoRow
                 label="GPS logs"
                 value={

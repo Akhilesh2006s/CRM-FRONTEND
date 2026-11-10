@@ -43,13 +43,6 @@ function calcTravelAmount(mode: string, kms: number, rates?: TravelPerKmRates): 
   return (kms * (mode === 'Bike' ? r.bikeRatePerKm : r.carRatePerKm)).toFixed(2);
 }
 
-function perKmRateLabel(mode: string, rates?: TravelPerKmRates): string {
-  const r = resolveRates(rates);
-  if (mode === 'Bike') return `₹${r.bikeRatePerKm}/km`;
-  if (mode === 'Car') return `₹${r.carRatePerKm}/km`;
-  return '';
-}
-
 const todayIso = () => new Date().toISOString().split('T')[0];
 
 const emptyForm = () => ({
@@ -349,10 +342,7 @@ export default function ExpenseCreateScreen({ navigation }: any) {
                 label="Travel mode *"
                 value={form.transportType}
                 onValueChange={(v) => update({ transportType: v })}
-                items={TRAVEL_MODES.map((m) => ({
-                  label: isPerKmMode(m) ? `${m} (${perKmRateLabel(m, rates)})` : m,
-                  value: m,
-                }))}
+                items={TRAVEL_MODES.map((m) => ({ label: m, value: m }))}
                 placeholder="Select mode"
               />
               <FormField label="From *" value={form.travelFrom} onChangeText={(t) => update({ travelFrom: t })} placeholder="Enter origin location" />
@@ -410,7 +400,7 @@ export default function ExpenseCreateScreen({ navigation }: any) {
               editable={!amountLocked}
             />
             {amountLocked && (
-              <Text style={styles.hint}>Calculated automatically: kilometres × {perKmRateLabel(form.transportType, rates)}</Text>
+              <Text style={styles.hint}>Calculated automatically from the kilometres claimed.</Text>
             )}
           </View>
 

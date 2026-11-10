@@ -1,3 +1,4 @@
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
@@ -44,6 +45,8 @@ function productCount(partner: Partner) {
 }
 
 export default function VendorsListScreen() {
+  // Bottom sheets stay above the phone's navigation bar.
+  const sheetBottom = useSafeAreaInsets().bottom;
   const [partners, setPartners] = useState<Partner[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -155,7 +158,7 @@ export default function VendorsListScreen() {
 
       <Modal visible={editOpen} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingBottom: sheetBottom }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Edit Products — {selectedPartner?.name}</Text>
               <TouchableOpacity onPress={() => setEditOpen(false)}>

@@ -134,14 +134,7 @@ export default function LeadsListScreen({ navigation }: any) {
       </View>
 
       {visibleLeads.length === 0 ? (
-        <View>
-          <EmptyState icon="📋" title="No schools found" />
-          <View style={{ alignItems: 'center' }}>
-            <TouchableOpacity style={styles.primaryBtn} onPress={() => navigation.navigate('LeadAdd')}>
-              <Text style={styles.primaryBtnText}>Add Lead</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        <EmptyState icon="📋" title="No schools found" />
       ) : (
         visibleLeads.map((lead) => {
           const open = openId === lead._id;

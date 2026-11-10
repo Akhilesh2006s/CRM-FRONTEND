@@ -23,7 +23,7 @@ import { colors } from '../theme/colors';
 /** Same reasons / labels as web app/dashboard/attendance/page.tsx (Office is the default). */
 export const ATTENDANCE_REASONS = [
   { label: 'Office', value: 'office' },
-  { label: 'Field work', value: 'employee' },
+  { label: 'Sales', value: 'employee' },
   { label: 'Collection', value: 'collection' },
   { label: 'Service', value: 'service' },
   { label: 'Training', value: 'training' },

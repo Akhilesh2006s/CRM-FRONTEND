@@ -21,7 +21,7 @@ import { normalizeIntegerInput } from '@/lib/numericInput'
 import { toFollowUpDatePayload } from '@/lib/followUpDate'
 import { isBeforeToday, todayDateString } from '@/lib/todayDate'
 import { geocodeSchoolLocation } from '@/lib/geocode'
-import { LEAD_PRODUCT_STATUSES, validateLeadStyleProducts, type LeadProductStatus } from '@/lib/leadProductRules'
+import { LEAD_PRODUCT_STATUSES, validateLeadStyleProducts, chanceForStatus, type LeadProductStatus } from '@/lib/leadProductRules'
 
 type ProductSelection = {
   name: string
@@ -296,7 +296,7 @@ export default function NewSchoolPage() {
       updated[index].chance = ''
       updated[index].not_interested_reason = ''
     } else {
-      if (updated[index].chance === '0') updated[index].chance = ''
+      updated[index].chance = chanceForStatus(status, updated[index].chance === '0' ? '' : updated[index].chance)
       updated[index].not_interested_reason = ''
     }
 
@@ -365,13 +365,8 @@ export default function NewSchoolPage() {
       setSubmitting(false)
       return
     }
-    if (!form.email || !form.email.trim()) {
-      setError('Email is required')
-      setSubmitting(false)
-      return
-    }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(form.email.trim())) {
+    if (form.email?.trim() && !emailRegex.test(form.email.trim())) {
       setError('Please enter a valid email address')
       setSubmitting(false)
       return
@@ -494,7 +489,7 @@ export default function NewSchoolPage() {
         remarks: form.remarks || undefined,
         average_fee: form.average_fee ? Number(form.average_fee) : undefined,
         avg_fee: form.average_fee ? Number(form.average_fee) : undefined,
-        email: form.email,
+        email: form.email.trim() || undefined,
         products: productsPayload,
         follow_up_date: toFollowUpDatePayload(form.follow_up_date),
         assigned_to: isSuperAdmin ? form.assigned_to : currentUser?._id,
@@ -608,8 +603,8 @@ export default function NewSchoolPage() {
             />
           </div>
           <div>
-            <Label>Email *</Label>
-            <Input className="bg-white text-neutral-900" type="email" name="email" value={form.email} onChange={onChange} required />
+            <Label>Email</Label>
+            <Input className="bg-white text-neutral-900" type="email" name="email" value={form.email} onChange={onChange} />
           </div>
           <div>
             <Label>Financial contact person *</Label>

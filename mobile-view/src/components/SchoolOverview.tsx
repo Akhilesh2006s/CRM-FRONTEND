@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { apiService } from '../services/api';
 import { colors } from '../theme/colors';
+import SchoolLocation from './SchoolLocation';
 
 export type Overview = {
   lead: Record<string, any>;
@@ -99,6 +100,7 @@ export default function SchoolOverview({
               </View>
             );
           })}
+        <SchoolLocation schoolCode={l.school_code} schoolName={l.school_name} />
         {onEdit ? (
           <TouchableOpacity onPress={onEdit}>
             <Text style={styles.action}>Edit / Follow up ›</Text>

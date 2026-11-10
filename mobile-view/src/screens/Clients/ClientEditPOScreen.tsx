@@ -4,6 +4,7 @@
  * - Request PO Change (new PDF + remarks) → requires Manager approval; DC Request locked until resolved
  * - Edit products & quantities (saved directly)
  */
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
@@ -174,6 +175,8 @@ function EditPOTableCell({
 const DC_FLOW_ORDER_STATUSES = new Set(['dc_requested', 'dc_accepted', 'dc_approved', 'dc_sent_to_senior', 'in_transit', 'completed']);
 
 export default function ClientEditPOScreen({ navigation, route }: any) {
+  // Bottom sheets stay above the phone's navigation bar.
+  const sheetBottom = useSafeAreaInsets().bottom;
   const orderId = route?.params?.orderId as string | undefined;
   const paramDcId = route?.params?.dcId as string | undefined;
   const catalog = useDcCatalog();
@@ -1065,7 +1068,7 @@ export default function ClientEditPOScreen({ navigation, route }: any) {
       {/* Request PO Change modal */}
       <Modal visible={showRequestModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingBottom: sheetBottom }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Request PO Change</Text>
               <TouchableOpacity onPress={() => { setShowRequestModal(false); setNewPdfUrl(''); setChangeRemarks(''); }}>
@@ -1102,7 +1105,7 @@ export default function ClientEditPOScreen({ navigation, route }: any) {
       {/* Add Product modal — catalog products not already on the original PO */}
       <Modal visible={showAddProductModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingBottom: sheetBottom }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Add Product</Text>
               <TouchableOpacity onPress={() => setShowAddProductModal(false)}>

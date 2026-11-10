@@ -2,6 +2,7 @@
  * Completed DC (Warehouse) — matches web /dashboard/warehouse/completed-dc
  * after Update & Submit from DC @ Warehouse.
  */
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import React, { useCallback, useState } from 'react';
 import {
   View,
@@ -247,6 +248,8 @@ function transformDc(dc: any): CompletedRow {
 }
 
 export default function WarehouseCompletedDCScreen({ navigation }: any) {
+  // Bottom sheets stay above the phone's navigation bar.
+  const sheetBottom = useSafeAreaInsets().bottom;
   const { user } = useAuth();
   const [rows, setRows] = useState<CompletedRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -872,7 +875,7 @@ export default function WarehouseCompletedDCScreen({ navigation }: any) {
       {/* PDF modal */}
       <Modal visible={pdfVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingBottom: sheetBottom }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle} numberOfLines={1}>
                 {pdfTitle}
@@ -975,7 +978,7 @@ export default function WarehouseCompletedDCScreen({ navigation }: any) {
       {/* Invoice modal */}
       <Modal visible={invoiceVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingBottom: sheetBottom }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle} numberOfLines={1}>
                 {invoiceTitle}

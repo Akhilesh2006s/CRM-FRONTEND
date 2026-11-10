@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } fr
 import { useFocusEffect } from '@react-navigation/native';
 import { apiService } from '../services/api';
 import { getCurrentLocation } from '../services/location';
+import SchoolVisitForm from './SchoolVisitForm';
 
 type OpenVisit = { _id: string; schoolName: string; schoolCode?: string; leadId?: string | null };
 export type FieldDayState = { checkedIn: boolean; fieldWorkAllowed: boolean; openVisit: OpenVisit | null } | null;
@@ -35,8 +36,22 @@ export const sameSchool = (v: OpenVisit, s: VisitSchool) =>
   (norm(s.schoolCode) && norm(v.schoolCode) === norm(s.schoolCode)) ||
   (!norm(s.schoolCode) && norm(v.schoolName) === norm(s.schoolName));
 
-/** School visit Check In / Check Out right on a school card. */
-export default function SchoolVisitActions({ school, day, reload }: { school: VisitSchool; day: FieldDayState; reload: () => Promise<void> }) {
+/**
+ * School visit Check In right on a school card. There is no separate Check Out: once checked in,
+ * the visit form's Submit & Check Out ends the visit (shown here unless the parent shows the form).
+ */
+export default function SchoolVisitActions({
+  school,
+  day,
+  reload,
+  formShown,
+}: {
+  school: VisitSchool;
+  day: FieldDayState;
+  reload: () => Promise<void>;
+  /** The parent already shows the visit form for this school. */
+  formShown?: boolean;
+}) {
   const [busy, setBusy] = useState(false);
   if (!day) return null;
 
@@ -66,17 +81,6 @@ export default function SchoolVisitActions({ school, day, reload }: { school: Vi
       Alert.alert('Checked in', `You are checked in at ${school.schoolName}.`);
     });
 
-  const checkOut = (visit: OpenVisit) =>
-    run(async () => {
-      const here = await getCurrentLocation();
-      await apiService.post(`/field-day/visits/${visit._id}/exit`, {
-        latitude: here.latitude,
-        longitude: here.longitude,
-        accuracy: here.accuracy,
-      });
-      Alert.alert('Checked out', `You are checked out of ${visit.schoolName}.`);
-    });
-
   const visit = day.openVisit;
   let body: React.ReactNode;
   if (!day.checkedIn) {
@@ -84,10 +88,10 @@ export default function SchoolVisitActions({ school, day, reload }: { school: Vi
   } else if (!day.fieldWorkAllowed) {
     body = <Text style={styles.note}>School check-in needs field work approval for today.</Text>;
   } else if (visit && sameSchool(visit, school)) {
-    body = (
-      <TouchableOpacity style={[styles.btn, styles.out]} onPress={() => checkOut(visit)} disabled={busy} activeOpacity={0.8}>
-        {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Check Out</Text>}
-      </TouchableOpacity>
+    body = formShown ? (
+      <Text style={styles.note}>Checked in. Fill the visit form and tap Submit & Check Out.</Text>
+    ) : (
+      <SchoolVisitForm visitId={visit._id} schoolName={visit.schoolName} history={[]} onDone={reload} />
     );
   } else if (visit) {
     body = <Text style={styles.note}>Checked in at {visit.schoolName}. Check out there first.</Text>;

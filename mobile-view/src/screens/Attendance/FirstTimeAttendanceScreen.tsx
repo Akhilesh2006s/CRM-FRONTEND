@@ -17,7 +17,7 @@ import { apiService } from '../../services/api';
 import { getCurrentLocation, getPincodeFromLocation, getTownFromPincode } from '../../services/location';
 
 const ATTENDANCE_REASONS = [
-  { label: 'Employee', value: 'employee' },
+  { label: 'Sales', value: 'employee' },
   { label: 'Collection', value: 'collection' },
   { label: 'Service', value: 'service' },
   { label: 'Training', value: 'training' },

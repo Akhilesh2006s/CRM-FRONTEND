@@ -1,3 +1,4 @@
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
@@ -25,6 +26,8 @@ function cell(value: string | number | undefined | null) {
 }
 
 export default function WarehouseStockScreen({ navigation }: any) {
+  // Bottom sheets stay above the phone's navigation bar.
+  const sheetBottom = useSafeAreaInsets().bottom;
   const { user } = useAuth();
   const isWarehouseExecutive = user?.role === 'Warehouse Executive';
   const [items, setItems] = useState<any[]>([]);
@@ -166,7 +169,7 @@ export default function WarehouseStockScreen({ navigation }: any) {
 
       <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingBottom: sheetBottom }]}>
             <Text style={styles.modalTitle}>Add Item Qty</Text>
             <Text style={styles.modalSubtitle}>{selectedItem?.productName || 'Item'}</Text>
             <WebLabel>Quantity *</WebLabel>

@@ -1,3 +1,5 @@
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { chanceForStatus } from '../../lib/crm/leadProductRules';
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -213,6 +215,8 @@ function priorityTone(p?: string): Tone {
 }
 
 export default function LeadFollowupScreen({ navigation }: any) {
+  // Bottom sheets stay above the phone's navigation bar.
+  const sheetBottom = useSafeAreaInsets().bottom;
   const { user } = useAuth();
   const fieldDay = useFieldDay();
   const seesAllFollowups =
@@ -510,8 +514,8 @@ export default function LeadFollowupScreen({ navigation }: any) {
           next.chance = DROPPED_LINE_STATUSES.has(v) ? '0' : '';
         } else if (v === 'Renewed') {
           next.chance = '100';
-        } else if (next.chance === '0') {
-          next.chance = '';
+        } else {
+          next.chance = chanceForStatus(v, next.chance === '0' ? '' : next.chance);
         }
         if (!DROPPED_LINE_STATUSES.has(v)) next.not_interested_reason = '';
         return next;
@@ -916,7 +920,7 @@ export default function LeadFollowupScreen({ navigation }: any) {
       {/* Create Follow-up Modal */}
       <Modal visible={showUpdateModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingBottom: sheetBottom }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Create Follow-up</Text>
               <TouchableOpacity onPress={closeUpdateModal}>
@@ -1198,7 +1202,7 @@ export default function LeadFollowupScreen({ navigation }: any) {
       {/* History Modal */}
       <Modal visible={showHistoryModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingBottom: sheetBottom }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Follow-up History</Text>
               <TouchableOpacity onPress={() => setShowHistoryModal(false)}>

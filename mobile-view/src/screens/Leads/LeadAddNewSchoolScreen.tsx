@@ -19,17 +19,15 @@ import { useAuth } from '../../context/AuthContext';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
+import { getCurrentLocation } from '../../services/location';
 import {
   LEAD_PRODUCT_STATUSES,
   validateLeadStyleProducts,
+  chanceForStatus,
   type LeadProductStatus,
 } from '../../lib/crm/leadProductRules';
 
 import { ymdToDmy } from '../../utils/dateFormat';
-const SCHOOL_TYPE_OPTIONS = [
-  { label: 'New', value: 'New' },
-  { label: 'Existing', value: 'Existing' },
-];
 const TERM_OPTIONS = [
   { label: 'Term 1', value: 'Term 1' },
   { label: 'Term 2', value: 'Term 2' },
@@ -169,37 +167,20 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
     loadUserZone();
   }, [user?._id]);
 
-  // Clusters of the selected zone, for the Cluster dropdown (same as the web).
-  const [clustersForZone, setClustersForZone] = useState<string[]>([]);
+  // The school's GPS point is taken from the phone (the BDE is at the school) and saved with the
+  // lead; Latitude / Longitude are not shown on the form.
   useEffect(() => {
     let active = true;
-    const loadClusters = async () => {
-      if (!form.zone) {
-        setClustersForZone([]);
-        return;
-      }
-      try {
-        const zones = await apiService.get('/zones');
-        const match = (Array.isArray(zones) ? zones : []).find((z: any) => z?.name === form.zone);
-        if (!match?._id) {
-          if (active) setClustersForZone([]);
-          return;
-        }
-        const clusters = await apiService.get(`/zones/${match._id}/clusters`);
-        if (active) {
-          setClustersForZone(
-            (Array.isArray(clusters) ? clusters : []).map((c: any) => String(c?.name || '')).filter(Boolean),
-          );
-        }
-      } catch {
-        if (active) setClustersForZone([]);
-      }
-    };
-    loadClusters();
+    getCurrentLocation()
+      .then((p) => {
+        if (active && p) setForm((f) => ({ ...f, latitude: String(p.latitude), longitude: String(p.longitude) }));
+      })
+      .catch(() => {});
     return () => {
       active = false;
     };
-  }, [form.zone]);
+  }, []);
+
 
   useEffect(() => {
     const loadProducts = async () => {
@@ -330,7 +311,7 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
         if (status !== 'Hot' && status !== 'Warm') {
           return { ...p, status, strength: '', unit_price: '', chance: '', not_interested_reason: '' };
         }
-        return { ...p, status, chance: p.chance === '0' ? '' : p.chance, not_interested_reason: '' };
+        return { ...p, status, chance: chanceForStatus(status, p.chance === '0' ? '' : p.chance), not_interested_reason: '' };
       }),
     );
   };
@@ -353,7 +334,6 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
 
     if (!form.school_name?.trim()) {
       setErrorMessage('School name is required');
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
     if (isSuperAdmin && !form.assigned_to) {
@@ -376,11 +356,7 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
       setErrorMessage('Financial contact designation is required');
       return;
     }
-    if (!form.email?.trim()) {
-      setErrorMessage('Email is required');
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+    if (form.email?.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
       setErrorMessage('Please enter a valid email address');
       return;
     }
@@ -410,14 +386,6 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
     }
     if (!form.remarks?.trim()) {
       setErrorMessage('Remarks is required');
-      return;
-    }
-    if (!form.zone?.trim()) {
-      setErrorMessage('Zone is required');
-      return;
-    }
-    if (!form.cluster?.trim()) {
-      setErrorMessage('Cluster is required');
       return;
     }
     if (!form.follow_up_date?.trim()) {
@@ -487,7 +455,7 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
         remarks: form.remarks || undefined,
         average_fee: form.average_fee ? Number(form.average_fee) : undefined,
         avg_fee: form.average_fee ? Number(form.average_fee) : undefined,
-        email: form.email,
+        email: form.email.trim() || undefined,
         products: productsPayload,
         follow_up_date: parseFollowUpDate(form.follow_up_date),
         assigned_to: isSuperAdmin ? form.assigned_to : user?._id,
@@ -534,10 +502,6 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
             onAction={() => navigation.navigate('LeadFollowup')}
           />
         )}
-        {errorMessage && (
-          <MessageBanner type="error" message={errorMessage} onDismiss={clearMessages} />
-        )}
-
         <Text style={styles.mandatoryNote}>Fields marked * are required.</Text>
 
         <PageSection title="School">
@@ -575,13 +539,6 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
           editable={false}
         />
 
-        <WebSelect
-          label="School Type"
-          value={form.school_type}
-          onValueChange={(v) => setForm((f) => ({ ...f, school_type: v }))}
-          items={SCHOOL_TYPE_OPTIONS}
-        />
-
         </PageSection>
 
         <PageSection title="Contact">
@@ -609,7 +566,7 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
         />
 
         <FormField
-          label="Email *"
+          label="Email"
           value={form.email}
           onChangeText={(text) => setForm((f) => ({ ...f, email: text }))}
           placeholder="Enter email"
@@ -733,36 +690,9 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
           onChangeText={(text) => setForm((f) => ({ ...f, mandal: text }))}
           placeholder="Enter mandal"
         />
-        {clustersForZone.length > 0 ? (
-          <WebSelect
-            label="Cluster *"
-            value={form.cluster}
-            onValueChange={(v) => setForm((f) => ({ ...f, cluster: v, cluster_code: v }))}
-            items={[...new Set([...(form.cluster ? [form.cluster] : []), ...clustersForZone])].map((c) => ({ label: c, value: c }))}
-            placeholder="Select cluster"
-          />
-        ) : (
-          <FormField
-            label="Cluster *"
-            value={form.cluster}
-            onChangeText={(text) => setForm((f) => ({ ...f, cluster: text, cluster_code: text }))}
-            placeholder="Enter cluster"
-          />
-        )}
-        <FormField
-          label="Latitude"
-          value={form.latitude}
-          onChangeText={(text) => setForm((f) => ({ ...f, latitude: text }))}
-          placeholder="e.g. 17.3850"
-          keyboardType="decimal-pad"
-        />
-        <FormField
-          label="Longitude"
-          value={form.longitude}
-          onChangeText={(text) => setForm((f) => ({ ...f, longitude: text }))}
-          placeholder="e.g. 78.4867"
-          keyboardType="decimal-pad"
-        />
+        {isSuperAdmin && form.cluster ? (
+          <FormField label="Cluster" value={form.cluster} onChangeText={() => {}} editable={false} />
+        ) : null}
 
         <FormField
           label="School Strength (students) *"
@@ -867,12 +797,6 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
           editable={false}
         />
 
-        <FormField
-          label="Cluster Code"
-          value={form.cluster_code}
-          onChangeText={(text) => setForm((f) => ({ ...f, cluster_code: text }))}
-          placeholder="Enter cluster code"
-        />
 
         <View style={styles.fieldContainer}>
           <Text style={styles.label}>Follow-up date *</Text>
@@ -947,6 +871,10 @@ export default function LeadAddNewSchoolScreen({ navigation }: any) {
         )}
 
         </PageSection>
+
+        {errorMessage ? (
+          <MessageBanner type="error" message={errorMessage} onDismiss={clearMessages} />
+        ) : null}
 
         <WebButton
           title={submitting ? 'Creating...' : 'Create New School Lead'}

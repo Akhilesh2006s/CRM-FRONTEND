@@ -6,70 +6,74 @@ import { Input } from '@/components/ui/input'
 import { apiRequest } from '@/lib/api'
 import SchoolOverview from '@/components/SchoolOverviewPanel'
 
-type Lead = {
+/** Same tags as the server (backend utils/schoolStatus.js) and the app. */
+const TAGS = ['Lead', 'PO Dropped', 'DC Dropped', 'Client for Renewal', 'Renewed'] as const
+type Tag = (typeof TAGS)[number]
+
+const TAG_CLASS: Record<Tag, string> = {
+  Lead: 'bg-sky-100 text-sky-800',
+  'PO Dropped': 'bg-amber-100 text-amber-800',
+  'DC Dropped': 'bg-green-100 text-green-800',
+  'Client for Renewal': 'bg-red-100 text-red-800',
+  Renewed: 'bg-emerald-100 text-emerald-800',
+}
+
+type School = {
   _id: string
   school_name?: string
   school_code?: string
   contact_person?: string
   contact_mobile?: string
   zone?: string
-  location?: string
-  status?: string
-  priority?: string
-  createdAt?: string
+  area?: string
+  city?: string
+  year?: string
+  statusTag: Tag
+  schoolLocation?: { latitude: number; longitude: number } | null
 }
 
-
-const FILTERS = [
-  { key: 'all', label: 'All', query: '' },
-  { key: 'open', label: 'Open', query: '?status=Pending' },
-  { key: 'followup', label: 'Follow-up', query: '?status=Follow-up' },
-  { key: 'closed', label: 'Closed', query: '?status=Closed' },
-] as const
-
-const date = (v?: string) => (v ? new Date(v).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—')
-
-/** My Schools (same as the app): tap a school to see all of its information on the same page. */
+/** My Schools (same as the app): every school, leads and clients, with its status; click a school for all its details. */
 export default function MySchoolsPage() {
-  const [filter, setFilter] = useState<(typeof FILTERS)[number]['key']>('all')
-  const [leads, setLeads] = useState<Lead[]>([])
+  const [filter, setFilter] = useState<'All' | Tag>('All')
+  const [schools, setSchools] = useState<School[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [openId, setOpenId] = useState<string | null>(null)
 
   useEffect(() => {
     setLoading(true)
-    const query = FILTERS.find((f) => f.key === filter)?.query || ''
-    apiRequest<Lead[] | { data?: Lead[] }>(`/leads${query}`)
-      .then((res) => {
-        const list = Array.isArray(res) ? res : res?.data || []
-        list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
-        setLeads(list)
-      })
-      .catch(() => setLeads([]))
+    apiRequest<School[]>('/dc-orders/my-schools')
+      .then((res) => setSchools(Array.isArray(res) ? res : []))
+      .catch(() => setSchools([]))
       .finally(() => setLoading(false))
-  }, [filter])
+  }, [])
 
   const q = search.trim().toLowerCase()
   const shown = useMemo(
-    () => leads.filter((l) => !q || [l.school_name, l.school_code, l.location, l.contact_person].some((v) => String(v || '').toLowerCase().includes(q))),
-    [leads, q]
+    () =>
+      schools.filter(
+        (s) =>
+          (filter === 'All' || s.statusTag === filter) &&
+          (!q || [s.school_name, s.school_code, s.area, s.city, s.contact_person].some((v) => String(v || '').toLowerCase().includes(q)))
+      ),
+    [schools, q, filter]
   )
+  const count = (t: 'All' | Tag) => (t === 'All' ? schools.length : schools.filter((s) => s.statusTag === t).length)
 
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">My Schools</h1>
-        <p className="text-sm text-neutral-600 mt-1">Click a school to see all of its details, deals, DCs, payments and visits.</p>
+        <p className="text-sm text-neutral-600 mt-1">All your schools: leads and clients. Click a school for its details.</p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        {FILTERS.map((f) => (
+        {(['All', ...TAGS] as const).map((t) => (
           <button
-            key={f.key}
-            onClick={() => setFilter(f.key)}
-            className={`rounded-full border px-3 py-1 text-sm ${filter === f.key ? 'border-sky-600 bg-sky-600 text-white' : 'bg-white text-neutral-700'}`}
+            key={t}
+            onClick={() => setFilter(t)}
+            className={`rounded-full border px-3 py-1 text-sm ${filter === t ? 'border-sky-600 bg-sky-600 text-white' : 'bg-white text-neutral-700'}`}
           >
-            {f.label}
+            {t} ({count(t)})
           </button>
         ))}
         <Input className="ml-auto w-full bg-white sm:w-72" placeholder="Search school / code / town" value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -81,9 +85,9 @@ export default function MySchoolsPage() {
               <th className="py-2 px-3">School</th>
               <th className="py-2 px-3">Code</th>
               <th className="py-2 px-3">Contact</th>
-              <th className="py-2 px-3">Zone</th>
+              <th className="py-2 px-3">Area</th>
+              <th className="py-2 px-3">Location</th>
               <th className="py-2 px-3">Status</th>
-              <th className="py-2 px-3">Created</th>
             </tr>
           </thead>
           <tbody>
@@ -96,23 +100,39 @@ export default function MySchoolsPage() {
                 <td colSpan={6} className="py-6 text-center text-neutral-500">No schools found.</td>
               </tr>
             ) : (
-              shown.map((l) => (
-                <Fragment key={l._id}>
-                  <tr className={`border-t cursor-pointer hover:bg-neutral-50 ${openId === l._id ? 'bg-sky-50' : ''}`} onClick={() => setOpenId(openId === l._id ? null : l._id)}>
-                    <td className="py-2 px-3 font-medium">{l.school_name || '—'}</td>
-                    <td className="py-2 px-3">{l.school_code || '—'}</td>
+              shown.map((s) => (
+                <Fragment key={s._id}>
+                  <tr className={`border-t cursor-pointer hover:bg-neutral-50 ${openId === s._id ? 'bg-sky-50' : ''}`} onClick={() => setOpenId(openId === s._id ? null : s._id)}>
+                    <td className="py-2 px-3 font-medium">{s.school_name || '—'}</td>
+                    <td className="py-2 px-3">{s.school_code || '—'}</td>
                     <td className="py-2 px-3">
-                      {l.contact_person || '—'}
-                      {l.contact_mobile ? <div className="text-xs text-neutral-500">{l.contact_mobile}</div> : null}
+                      {s.contact_person || '—'}
+                      {s.contact_mobile ? <div className="text-xs text-neutral-500">{s.contact_mobile}</div> : null}
                     </td>
-                    <td className="py-2 px-3">{l.zone || '—'}</td>
-                    <td className="py-2 px-3">{[l.status, l.priority].filter(Boolean).join(' · ') || '—'}</td>
-                    <td className="py-2 px-3">{date(l.createdAt)}</td>
+                    <td className="py-2 px-3">{[s.area, s.city].filter(Boolean).join(', ') || '—'}</td>
+                    <td className="py-2 px-3">
+                      {s.schoolLocation ? (
+                        <a
+                          className="text-sky-700 underline"
+                          href={`https://www.google.com/maps/search/?api=1&query=${s.schoolLocation.latitude},${s.schoolLocation.longitude}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          View on map
+                        </a>
+                      ) : (
+                        <span className="text-neutral-400">Not captured</span>
+                      )}
+                    </td>
+                    <td className="py-2 px-3">
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${TAG_CLASS[s.statusTag] || 'bg-neutral-100 text-neutral-700'}`}>{s.statusTag}</span>
+                    </td>
                   </tr>
-                  {openId === l._id ? (
+                  {openId === s._id ? (
                     <tr className="bg-neutral-50">
                       <td colSpan={6} className="p-4">
-                        <SchoolOverview leadId={l._id} />
+                        <SchoolOverview leadId={s._id} />
                       </td>
                     </tr>
                   ) : null}

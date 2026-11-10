@@ -18,7 +18,7 @@ import Link from 'next/link'
 import { useProducts } from '@/hooks/useProducts'
 import { normalizeIntegerInput } from '@/lib/numericInput'
 import { sanitizePhoneInput, validatePhoneDigits } from '@/lib/phone'
-import { validateLeadStyleProducts } from '@/lib/leadProductRules'
+import { validateLeadStyleProducts, chanceForStatus } from '@/lib/leadProductRules'
 
 type ProductSelection = {
   name: string
@@ -471,6 +471,8 @@ export default function EditLeadPage() {
       updated[index].strength = ''
       updated[index].unit_price = ''
       updated[index].chance = status === 'Not Interested' ? '0' : ''
+    } else {
+      updated[index].chance = chanceForStatus(status, updated[index].chance === '0' ? '' : updated[index].chance)
     }
     if (status !== 'Not Interested') {
       updated[index].not_interested_reason = ''

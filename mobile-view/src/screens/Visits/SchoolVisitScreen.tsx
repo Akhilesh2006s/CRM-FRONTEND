@@ -295,11 +295,6 @@ export default function SchoolVisitScreen({ navigation, route }: any) {
       title="School Visits"
       subtitle={leadId ? 'Linked to lead' : 'Log field visits with GPS'}
       loading={loading && !refreshing}
-      headerRight={
-        <TouchableOpacity onPress={() => { clearMessages(); setShowForm((v) => !v); }}>
-          <Text style={styles.headerLink}>{showForm ? 'List' : '+ New'}</Text>
-        </TouchableOpacity>
-      }
     >
       <ScrollView
         style={styles.scroll}
@@ -519,7 +514,7 @@ export default function SchoolVisitScreen({ navigation, route }: any) {
           <>
             <SectionTitle>{`My visits (${visits.length})`}</SectionTitle>
             {visits.length === 0 ? (
-              <EmptyState icon="🏫" title="No visits yet" message="Tap + New to log one." />
+              <EmptyState icon="🏫" title="No visits yet" message="Check in at a school from its page to log a visit." />
             ) : (
               visits.map((v) => {
                 const hasGps = typeof v.latitude === 'number' && typeof v.longitude === 'number';

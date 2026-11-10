@@ -156,18 +156,11 @@ function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
         items: [
           { label: 'Add Lead', screen: 'LeadAdd' },
           { label: 'Followup Leads', screen: 'LeadFollowup' },
-          { label: 'My Schools', screen: 'LeadsList' },
+          { label: 'My Schools', screen: 'MySchools' },
           { label: 'School Visits', screen: 'SchoolVisits' },
         ],
       },
-      {
-        title: 'Payments',
-        items: [
-          { label: 'Pending Payments', screen: 'PaymentList' },
-          { label: 'Add Payment', screen: 'PaymentAdd' },
-          { label: 'Payments Done', screen: 'PaymentDone' },
-        ],
-      },
+      // No Payments menu for the BDE: payments are added from each school's page (My Orders / My Clients).
       {
         title: 'Expenses',
         items: [

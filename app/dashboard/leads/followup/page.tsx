@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { chanceForStatus } from '@/lib/leadProductRules'
 import { Card } from '@/components/ui/card'
 import { apiRequest } from '@/lib/api'
 import { Input } from '@/components/ui/input'
@@ -1243,8 +1244,8 @@ export default function FollowupLeadsPage() {
                                     next.chance = DROPPED_LINE_STATUSES.has(v) ? '0' : ''
                                   } else if (v === 'Renewed') {
                                     next.chance = '100'
-                                  } else if (next.chance === '0') {
-                                    next.chance = ''
+                                  } else {
+                                    next.chance = chanceForStatus(v, next.chance === '0' ? '' : next.chance)
                                   }
                                   if (!DROPPED_LINE_STATUSES.has(v)) next.not_interested_reason = ''
                                   return next

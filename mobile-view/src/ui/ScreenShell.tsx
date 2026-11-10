@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, radii } from '../theme/colors';
 
 type Props = {
@@ -39,6 +40,9 @@ export default function ScreenShell({
   noScroll,
 }: Props) {
   const navigation = useNavigation();
+  // Status bar on top, phone navigation bar / gesture bar at the bottom (Android draws edge to edge).
+  const insets = useSafeAreaInsets();
+  const bottomPad = Math.max(insets.bottom, 12);
 
   useLayoutEffect(() => {
     navigation.setOptions({ headerShown: false });
@@ -55,7 +59,7 @@ export default function ScreenShell({
 
   return (
     <View style={styles.root}>
-      <View style={styles.topBar}>
+      <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 24) + 8 }]}>
         {showBack ? (
           <TouchableOpacity
             onPress={() => {
@@ -84,11 +88,11 @@ export default function ScreenShell({
       </View>
 
       {noScroll ? (
-        <View style={[styles.contentFill, contentContainerStyle]}>{body}</View>
+        <View style={[styles.contentFill, { paddingBottom: bottomPad }, contentContainerStyle]}>{body}</View>
       ) : (
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={[styles.content, contentContainerStyle]}
+          contentContainerStyle={[styles.content, { paddingBottom: spacing.xl + bottomPad }, contentContainerStyle]}
           refreshControl={
             onRefresh ? (
               <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={colors.primary} />

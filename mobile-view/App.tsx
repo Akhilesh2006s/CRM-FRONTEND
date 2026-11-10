@@ -31,6 +31,7 @@ import LeaveListScreen from './src/screens/Leaves/LeaveListScreen';
 import LeadsListScreen from './src/screens/Leads/LeadsListScreen';
 import LeadAddNewSchoolScreen from './src/screens/Leads/LeadAddNewSchoolScreen';
 import LeadAddRenewalScreen from './src/screens/Leads/LeadAddRenewalScreen';
+import MySchoolsScreen from './src/screens/Leads/MySchoolsScreen';
 import LeadFollowupScreen from './src/screens/Leads/LeadFollowupScreen';
 import LeadEditScreen from './src/screens/Leads/LeadEditScreen';
 import LeadCloseScreen from './src/screens/Leads/LeadCloseScreen';
@@ -268,6 +269,7 @@ function AuthenticatedStack() {
         />
         {/* Leads */}
         <Stack.Screen name="LeadsList" component={LeadsListScreen} />
+        <Stack.Screen name="MySchools" component={MySchoolsScreen} />
         {/* Add Lead opens the New School form directly (no type chooser). */}
         <Stack.Screen name="LeadAdd" component={LeadAddNewSchoolScreen} />
         <Stack.Screen name="LeadAddNewSchool" component={LeadAddNewSchoolScreen} />

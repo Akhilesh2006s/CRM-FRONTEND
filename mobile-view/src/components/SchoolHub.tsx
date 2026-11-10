@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, Modal, View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiService } from '../services/api';
 import { navigateRoot } from '../navigation/navigationRef';
 import { colors } from '../theme/colors';
@@ -10,6 +11,7 @@ import SchoolOverview, { type Overview } from './SchoolOverview';
 import SchoolVisitActions, { type FieldDayState, sameSchool } from './SchoolVisitActions';
 import SchoolVisitForm, { VisitHistory, type VisitRecord } from './SchoolVisitForm';
 import SchoolTicket from './SchoolTicket';
+import SchoolLocation from './SchoolLocation';
 
 type IonName = React.ComponentProps<typeof Ionicons>['name'];
 type TileKey =
@@ -159,6 +161,7 @@ export default function SchoolHub({
   onYearChanged?: (year: string) => void;
 }) {
   const TILES = mode === 'order' ? ORDER_TILES : CLIENT_TILES;
+  const insets = useSafeAreaInsets();
   const [tile, setTile] = useState<TileKey>(TILES[0].key);
   const [data, setData] = useState<Overview | null>(null);
   const [error, setError] = useState('');
@@ -364,7 +367,7 @@ export default function SchoolHub({
               <>
                 <Text style={styles.muted}>Step 1: Check in at the school. The visit form opens after check-in.</Text>
                 <View style={{ height: 8 }} />
-                <SchoolVisitActions day={fieldDay.day} reload={refresh} school={{ schoolName, schoolCode: code, leadId }} />
+                <SchoolVisitActions day={fieldDay.day} reload={refresh} school={{ schoolName, schoolCode: code, leadId }} formShown />
               </>
             )}
             {openHere ? <SchoolVisitForm visitId={openHere._id} schoolName={schoolName} history={history} onDone={refresh} /> : null}
@@ -431,7 +434,7 @@ export default function SchoolHub({
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={styles.root}>
-        <View style={styles.topBar}>
+        <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 24) + 8 }]}>
           <TouchableOpacity onPress={onClose} hitSlop={12} style={styles.back}>
             <Ionicons name="chevron-back" size={26} color={colors.primary} />
           </TouchableOpacity>
@@ -446,7 +449,8 @@ export default function SchoolHub({
           {status ? <Badge label={status} tone={toneFor(status)} /> : null}
         </View>
 
-        <ScrollView contentContainerStyle={styles.content}>
+        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 40 + insets.bottom }]}>
+          <SchoolLocation schoolCode={code || data?.lead?.school_code} schoolName={schoolName} compact />
           {mode === 'order' ? (
             <View style={styles.tracker}>
               {ORDER_STEPS.map((s, i) => {

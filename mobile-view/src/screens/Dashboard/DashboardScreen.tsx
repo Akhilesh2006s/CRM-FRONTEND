@@ -1,13 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import AttendanceCard from '../../components/AttendanceCard';
 import PendingAdvanceApprovalsCard from '../../components/PendingAdvanceApprovalsCard';
 import PartnerDashboard from '../../components/partner/PartnerDashboard';
-import { getNavSections, MY_DATA_TITLE } from '../../config/navConfig';
-import { iconForSection } from '../../config/moduleIcons';
-import { navigateRoot } from '../../navigation/navigationRef';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import SideMenu from '../../navigation/SideMenu';
 import { getRoleFlags } from '../../utils/roles';
 import { colors } from '../../theme/colors';
 
@@ -15,18 +14,19 @@ import { colors } from '../../theme/colors';
 export const MODULE_COLORS = ['#0D9488', '#EA580C', '#2563EB', '#DC2626', '#7C3AED', '#0891B2', '#D97706', '#16A34A'];
 
 /**
- * Home: Start Day / End Day, then every main menu module as a tile.
- * A tile opens that module's options as tiles (ModuleHub) — no side menu, no overview figures.
+ * Home: Start Day / End Day and pending approvals. Every module is in the side menu (☰),
+ * like the web sidebar.
  */
 export default function DashboardScreen() {
   const { user } = useAuth();
   const flags = getRoleFlags(user);
+  const insets = useSafeAreaInsets();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   if (flags.isPartner) {
     return <PartnerDashboard userName={user?.name} role={user?.role} />;
   }
 
-  const sections = getNavSections(user).filter((s) => s.title !== MY_DATA_TITLE);
   // Start Day / End Day for field and office staff, trainers included.
   const showAttendance =
     flags.isTrainer ||
@@ -39,7 +39,10 @@ export default function DashboardScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        <TouchableOpacity onPress={() => setMenuOpen(true)} hitSlop={12} style={styles.menuBtn} accessibilityLabel="Open menu">
+          <Ionicons name="menu" size={28} color={colors.textPrimary} />
+        </TouchableOpacity>
         <Image source={require('../../../assets/logo-login.png')} style={styles.logo} resizeMode="contain" accessibilityLabel="Viswam" />
         <View style={styles.headerText}>
           <Text style={styles.greeting}>Welcome back</Text>
@@ -54,34 +57,17 @@ export default function DashboardScreen() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: 32 + insets.bottom }]} showsVerticalScrollIndicator={false}>
         {showAttendance ? <AttendanceCard /> : null}
         <PendingAdvanceApprovalsCard />
 
-        <Text style={styles.heading}>Menu</Text>
-        <View style={styles.grid}>
-          {sections.map((s, i) => {
-            const color = MODULE_COLORS[i % MODULE_COLORS.length];
-            const single = s.items.length === 1;
-            return (
-              <TouchableOpacity
-                key={s.title}
-                style={styles.tile}
-                activeOpacity={0.8}
-                onPress={() => (single ? navigateRoot(s.items[0].screen, s.items[0].params) : navigateRoot('ModuleHub', { title: s.title }))}
-              >
-                <View style={[styles.icon, { backgroundColor: color + '1A' }]}>
-                  <Ionicons name={iconForSection(s.title)} size={26} color={color} />
-                </View>
-                <Text style={styles.tileTitle} numberOfLines={2}>
-                  {s.title}
-                </Text>
-                <Text style={styles.tileSub}>{single ? 'Open' : `${s.items.length} options`}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        <TouchableOpacity style={styles.menuCard} onPress={() => setMenuOpen(true)} activeOpacity={0.8}>
+          <Ionicons name="menu" size={22} color={colors.primaryDark} />
+          <Text style={styles.menuCardText}>Open the menu for all options</Text>
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        </TouchableOpacity>
       </ScrollView>
+      <SideMenu visible={menuOpen} onClose={() => setMenuOpen(false)} />
     </View>
   );
 }
@@ -98,6 +84,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#EEF2F7',
   },
+  menuBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', marginRight: 6 },
+  menuCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 16,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#EEF2F7',
+  },
+  menuCardText: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.textPrimary },
   logo: { width: 44, height: 44, marginRight: 12 },
   headerText: { flex: 1 },
   greeting: { fontSize: 13, color: colors.textTertiary },

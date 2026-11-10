@@ -60,3 +60,17 @@ export function validateLeadStyleProducts(products: LeadStyleProduct[]): string 
 
   return null
 }
+
+/** Default Chance % filled in when a product is set to Hot or Warm (the lowest allowed value). */
+export const DEFAULT_CHANCE_BY_STATUS: Record<string, string> = { Hot: '80', Warm: '20' }
+
+/** Keeps a Chance % that already fits the new status; otherwise returns that status's default. */
+export function chanceForStatus(status: string, current: string): string {
+  const def = DEFAULT_CHANCE_BY_STATUS[status]
+  if (!def) return current
+  const n = current === '' ? NaN : Number(current)
+  if (!Number.isFinite(n)) return def
+  if (status === 'Hot' && (n < 80 || n > 100)) return def
+  if (status === 'Warm' && (n < 20 || n >= 80)) return def
+  return current
+}

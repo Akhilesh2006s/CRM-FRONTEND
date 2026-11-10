@@ -36,7 +36,7 @@ const REVIEW_LABELS: Record<string, string> = {
 
 const REASONS: Array<{ value: string; label: string }> = [
   { value: 'office', label: 'Office' },
-  { value: 'employee', label: 'Field work' },
+  { value: 'employee', label: 'Sales' },
   { value: 'collection', label: 'Collection' },
   { value: 'service', label: 'Service' },
   { value: 'training', label: 'Training' },

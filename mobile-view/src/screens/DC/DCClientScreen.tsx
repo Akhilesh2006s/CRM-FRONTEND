@@ -1,3 +1,4 @@
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import React, { useState, useCallback } from 'react';
 import {
   View,
@@ -24,6 +25,7 @@ import { isTransportComplete, TRANSPORT_REQUIRED_MESSAGE } from '../../utils/dcT
 import { showAlert, showConfirm } from '../../utils/showAlert';
 import { navigateRoot } from '../../navigation/navigationRef';
 import SchoolOverview, { OverviewSection } from '../../components/SchoolOverview';
+import SchoolLocation from '../../components/SchoolLocation';
 
 /** School modules on each client card (same as the web's school info). */
 const MODULES: { key: OverviewSection; label: string }[] = [
@@ -53,6 +55,8 @@ const isCompletedDc = (dc: any) =>
   String(dc?.status || '').toLowerCase() === 'completed' || ['delivery_confirmation', 'billing'].includes(dc?.workflow?.stage);
 
 export default function DCClientScreen({ navigation, route }: any) {
+  // Bottom sheets stay above the phone's navigation bar.
+  const sheetBottom = useSafeAreaInsets().bottom;
   /** orders = My Orders (PO uploaded, DC on its way); clients = My Clients (DC completed). */
   const view: 'orders' | 'clients' = route?.params?.view === 'orders' ? 'orders' : 'clients';
   const { user } = useAuth();
@@ -470,6 +474,7 @@ export default function DCClientScreen({ navigation, route }: any) {
                   <Text style={styles.k}>School code</Text>
                   <Text style={[styles.v, styles.code]}>{getSchoolCode(dc)}</Text>
                 </View>
+                <SchoolLocation schoolCode={orderOf(dc).school_code} schoolName={schoolName(dc)} />
                 <View style={styles.kv}>
                   <Text style={styles.k}>Year</Text>
                   <Text style={styles.v}>{dealYear(dc)}</Text>
@@ -564,7 +569,7 @@ export default function DCClientScreen({ navigation, route }: any) {
 
       <Modal visible={showModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingBottom: sheetBottom }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>DC Details</Text>
               <TouchableOpacity onPress={() => setShowModal(false)}>
@@ -603,7 +608,7 @@ export default function DCClientScreen({ navigation, route }: any) {
 
       <Modal visible={showInvoiceModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingBottom: sheetBottom }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 Invoice{invoiceData ? ` - ${invoiceData.schoolName}` : ''}

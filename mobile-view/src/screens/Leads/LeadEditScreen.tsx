@@ -18,7 +18,7 @@ import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 import { useAuth } from '../../context/AuthContext';
-import { LEAD_PRODUCT_STATUSES, validateLeadStyleProducts } from '../../lib/crm/leadProductRules';
+import { LEAD_PRODUCT_STATUSES, validateLeadStyleProducts, chanceForStatus } from '../../lib/crm/leadProductRules';
 
 import { ymdToDmy } from '../../utils/dateFormat';
 const SCHOOL_TYPE_OPTIONS = [
@@ -434,6 +434,7 @@ export default function LeadEditScreen({ navigation, route }: any) {
           next.unit_price = '';
           next.chance = status === 'Not Interested' ? '0' : '';
         }
+        else next.chance = chanceForStatus(status, next.chance === '0' ? '' : next.chance);
         if (status !== 'Not Interested') next.not_interested_reason = '';
         return next;
       }),
@@ -777,26 +778,11 @@ export default function LeadEditScreen({ navigation, route }: any) {
           onChangeText={(text) => setForm((f) => ({ ...f, mandal: text }))}
           placeholder="Enter mandal"
         />
-        <FormField
-          label="Cluster"
-          value={form.cluster}
-          onChangeText={(text) => setForm((f) => ({ ...f, cluster: text }))}
-          placeholder="Enter cluster"
-        />
-        <FormField
-          label="Latitude"
-          value={form.latitude}
-          onChangeText={(text) => setForm((f) => ({ ...f, latitude: text }))}
-          placeholder="e.g. 17.3850"
-          keyboardType="decimal-pad"
-        />
-        <FormField
-          label="Longitude"
-          value={form.longitude}
-          onChangeText={(text) => setForm((f) => ({ ...f, longitude: text }))}
-          placeholder="e.g. 78.4867"
-          keyboardType="decimal-pad"
-        />
+        {/* Cluster is the BDE's assigned cluster (read-only). Latitude / Longitude are kept but not shown:
+            the school location is updated with "Update location" on the school's card. */}
+        {form.cluster ? (
+          <FormField label="Cluster" value={form.cluster} onChangeText={() => {}} editable={false} />
+        ) : null}
         <FormField
           label="School Strength *"
           value={form.strength}
