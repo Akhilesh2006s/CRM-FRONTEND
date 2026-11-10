@@ -25,6 +25,21 @@ import {
 import { sanitizePhoneInput, validateStrictIndianMobile } from '@/lib/phone'
 import { displayRoleName } from '@/lib/roleLabels'
 import { useProducts } from '@/hooks/useProducts'
+import { SearchableSelect } from '@/components/ui/searchable-select'
+import {
+  ONBOARDING_ITEMS,
+  PERMANENT_ADDRESS_FIELDS,
+  emptyPermanentAddress,
+  employeeDesignation,
+  formatPermanentAddress,
+  isBlankPermanentAddress,
+  onboardingError,
+  onboardingFromSaved,
+  permanentAddressError,
+  permanentAddressFromSaved,
+  productsLeftForTraining,
+  type PermanentAddressDetails,
+} from '@/lib/employeeHrms'
 import {
   validateEmployeeFirstName,
   validateEmployeeLastName,
@@ -37,6 +52,8 @@ type EmployeeOption = {
   _id: string
   name: string
   role: string
+  department?: string
+  designation?: string
   assignedProductIds?: Array<string | { _id?: string }>
 }
 type ProductSchool = { schoolName: string; schoolCode: string; zone: string; cluster: string; zonalManager: string; contactPerson: string }
@@ -45,6 +62,7 @@ const MULTI_ZONE_ROLES = ['Executive Manager', 'Trainer', 'Coordinator', 'Senior
 const roleUsesZones = (role: string) => isSingleZoneRole(role) || MULTI_ZONE_ROLES.includes(role)
 const roleRequiresZones = (role: string) =>
   isSingleZoneRole(role) || ['Trainer', 'Coordinator', 'Senior Coordinator'].includes(role)
+const emptyRelationship = () => ({ employeeId: '', fullName: '', relationship: '', department: '', designation: '' })
 
 /** Stored date as YYYY-MM-DD on the Indian calendar (how the forms save it). */
 function dateInputValue(value: unknown): string {
@@ -95,7 +113,7 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
     phone: '',
     mobile: '',
     hasEmployeeRelationship: null as boolean | null,
-    employeeRelationshipDetails: { fullName: '', relationship: '', department: '', designation: '' },
+    employeeRelationshipDetails: emptyRelationship(),
     dateOfBirth: '',
     dateOfJoining: '',
     /** CTC per year (saved as the yearly salary) and the monthly take-home pay. */
@@ -103,10 +121,12 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
     monthlyTakeHome: '',
     passportPhotoUrl: '',
     onboardingChecklist: [] as string[],
+    onboardingProductTraining: [] as string[],
     onboardingOtherNote: '',
     address1: '',
     temporaryAddress: '',
     permanentAddress: '',
+    permanentAddressDetails: emptyPermanentAddress() as PermanentAddressDetails,
     state: '',
     zone: '',
     zones: [] as string[],
@@ -145,18 +165,35 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
   const [uploadingRefAadhaar, setUploadingRefAadhaar] = useState<number | null>(null)
   const [uploadingLocation, setUploadingLocation] = useState(false)
   const [uploadingPassport, setUploadingPassport] = useState(false)
-  const ONBOARDING_ITEMS = [
-    'App Training',
-    'Account Session',
-    'Product Training',
-    'Visiting cards',
-    'Id cards',
-    'Sim',
-    'Training Manuals',
-    'Marketing Kit (BDE)',
-    'Laptop',
-    'Others',
-  ]
+  const [departments, setDepartments] = useState<string[]>([])
+  const [canAddDepartment, setCanAddDepartment] = useState(false)
+  const [newDepartment, setNewDepartment] = useState('')
+  const [addingDepartment, setAddingDepartment] = useState(false)
+  const loadDepartments = async () => {
+    try {
+      const data = await apiRequest<{ departments: { name: string }[]; canManage: boolean }>('/departments')
+      setDepartments((data?.departments || []).map((d) => d.name))
+      setCanAddDepartment(Boolean(data?.canManage))
+    } catch {
+      setDepartments([])
+    }
+  }
+  const addDepartment = async () => {
+    const name = newDepartment.trim()
+    if (!name) return
+    setAddingDepartment(true)
+    try {
+      const created = await apiRequest<{ name: string }>('/departments', { method: 'POST', body: JSON.stringify({ name }) })
+      await loadDepartments()
+      setForm((f) => ({ ...f, department: created?.name || name }))
+      setNewDepartment('')
+      toast.success(`Department "${created?.name || name}" added`)
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to add department')
+    } finally {
+      setAddingDepartment(false)
+    }
+  }
   const REFERENCE_RELATIONS = ['Wife', 'Husband', 'Brother', 'Sister', 'Father', 'Mother'] as const
   const [tagOptions, setTagOptions] = useState<EmployeeOption[]>([])
   const filteredTagOptions = useMemo(
@@ -319,14 +356,6 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
       if (name === 'phone' && phoneError) setPhoneError(null)
       return
     }
-    if (name === 'permanentAddress') {
-      setForm((f) => ({
-        ...f,
-        permanentAddress: value,
-        ...(sameAsPermanent ? { temporaryAddress: value } : {}),
-      }))
-      return
-    }
     setForm((f) => ({ ...f, [name]: value }))
     if (name === 'firstName') {
       if (!value.trim()) {
@@ -380,9 +409,12 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
     }
   }
 
+  const setPermanentAddress = (patch: Partial<PermanentAddressDetails>) =>
+    setForm((f) => ({ ...f, permanentAddressDetails: { ...f.permanentAddressDetails, ...patch } }))
+
   const handlePincodeChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const pincode = e.target.value.replace(/\D/g, '').slice(0, 6)
-    setForm((f) => ({ ...f, pincode }))
+    setForm((f) => ({ ...f, pincode, permanentAddressDetails: { ...f.permanentAddressDetails, pincode } }))
 
     // Only lookup when full 6-digit pincode entered
     if (pincode.length === 6) {
@@ -405,11 +437,18 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
               isSingleZoneRole(f.role) || !zone || f.zones.includes(zone)
                 ? f.zones
                 : [...f.zones, zone]
+            const address = f.permanentAddressDetails
             return {
               ...f,
               state: response.state || f.state,
               district: response.district || f.district,
               city: response.city || response.town || f.city,
+              permanentAddressDetails: {
+                ...address,
+                state: response.state || address.state,
+                district: response.district || address.district,
+                villageTownCity: address.villageTownCity || response.city || response.town || '',
+              },
               zone,
               zones,
               cluster: response.cluster || (response.zone ? '' : f.cluster),
@@ -422,16 +461,6 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
       } finally {
         setLoadingPincode(false)
       }
-    } else {
-      // If user clears or edits pincode to less than 6 digits, clear derived fields
-      setForm((f) => ({
-        ...f,
-        state: '',
-        district: '',
-        city: '',
-        zone: '',
-        cluster: '',
-      }))
     }
   }
 
@@ -467,6 +496,7 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
       mobile: String(emp.mobile || ''),
       hasEmployeeRelationship: typeof emp.hasEmployeeRelationship === 'boolean' ? emp.hasEmployeeRelationship : null,
       employeeRelationshipDetails: {
+        employeeId: relationship.employeeId ? String(relationship.employeeId?._id || relationship.employeeId) : '',
         fullName: String(relationship.fullName || ''),
         relationship: String(relationship.relationship || ''),
         department: String(relationship.department || ''),
@@ -477,11 +507,13 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
       yearlySalary: emp.yearlySalary ? String(emp.yearlySalary) : '',
       monthlyTakeHome: emp.monthlyTakeHome ? String(emp.monthlyTakeHome) : '',
       passportPhotoUrl: String(emp.passportPhotoUrl || ''),
-      onboardingChecklist: Array.isArray(emp.onboardingChecklist) ? emp.onboardingChecklist : [],
+      onboardingChecklist: onboardingFromSaved(emp.onboardingChecklist),
+      onboardingProductTraining: Array.isArray(emp.onboardingProductTraining) ? emp.onboardingProductTraining.map(String) : [],
       onboardingOtherNote: String(emp.onboardingOtherNote || ''),
       address1: String(emp.address1 || ''),
       temporaryAddress,
       permanentAddress,
+      permanentAddressDetails: permanentAddressFromSaved(emp.permanentAddressDetails),
       state: String(emp.state || ''),
       zone: savedZones[0] || '',
       zones: savedZones,
@@ -511,6 +543,7 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
 
   useEffect(() => {
     loadZones()
+    loadDepartments()
     apiRequest<EmployeeOption[]>('/employees?isActive=true')
       .then((data) => setTagOptions(Array.isArray(data) ? data.filter((e) => e._id !== employeeId) : []))
       .catch(() => setTagOptions([]))
@@ -548,6 +581,56 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
     }))
   }
 
+  const productNames = useMemo(() => productOptions.map((p) => p.productName).filter(Boolean), [productOptions])
+  const productsLeft = productsLeftForTraining(productNames, form.onboardingProductTraining)
+  const relationshipOptions = useMemo(
+    () =>
+      tagOptions
+        .filter((e) => e._id !== employeeId)
+        .map((e) => ({ value: e._id, label: `${e.name} (${displayRoleName(e.role)})` }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [tagOptions, employeeId]
+  )
+  /** A declaration saved before the employee picker: typed name, no employee picked. */
+  const legacyRelationship =
+    isEdit &&
+    !form.employeeRelationshipDetails.employeeId &&
+    Boolean(original?.employeeRelationshipDetails?.fullName) &&
+    form.employeeRelationshipDetails.fullName === String(original?.employeeRelationshipDetails?.fullName || '')
+  const pickRelatedEmployee = (id: string) => {
+    const picked = tagOptions.find((e) => e._id === id)
+    setForm((f) => ({
+      ...f,
+      employeeRelationshipDetails: {
+        ...f.employeeRelationshipDetails,
+        employeeId: picked ? picked._id : '',
+        fullName: picked?.name || '',
+        department: picked?.department || '',
+        designation: employeeDesignation(picked),
+      },
+    }))
+  }
+  const toggleOnboarding = (item: string) =>
+    setForm((f) => ({
+      ...f,
+      onboardingChecklist: ONBOARDING_ITEMS.filter((name) =>
+        name === item ? !f.onboardingChecklist.includes(item) : f.onboardingChecklist.includes(name)
+      ),
+    }))
+  const toggleTrainingProduct = (name: string) =>
+    setForm((f) => {
+      const ticked = f.onboardingProductTraining.includes(name)
+        ? f.onboardingProductTraining.filter((n) => n !== name)
+        : [...f.onboardingProductTraining, name]
+      const allDone = productsLeftForTraining(productNames, ticked).length === 0
+      return {
+        ...f,
+        onboardingProductTraining: ticked,
+        // Product Training stays ticked only while every product is ticked.
+        onboardingChecklist: allDone ? f.onboardingChecklist : f.onboardingChecklist.filter((i) => i !== 'Product Training'),
+      }
+    })
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSubmitting(true)
@@ -573,8 +656,14 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
       }
       setIdentityErrors({})
 
-      const temporaryAddress = sameAsPermanent
+      const addressPartsBlank = isBlankPermanentAddress(form.permanentAddressDetails)
+      // Employees saved before the address parts existed may keep their one-line address.
+      const keepLegacyPermanentAddress = isEdit && addressPartsBlank && !onFile('permanentAddressDetails') && Boolean(form.permanentAddress.trim())
+      const permanentAddressText = keepLegacyPermanentAddress
         ? form.permanentAddress
+        : formatPermanentAddress(form.permanentAddressDetails)
+      const temporaryAddress = sameAsPermanent
+        ? permanentAddressText
         : form.temporaryAddress
 
       if (!form.mobile.trim()) {
@@ -619,8 +708,13 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
       }
       if (form.hasEmployeeRelationship) {
         const relationship = form.employeeRelationshipDetails
-        if (!relationship.fullName.trim() || !relationship.relationship.trim() || !relationship.department.trim() || !relationship.designation.trim()) {
-          setError('Enter the full name, relationship, department, and designation of the employee connection')
+        if (!relationship.employeeId && !legacyRelationship) {
+          setError('Employee Relationship Declaration: select the employee from the list')
+          setSubmitting(false)
+          return
+        }
+        if (!relationship.relationship.trim()) {
+          setError('Employee Relationship Declaration: Relationship is required')
           setSubmitting(false)
           return
         }
@@ -701,23 +795,23 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
       for (let i = 0; i < (skipReferences ? 0 : 2); i++) {
         const ref = form.references[i]
         if (!REFERENCE_RELATIONS.includes(ref.relation as any)) {
-          setError(`Reference ${i + 1}: select relationship (Wife, Husband, Brother, Sister, Father, or Mother)`)
+          setError(`Family Member ${i + 1}: select relationship (Wife, Husband, Brother, Sister, Father, or Mother)`)
           setSubmitting(false)
           return
         }
         if (!ref.name.trim()) {
-          setError(`Reference ${i + 1}: name is required`)
+          setError(`Family Member ${i + 1}: name is required`)
           setSubmitting(false)
           return
         }
         const refMobile = validateStrictIndianMobile(ref.mobile)
         if (!refMobile.ok) {
-          setError(`Reference ${i + 1}: ${refMobile.message}`)
+          setError(`Family Member ${i + 1}: ${refMobile.message}`)
           setSubmitting(false)
           return
         }
         if (!ref.aadhaarUrl.trim()) {
-          setError(`Reference ${i + 1}: Aadhaar PDF is required`)
+          setError(`Family Member ${i + 1}: Aadhaar PDF is required`)
           setSubmitting(false)
           return
         }
@@ -727,14 +821,17 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
         return m.ok ? m.digits : r.mobile.trim()
       })
       if (refMobiles[0] && refMobiles[0] === refMobiles[1]) {
-        setError('Reference 1 and Reference 2 cannot have the same mobile number')
+        setError('Family Member 1 and Family Member 2 cannot have the same mobile number')
         setSubmitting(false)
         return
       }
-      if (!form.permanentAddress.trim() && needs('permanentAddress')) {
-        setError('Permanent address is required')
-        setSubmitting(false)
-        return
+      if (!keepLegacyPermanentAddress && !(isEdit && addressPartsBlank && !onFile('permanentAddressDetails') && !onFile('permanentAddress'))) {
+        const addressError = permanentAddressError(form.permanentAddressDetails)
+        if (addressError) {
+          setError(addressError)
+          setSubmitting(false)
+          return
+        }
       }
       if (!temporaryAddress.trim() && (needs('temporaryAddress') || (isEdit && onFile('address1')))) {
         setError('Temporary address is required')
@@ -772,8 +869,11 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
         }
       }
       const skipOnboarding = isEdit && !onFile('onboardingChecklist') && form.onboardingChecklist.length === 0
-      if (form.onboardingChecklist.length < 2 && !skipOnboarding) {
-        setError('Select at least two onboarding checklist items')
+      const checklistError = skipOnboarding
+        ? null
+        : onboardingError(form.onboardingChecklist, form.onboardingProductTraining, form.onboardingOtherNote, productNames)
+      if (checklistError) {
+        setError(checklistError)
         setSubmitting(false)
         return
       }
@@ -786,7 +886,7 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
         phone: phoneCheck.ok ? phoneCheck.digits : '',
         mobile: mobileCheck.digits,
         temporaryAddress,
-        permanentAddress: form.permanentAddress,
+        permanentAddress: permanentAddressText,
         zone: selectedZones[0],
         zones: selectedZones,
         name:
@@ -807,6 +907,9 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
       if (form.role !== 'Executive') {
         delete payload.cluster
       }
+      if (keepLegacyPermanentAddress || (isEdit && addressPartsBlank)) {
+        delete payload.permanentAddressDetails
+      }
       if (!supportsEmployeeTagging(form.role)) {
         delete payload.taggedEmployeeIds
       }
@@ -822,6 +925,7 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
         }
         if (skipOnboarding) {
           delete payload.onboardingChecklist
+          delete payload.onboardingProductTraining
           delete payload.onboardingOtherNote
         }
         if (form.role === 'Trainer' && keepLegacyTrainer) {
@@ -829,6 +933,7 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
           delete payload.verticalManagerId
         }
         if (!temporaryAddress.trim()) delete payload.address1
+        if (!permanentAddressText.trim()) delete payload.permanentAddress
         await apiRequest(`/employees/${employeeId}`, {
           method: 'PUT',
           body: JSON.stringify(payload),
@@ -1114,7 +1219,7 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
                   ...current,
                   hasEmployeeRelationship: value === 'yes',
                   ...(value === 'no'
-                    ? { employeeRelationshipDetails: { fullName: '', relationship: '', department: '', designation: '' } }
+                    ? { employeeRelationshipDetails: emptyRelationship() }
                     : {}),
                 }))
               }
@@ -1144,23 +1249,27 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
             </RadioGroup>
             {form.hasEmployeeRelationship === true && (
               <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div>
-                  <Label htmlFor="relationship-full-name">Full Name *</Label>
-                  <Input
-                    id="relationship-full-name"
-                    className="mt-1 bg-white text-neutral-900"
-                    value={form.employeeRelationshipDetails.fullName}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        employeeRelationshipDetails: {
-                          ...current.employeeRelationshipDetails,
-                          fullName: event.target.value,
-                        },
-                      }))
-                    }
-                    required
+                <div className="md:col-span-2">
+                  <Label htmlFor="relationship-employee">Employee Name *</Label>
+                  <SearchableSelect
+                    id="relationship-employee"
+                    className="mt-1"
+                    options={relationshipOptions}
+                    value={form.employeeRelationshipDetails.employeeId}
+                    onValueChange={pickRelatedEmployee}
+                    placeholder="Search and select the employee"
+                    searchPlaceholder="Search employees…"
+                    emptyText="No employee found."
                   />
+                  {legacyRelationship && (
+                    <p className="mt-1 text-xs text-amber-700">
+                      Saved earlier as &quot;{form.employeeRelationshipDetails.fullName}&quot;. Select the employee from the list to update it.
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <Label htmlFor="relationship-full-name">Full Name</Label>
+                  <Input id="relationship-full-name" className="mt-1 bg-neutral-100 text-neutral-900" value={form.employeeRelationshipDetails.fullName} readOnly placeholder="Filled from the selected employee" />
                 </div>
                 <div>
                   <Label htmlFor="relationship-type">Relationship *</Label>
@@ -1182,55 +1291,36 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
                   />
                 </div>
                 <div>
-                  <Label htmlFor="relationship-department">Department *</Label>
-                  <Input
-                    id="relationship-department"
-                    className="mt-1 bg-white text-neutral-900"
-                    value={form.employeeRelationshipDetails.department}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        employeeRelationshipDetails: {
-                          ...current.employeeRelationshipDetails,
-                          department: event.target.value,
-                        },
-                      }))
-                    }
-                    required
-                  />
+                  <Label htmlFor="relationship-department">Department</Label>
+                  <Input id="relationship-department" className="mt-1 bg-neutral-100 text-neutral-900" value={form.employeeRelationshipDetails.department} readOnly placeholder="Filled from the selected employee" />
                 </div>
                 <div>
-                  <Label htmlFor="relationship-designation">Designation *</Label>
-                  <Input
-                    id="relationship-designation"
-                    className="mt-1 bg-white text-neutral-900"
-                    value={form.employeeRelationshipDetails.designation}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        employeeRelationshipDetails: {
-                          ...current.employeeRelationshipDetails,
-                          designation: event.target.value,
-                        },
-                      }))
-                    }
-                    required
-                  />
+                  <Label htmlFor="relationship-designation">Designation</Label>
+                  <Input id="relationship-designation" className="mt-1 bg-neutral-100 text-neutral-900" value={form.employeeRelationshipDetails.designation} readOnly placeholder="Filled from the selected employee" />
                 </div>
               </div>
             )}
           </fieldset>
-          <div className="md:col-span-2">
-            <Label>Permanent address *</Label>
-            <Textarea
-              className="bg-white text-neutral-900"
-              name="permanentAddress"
-              value={form.permanentAddress}
-              onChange={onChange}
-              placeholder="Permanent address"
-              required
-            />
-          </div>
+          <div className="md:col-span-2 text-lg font-semibold mt-4">Permanent Address *</div>
+          {isEdit && isBlankPermanentAddress(form.permanentAddressDetails) && form.permanentAddress.trim() && (
+            <p className="md:col-span-2 -mt-2 text-xs text-neutral-500">Saved earlier as: {form.permanentAddress}. Fill in the parts below to update it.</p>
+          )}
+          {PERMANENT_ADDRESS_FIELDS.map(({ key, label, required }) => (
+            <div key={key}>
+              <Label htmlFor={`permanent-${key}`}>{label}{required ? ' *' : ''}</Label>
+              <Input
+                id={`permanent-${key}`}
+                className="bg-white text-neutral-900"
+                value={form.permanentAddressDetails[key]}
+                inputMode={key === 'pincode' ? 'numeric' : undefined}
+                maxLength={key === 'pincode' ? 6 : undefined}
+                onChange={key === 'pincode' ? handlePincodeChange : (e) => setPermanentAddress({ [key]: e.target.value })}
+                placeholder={key === 'pincode' ? '6-digit PIN Code' : label}
+              />
+              {key === 'pincode' && loadingPincode && <p className="text-xs text-neutral-500 mt-1">Looking up location…</p>}
+              {key === 'pincode' && !loadingPincode && <p className="text-xs text-neutral-500 mt-1">PIN Code fills District, State and Zone.</p>}
+            </div>
+          ))}
           <div className="md:col-span-2 flex items-center gap-2">
             <input
               id="sameAsPermanent"
@@ -1241,7 +1331,7 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
                 const checked = e.target.checked
                 setSameAsPermanent(checked)
                 if (checked) {
-                  setForm((f) => ({ ...f, temporaryAddress: f.permanentAddress }))
+                  setForm((f) => ({ ...f, temporaryAddress: formatPermanentAddress(f.permanentAddressDetails) || f.permanentAddress }))
                 }
               }}
             />
@@ -1254,7 +1344,7 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
             <Textarea
               className="bg-white text-neutral-900"
               name="temporaryAddress"
-              value={sameAsPermanent ? form.permanentAddress : form.temporaryAddress}
+              value={sameAsPermanent ? formatPermanentAddress(form.permanentAddressDetails) || form.permanentAddress : form.temporaryAddress}
               onChange={onChange}
               placeholder="Temporary / current address"
               readOnly={sameAsPermanent}
@@ -1391,11 +1481,11 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
             </p>
           </div>
 
-          <div className="md:col-span-2 text-lg font-semibold mb-2 mt-4">References *</div>
+          <div className="md:col-span-2 text-lg font-semibold mb-2 mt-4">Family Details *</div>
           {[0, 1].map((idx) => (
             <div key={idx} className="md:col-span-2 grid grid-cols-1 md:grid-cols-4 gap-4 border border-neutral-200 rounded p-3 bg-white">
               <div>
-                <Label>Reference {idx + 1} — Relationship *</Label>
+                <Label>Family Member {idx + 1} — Relationship *</Label>
                 <Select
                   value={form.references[idx].relation}
                   onValueChange={(v) =>
@@ -1430,7 +1520,7 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
                       return { ...f, references }
                     })
                   }
-                  placeholder="Reference name"
+                  placeholder="Family member name"
                   required
                 />
               </div>
@@ -1491,7 +1581,7 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
                         return { ...f, references }
                       })
                     } catch (err: any) {
-                      setError(err?.message || `Reference ${idx + 1} Aadhaar upload failed`)
+                      setError(err?.message || `Family Member ${idx + 1} Aadhaar upload failed`)
                     } finally {
                       setUploadingRefAadhaar(null)
                     }
@@ -1508,19 +1598,110 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
             </div>
           ))}
 
-          <div className="md:col-span-2 text-lg font-semibold mb-2 mt-4">Location & User Type</div>
-
+          <div className="md:col-span-2 text-lg font-semibold mb-2 mt-4">User Type</div>
           <div>
-            <Label>PinCode *</Label>
-            <Input
-              className="bg-white text-neutral-900"
-              name="pincode"
-              value={form.pincode}
-              onChange={handlePincodeChange}
-              placeholder="Pincode"
-              required
-            />
+            <Label>User Type *</Label>
+            <Select
+              value={form.role}
+              onValueChange={(v) => {
+                if (v !== 'Manager') setProductId('')
+                setForm((f) => {
+                  const allowed = new Set(filterTagOptions(tagOptions, v).map((e) => e._id))
+                  const single = isSingleZoneRole(v)
+                  const usesZones = roleUsesZones(v)
+                  const zones = !usesZones
+                    ? []
+                    : single
+                      ? f.zone
+                        ? [f.zone]
+                        : f.zones.slice(0, 1)
+                      : f.zones.length
+                        ? f.zones
+                        : f.zone
+                          ? [f.zone]
+                          : []
+                  return {
+                    ...f,
+                    role: v,
+                    zone: usesZones ? zones[0] || '' : '',
+                    zones,
+                    cluster: single ? f.cluster : '',
+                    trainerProducts: v === 'Trainer' ? f.trainerProducts : [],
+                    verticalManagerId: v === 'Trainer' ? f.verticalManagerId : '',
+                    taggedEmployeeIds: supportsEmployeeTagging(v)
+                      ? f.taggedEmployeeIds.filter((id) => allowed.has(id))
+                      : [],
+                  }
+                })
+              }}
+            >
+              <SelectTrigger className="bg-white text-neutral-900">
+                <SelectValue placeholder="Select Option" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Executive">BDE</SelectItem>
+                <SelectItem value="Trainer">Trainer</SelectItem>
+                <SelectItem value="Finance Manager">Finance Manager</SelectItem>
+                <SelectItem value="Finance Executive">Finance Executive</SelectItem>
+                <SelectItem value="HR Manager">HR Manager</SelectItem>
+                <SelectItem value="HR Executive">HR Executive</SelectItem>
+                <SelectItem value="Coordinator">Coordinator</SelectItem>
+                <SelectItem value="Senior Coordinator">Senior Coordinator</SelectItem>
+                <SelectItem value="Manager">Product Manager</SelectItem>
+                <SelectItem value="Executive Manager">Zonal Manager</SelectItem>
+                <SelectItem value="Regional Manager">Regional Manager</SelectItem>
+                <SelectItem value="Regional Head">Regional Head</SelectItem>
+                <SelectItem value="National Head">National Head</SelectItem>
+                <SelectItem value="Warehouse Executive">Warehouse Executive</SelectItem>
+                <SelectItem value="Warehouse Manager">Warehouse Manager</SelectItem>
+                <SelectItem value="Admin">Admin</SelectItem>
+                <SelectItem value="Office Team">Office Team</SelectItem>
+                <SelectItem value="Super Admin">Super Admin</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
+          <div>
+            <Label>Department</Label>
+            <Select
+              value={form.department || undefined}
+              onValueChange={(department) => setForm((f) => ({ ...f, department }))}
+            >
+              <SelectTrigger className="bg-white text-neutral-900">
+                <SelectValue placeholder={departments.length ? 'Select department' : 'No departments yet'} />
+              </SelectTrigger>
+              <SelectContent>
+                {[...departments, ...(form.department && !departments.includes(form.department) ? [form.department] : [])].map((name) => (
+                  <SelectItem key={name} value={name}>{name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {canAddDepartment && (
+              <div className="mt-2 flex gap-2">
+                <Input
+                  className="bg-white text-neutral-900"
+                  value={newDepartment}
+                  onChange={(e) => setNewDepartment(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      addDepartment()
+                    }
+                  }}
+                  placeholder="New department name"
+                  maxLength={60}
+                />
+                <Button type="button" variant="outline" disabled={addingDepartment || !newDepartment.trim()} onClick={addDepartment}>
+                  {addingDepartment ? 'Adding…' : 'Add Department'}
+                </Button>
+              </div>
+            )}
+          </div>
+          {!isEdit && (
+            <div>
+              <Label>Password *</Label>
+              <Input className="bg-white text-neutral-900" type="password" name="password" value={form.password} onChange={onChange} required />
+            </div>
+          )}
           {!roleUsesZones(form.role) ? null : isSingleZoneRole(form.role) ? (
             <div>
               <Label>{isSingleZoneRole(form.role) ? 'BDE Zone *' : 'Zone *'}</Label>
@@ -1607,98 +1788,6 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
               </Select>
             </div>
           )}
-          <div>
-            <Label>District</Label>
-            <Input
-              className="bg-neutral-100 text-neutral-900"
-              name="district"
-              value={form.district}
-              readOnly
-              placeholder="Auto-filled from Pincode"
-            />
-          </div>
-          <div>
-            <Label>City</Label>
-            <Input
-              className="bg-neutral-100 text-neutral-900"
-              name="city"
-              value={form.city}
-              readOnly
-              placeholder="Auto-filled from Pincode"
-            />
-          </div>
-          <div>
-            <Label>State *</Label>
-            <Input
-              className="bg-neutral-100 text-neutral-900"
-              name="state"
-              value={form.state}
-              readOnly
-              placeholder="Auto-filled from Pincode"
-              required
-            />
-          </div>
-          <div>
-            <Label>User Type *</Label>
-            <Select
-              value={form.role}
-              onValueChange={(v) => {
-                if (v !== 'Manager') setProductId('')
-                setForm((f) => {
-                  const allowed = new Set(filterTagOptions(tagOptions, v).map((e) => e._id))
-                  const single = isSingleZoneRole(v)
-                  const usesZones = roleUsesZones(v)
-                  const zones = !usesZones
-                    ? []
-                    : single
-                      ? f.zone
-                        ? [f.zone]
-                        : f.zones.slice(0, 1)
-                      : f.zones.length
-                        ? f.zones
-                        : f.zone
-                          ? [f.zone]
-                          : []
-                  return {
-                    ...f,
-                    role: v,
-                    zone: usesZones ? zones[0] || '' : '',
-                    zones,
-                    cluster: single ? f.cluster : '',
-                    trainerProducts: v === 'Trainer' ? f.trainerProducts : [],
-                    verticalManagerId: v === 'Trainer' ? f.verticalManagerId : '',
-                    taggedEmployeeIds: supportsEmployeeTagging(v)
-                      ? f.taggedEmployeeIds.filter((id) => allowed.has(id))
-                      : [],
-                  }
-                })
-              }}
-            >
-              <SelectTrigger className="bg-white text-neutral-900">
-                <SelectValue placeholder="Select Option" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Executive">BDE</SelectItem>
-                <SelectItem value="Trainer">Trainer</SelectItem>
-                <SelectItem value="Finance Manager">Finance Manager</SelectItem>
-                <SelectItem value="Finance Executive">Finance Executive</SelectItem>
-                <SelectItem value="HR Manager">HR Manager</SelectItem>
-                <SelectItem value="HR Executive">HR Executive</SelectItem>
-                <SelectItem value="Coordinator">Coordinator</SelectItem>
-                <SelectItem value="Senior Coordinator">Senior Coordinator</SelectItem>
-                <SelectItem value="Manager">Product Manager</SelectItem>
-                <SelectItem value="Executive Manager">Zonal Manager</SelectItem>
-                <SelectItem value="Regional Manager">Regional Manager</SelectItem>
-                <SelectItem value="Regional Head">Regional Head</SelectItem>
-                <SelectItem value="National Head">National Head</SelectItem>
-                <SelectItem value="Warehouse Executive">Warehouse Executive</SelectItem>
-                <SelectItem value="Warehouse Manager">Warehouse Manager</SelectItem>
-                <SelectItem value="Admin">Admin</SelectItem>
-                <SelectItem value="Office Team">Office Team</SelectItem>
-                <SelectItem value="Super Admin">Super Admin</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
           {form.role === 'Office Team' && (
             <div>
               <Label>Designation *</Label>
@@ -1812,22 +1901,6 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
               </div>
             </div>
           )}
-          {!isEdit && (
-            <div>
-              <Label>Password *</Label>
-              <Input className="bg-white text-neutral-900" type="password" name="password" value={form.password} onChange={onChange} required />
-            </div>
-          )}
-          <div>
-            <Label>Department</Label>
-            <Input
-              className="bg-white text-neutral-900"
-              name="department"
-              value={form.department}
-              onChange={onChange}
-              placeholder="Department"
-            />
-          </div>
 
           <div className="md:col-span-2">
             <Label className="mb-2 block">
@@ -1862,36 +1935,60 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
 
           {error && <div className="md:col-span-2 text-red-600 text-sm">{error}</div>}
           <div className="md:col-span-2">
-              <div className="text-lg font-semibold mb-1">Onboarding checklist *</div>
-              <p className="mb-2 text-xs text-neutral-600">Select at least two items.</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 border rounded p-3 bg-white">
-                {ONBOARDING_ITEMS.map((item) => (
-                  <label key={item} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={form.onboardingChecklist.includes(item)}
-                      onChange={() => {
-                        setForm((f) => ({
-                          ...f,
-                          onboardingChecklist: f.onboardingChecklist.includes(item)
-                            ? f.onboardingChecklist.filter((value) => value !== item)
-                            : [...f.onboardingChecklist, item],
-                        }))
-                      }}
-                    />
-                    {item}
-                  </label>
-                ))}
-              </div>
-              {form.onboardingChecklist.includes('Others') && (
-                <Input
-                  className="bg-white text-neutral-900 mt-2"
-                  name="onboardingOtherNote"
-                  value={form.onboardingOtherNote}
-                  onChange={onChange}
-                  placeholder="Others"
-                />
-              )}
+            <div className="text-lg font-semibold mb-1">Onboarding Checklist *</div>
+            <p className="mb-2 text-xs text-neutral-600">Select at least two items. Product Training can be ticked after every product is ticked.</p>
+            <div className="space-y-2 border rounded p-3 bg-white">
+              {ONBOARDING_ITEMS.map((item) => {
+                const locked = item === 'Product Training' && productsLeft.length > 0 && !form.onboardingChecklist.includes(item)
+                return (
+                  <div key={item}>
+                    <label className={`flex items-center gap-2 text-sm ${locked ? 'text-neutral-400' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={form.onboardingChecklist.includes(item)}
+                        disabled={locked}
+                        onChange={() => toggleOnboarding(item)}
+                      />
+                      {item}
+                    </label>
+                    {item === 'Product Training' && (
+                      <div className="ml-6 mt-1 rounded border border-neutral-200 bg-neutral-50 p-2">
+                        <p className="mb-1 text-xs text-neutral-500">
+                          {productsLoading
+                            ? 'Loading products…'
+                            : productNames.length === 0
+                              ? 'No active products.'
+                              : productsLeft.length
+                                ? `Tick every product (${productNames.length - productsLeft.length} of ${productNames.length} done).`
+                                : 'All products ticked.'}
+                        </p>
+                        <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+                          {productNames.map((name) => (
+                            <label key={name} className="flex items-center gap-2 text-sm">
+                              <input
+                                type="checkbox"
+                                checked={form.onboardingProductTraining.includes(name)}
+                                onChange={() => toggleTrainingProduct(name)}
+                              />
+                              {name}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {item === 'Others' && form.onboardingChecklist.includes('Others') && (
+                      <Input
+                        className="ml-6 mt-1 w-[calc(100%-1.5rem)] bg-white text-neutral-900"
+                        name="onboardingOtherNote"
+                        value={form.onboardingOtherNote}
+                        onChange={onChange}
+                        placeholder="What is it? (required)"
+                      />
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </div>
           <div className="md:col-span-2 flex justify-end gap-2">
             {isEdit && (

@@ -307,7 +307,7 @@ export default function EmployeeVerificationPage() {
 
             {emp.references && emp.references.length > 0 && (
               <div className="text-sm">
-                <p className="font-medium mb-1">References</p>
+                <p className="font-medium mb-1">Family Details</p>
                 <ul className="list-disc pl-5 text-neutral-700">
                   {emp.references.map((r, i) => (
                     <li key={i}>

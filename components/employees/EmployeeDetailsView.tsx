@@ -124,13 +124,13 @@ export function EmployeeDetailsView({
         <Field label="Personal mobile" value={e.mobile} />
       </Section>
 
-      <Section title="Emergency contacts / references">
+      <Section title="Family Details">
         {references.length === 0 ? (
-          <Field label="References" value="" wide />
+          <Field label="Family Details" value="" wide />
         ) : (
           references.map((ref, index) => (
             <div key={index} className="rounded border border-neutral-200 bg-neutral-50 p-3">
-              <div className="mb-2 text-xs font-semibold text-neutral-600">Reference {index + 1}</div>
+              <div className="mb-2 text-xs font-semibold text-neutral-600">Family Member {index + 1}</div>
               <dl className="space-y-2">
                 <Field label="Relationship" value={ref?.relation} />
                 <Field label="Name" value={ref?.name} />
@@ -180,8 +180,9 @@ export function EmployeeDetailsView({
           <Field label="Assigned products" value={chips(assignedProducts.map(productName))} />
         )}
         <Field label="Tagged employees" value={chips(tagged.map(personName).filter(Boolean))} wide />
-        <Field label="Onboarding checklist" value={chips(Array.isArray(e.onboardingChecklist) ? e.onboardingChecklist : [])} wide />
-        {e.onboardingOtherNote ? <Field label="Onboarding note (Others)" value={e.onboardingOtherNote} wide /> : null}
+        <Field label="Onboarding Checklist" value={chips(Array.isArray(e.onboardingChecklist) ? e.onboardingChecklist : [])} wide />
+        {Array.isArray(e.onboardingProductTraining) && e.onboardingProductTraining.length ? <Field label="Product Training (products)" value={chips(e.onboardingProductTraining)} wide /> : null}
+        {e.onboardingOtherNote ? <Field label="Others" value={e.onboardingOtherNote} wide /> : null}
       </Section>
 
       <Section title="Payroll / CTC">
@@ -211,7 +212,7 @@ export function EmployeeDetailsView({
         <Field label="Passport size photo" value={doc(e.passportPhotoUrl)} />
         <Field label="Bank passbook" value={doc(e.bankPassbookUrl)} />
         {references.map((ref, index) => (
-          <Field key={index} label={`Reference ${index + 1} Aadhaar`} value={doc(ref?.aadhaarUrl)} />
+          <Field key={index} label={`Family Member ${index + 1} Aadhaar`} value={doc(ref?.aadhaarUrl)} />
         ))}
       </Section>
 

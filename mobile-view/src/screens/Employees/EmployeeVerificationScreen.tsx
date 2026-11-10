@@ -283,7 +283,7 @@ export default function EmployeeVerificationScreen() {
 
               {emp.references && emp.references.length > 0 ? (
                 <View>
-                  <Text style={styles.blockTitle}>References</Text>
+                  <Text style={styles.blockTitle}>Family Details</Text>
                   {emp.references.map((r, i) => (
                     <View key={i} style={styles.refRow}>
                       <Text style={styles.value}>
@@ -291,7 +291,7 @@ export default function EmployeeVerificationScreen() {
                         {r.name ? ` — ${r.name}` : ''} — {r.mobile}
                       </Text>
                       {r.aadhaarUrl ? (
-                        <TouchableOpacity onPress={() => setViewer({ url: r.aadhaarUrl!, title: `Reference ${i + 1} Aadhaar` })}>
+                        <TouchableOpacity onPress={() => setViewer({ url: r.aadhaarUrl!, title: `Family Member ${i + 1} Aadhaar` })}>
                           <Text style={styles.link}>View Aadhaar</Text>
                         </TouchableOpacity>
                       ) : null}

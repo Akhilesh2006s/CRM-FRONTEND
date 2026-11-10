@@ -12,6 +12,20 @@ import EmployeeTaggingPicker, { supportsEmployeeTagging } from '../../components
 import DateField from '../../ui/DateField';
 import { bankDetailsError, bankDetailsFromEmployee, bankDetailsPayload, emptyBankDetails } from '../../utils/bankDetails';
 import { employeeDateYmd, employeeDocName, openEmployeeDoc } from '../../utils/employeeDocs';
+import {
+  ONBOARDING_ITEMS,
+  PERMANENT_ADDRESS_FIELDS,
+  emptyPermanentAddress,
+  employeeDesignation,
+  formatPermanentAddress,
+  isBlankPermanentAddress,
+  onboardingError,
+  onboardingFromSaved,
+  permanentAddressError,
+  permanentAddressFromSaved,
+  productsLeftForTraining,
+  type PermanentAddressDetails,
+} from '../../utils/employeeHrms';
 /** User types, same values / labels as web app/dashboard/employees/new/page.tsx */
 const ROLE_OPTIONS: { value: string; label: string }[] = [
   { value: 'Executive', label: 'BDE' },
@@ -34,19 +48,6 @@ const ROLE_OPTIONS: { value: string; label: string }[] = [
   { value: 'Super Admin', label: 'Super Admin' },
 ];
 
-const ONBOARDING_ITEMS = [
-  'App Training',
-  'Account Session',
-  'Product Training',
-  'Visiting cards',
-  'Id cards',
-  'Sim',
-  'Training Manuals',
-  'Marketing Kit (BDE)',
-  'Laptop',
-  'Others',
-];
-
 const REFERENCE_RELATIONS = ['Wife', 'Husband', 'Brother', 'Sister', 'Father', 'Mother'];
 
 const MULTI_ZONE_ROLES = ['Executive Manager', 'Trainer', 'Coordinator', 'Senior Coordinator'];
@@ -56,13 +57,15 @@ const roleRequiresZones = (role: string) => isSingleZoneRole(role) || ['Trainer'
 
 type Reference = { relation: string; name: string; mobile: string; aadhaarUrl: string };
 type Product = { _id: string; productName: string };
-type EmployeeOption = { _id: string; name: string; role: string; assignedProductIds?: Array<string | { _id?: string }> };
+type EmployeeOption = { _id: string; name: string; role: string; department?: string; designation?: string; assignedProductIds?: Array<string | { _id?: string }> };
 type UploadKind = 'aadhaar' | 'location' | 'passport' | 'reference-aadhaar' | 'passbook';
 
 const todayDate = () => {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 };
+const emptyRelationship = () => ({ employeeId: '', fullName: '', relationship: '', department: '', designation: '' });
+const ROLE_NAMES: Record<string, string> = Object.fromEntries(ROLE_OPTIONS.map((r) => [r.value, r.label]));
 const isIsoDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(new Date(v).getTime());
 
 /**
@@ -82,7 +85,9 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
     phone: '',
     mobile: '',
     permanentAddress: '',
+    permanentAddressDetails: emptyPermanentAddress() as PermanentAddressDetails,
     temporaryAddress: '',
+    department: '',
     state: '',
     zone: '',
     zones: [] as string[],
@@ -99,7 +104,7 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
     monthlyTakeHome: '',
     ...emptyBankDetails(),
     hasEmployeeRelationship: null as boolean | null,
-    employeeRelationshipDetails: { fullName: '', relationship: '', department: '', designation: '' },
+    employeeRelationshipDetails: emptyRelationship(),
     references: [
       { relation: '', name: '', mobile: '', aadhaarUrl: '' },
       { relation: '', name: '', mobile: '', aadhaarUrl: '' },
@@ -108,6 +113,7 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
     locationPhotoUrl: '',
     passportPhotoUrl: '',
     onboardingChecklist: [] as string[],
+    onboardingProductTraining: [] as string[],
     onboardingOtherNote: '',
     trainerProducts: [] as string[],
     verticalManagerId: '',
@@ -135,6 +141,11 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
   const [clustersByZone, setClustersByZone] = useState<Record<string, string[]>>({});
   const [loadingPincode, setLoadingPincode] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [departments, setDepartments] = useState<string[]>([]);
+  const [canAddDepartment, setCanAddDepartment] = useState(false);
+  const [newDepartment, setNewDepartment] = useState('');
+  const [addingDepartment, setAddingDepartment] = useState(false);
+  const [relationSearch, setRelationSearch] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const scrollRef = useRef<ScrollView>(null);
@@ -176,7 +187,34 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
       .get('/employees?isActive=true')
       .then((d: any) => setEmployees(Array.isArray(d) ? d : []))
       .catch(() => setEmployees([]));
+    loadDepartments();
   }, []);
+
+  const loadDepartments = async () => {
+    try {
+      const data: any = await apiService.get('/departments');
+      setDepartments((Array.isArray(data?.departments) ? data.departments : []).map((d: any) => String(d.name)));
+      setCanAddDepartment(Boolean(data?.canManage));
+    } catch {
+      setDepartments([]);
+    }
+  };
+
+  const addDepartment = async () => {
+    const name = newDepartment.trim();
+    if (!name) return;
+    setAddingDepartment(true);
+    try {
+      const created: any = await apiService.post('/departments', { name });
+      await loadDepartments();
+      setForm((f) => ({ ...f, department: created?.name || name }));
+      setNewDepartment('');
+    } catch (e: any) {
+      fail(e?.response?.data?.message || e?.message || 'Failed to add department');
+    } finally {
+      setAddingDepartment(false);
+    }
+  };
 
   useEffect(() => {
     if (!isEdit) return;
@@ -208,7 +246,9 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
           phone: emp.phone && emp.phone !== '0' ? String(emp.phone) : '',
           mobile: String(emp.mobile || ''),
           permanentAddress,
+          permanentAddressDetails: permanentAddressFromSaved(emp.permanentAddressDetails),
           temporaryAddress,
+          department: String(emp.department || ''),
           state: String(emp.state || ''),
           zone: savedZones[0] || '',
           zones: savedZones,
@@ -226,6 +266,7 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
           ...bankDetailsFromEmployee(emp),
           hasEmployeeRelationship: typeof emp.hasEmployeeRelationship === 'boolean' ? emp.hasEmployeeRelationship : null,
           employeeRelationshipDetails: {
+            employeeId: rel.employeeId ? String(rel.employeeId?._id || rel.employeeId) : '',
             fullName: String(rel.fullName || ''),
             relationship: String(rel.relationship || ''),
             department: String(rel.department || ''),
@@ -235,7 +276,8 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
           aadhaarUrl: String(emp.aadhaarUrl || ''),
           locationPhotoUrl: String(emp.locationPhotoUrl || ''),
           passportPhotoUrl: String(emp.passportPhotoUrl || ''),
-          onboardingChecklist: Array.isArray(emp.onboardingChecklist) ? emp.onboardingChecklist : [],
+          onboardingChecklist: onboardingFromSaved(emp.onboardingChecklist),
+          onboardingProductTraining: Array.isArray(emp.onboardingProductTraining) ? emp.onboardingProductTraining.map(String) : [],
           onboardingOtherNote: String(emp.onboardingOtherNote || ''),
           trainerProducts: Array.isArray(emp.trainerProducts) ? emp.trainerProducts : [],
           verticalManagerId: emp.verticalManagerId ? String(emp.verticalManagerId?._id || emp.verticalManagerId) : '',
@@ -280,17 +322,27 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
     scrollRef.current?.scrollTo({ y: 0, animated: true });
   };
 
+  const setPermanentAddress = (patch: Partial<PermanentAddressDetails>) =>
+    setForm((f) => ({ ...f, permanentAddressDetails: { ...f.permanentAddressDetails, ...patch } }));
+
   const handlePincodeChange = async (value: string) => {
     const pincode = value.replace(/\D/g, '').slice(0, 6);
-    setForm((current) => ({ ...current, pincode }));
+    setForm((current) => ({ ...current, pincode, permanentAddressDetails: { ...current.permanentAddressDetails, pincode } }));
     if (pincode.length !== 6) return;
     setLoadingPincode(true);
     try {
       const location: any = await apiService.get(`/location/resolve?pincode=${pincode}`);
       setForm((current) => {
         const zone = location.zone || current.zone;
+        const address = current.permanentAddressDetails;
         return {
           ...current,
+          permanentAddressDetails: {
+            ...address,
+            state: location.state || address.state,
+            district: location.district || address.district,
+            villageTownCity: address.villageTownCity || location.city || location.town || '',
+          },
           city: location.city || location.town || current.city,
           district: location.district || current.district,
           state: location.state || current.state,
@@ -364,9 +416,61 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
     }
   };
 
+  const productNames = useMemo(() => products.map((p) => p.productName).filter(Boolean), [products]);
+  const productsLeft = productsLeftForTraining(productNames, form.onboardingProductTraining);
+  /** A declaration saved before the employee picker: typed name, no employee picked. */
+  const legacyRelationship =
+    isEdit &&
+    !form.employeeRelationshipDetails.employeeId &&
+    Boolean(original?.employeeRelationshipDetails?.fullName) &&
+    form.employeeRelationshipDetails.fullName === String(original?.employeeRelationshipDetails?.fullName || '');
+  const relationMatches = useMemo(() => {
+    const q = relationSearch.trim().toLowerCase();
+    if (!q) return [];
+    return employees
+      .filter((e) => e._id !== editId && `${e.name} ${ROLE_NAMES[e.role] || e.role}`.toLowerCase().includes(q))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .slice(0, 8);
+  }, [employees, relationSearch, editId]);
+  const pickRelatedEmployee = (picked: EmployeeOption) => {
+    setRelationSearch('');
+    setForm((f) => ({
+      ...f,
+      employeeRelationshipDetails: {
+        ...f.employeeRelationshipDetails,
+        employeeId: picked._id,
+        fullName: picked.name || '',
+        department: picked.department || '',
+        designation: employeeDesignation(picked),
+      },
+    }));
+  };
+  const toggleOnboarding = (item: string) =>
+    setForm((f) => ({
+      ...f,
+      onboardingChecklist: ONBOARDING_ITEMS.filter((name) =>
+        name === item ? !f.onboardingChecklist.includes(item) : f.onboardingChecklist.includes(name)
+      ),
+    }));
+  const toggleTrainingProduct = (name: string) =>
+    setForm((f) => {
+      const ticked = toggleIn(f.onboardingProductTraining, name);
+      const allDone = productsLeftForTraining(productNames, ticked).length === 0;
+      return {
+        ...f,
+        onboardingProductTraining: ticked,
+        // Product Training stays ticked only while every product is ticked.
+        onboardingChecklist: allDone ? f.onboardingChecklist : f.onboardingChecklist.filter((i) => i !== 'Product Training'),
+      };
+    });
+
   const handleSubmit = async () => {
     clearMessages();
-    const temporaryAddress = sameAsPermanent ? form.permanentAddress : form.temporaryAddress;
+    const addressPartsBlank = isBlankPermanentAddress(form.permanentAddressDetails);
+    // Employees saved before the address parts existed may keep their one-line address.
+    const keepLegacyPermanentAddress = isEdit && addressPartsBlank && !onFile('permanentAddressDetails') && Boolean(form.permanentAddress.trim());
+    const permanentAddressText = keepLegacyPermanentAddress ? form.permanentAddress : formatPermanentAddress(form.permanentAddressDetails);
+    const temporaryAddress = sameAsPermanent ? permanentAddressText : form.temporaryAddress;
     if (!form.firstName?.trim()) return fail('First Name is required');
     if (!form.email?.trim()) return fail('Email is required');
     if (!form.mobile.trim()) return fail('Employee mobile number is required.');
@@ -377,9 +481,8 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
     if (form.hasEmployeeRelationship === null && needs('hasEmployeeRelationship')) return fail('Select Yes or No for the employee relationship declaration');
     if (form.hasEmployeeRelationship) {
       const r = form.employeeRelationshipDetails;
-      if (!r.fullName.trim() || !r.relationship.trim() || !r.department.trim() || !r.designation.trim()) {
-        return fail('Enter the full name, relationship, department, and designation of the employee connection');
-      }
+      if (!r.employeeId && !legacyRelationship) return fail('Employee Relationship Declaration: select the employee from the list');
+      if (!r.relationship.trim()) return fail('Employee Relationship Declaration: Relationship is required');
     }
     if (!form.dateOfBirth && needs('dateOfBirth')) return fail('Date of birth is required');
     if (form.dateOfBirth && !isIsoDate(form.dateOfBirth)) return fail('Pick a valid date of birth');
@@ -416,16 +519,19 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
     for (let i = 0; i < (skipReferences ? 0 : 2); i++) {
       const ref = form.references[i];
       if (!REFERENCE_RELATIONS.includes(ref.relation)) {
-        return fail(`Reference ${i + 1}: select relationship (Wife, Husband, Brother, Sister, Father, or Mother)`);
+        return fail(`Family Member ${i + 1}: select relationship (Wife, Husband, Brother, Sister, Father, or Mother)`);
       }
-      if (!ref.name.trim()) return fail(`Reference ${i + 1}: name is required`);
-      if (!/^\d{10,15}$/.test(ref.mobile)) return fail(`Reference ${i + 1}: enter a mobile number with 10 to 15 digits`);
-      if (!ref.aadhaarUrl.trim()) return fail(`Reference ${i + 1}: Aadhaar PDF is required`);
+      if (!ref.name.trim()) return fail(`Family Member ${i + 1}: name is required`);
+      if (!/^\d{10,15}$/.test(ref.mobile)) return fail(`Family Member ${i + 1}: enter a mobile number with 10 to 15 digits`);
+      if (!ref.aadhaarUrl.trim()) return fail(`Family Member ${i + 1}: Aadhaar PDF is required`);
     }
     if (!skipReferences && form.references[0].mobile === form.references[1].mobile) {
-      return fail('Reference 1 and Reference 2 cannot have the same mobile number');
+      return fail('Family Member 1 and Family Member 2 cannot have the same mobile number');
     }
-    if (!form.permanentAddress.trim() && needs('permanentAddress')) return fail('Permanent address is required');
+    if (!keepLegacyPermanentAddress && !(isEdit && addressPartsBlank && !onFile('permanentAddressDetails') && !onFile('permanentAddress'))) {
+      const addressError = permanentAddressError(form.permanentAddressDetails);
+      if (addressError) return fail(addressError);
+    }
     if (!temporaryAddress.trim() && (needs('temporaryAddress') || (isEdit && onFile('address1')))) return fail('Temporary address is required');
     if (!form.aadhaarUrl.trim() && needs('aadhaarUrl')) return fail('Aadhaar upload is required');
     if (!form.locationPhotoUrl.trim() && needs('locationPhotoUrl')) return fail('Location upload is required');
@@ -438,13 +544,16 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
       if (!form.verticalManagerId) return fail('Select the Product Head for this Trainer');
     }
     const skipOnboarding = isEdit && !onFile('onboardingChecklist') && form.onboardingChecklist.length === 0;
-    if (form.onboardingChecklist.length < 2 && !skipOnboarding) return fail('Select at least two onboarding checklist items');
-    if ((form.pincode || needs('pincode')) && form.pincode.length !== 6) return fail('Pincode must contain 6 digits');
+    const checklistError = skipOnboarding
+      ? null
+      : onboardingError(form.onboardingChecklist, form.onboardingProductTraining, form.onboardingOtherNote, productNames);
+    if (checklistError) return fail(checklistError);
 
     setSubmitting(true);
     try {
       const payload: any = {
         ...form,
+        permanentAddress: permanentAddressText,
         temporaryAddress,
         address1: temporaryAddress,
         zone: selectedZones[0] || '',
@@ -457,6 +566,7 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
         empCode: form.empCode.trim() || undefined,
       };
       if (form.role !== 'Executive') delete payload.cluster;
+      if (keepLegacyPermanentAddress || (isEdit && addressPartsBlank)) delete payload.permanentAddressDetails;
       if (!supportsEmployeeTagging(form.role)) delete payload.taggedEmployeeIds;
       if (form.role === 'Manager' && productId) payload.assignedProductIds = [productId];
       if (form.role !== 'Trainer') {
@@ -472,8 +582,10 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
         }
         if (skipOnboarding) {
           delete payload.onboardingChecklist;
+          delete payload.onboardingProductTraining;
           delete payload.onboardingOtherNote;
         }
+        if (!permanentAddressText.trim()) delete payload.permanentAddress;
         if (form.role === 'Trainer' && keepLegacyTrainer) {
           delete payload.trainerProducts;
           delete payload.verticalManagerId;
@@ -523,8 +635,8 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
     </View>
   );
 
-  const Check = ({ checked, label, onPress }: { checked: boolean; label: string; onPress: () => void }) => (
-    <TouchableOpacity style={styles.checkRow} onPress={onPress}>
+  const Check = ({ checked, label, onPress, disabled }: { checked: boolean; label: string; onPress: () => void; disabled?: boolean }) => (
+    <TouchableOpacity style={[styles.checkRow, disabled && styles.checkRowDisabled]} onPress={onPress} disabled={disabled}>
       <Ionicons name={checked ? 'checkbox' : 'square-outline'} size={20} color={checked ? colors.primary : colors.textMuted} />
       <Text style={styles.checkLabel}>{label}</Text>
     </TouchableOpacity>
@@ -581,7 +693,10 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
           </View>
 
           <View style={styles.fieldContainer}>
-            <WebLabel>Any relative / friend working in the company? *</WebLabel>
+            <WebLabel>Employee Relationship Declaration *</WebLabel>
+            <Text style={styles.helper}>
+              Do you have any relatives, family members, or personal connections currently employed by Viswam EduTech Solutions Pvt. Ltd.?
+            </Text>
             <View style={styles.roleContainer}>
               {[
                 { label: 'Yes', value: true },
@@ -594,7 +709,7 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
                     setForm((f) => ({
                       ...f,
                       hasEmployeeRelationship: opt.value,
-                      ...(opt.value ? {} : { employeeRelationshipDetails: { fullName: '', relationship: '', department: '', designation: '' } }),
+                      ...(opt.value ? {} : { employeeRelationshipDetails: emptyRelationship() }),
                     }))
                   }
                 >
@@ -605,16 +720,54 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
           </View>
           {form.hasEmployeeRelationship ? (
             <>
-              {(['fullName', 'relationship', 'department', 'designation'] as const).map((key) => (
-                <FormField
-                  key={key}
-                  label={`${{ fullName: 'Full name', relationship: 'Relationship', department: 'Department', designation: 'Designation' }[key]} *`}
-                  value={form.employeeRelationshipDetails[key]}
-                  onChangeText={(t: string) =>
-                    setForm((f) => ({ ...f, employeeRelationshipDetails: { ...f.employeeRelationshipDetails, [key]: t } }))
-                  }
-                />
-              ))}
+              <View style={styles.fieldContainer}>
+                <WebLabel>Employee Name *</WebLabel>
+                {form.employeeRelationshipDetails.employeeId ? (
+                  <View style={styles.pickedRow}>
+                    <Text style={styles.pickedText}>{form.employeeRelationshipDetails.fullName}</Text>
+                    <TouchableOpacity
+                      onPress={() =>
+                        setForm((f) => ({
+                          ...f,
+                          employeeRelationshipDetails: { ...emptyRelationship(), relationship: f.employeeRelationshipDetails.relationship },
+                        }))
+                      }
+                    >
+                      <Text style={styles.viewDocLinkText}>Change</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <>
+                    <WebInput style={styles.input} value={relationSearch} onChangeText={setRelationSearch} placeholder="Search and select the employee" />
+                    {relationSearch.trim() ? (
+                      <View style={styles.listBox}>
+                        {relationMatches.length === 0 ? <Text style={styles.helper}>No employee found.</Text> : null}
+                        {relationMatches.map((e) => (
+                          <TouchableOpacity key={e._id} style={styles.checkRow} onPress={() => pickRelatedEmployee(e)}>
+                            <Text style={styles.checkLabel}>{`${e.name} (${ROLE_NAMES[e.role] || e.role})`}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    ) : null}
+                    {legacyRelationship ? (
+                      <Text style={styles.helper}>
+                        Saved earlier as "{form.employeeRelationshipDetails.fullName}". Select the employee from the list to update it.
+                      </Text>
+                    ) : null}
+                  </>
+                )}
+              </View>
+              <ReadOnlyField label="Full Name" value={form.employeeRelationshipDetails.fullName} />
+              <FormField
+                label="Relationship *"
+                value={form.employeeRelationshipDetails.relationship}
+                placeholder="e.g. Brother, spouse, friend"
+                onChangeText={(t: string) =>
+                  setForm((f) => ({ ...f, employeeRelationshipDetails: { ...f.employeeRelationshipDetails, relationship: t } }))
+                }
+              />
+              <ReadOnlyField label="Department" value={form.employeeRelationshipDetails.department} />
+              <ReadOnlyField label="Designation" value={form.employeeRelationshipDetails.designation} />
             </>
           ) : null}
         </PageSection>
@@ -625,32 +778,32 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
           <FormField label="Personal mobile *" value={form.mobile} onChangeText={(v: string) => setForm((f) => ({ ...f, mobile: sanitizeDigits(v) }))} placeholder="10 to 15 digits" keyboardType="phone-pad" maxLength={15} />
         </PageSection>
 
-        <PageSection title="Address" description="Pincode fills city, district, state and zone.">
-          <FormField label="Pincode *" value={form.pincode} onChangeText={handlePincodeChange} placeholder="6-digit pincode" keyboardType="number-pad" />
-          {loadingPincode ? <Text style={styles.lookupText}>Looking up location…</Text> : null}
-          <FormField label="City" value={form.city} onChangeText={(t: string) => setForm((f) => ({ ...f, city: t }))} placeholder="City" />
-          <FormField label="District" value={form.district} onChangeText={(t: string) => setForm((f) => ({ ...f, district: t }))} placeholder="Employee District" />
-          <FormField label="State" value={form.state} onChangeText={(t: string) => setForm((f) => ({ ...f, state: t }))} placeholder="Employee State" />
-          <View style={styles.fieldContainer}>
-            <WebLabel>Permanent address *</WebLabel>
-            <WebInput
-              style={styles.textArea}
-              value={form.permanentAddress}
-              onChangeText={(t: string) => setForm((f) => ({ ...f, permanentAddress: t }))}
-              placeholder="Permanent address"
-              multiline
-              numberOfLines={3}
-            />
-          </View>
-          <Check checked={sameAsPermanent} label="Temporary address same as permanent" onPress={() => setSameAsPermanent((v) => !v)} />
+        <PageSection title="Permanent Address *" description="PIN Code fills District, State and Zone.">
+          {isEdit && isBlankPermanentAddress(form.permanentAddressDetails) && form.permanentAddress.trim() ? (
+            <Text style={styles.lookupText}>Saved earlier as: {form.permanentAddress}. Fill in the parts below to update it.</Text>
+          ) : null}
+          {PERMANENT_ADDRESS_FIELDS.map(({ key, label, required }) => (
+            <React.Fragment key={key}>
+              <FormField
+                label={`${label}${required ? ' *' : ''}`}
+                value={form.permanentAddressDetails[key]}
+                onChangeText={key === 'pincode' ? handlePincodeChange : (t: string) => setPermanentAddress({ [key]: t })}
+                placeholder={key === 'pincode' ? '6-digit PIN Code' : label}
+                keyboardType={key === 'pincode' ? 'number-pad' : undefined}
+                maxLength={key === 'pincode' ? 6 : undefined}
+              />
+              {key === 'pincode' && loadingPincode ? <Text style={styles.lookupText}>Looking up location…</Text> : null}
+            </React.Fragment>
+          ))}
+          <Check checked={sameAsPermanent} label="Same as permanent address" onPress={() => setSameAsPermanent((v) => !v)} />
           <View style={[styles.fieldContainer, { marginTop: 8 }]}>
             <WebLabel>Temporary address *</WebLabel>
             <WebInput
               style={[styles.textArea, sameAsPermanent && styles.textAreaDisabled]}
-              value={sameAsPermanent ? form.permanentAddress : form.temporaryAddress}
+              value={sameAsPermanent ? formatPermanentAddress(form.permanentAddressDetails) || form.permanentAddress : form.temporaryAddress}
               editable={!sameAsPermanent}
               onChangeText={(t: string) => setForm((f) => ({ ...f, temporaryAddress: t }))}
-              placeholder="Temporary address"
+              placeholder="Temporary / current address"
               multiline
               numberOfLines={3}
             />
@@ -663,10 +816,10 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
           <UploadRow label="Passport size photo *" url={form.passportPhotoUrl} kind="passport" uploadKey="passport" onUrl={(u) => setForm((f) => ({ ...f, passportPhotoUrl: u }))} />
         </PageSection>
 
-        <PageSection title="References" description="Two family contacts, each with an Aadhaar PDF.">
+        <PageSection title="Family Details *" description="Two family members, each with an Aadhaar PDF.">
           {[0, 1].map((idx) => (
             <View key={idx} style={styles.refCard}>
-              <Text style={styles.refTitle}>Reference {idx + 1}</Text>
+              <Text style={styles.refTitle}>Family Member {idx + 1}</Text>
               <WebSelect
                 label="Relationship *"
                 value={form.references[idx].relation}
@@ -687,7 +840,7 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
           ))}
         </PageSection>
 
-        <PageSection title="Job">
+        <PageSection title="User Type">
           <WebSelect
             label="User Type *"
             value={form.role}
@@ -711,8 +864,26 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
             }}
             items={ROLE_OPTIONS}
           />
-          {form.role === 'Office Team' ? (
-            <FormField label="Designation *" value={form.designation} onChangeText={(t: string) => setForm((f) => ({ ...f, designation: t }))} placeholder="Enter designation" />
+          <WebSelect
+            label="Department"
+            value={form.department}
+            onValueChange={(department) => setForm((f) => ({ ...f, department }))}
+            placeholder={departments.length ? 'Select department' : 'No departments yet'}
+            items={[...departments, ...(form.department && !departments.includes(form.department) ? [form.department] : [])].map((d) => ({ label: d, value: d }))}
+          />
+          {canAddDepartment ? (
+            <View style={styles.fieldContainer}>
+              <WebInput style={styles.input} value={newDepartment} onChangeText={setNewDepartment} placeholder="New department name" maxLength={60} />
+              <WebButton
+                title={addingDepartment ? 'Adding…' : 'Add Department'}
+                variant="outline"
+                onPress={addDepartment}
+                disabled={addingDepartment || !newDepartment.trim()}
+              />
+            </View>
+          ) : null}
+          {!isEdit ? (
+            <FormField label="Password" value={form.password} onChangeText={(t: string) => setForm((f) => ({ ...f, password: t }))} placeholder="Default password if left blank" secureTextEntry />
           ) : null}
 
           {!usesZones ? null : singleZone ? (
@@ -754,6 +925,10 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
               </View>
             </View>
           )}
+
+          {form.role === 'Office Team' ? (
+            <FormField label="Designation *" value={form.designation} onChangeText={(t: string) => setForm((f) => ({ ...f, designation: t }))} placeholder="Enter designation" />
+          ) : null}
 
           {form.role === 'Manager' ? (
             <WebSelect
@@ -797,22 +972,51 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
           />
         </PageSection>
 
-        <PageSection title="Onboarding" description="Select at least two items.">
+        <PageSection title="Onboarding Checklist *" description="Select at least two items. Product Training can be ticked after every product is ticked.">
           <View style={styles.listBox}>
-            {ONBOARDING_ITEMS.map((item) => (
-              <Check
-                key={item}
-                checked={form.onboardingChecklist.includes(item)}
-                label={item}
-                onPress={() => setForm((f) => ({ ...f, onboardingChecklist: toggleIn(f.onboardingChecklist, item) }))}
-              />
-            ))}
+            {ONBOARDING_ITEMS.map((item) => {
+              const locked = item === 'Product Training' && productsLeft.length > 0 && !form.onboardingChecklist.includes(item);
+              return (
+                <View key={item}>
+                  <Check
+                    checked={form.onboardingChecklist.includes(item)}
+                    label={item}
+                    disabled={locked}
+                    onPress={() => toggleOnboarding(item)}
+                  />
+                  {item === 'Product Training' ? (
+                    <View style={styles.subList}>
+                      <Text style={styles.helper}>
+                        {productNames.length === 0
+                          ? 'No active products.'
+                          : productsLeft.length
+                            ? `Tick every product (${productNames.length - productsLeft.length} of ${productNames.length} done).`
+                            : 'All products ticked.'}
+                      </Text>
+                      {productNames.map((name) => (
+                        <Check
+                          key={name}
+                          checked={form.onboardingProductTraining.includes(name)}
+                          label={name}
+                          onPress={() => toggleTrainingProduct(name)}
+                        />
+                      ))}
+                    </View>
+                  ) : null}
+                  {item === 'Others' && form.onboardingChecklist.includes('Others') ? (
+                    <View style={styles.subList}>
+                      <WebInput
+                        style={styles.input}
+                        value={form.onboardingOtherNote}
+                        onChangeText={(t: string) => setForm((f) => ({ ...f, onboardingOtherNote: t }))}
+                        placeholder="What is it? (required)"
+                      />
+                    </View>
+                  ) : null}
+                </View>
+              );
+            })}
           </View>
-          {form.onboardingChecklist.includes('Others') ? (
-            <View style={{ marginTop: 12 }}>
-              <FormField label="Other onboarding note" value={form.onboardingOtherNote} onChangeText={(t: string) => setForm((f) => ({ ...f, onboardingOtherNote: t }))} />
-            </View>
-          ) : null}
         </PageSection>
 
         <PageSection title="Salary">
@@ -838,12 +1042,6 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
           />
         </PageSection>
 
-        {!isEdit ? (
-          <PageSection title="Login">
-            <FormField label="Password" value={form.password} onChangeText={(t: string) => setForm((f) => ({ ...f, password: t }))} placeholder="Default password if left blank" secureTextEntry />
-          </PageSection>
-        ) : null}
-
         <WebButton
           title={isEdit ? 'Save Changes' : 'Submit'}
           onPress={handleSubmit}
@@ -853,6 +1051,15 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
         {isEdit ? <WebButton title="Cancel" variant="outline" onPress={() => navigation.goBack()} disabled={submitting} /> : null}
       </ScrollView>
     </ScreenShell>
+  );
+}
+
+function ReadOnlyField({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.fieldContainer}>
+      <WebLabel>{label}</WebLabel>
+      <WebInput style={[styles.input, styles.textAreaDisabled]} value={value} editable={false} placeholder="Filled from the selected employee" />
+    </View>
   );
 }
 
@@ -895,6 +1102,10 @@ const styles = StyleSheet.create({
   listBox: { borderWidth: 1, borderColor: '#DCE3EC', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 4, backgroundColor: colors.backgroundLight },
   checkRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
   checkLabel: { fontSize: 14, color: colors.textPrimary, flex: 1 },
+  checkRowDisabled: { opacity: 0.45 },
+  subList: { marginLeft: 28, marginBottom: 8 },
+  pickedRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: '#DCE3EC', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12, backgroundColor: colors.backgroundLight },
+  pickedText: { fontSize: 14, color: colors.textPrimary, fontWeight: '600', flex: 1 },
   helper: { fontSize: 13, color: colors.textTertiary, paddingVertical: 8 },
   successBanner: { backgroundColor: colors.successLight, borderRadius: 12, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#BBF7D0' },
   successText: { fontSize: 14, color: '#15803D', fontWeight: '600', marginBottom: 12 },

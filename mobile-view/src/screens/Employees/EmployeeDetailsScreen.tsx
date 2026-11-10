@@ -151,11 +151,11 @@ export default function EmployeeDetailsScreen({ navigation, route }: any) {
               <Row label="Personal mobile" value={e.mobile} phone />
             </Section>
 
-            <Section title="Emergency contacts / references">
-              {refs.length === 0 ? <Row label="References" value="" /> : null}
+            <Section title="Family Details">
+              {refs.length === 0 ? <Row label="Family Details" value="" /> : null}
               {refs.map((r, i) => (
                 <View key={i} style={styles.subCard}>
-                  <Text style={styles.subTitle}>Reference {i + 1}</Text>
+                  <Text style={styles.subTitle}>Family Member {i + 1}</Text>
                   <Row label="Relationship" value={r?.relation} />
                   <Row label="Name" value={r?.name} />
                   <Row label="Mobile" value={r?.mobile} phone />
@@ -202,8 +202,9 @@ export default function EmployeeDetailsScreen({ navigation, route }: any) {
                 <Row label="Assigned products" value={list((e.assignedProductIds || []).map(productName))} />
               ) : null}
               <Row label="Tagged employees" value={list((e.taggedEmployeeIds || []).map(personName))} />
-              <Row label="Onboarding checklist" value={list(e.onboardingChecklist)} />
-              {e.onboardingOtherNote ? <Row label="Onboarding note" value={e.onboardingOtherNote} /> : null}
+              <Row label="Onboarding Checklist" value={list(e.onboardingChecklist)} />
+              {Array.isArray(e.onboardingProductTraining) && e.onboardingProductTraining.length ? <Row label="Product Training (products)" value={list(e.onboardingProductTraining)} /> : null}
+              {e.onboardingOtherNote ? <Row label="Others" value={e.onboardingOtherNote} /> : null}
             </Section>
 
             <Section title="Payroll / CTC">
@@ -233,7 +234,7 @@ export default function EmployeeDetailsScreen({ navigation, route }: any) {
               <DocRow label="Passport size photo" url={e.passportPhotoUrl} />
               <DocRow label="Bank passbook" url={e.bankPassbookUrl} />
               {refs.map((r, i) => (
-                <DocRow key={i} label={`Reference ${i + 1} Aadhaar`} url={r?.aadhaarUrl} />
+                <DocRow key={i} label={`Family Member ${i + 1} Aadhaar`} url={r?.aadhaarUrl} />
               ))}
             </Section>
 
