@@ -641,6 +641,38 @@ function ClientDCPageInner() {
   const [addingYear, setAddingYear] = useState<string | null>(null)
   // Full information for one client: DCs, payments, returns, trainings, visits.
   const [overviewFor, setOverviewFor] = useState<{ id: string; name: string } | null>(null)
+  // Move a school's deal to another academic year (e.g. back to the previous year).
+  const [yearChange, setYearChange] = useState<{ orderId: string; name: string; year: string } | null>(null)
+  const [yearChoice, setYearChoice] = useState('')
+  const [savingYear, setSavingYear] = useState(false)
+  const yearOptions = (current: string) => {
+    const now = Number(academicYearFor().slice(0, 4))
+    return [now - 2, now - 1, now, now + 1].map(yearFrom).filter((y) => y !== current)
+  }
+  const openYearChange = (d: any) => {
+    const orderId = typeof d.dcOrderId === 'object' ? d.dcOrderId?._id : d.dcOrderId || (d._isConvertedLead ? d._id : null)
+    if (!orderId) return
+    const year = dealYear(d)
+    setYearChange({ orderId: String(orderId), name: d.customerName || d.dcOrderId?.school_name || 'this school', year })
+    setYearChoice(yearOptions(year)[0] || '')
+  }
+  const saveYearChange = async () => {
+    if (!yearChange || !yearChoice) return
+    setSavingYear(true)
+    try {
+      await apiRequest(`/dc-orders/${yearChange.orderId}/academic-year`, {
+        method: 'PUT',
+        body: JSON.stringify({ academicYear: yearChoice }),
+      })
+      toast.success(`${yearChange.name} is now under ${yearChoice}.`)
+      setYearChange(null)
+      await load()
+    } catch (e: any) {
+      toast.error(e?.message || 'Could not change the academic year')
+    } finally {
+      setSavingYear(false)
+    }
+  }
   const addNextYearPo = async (d: any) => {
     const orderId = typeof d.dcOrderId === 'object' ? d.dcOrderId?._id : d.dcOrderId || (d._isConvertedLead ? d._id : null)
     if (!orderId) return
@@ -3799,6 +3831,15 @@ function ClientDCPageInner() {
                               {addingYear === d._id ? 'Adding…' : '+ New Year PO'}
                             </button>
                           ) : null}
+                          {d.dcType !== 'shortage' && (d.dcOrderId || d._isConvertedLead) ? (
+                            <button
+                              type="button"
+                              className="mb-2 block w-full rounded border border-amber-600 px-2 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50"
+                              onClick={() => openYearChange(d)}
+                            >
+                              Change Academic Year
+                            </button>
+                          ) : null}
                           {rawStatus === 'created' || rawStatus === 'po_submitted' || rawStatus === 'dc_requested' ? (
                           <div className="flex items-center gap-2 justify-center">
                             {d.poPhotoUrl && (
@@ -5965,6 +6006,28 @@ function ClientDCPageInner() {
             <Button variant="outline" onClick={() => setInvoiceModalOpen(false)}>
               Close
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={Boolean(yearChange)} onOpenChange={(open) => !open && setYearChange(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Change Academic Year</DialogTitle>
+            <DialogDescription>
+              {yearChange?.name} is currently under {yearChange?.year}. Move it to another academic year.
+            </DialogDescription>
+          </DialogHeader>
+          <Select value={yearChoice} onValueChange={setYearChoice}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select academic year" />
+            </SelectTrigger>
+            <SelectContent>
+              {yearChange ? yearOptions(yearChange.year).map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>) : null}
+            </SelectContent>
+          </Select>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setYearChange(null)}>Cancel</Button>
+            <Button onClick={saveYearChange} disabled={!yearChoice || savingYear}>{savingYear ? 'Saving…' : 'Move'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Modal, View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { Alert, Modal, View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { apiService } from '../services/api';
 import { navigateRoot } from '../navigation/navigationRef';
@@ -77,6 +77,49 @@ export type SchoolHubActions = {
  * One school's page (My Clients → school): everything about the school under nine tiles.
  * A tile shows its records right here, with buttons to add or edit — no hunting through menus.
  */
+const yearOf = (start: number) => `${start}-${String((start + 1) % 100).padStart(2, '0')}`;
+const currentYearStart = () => {
+  const d = new Date(Date.now() + 330 * 60000);
+  return d.getUTCMonth() >= 3 ? d.getUTCFullYear() : d.getUTCFullYear() - 1;
+};
+
+/** Move this school's deal to another academic year (e.g. back to the previous year). */
+function AcademicYearChange({ orderId, year, onChanged }: { orderId: string; year?: string; onChanged: (year: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  const now = currentYearStart();
+  const options = [now - 2, now - 1, now, now + 1].map(yearOf).filter((y) => y !== year);
+  const move = (to: string) =>
+    Alert.alert('Change academic year', `Move this school from ${year || 'its current year'} to ${to}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Move',
+        onPress: async () => {
+          setBusy(true);
+          try {
+            await apiService.put(`/dc-orders/${orderId}/academic-year`, { academicYear: to });
+            Alert.alert('Academic year changed', `This school is now under ${to}.`);
+            onChanged(to);
+          } catch (e: any) {
+            Alert.alert('Could not change the year', e?.response?.data?.message || e?.message || 'Try again.');
+          } finally {
+            setBusy(false);
+          }
+        },
+      },
+    ]);
+  return (
+    <View style={{ marginTop: 12 }}>
+      <Text style={styles.sectionTitle}>Academic year</Text>
+      <Text style={styles.help}>Currently {year || '—'}. Move the school to another academic year:</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        {options.map((y) => (
+          <WebButton key={y} title={y} variant="outline" disabled={busy} onPress={() => move(y)} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
 export default function SchoolHub({
   visible,
   onClose,
@@ -92,6 +135,7 @@ export default function SchoolHub({
   stage,
   fieldDay,
   actions,
+  onYearChanged,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -111,6 +155,8 @@ export default function SchoolHub({
   stage?: string;
   fieldDay: { day: FieldDayState; reload: () => Promise<void> };
   actions: SchoolHubActions;
+  /** Called after the school is moved to another academic year (reload the list). */
+  onYearChanged?: (year: string) => void;
 }) {
   const TILES = mode === 'order' ? ORDER_TILES : CLIENT_TILES;
   const [tile, setTile] = useState<TileKey>(TILES[0].key);
@@ -150,6 +196,7 @@ export default function SchoolHub({
         return (
           <>
             <SchoolOverview leadId={id} data={data} only="details" />
+            {orderId ? <AcademicYearChange orderId={orderId} year={year} onChanged={(y) => { onClose(); onYearChanged?.(y); }} /> : null}
             <Buttons>
               {orderId ? <WebButton title="Edit school info / PO" variant="outline" onPress={() => go('ClientEditPO', { orderId, dcId })} /> : null}
             </Buttons>

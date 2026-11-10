@@ -544,6 +544,7 @@ export default function DCClientScreen({ navigation, route }: any) {
                 : undefined
             }
             fieldDay={fieldDay}
+            onYearChanged={() => { setHubDc(null); void loadDCs(); }}
             actions={{
               editPO,
               viewInvoice: canEditRequest ? undefined : () => openInvoiceView(dc),
