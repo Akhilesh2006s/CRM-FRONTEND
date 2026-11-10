@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { apiRequest } from '@/lib/api'
+import { getCurrentUser } from '@/lib/auth'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -23,8 +25,13 @@ type Ticket = {
   town?: string
   status: 'Open' | 'Resolved'
   resolutionNote?: string
+  assignedTo?: Person | null
   createdAt: string
 }
+type Assignee = { _id: string; name?: string; role?: string }
+
+/** Roles that see every ticket and can assign them (others see only tickets assigned to them). */
+const REVIEW_ROLES = new Set(['Coordinator', 'Senior Coordinator', 'Admin', 'Super Admin'])
 
 const VIEWS: { view: TicketsView; label: string; href: string; status?: Ticket['status'] }[] = [
   { view: 'all', label: 'All Tickets', href: '/dashboard/complaints' },
@@ -62,6 +69,42 @@ export function TicketsInbox({ view }: { view: TicketsView }) {
   const [acting, setActing] = useState(false)
   const [resolveId, setResolveId] = useState<string | null>(null)
   const [resolutionNote, setResolutionNote] = useState('')
+  const [isReviewer, setIsReviewer] = useState(false)
+  const [assignId, setAssignId] = useState<string | null>(null)
+  const [assignees, setAssignees] = useState<Assignee[]>([])
+  const [assigneeId, setAssigneeId] = useState('')
+
+  useEffect(() => {
+    const u: any = getCurrentUser()
+    setIsReviewer(Boolean(u?.isSuperAdmin) || REVIEW_ROLES.has(String(u?.role || '')))
+  }, [])
+
+  const openAssign = async (id: string) => {
+    setAssignId(id)
+    setAssigneeId('')
+    if (assignees.length) return
+    try {
+      const data = await apiRequest<Assignee[]>('/complaints/assignees')
+      setAssignees(Array.isArray(data) ? data : [])
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Failed to load people to assign')
+    }
+  }
+
+  const confirmAssign = async () => {
+    if (!assignId || !assigneeId) return
+    setActing(true)
+    try {
+      await apiRequest(`/complaints/${assignId}/assign`, { method: 'PUT', body: JSON.stringify({ userId: assigneeId }) })
+      toast.success('Ticket assigned')
+      setAssignId(null)
+      load()
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Failed to assign ticket')
+    } finally {
+      setActing(false)
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -82,6 +125,10 @@ export function TicketsInbox({ view }: { view: TicketsView }) {
 
   const confirmResolve = async () => {
     if (!resolveId) return
+    if (!resolutionNote.trim()) {
+      toast.error('Enter a remark before marking the ticket as solved.')
+      return
+    }
     setActing(true)
     try {
       await apiRequest(`/complaints/${resolveId}/resolve`, {
@@ -103,7 +150,9 @@ export function TicketsInbox({ view }: { view: TicketsView }) {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">View Tickets</h1>
-        <p className="text-sm text-neutral-600 mt-1">Tickets raised by employees of every designation.</p>
+        <p className="text-sm text-neutral-600 mt-1">
+          {isReviewer ? 'Tickets raised by employees of every designation, oldest first.' : 'Tickets assigned to you, oldest first.'}
+        </p>
       </div>
 
       <div className="flex flex-wrap gap-2" role="tablist" aria-label="Ticket sections">
@@ -158,10 +207,21 @@ export function TicketsInbox({ view }: { view: TicketsView }) {
                       <span className={item.status === 'Resolved' ? 'text-green-700' : 'text-amber-700'}>
                         {ticketStatusLabel(item.status)}
                       </span>
+                      {item.assignedTo && typeof item.assignedTo === 'object' ? (
+                        <div className="text-xs text-neutral-500 mt-1">
+                          Assigned to {item.assignedTo.name}{item.assignedTo.role ? ` (${item.assignedTo.role})` : ''}
+                        </div>
+                      ) : null}
                     </td>
                     <td className="py-2 px-3">{new Date(item.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
                     <td className="py-2 px-3 text-right">
                       {item.status === 'Open' ? (
+                        <div className="flex justify-end gap-2">
+                        {isReviewer ? (
+                          <Button size="sm" variant="outline" disabled={acting} onClick={() => openAssign(item._id)}>
+                            Assign
+                          </Button>
+                        ) : null}
                         <Button
                           size="sm"
                           disabled={acting}
@@ -172,6 +232,7 @@ export function TicketsInbox({ view }: { view: TicketsView }) {
                         >
                           Mark solved
                         </Button>
+                        </div>
                       ) : (
                         '—'
                       )}
@@ -184,25 +245,56 @@ export function TicketsInbox({ view }: { view: TicketsView }) {
         )}
       </Card>
 
+      <Dialog open={Boolean(assignId)} onOpenChange={(open) => !open && setAssignId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assign ticket</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Assign to</Label>
+            <Select value={assigneeId} onValueChange={setAssigneeId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Super Admin, Admin, Finance Manager or HR Manager" />
+              </SelectTrigger>
+              <SelectContent>
+                {assignees.map((a) => (
+                  <SelectItem key={a._id} value={a._id}>
+                    {a.name || 'Unnamed'} ({a.role})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignId(null)}>
+              Cancel
+            </Button>
+            <Button disabled={acting || !assigneeId} onClick={confirmAssign}>
+              {acting ? 'Saving…' : 'Assign'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={Boolean(resolveId)} onOpenChange={(open) => !open && setResolveId(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Mark ticket solved</DialogTitle>
           </DialogHeader>
           <div className="space-y-2">
-            <Label>Note</Label>
+            <Label>Remark *</Label>
             <Textarea
               value={resolutionNote}
               onChange={(e) => setResolutionNote(e.target.value)}
               rows={3}
-              placeholder="Optional note for the person who raised the ticket"
+              placeholder="What was done to solve this ticket (required)"
             />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setResolveId(null)}>
               Cancel
             </Button>
-            <Button disabled={acting} onClick={confirmResolve}>
+            <Button disabled={acting || !resolutionNote.trim()} onClick={confirmResolve}>
               {acting ? 'Saving…' : 'Mark solved'}
             </Button>
           </DialogFooter>

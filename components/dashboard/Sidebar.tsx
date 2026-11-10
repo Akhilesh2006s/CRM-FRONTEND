@@ -212,6 +212,16 @@ function ensureTrackingNav(
   return at < 0 ? [...nav, entry] : [...nav.slice(0, at), entry, ...nav.slice(at)]
 }
 
+/** Finance Manager / HR Manager see the tickets a coordinator assigned to them. */
+function ensureAssignedTicketsNav(nav: NavItem[], role: string | undefined): NavItem[] {
+  if (!['Finance Manager', 'HR Manager'].includes(String(role || ''))) return nav
+  const has = nav.some((item) => item.href === '/dashboard/complaints' || item.children?.some((c) => c.href === '/dashboard/complaints'))
+  if (has) return nav
+  const entry: NavItem = { label: 'Assigned Tickets', icon: AlertCircle, href: '/dashboard/complaints' }
+  const at = nav.findIndex((item) => item.label === 'Settings' || item.label === 'Sign out')
+  return at < 0 ? [...nav, entry] : [...nav.slice(0, at), entry, ...nav.slice(at)]
+}
+
 function ensureRaiseTicketNav(nav: NavItem[]): NavItem[] {
   const href = '/dashboard/complaints/raise'
   const withoutNestedRaiseTicket = nav.flatMap((item) => {
@@ -1553,6 +1563,7 @@ export function Sidebar() {
   }
   finalNav = ensureEmployeeVerificationNav(finalNav, user?.role || permUser?.role)
   finalNav = groupMyDataNav(mergeAdvanceIntoExpenses(finalNav), user?.role || permUser?.role)
+  finalNav = ensureAssignedTicketsNav(finalNav, user?.role || permUser?.role)
 
   finalNav = ensureExpenseApprovalNav(
     finalNav,

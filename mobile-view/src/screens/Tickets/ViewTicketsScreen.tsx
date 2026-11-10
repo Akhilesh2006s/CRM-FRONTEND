@@ -4,7 +4,8 @@
  * Optional route param `view`: 'all' | 'solved' | 'pending'.
  */
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Modal, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Modal, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { useAuth } from '../../context/AuthContext';
 import { colors } from '../../theme/colors';
 import { apiService } from '../../services/api';
 import ScreenShell from '../../ui/ScreenShell';
@@ -21,7 +22,16 @@ const VIEWS: { view: TicketsView; label: string; status?: Ticket['status'] }[] =
   { view: 'pending', label: 'Pending Tickets', status: 'Open' },
 ];
 
+/** Roles that see every ticket and can assign them; others see only tickets assigned to them. */
+const REVIEW_ROLES = new Set(['Coordinator', 'Senior Coordinator', 'Admin', 'Super Admin']);
+type Assignee = { _id: string; name?: string; role?: string };
+
 export default function ViewTicketsScreen({ route }: any) {
+  const { user } = useAuth() as any;
+  const isReviewer = Boolean(user?.isSuperAdmin) || REVIEW_ROLES.has(String(user?.role || ''));
+  const [assignId, setAssignId] = useState<string | null>(null);
+  const [assignees, setAssignees] = useState<Assignee[]>([]);
+  const [assigneeId, setAssigneeId] = useState('');
   const initial = (route?.params?.view as TicketsView) || 'all';
   const [view, setView] = useState<TicketsView>(VIEWS.some((v) => v.view === initial) ? initial : 'all');
   const current = VIEWS.find((v) => v.view === view) || VIEWS[0];
@@ -74,8 +84,39 @@ export default function ViewTicketsScreen({ route }: any) {
     load();
   }, [load]);
 
+  const openAssign = async (id: string) => {
+    setAssignId(id);
+    setAssigneeId('');
+    if (assignees.length) return;
+    try {
+      const data = await apiService.get('/complaints/assignees');
+      setAssignees(Array.isArray(data) ? data : []);
+    } catch (e: any) {
+      setMessage({ type: 'error', text: e?.response?.data?.message || e?.message || 'Failed to load people to assign' });
+    }
+  };
+
+  const confirmAssign = async () => {
+    if (!assignId || !assigneeId) return;
+    setActing(true);
+    try {
+      await apiService.put(`/complaints/${assignId}/assign`, { userId: assigneeId });
+      setMessage({ type: 'success', text: 'Ticket assigned' });
+      setAssignId(null);
+      load();
+    } catch (e: any) {
+      setMessage({ type: 'error', text: e?.response?.data?.message || e?.message || 'Failed to assign ticket' });
+    } finally {
+      setActing(false);
+    }
+  };
+
   const confirmResolve = async () => {
     if (!resolveId) return;
+    if (!resolutionNote.trim()) {
+      setMessage({ type: 'error', text: 'Enter a remark before marking the ticket as solved.' });
+      return;
+    }
     setActing(true);
     try {
       await apiService.put(`/complaints/${resolveId}/resolve`, { resolutionNote });
@@ -84,7 +125,7 @@ export default function ViewTicketsScreen({ route }: any) {
       setResolutionNote('');
       load();
     } catch (e: any) {
-      setMessage({ type: 'error', text: e?.message || 'Failed to solve ticket' });
+      setMessage({ type: 'error', text: e?.response?.data?.message || e?.message || 'Failed to solve ticket' });
     } finally {
       setActing(false);
     }
@@ -93,7 +134,7 @@ export default function ViewTicketsScreen({ route }: any) {
   return (
     <ScreenShell
       title="View Tickets"
-      subtitle="Tickets raised by all employees."
+      subtitle={isReviewer ? 'Tickets raised by all employees, oldest first.' : 'Tickets assigned to you, oldest first.'}
       loading={loading && !refreshing}
       refreshing={refreshing}
       onRefresh={() => {
@@ -137,9 +178,16 @@ export default function ViewTicketsScreen({ route }: any) {
             />
             <InfoRow label="Area / Town" value={item.town || ''} />
             <InfoRow label="Raised on" value={fmtTicketDate(item.createdAt)} />
-            <InfoRow label="Note" value={item.resolutionNote || ''} />
+            <InfoRow
+              label="Assigned to"
+              value={item.assignedTo && typeof item.assignedTo === 'object' ? `${item.assignedTo.name || ''}${item.assignedTo.role ? ` (${item.assignedTo.role})` : ''}` : ''}
+            />
+            <InfoRow label="Remark" value={item.resolutionNote || ''} />
             {item.status === 'Open' ? (
               <ActionRow>
+                {isReviewer ? (
+                  <WebButton title="Assign" variant="outline" disabled={acting} onPress={() => openAssign(item._id)} />
+                ) : null}
                 <WebButton
                   title="Mark solved"
                   variant="success"
@@ -155,15 +203,49 @@ export default function ViewTicketsScreen({ route }: any) {
         ))
       )}
 
+      <Modal visible={Boolean(assignId)} transparent animationType="fade" onRequestClose={() => setAssignId(null)}>
+        <View style={styles.overlay}>
+          <View style={styles.modal}>
+            <Text style={styles.modalTitle}>Assign ticket</Text>
+            <WebLabel>Assign to</WebLabel>
+            {assignees.length === 0 ? <Text style={styles.desc}>Loading…</Text> : null}
+            {assignees.map((a) => (
+              <TouchableOpacity
+                key={a._id}
+                style={[styles.option, assigneeId === a._id && styles.optionOn]}
+                onPress={() => setAssigneeId(a._id)}
+              >
+                <Text style={[styles.optionText, assigneeId === a._id && styles.optionTextOn]}>
+                  {a.name || 'Unnamed'} ({a.role})
+                </Text>
+              </TouchableOpacity>
+            ))}
+            <View style={styles.modalBtns}>
+              <View style={{ flex: 1 }}>
+                <WebButton title="Cancel" variant="outline" onPress={() => setAssignId(null)} />
+              </View>
+              <View style={{ flex: 1 }}>
+                {acting ? (
+                  <ActivityIndicator color={colors.primary} />
+                ) : (
+                  <WebButton title="Assign" onPress={confirmAssign} disabled={!assigneeId} />
+                )}
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <Modal visible={Boolean(resolveId)} transparent animationType="fade" onRequestClose={() => setResolveId(null)}>
         <View style={styles.overlay}>
           <View style={styles.modal}>
             <Text style={styles.modalTitle}>Mark ticket solved</Text>
-            <WebLabel>Note</WebLabel>
+            {message?.type === 'error' ? <Text style={styles.err}>{message.text}</Text> : null}
+            <WebLabel>Remark *</WebLabel>
             <WebInput
               value={resolutionNote}
               onChangeText={setResolutionNote}
-              placeholder="Optional note for the person who raised the ticket"
+              placeholder="What was done to solve this ticket (required)"
               multiline
               numberOfLines={3}
               style={styles.textArea}
@@ -176,7 +258,7 @@ export default function ViewTicketsScreen({ route }: any) {
                 {acting ? (
                   <ActivityIndicator color={colors.primary} />
                 ) : (
-                  <WebButton title="Mark solved" onPress={confirmResolve} disabled={acting} />
+                  <WebButton title="Mark solved" onPress={confirmResolve} disabled={acting || !resolutionNote.trim()} />
                 )}
               </View>
             </View>
@@ -195,4 +277,9 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary, marginBottom: 12 },
   textArea: { minHeight: 80, textAlignVertical: 'top' },
   modalBtns: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  err: { color: colors.error, fontSize: 13, marginBottom: 8 },
+  option: { borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 10, marginBottom: 6 },
+  optionOn: { borderColor: colors.primary, backgroundColor: '#EEF2FF' },
+  optionText: { fontSize: 14, color: colors.textPrimary },
+  optionTextOn: { color: colors.primary, fontWeight: '700' },
 });

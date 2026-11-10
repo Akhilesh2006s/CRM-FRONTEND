@@ -752,7 +752,10 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
   }));
   // Tickets: everyone can raise one; Admin / Coordinators also work the ticket inbox.
   const tickets: NavLink[] = [{ label: 'Raise Ticket', screen: 'RaiseTicket', icon: '🎫' }];
-  if (TICKET_INBOX_ROLES.has(role)) {
+  if (role === 'Finance Manager' || role === 'HR Manager') {
+    // Tickets a coordinator assigned to them.
+    tickets.push({ label: 'Assigned Tickets', screen: 'ViewTickets', params: { view: 'all' }, icon: '📥' });
+  } else if (TICKET_INBOX_ROLES.has(role)) {
     tickets.push(
       { label: 'All Tickets', screen: 'ViewTickets', params: { view: 'all' }, icon: '📥' },
       { label: 'Pending Tickets', screen: 'ViewTickets', params: { view: 'pending' }, icon: '⏳' },

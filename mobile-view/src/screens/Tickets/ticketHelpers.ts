@@ -11,6 +11,8 @@ export type Ticket = {
   town?: string;
   status: 'Open' | 'Resolved';
   resolutionNote?: string;
+  /** Who a coordinator assigned the ticket to (Super Admin / Admin / Finance Manager / HR Manager). */
+  assignedTo?: TicketPerson | null;
   createdAt: string;
 };
 
