@@ -24,7 +24,8 @@ import {
 import { normalizeIntegerInput } from '@/lib/numericInput'
 
 /** Create Sale School Type options (Super Admin / Coordinator). */
-const CREATE_SALE_SCHOOL_TYPES = ['New', 'Existing'] as const
+// Existing schools continue through next year's PO, not Create Sale.
+const CREATE_SALE_SCHOOL_TYPES = ['New'] as const
 type CreateSaleSchoolType = (typeof CREATE_SALE_SCHOOL_TYPES)[number]
 
 /** Same product fields as the app's Create Sale: tick a product, then Price, Quantity, Strength. */
@@ -66,7 +67,7 @@ export default function CreateDealPage() {
     currentUser?.role === 'Super Admin' || Boolean((currentUser as any)?.isSuperAdmin)
   
   const [form, setForm] = useState({
-    school_type: '',
+    school_type: 'New',
     school_name: '',
     contact_person: '',
     contact_mobile: '',
@@ -122,6 +123,8 @@ export default function CreateDealPage() {
 
   // Cluster pick list across zones; the deal's zone is the chosen cluster's zone.
   const [clusters, setClusters] = useState<{ _id: string; name: string; zone: string }[]>([])
+  // The employee's own cluster is fixed (not editable); only logins without a cluster pick one.
+  const [clusterLocked, setClusterLocked] = useState(false)
   useEffect(() => {
     ;(async () => {
       try {
@@ -130,13 +133,16 @@ export default function CreateDealPage() {
           .map((c) => ({ _id: c._id, name: c.name || '', zone: c.zoneId?.name || '' }))
           .filter((c) => c.name)
         setClusters(mapped)
-        // The BDE's own cluster is selected by default (they can still change it).
+        // The BDE's own cluster is filled in and cannot be changed.
         try {
           const me = await apiRequest<{ cluster?: string; zone?: string }>('/auth/me')
           const mine = String(me?.cluster || '').trim().toLowerCase()
           const inZone = mapped.filter((c) => me?.zone && c.zone === me.zone)
           const own = mapped.find((c) => mine && c.name.trim().toLowerCase() === mine) || (inZone.length === 1 ? inZone[0] : undefined)
-          if (own) setForm((f) => (f.clusterId ? f : { ...f, clusterId: own._id, cluster: own.name, zone: own.zone || f.zone }))
+          if (own) {
+            setForm((f) => ({ ...f, clusterId: own._id, cluster: own.name, zone: own.zone || f.zone }))
+            setClusterLocked(true)
+          }
         } catch {
           // no default; the BDE picks it
         }
@@ -718,7 +724,9 @@ export default function CreateDealPage() {
           </div>
           <div>
             <Label>Cluster *</Label>
-            {clusters.length > 0 ? (
+            {clusterLocked ? (
+              <Input className="bg-neutral-100 text-neutral-900" value={form.cluster} readOnly disabled />
+            ) : clusters.length > 0 ? (
               <Select
                 value={form.clusterId || undefined}
                 onValueChange={(v) => {

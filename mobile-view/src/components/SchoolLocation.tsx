@@ -99,9 +99,14 @@ export default function SchoolLocation({
             latitude: here.latitude,
             longitude: here.longitude,
           });
-          cache.set(code, { latitude: saved.latitude, longitude: saved.longitude, source: saved.source, updatedAt: saved.updatedAt });
-          notify();
-          showAlert('Location updated', 'The school location was saved.');
+          if (saved?.pending) {
+            // Employees: the new location waits for the reporting manager's approval.
+            showAlert('Sent for approval', saved.message || 'Location sent to your manager for approval. It will be updated once approved.');
+          } else {
+            cache.set(code, { latitude: saved.latitude, longitude: saved.longitude, source: saved.source, updatedAt: saved.updatedAt });
+            notify();
+            showAlert('Location updated', 'The school location was saved.');
+          }
         } catch (e: any) {
           showAlert('Could not update location', e?.message || 'Please try again.');
         } finally {

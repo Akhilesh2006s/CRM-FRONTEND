@@ -37,6 +37,7 @@ type Expense = ApprovalExpense & {
   gpsAmount?: number | null
   expItemId?: string
   receipt?: string
+  receipts?: string[]
   ticketReceipt?: string
   transportType?: string
   travelFrom?: string
@@ -493,9 +494,11 @@ export default function ManagerExpenseUpdatePage() {
                           />
                         </TableCell>
                         <TableCell>
-                          {expense.receipt || expense.ticketReceipt ? (
+                          {(expense.receipts?.length || expense.receipt || expense.ticketReceipt) ? (
                             <div className="flex gap-2">
-                              <BillLink label="Image 1" url={expense.receipt} />
+                              {(expense.receipts?.length ? expense.receipts : expense.receipt ? [expense.receipt] : []).map((url, i) => (
+                                <BillLink key={url} label={`Image ${i + 1}`} url={url} />
+                              ))}
                               <BillLink label="Ticket" url={expense.ticketReceipt} />
                             </div>
                           ) : (

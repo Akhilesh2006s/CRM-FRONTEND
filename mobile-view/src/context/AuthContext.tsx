@@ -75,10 +75,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (mobile: string, password: string) => {
     try {
       console.log('Attempting login with mobile:', mobile);
-      // Use the same credential-only login payload as the web app.
+      // One login = one phone: the first login binds this device; another phone needs a Device Reset by Admin.
+      let deviceId = await AsyncStorage.getItem('deviceId');
+      if (!deviceId) {
+        deviceId = `dev-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+        await AsyncStorage.setItem('deviceId', deviceId);
+      }
       const response = await apiService.post('/auth/login', {
         mobile,
         password,
+        deviceId,
       });
       const { token, ...userData } = response;
 

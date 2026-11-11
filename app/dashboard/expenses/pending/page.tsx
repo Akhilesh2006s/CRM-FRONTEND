@@ -47,6 +47,7 @@ type Expense = ApprovalExpense & {
   department?: string
   paymentMethod?: string
   receipt?: string
+  receipts?: string[]
   ticketReceipt?: string
   receiptNumber?: string
   expItemId?: string
@@ -458,9 +459,11 @@ function ExpenseDetailsDialog({
 
               <section>
                 <h3 className="text-sm font-semibold text-neutral-900 mb-2">Attachments</h3>
-                {expense.receipt || expense.ticketReceipt ? (
+                {(expense.receipts?.length || expense.receipt || expense.ticketReceipt) ? (
                   <div className="space-y-3">
-                    <Attachment label="Bill / Receipt" url={expense.receipt} />
+                    {(expense.receipts?.length ? expense.receipts : expense.receipt ? [expense.receipt] : []).map((url, i, all) => (
+                      <Attachment key={url} label={all.length > 1 ? `Bill / Receipt ${i + 1}` : 'Bill / Receipt'} url={url} />
+                    ))}
                     <Attachment label="Ticket / Proof" url={expense.ticketReceipt} />
                   </div>
                 ) : (

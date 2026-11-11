@@ -35,6 +35,7 @@ type Expense = ApprovalExpense & {
   managerRemarks?: string
   approvedAmount?: number
   receipt?: string
+  receipts?: string[]
   ticketReceipt?: string
   receiptNumber?: string
   transportType?: string
@@ -111,9 +112,11 @@ function ExpenseView({ expense, onClose }: { expense: Expense | null; onClose: (
                 ))}
               </ul>
             </section>
-            {(expense.receipt || expense.ticketReceipt) && (
+            {(expense.receipts?.length || expense.receipt || expense.ticketReceipt) && (
               <div className="flex gap-4">
-                <ExpenseBillButton label="Bill" url={expense.receipt} />
+                {(expense.receipts?.length ? expense.receipts : expense.receipt ? [expense.receipt] : []).map((url, i, all) => (
+                  <ExpenseBillButton key={url} label={all.length > 1 ? `Bill ${i + 1}` : 'Bill'} url={url} />
+                ))}
                 <ExpenseBillButton label="Ticket" url={expense.ticketReceipt} />
               </div>
             )}

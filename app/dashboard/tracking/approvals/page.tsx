@@ -36,6 +36,26 @@ type Review = {
   reviewedBy?: { name?: string } | null
 }
 
+type LocationRequest = {
+  _id: string
+  employeeId: Person
+  schoolCode: string
+  schoolName?: string
+  latitude: number
+  longitude: number
+  status: string
+  remarks?: string
+  createdAt: string
+  approverId?: { name?: string } | null
+  decidedBy?: { name?: string } | null
+}
+type Kind = 'request' | 'review' | 'location'
+const DECIDE_PATH: Record<Kind, (id: string) => string> = {
+  request: (id) => `/field-day/permission/${id}/decide`,
+  review: (id) => `/field-day/reviews/${id}/decide`,
+  location: (id) => `/field-day/school-location/${id}/decide`,
+}
+
 const when = (v?: string) =>
   v ? new Date(v).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : '—'
 const place = (mode?: string, office?: string) => (mode === 'office' ? `office${office ? `: ${office}` : ''}` : mode || 'no location')
@@ -49,6 +69,7 @@ export default function FieldApprovalsPage() {
   const [history, setHistory] = useState(false)
   const [requests, setRequests] = useState<FieldRequest[]>([])
   const [reviews, setReviews] = useState<Review[]>([])
+  const [locations, setLocations] = useState<LocationRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [remarks, setRemarks] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState('')
@@ -56,9 +77,10 @@ export default function FieldApprovalsPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await apiRequest<{ requests: FieldRequest[]; reviews: Review[] }>(`/field-day/approvals${history ? '?history=1' : ''}`)
+      const data = await apiRequest<{ requests: FieldRequest[]; reviews: Review[]; locations?: LocationRequest[] }>(`/field-day/approvals${history ? '?history=1' : ''}`)
       setRequests(Array.isArray(data?.requests) ? data.requests : [])
       setReviews(Array.isArray(data?.reviews) ? data.reviews : [])
+      setLocations(Array.isArray(data?.locations) ? data.locations : [])
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Could not load approvals')
     } finally {
@@ -70,12 +92,12 @@ export default function FieldApprovalsPage() {
     load()
   }, [load])
 
-  const decide = async (kind: 'request' | 'review', id: string, decision: 'approve' | 'reject') => {
+  const decide = async (kind: Kind, id: string, decision: 'approve' | 'reject') => {
     const note = (remarks[id] || '').trim()
     if (decision === 'reject' && !note) return toast.error('Enter the reason for rejecting')
     setBusy(`${id}-${decision}`)
     try {
-      await apiRequest(kind === 'request' ? `/field-day/permission/${id}/decide` : `/field-day/reviews/${id}/decide`, {
+      await apiRequest(DECIDE_PATH[kind](id), {
         method: 'PUT',
         body: JSON.stringify({ decision, remarks: note }),
       })
@@ -88,7 +110,7 @@ export default function FieldApprovalsPage() {
     }
   }
 
-  const actions = (kind: 'request' | 'review', id: string) =>
+  const actions = (kind: Kind, id: string) =>
     history ? null : (
       <div className="flex flex-wrap items-center gap-2 pt-2">
         <Input
@@ -112,8 +134,8 @@ export default function FieldApprovalsPage() {
         <div>
           <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Field Approvals</h1>
           <p className="text-sm text-neutral-600 mt-1">
-            Office to Field attendance change requests (approved = the day becomes a field day), and check-outs that did not match the check-in. A reviewed day counts for
-            attendance only when approved.
+            Office to Field attendance change requests (approved = the day becomes a field day), check-outs that did not match the check-in, and school
+            location updates asked by employees (the school&apos;s location changes only when approved). A reviewed day counts for attendance only when approved.
           </p>
         </div>
         <div className="flex gap-2">
@@ -146,6 +168,41 @@ export default function FieldApprovalsPage() {
                   </div>
                 ) : null}
                 {actions('request', r._id)}
+              </Card>
+            ))}
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-lg font-semibold">School location updates ({locations.length})</h2>
+            {locations.length === 0 && <p className="text-sm text-neutral-500">None.</p>}
+            {locations.map((l) => (
+              <Card key={l._id} className="p-4 text-sm space-y-1">
+                <div className="font-medium">
+                  {l.schoolName || l.schoolCode} <span className="text-neutral-500">({l.schoolCode})</span>
+                </div>
+                <div className="text-neutral-600">
+                  Asked by {who(l.employeeId)} · {when(l.createdAt)}
+                  {l.approverId?.name ? ` · reviewer ${l.approverId.name}` : ' · reviewer Admin'}
+                </div>
+                <div>
+                  New location: {Number(l.latitude).toFixed(6)}, {Number(l.longitude).toFixed(6)} ·{' '}
+                  <a
+                    className="text-blue-700 hover:underline"
+                    href={`https://www.google.com/maps/search/?api=1&query=${l.latitude},${l.longitude}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open in Google Maps
+                  </a>
+                </div>
+                {history ? (
+                  <div className={l.status === 'approved' ? 'text-green-700' : 'text-red-600'}>
+                    {l.status === 'approved' ? 'Approved' : 'Rejected'}
+                    {l.decidedBy?.name ? ` by ${l.decidedBy.name}` : ''}
+                    {l.remarks ? `: ${l.remarks}` : ''}
+                  </div>
+                ) : null}
+                {actions('location', l._id)}
               </Card>
             ))}
           </section>

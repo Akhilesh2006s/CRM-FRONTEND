@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, Platform, Alert } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -63,12 +63,15 @@ const emptyForm = () => ({
 
 type DateField = 'date' | 'checkInDate' | 'checkOutDate';
 
+/** Bills per expense (the server accepts up to 10). */
+const MAX_BILLS = 10;
+
 export default function ExpenseCreateScreen({ navigation }: any) {
   const [rates, setRates] = useState<TravelPerKmRates>({});
   // Travel modes that need a bill / ticket upload (Super Admin → Expense Policy).
   const [ticketModes, setTicketModes] = useState<string[] | null>(null);
   const [form, setForm] = useState(emptyForm());
-  const [billFile, setBillFile] = useState<PickedFile | null>(null);
+  const [billFiles, setBillFiles] = useState<PickedFile[]>([]);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -150,46 +153,63 @@ export default function ExpenseCreateScreen({ navigation }: any) {
       showError('File size must be less than 5MB');
       return;
     }
-    setBillFile(isPdf ? { ...file, mimeType: 'application/pdf' } : file);
+    setBillFiles((prev) => {
+      if (prev.length >= MAX_BILLS) {
+        showError(`You can add up to ${MAX_BILLS} bills.`);
+        return prev;
+      }
+      return [...prev, isPdf ? { ...file, mimeType: 'application/pdf' } : file];
+    });
     setFieldErrors((prev) => ({ ...prev, bill: undefined }));
   };
 
-  const pickPhoto = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  // "Choose Photo" → Camera or Upload Bill. Several bills can be added to one expense.
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      showError('Photo library access is required to attach a bill photo.');
+      showError('Camera access is required to take a bill photo.');
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.8,
-    });
-    if (result.canceled || !result.assets[0]) return;
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
+    if (result.canceled || !result.assets?.[0]) return;
     const a = result.assets[0];
     acceptFile({
       uri: a.uri,
-      name: a.fileName || a.uri.split('/').pop() || 'bill.jpg',
+      name: a.fileName || `bill-${Date.now()}.jpg`,
       mimeType: a.mimeType || 'image/jpeg',
       size: a.fileSize ?? null,
       webFile: (a as any).file,
     });
   };
 
-  const pickDocument = async () => {
+  const uploadBills = async () => {
     const result = await DocumentPicker.getDocumentAsync({
       type: ['image/*', 'application/pdf'],
       copyToCacheDirectory: true,
-      multiple: false,
+      multiple: true,
     });
-    if (result.canceled || !result.assets?.[0]) return;
-    const a = result.assets[0];
-    acceptFile({
-      uri: a.uri,
-      name: a.name || 'bill',
-      mimeType: a.mimeType || (/\.pdf$/i.test(a.name || '') ? 'application/pdf' : 'image/jpeg'),
-      size: a.size ?? null,
-      webFile: (a as any).file,
-    });
+    if (result.canceled || !result.assets?.length) return;
+    for (const a of result.assets) {
+      acceptFile({
+        uri: a.uri,
+        name: a.name || 'bill',
+        mimeType: a.mimeType || (/\.pdf$/i.test(a.name || '') ? 'application/pdf' : 'image/jpeg'),
+        size: a.size ?? null,
+        webFile: (a as any).file,
+      });
+    }
+  };
+
+  const choosePhoto = () => {
+    if (Platform.OS === 'web') {
+      void uploadBills();
+      return;
+    }
+    Alert.alert('Choose Photo', 'Add a bill', [
+      { text: 'Camera', onPress: () => void takePhoto() },
+      { text: 'Upload Bill', onPress: () => void uploadBills() },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   };
 
   const validate = (): FieldErrors => {
@@ -207,7 +227,7 @@ export default function ExpenseCreateScreen({ navigation }: any) {
       }
     }
     if (!form.remarks.trim()) errors.remarks = 'Remarks are required.';
-    if (!billOptional && !billFile) errors.bill = 'Bill upload is required.';
+    if (!billOptional && billFiles.length === 0) errors.bill = 'Bill upload is required.';
     return errors;
   };
 
@@ -255,12 +275,12 @@ export default function ExpenseCreateScreen({ navigation }: any) {
         expenseData.checkOutDate = form.checkOutDate;
       }
 
-      if (billFile) {
+      if (billFiles.length) {
         const formData = new FormData();
         Object.entries(expenseData).forEach(([key, value]) => {
           if (value !== undefined && value !== null) formData.append(key, String(value));
         });
-        await appendFileToFormData(formData, 'bill', billFile);
+        for (const file of billFiles) await appendFileToFormData(formData, 'bill', file);
         await apiService.upload('/expenses/create', formData);
       } else {
         const body: Record<string, string | number> = {};
@@ -272,7 +292,7 @@ export default function ExpenseCreateScreen({ navigation }: any) {
 
       navigation.navigate('ExpenseMy', { view: 'pending' });
       setForm(emptyForm());
-      setBillFile(null);
+      setBillFiles([]);
     } catch (e: any) {
       showError(e?.message || 'Failed to create expense');
     } finally {
@@ -438,25 +458,22 @@ export default function ExpenseCreateScreen({ navigation }: any) {
           <View style={styles.fieldContainer}>
             <Text style={styles.label}>{`${isTravelType ? 'Upload Bill / Ticket' : 'Upload Bill'}${billOptional ? ` (optional for ${form.transportType})` : ' *'}`}</Text>
             <View style={styles.uploadRow}>
-              <TouchableOpacity style={[styles.uploadButton, errStyle('bill')]} onPress={pickPhoto} disabled={submitting}>
-                <Text style={styles.uploadButtonText}>Choose photo</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.uploadButton, errStyle('bill')]} onPress={pickDocument} disabled={submitting}>
-                <Text style={styles.uploadButtonText}>Choose file (image / PDF)</Text>
+              <TouchableOpacity style={[styles.uploadButton, errStyle('bill')]} onPress={choosePhoto} disabled={submitting}>
+                <Text style={styles.uploadButtonText}>{billFiles.length ? 'Choose Photo (add another bill)' : 'Choose Photo'}</Text>
               </TouchableOpacity>
             </View>
-            {billFile ? (
-              <View style={styles.fileRow}>
+            {billFiles.map((file, i) => (
+              <View key={`${file.uri}-${i}`} style={styles.fileRow}>
                 <Text style={styles.fileName} numberOfLines={1}>
-                  {billFile.name}
+                  {`${i + 1}. ${file.name}`}
                 </Text>
-                <TouchableOpacity onPress={() => setBillFile(null)}>
+                <TouchableOpacity onPress={() => setBillFiles((prev) => prev.filter((_, j) => j !== i))}>
                   <Text style={styles.removeText}>Remove</Text>
                 </TouchableOpacity>
               </View>
-            ) : null}
+            ))}
             {errorText('bill')}
-            <Text style={styles.hint}>Accepted formats: JPG, PNG, PDF (Max 5MB)</Text>
+            <Text style={styles.hint}>Camera photo or bill (JPG, PNG, PDF, max 5MB each). Up to 10 bills.</Text>
           </View>
           </View>
         </ScrollView>

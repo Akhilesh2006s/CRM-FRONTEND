@@ -30,6 +30,7 @@ type Expense = ApprovalExpense & {
   createdAt: string;
   approvedAmount?: number;
   receipt?: string;
+  receipts?: string[];
   ticketReceipt?: string;
   receiptNumber?: string;
   transportType?: string;
@@ -125,9 +126,11 @@ function ExpenseView({ expense, onClose }: { expense: Expense | null; onClose: (
                 {entry.remarks ? ` · “${entry.remarks}”` : ''}
               </Text>
             ))}
-            {expense.receipt || expense.ticketReceipt ? (
+            {(expense.receipts?.length || expense.receipt || expense.ticketReceipt) ? (
               <View style={styles.billRow}>
-                <ExpenseBillButton label="Bill" url={expense.receipt} />
+                {(expense.receipts?.length ? expense.receipts : expense.receipt ? [expense.receipt] : []).map((url, i, all) => (
+                  <ExpenseBillButton key={url} label={all.length > 1 ? `Bill ${i + 1}` : 'Bill'} url={url} />
+                ))}
                 <ExpenseBillButton label="Ticket" url={expense.ticketReceipt} />
               </View>
             ) : null}

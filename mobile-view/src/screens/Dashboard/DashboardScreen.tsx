@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
@@ -7,6 +7,8 @@ import PendingAdvanceApprovalsCard from '../../components/PendingAdvanceApproval
 import PartnerDashboard from '../../components/partner/PartnerDashboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SideMenu from '../../navigation/SideMenu';
+import { navigateRoot } from '../../navigation/navigationRef';
+import HomeSummaryCard from '../../components/HomeSummaryCard';
 import { getRoleFlags } from '../../utils/roles';
 import { colors } from '../../theme/colors';
 
@@ -22,6 +24,7 @@ export default function DashboardScreen() {
   const flags = getRoleFlags(user);
   const insets = useSafeAreaInsets();
   const [menuOpen, setMenuOpen] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
 
   if (flags.isPartner) {
     return <PartnerDashboard userName={user?.name} role={user?.role} />;
@@ -57,8 +60,9 @@ export default function DashboardScreen() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: 32 + insets.bottom }]} showsVerticalScrollIndicator={false}>
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {showAttendance ? <AttendanceCard /> : null}
+        <HomeSummaryCard />
         <PendingAdvanceApprovalsCard />
 
         <TouchableOpacity style={styles.menuCard} onPress={() => setMenuOpen(true)} activeOpacity={0.8}>
@@ -67,6 +71,17 @@ export default function DashboardScreen() {
           <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </TouchableOpacity>
       </ScrollView>
+      {/* Bottom bar: Home and Raise Ticket (every employee can raise a ticket). */}
+      <View style={[styles.bottomBar, { paddingBottom: 8 + insets.bottom }]}>
+        <TouchableOpacity style={styles.bottomItem} onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })} accessibilityLabel="Home">
+          <Ionicons name="home" size={22} color={colors.primary} />
+          <Text style={[styles.bottomText, { color: colors.primary }]}>Home</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.bottomItem} onPress={() => navigateRoot('RaiseTicket')} accessibilityLabel="Raise Ticket">
+          <Ionicons name="ticket-outline" size={22} color={colors.textSecondary} />
+          <Text style={styles.bottomText}>Raise Ticket</Text>
+        </TouchableOpacity>
+      </View>
       <SideMenu visible={menuOpen} onClose={() => setMenuOpen(false)} />
     </View>
   );
@@ -103,7 +118,16 @@ const styles = StyleSheet.create({
   userName: { fontSize: 18, fontWeight: '700', color: colors.textPrimary, marginTop: 2 },
   roleBadge: { backgroundColor: '#DBEAFE', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, maxWidth: 150 },
   roleText: { fontSize: 12, fontWeight: '700', color: colors.primaryDark },
-  scroll: { padding: 16, paddingBottom: 32 },
+  scroll: { padding: 16, paddingBottom: 24 },
+  bottomBar: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    paddingTop: 8,
+  },
+  bottomItem: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2 },
+  bottomText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
   heading: { fontSize: 13, fontWeight: '700', color: colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 8, marginBottom: 10 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   tile: {

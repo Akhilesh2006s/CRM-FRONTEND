@@ -15,7 +15,8 @@ import { WebInput, WebButton, WebSelect, WebLabel } from '../../ui/WebPrimitives
 import MessageBanner from '../../components/MessageBanner';
 
 import { ymdToDmy } from '../../utils/dateFormat';
-const SCHOOL_TYPES = ['New', 'Existing'].map((t) => ({
+// Existing schools continue through next year's PO, not Create Sale (same as web).
+const SCHOOL_TYPES = ['New'].map((t) => ({
   label: t,
   value: t,
 }));
@@ -179,7 +180,7 @@ function validateSchoolCode(raw: string): { ok: true; value: string } | { ok: fa
 export default function DCCreateSaleScreen({ navigation }: any) {
   const { user } = useAuth();
   const [form, setForm] = useState({
-    school_type: '',
+    school_type: 'New',
     school_name: '',
     school_code: '',
     contact_person: '',
@@ -205,6 +206,8 @@ export default function DCCreateSaleScreen({ navigation }: any) {
   });
   const [products, setProducts] = useState<SaleProduct[]>([]);
   const [clusters, setClusters] = useState<{ _id: string; name: string; zone: string }[]>([]);
+  // The employee's own cluster is fixed (not editable); only logins without a cluster pick one.
+  const [clusterLocked, setClusterLocked] = useState(false);
   const [areas, setAreas] = useState<{ name: string; district?: string; block?: string; branchType?: string }[]>([]);
   const [loadingPincode, setLoadingPincode] = useState(false);
   const [pincodeError, setPincodeError] = useState<string | null>(null);
@@ -333,7 +336,7 @@ export default function DCCreateSaleScreen({ navigation }: any) {
           .map((c: any) => ({ _id: String(c._id || ''), name: String(c.name || ''), zone: String(c.zoneId?.name || '') }))
           .filter((c: { name: string }) => c.name);
         setClusters(mapped);
-        // The BDE's own cluster is selected by default (they can still change it).
+        // The BDE's own cluster is filled in and cannot be changed.
         try {
           const me: any = await apiService.get('/auth/me');
           const mine = String(me?.cluster || '').trim().toLowerCase();
@@ -343,7 +346,10 @@ export default function DCCreateSaleScreen({ navigation }: any) {
               const inZone = mapped.filter((c: { zone: string }) => me?.zone && c.zone === me.zone);
               return inZone.length === 1 ? inZone[0] : undefined;
             })();
-          if (own) setForm((f) => (f.clusterId ? f : { ...f, clusterId: own._id, cluster: own.name }));
+          if (own) {
+            setForm((f) => ({ ...f, clusterId: own._id, cluster: own.name }));
+            setClusterLocked(true);
+          }
         } catch {
           // no default; the BDE picks it
         }
@@ -691,7 +697,12 @@ export default function DCCreateSaleScreen({ navigation }: any) {
         onValueChange={(v) => setField('lead_status', v)}
         items={DEAL_STATUS_OPTIONS}
       />
-      {clusters.length > 0 ? (
+      {clusterLocked ? (
+        <>
+          <WebLabel>Cluster</WebLabel>
+          <WebInput value={form.cluster} editable={false} />
+        </>
+      ) : clusters.length > 0 ? (
         <WebSelect
           label="Cluster *"
           value={form.clusterId}

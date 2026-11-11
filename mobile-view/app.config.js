@@ -26,7 +26,6 @@ module.exports = ({ config }) => ({
     permissions: [
       'ACCESS_FINE_LOCATION',
       'ACCESS_COARSE_LOCATION',
-      'ACCESS_BACKGROUND_LOCATION',
       'FOREGROUND_SERVICE',
       'FOREGROUND_SERVICE_LOCATION',
       'CAMERA',
@@ -34,6 +33,8 @@ module.exports = ({ config }) => ({
       'WRITE_EXTERNAL_STORAGE',
       'RECORD_AUDIO',
     ],
+    // Location is "While using the app" only; never ask for "Allow all the time".
+    blockedPermissions: ['android.permission.ACCESS_BACKGROUND_LOCATION'],
   },
   extra: {
     eas: {
@@ -47,8 +48,10 @@ module.exports = ({ config }) => ({
     [
       'expo-location',
       {
-        locationAlwaysAndWhenInUsePermission: 'Allow CRM Forge to use your location for attendance.',
-        isAndroidBackgroundLocationEnabled: true,
+        // "While using the app" only (no "Allow all the time": it uses more battery). The day's GPS runs
+        // as a foreground service with a notification, which needs only this permission.
+        locationWhenInUsePermission: 'Allow CRM Forge to use your location for attendance and your day route.',
+        isAndroidBackgroundLocationEnabled: false,
         isAndroidForegroundServiceEnabled: true,
       },
     ],

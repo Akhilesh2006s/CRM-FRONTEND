@@ -221,9 +221,6 @@ function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
         title: 'Expenses',
         items: [
           { label: 'Create Expenses', screen: 'ExpenseCreate' },
-          { label: 'My Pending Expenses', screen: 'ExpenseMy', params: { view: 'pending' } },
-          { label: 'My Completed Expenses', screen: 'ExpenseMy', params: { view: 'completed' } },
-          { label: 'My Rejected Expenses', screen: 'ExpenseMy', params: { view: 'rejected' } },
           { label: 'All My Expenses', screen: 'ExpenseMy', params: { view: 'all' } },
           { label: 'Team Expenses to Approve', screen: 'ExpenseExecutiveManagerPending' },
           { label: 'Team Approved / Rejected', screen: 'ExpenseExecutiveManagerPending', params: { tab: 'decided' } },
@@ -274,9 +271,6 @@ function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
         icon: I.expenses,
         items: [
           { label: 'Create Expenses', screen: 'ExpenseCreate', icon: '➕' },
-          { label: 'Pending Expenses', screen: 'ExpenseMy', params: { view: 'pending' }, icon: '⏳' },
-          { label: 'Completed Expenses', screen: 'ExpenseMy', params: { view: 'completed' }, icon: '✅' },
-          { label: 'Rejected Expenses', screen: 'ExpenseMy', params: { view: 'rejected' }, icon: '❌' },
           { label: 'All My Expenses', screen: 'ExpenseMy', params: { view: 'all' }, icon: '📄' },
         ],
       },
@@ -303,9 +297,6 @@ function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
         icon: I.expenses,
         items: [
           { label: 'Create Expenses', screen: 'ExpenseCreate', icon: '➕' },
-          { label: 'Pending Expenses', screen: 'ExpenseMy', params: { view: 'pending' }, icon: '⏳' },
-          { label: 'Completed Expenses', screen: 'ExpenseMy', params: { view: 'completed' }, icon: '✅' },
-          { label: 'Rejected Expenses', screen: 'ExpenseMy', params: { view: 'rejected' }, icon: '❌' },
           { label: 'All My Expenses', screen: 'ExpenseMy', params: { view: 'all' }, icon: '📄' },
         ],
       },
@@ -733,9 +724,6 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
     items: section.items.flatMap((item): NavLink[] => {
       if (item.screen === 'ExpenseMy' && !item.params) {
         return [
-          { label: 'Pending Expenses', screen: 'ExpenseMy', params: { view: 'pending' }, icon: '⏳' },
-          { label: 'Completed Expenses', screen: 'ExpenseMy', params: { view: 'completed' }, icon: '✅' },
-          { label: 'Rejected Expenses', screen: 'ExpenseMy', params: { view: 'rejected' }, icon: '❌' },
           { label: 'All My Expenses', screen: 'ExpenseMy', params: { view: 'all' }, icon: '📄' },
         ];
       }
@@ -778,9 +766,6 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
       icon: I.expenses,
       items: [
         { label: 'Create Expenses', screen: 'ExpenseCreate', icon: '➕' },
-        { label: 'Pending Expenses', screen: 'ExpenseMy', params: { view: 'pending' }, icon: '⏳' },
-        { label: 'Completed Expenses', screen: 'ExpenseMy', params: { view: 'completed' }, icon: '✅' },
-        { label: 'Rejected Expenses', screen: 'ExpenseMy', params: { view: 'rejected' }, icon: '❌' },
         { label: 'All My Expenses', screen: 'ExpenseMy', params: { view: 'all' }, icon: '📄' },
       ],
     };
@@ -821,5 +806,26 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
       : [...sections, mine];
   }
   const superAdmin = role === 'Super Admin' || !!(user as { isSuperAdmin?: boolean } | null | undefined)?.isSuperAdmin;
-  return addWebPortedLinks(sections, role, superAdmin);
+  return moveDemoVideosToMyData(addWebPortedLinks(sections, role, superAdmin));
+}
+
+/** Demo Videos sit under My Data (not Leads). */
+function moveDemoVideosToMyData(sections: NavSection[]): NavSection[] {
+  const demo = sections.flatMap((s) => s.items).find((item) => item.screen === 'SalesCollateral');
+  if (!demo) return sections;
+  let out = sections
+    .map((s) => (s.title === MY_DATA_TITLE ? s : { ...s, items: s.items.filter((item) => item.screen !== 'SalesCollateral') }))
+    .filter((s) => s.items.length > 0);
+  const link: NavLink = { ...demo, label: 'Demo Videos', icon: demo.icon || '🎬' };
+  const at = out.findIndex((s) => s.title === MY_DATA_TITLE);
+  if (at >= 0) {
+    if (!out[at].items.some((item) => item.screen === 'SalesCollateral')) {
+      out = out.map((s, i) => (i === at ? { ...s, items: [...s.items, link] } : s));
+    }
+  } else {
+    const settingsAt = out.findIndex((s) => s.title === 'Settings');
+    const mine: NavSection = { title: MY_DATA_TITLE, icon: I.employees, items: [link] };
+    out = settingsAt >= 0 ? [...out.slice(0, settingsAt), mine, ...out.slice(settingsAt)] : [...out, mine];
+  }
+  return out;
 }

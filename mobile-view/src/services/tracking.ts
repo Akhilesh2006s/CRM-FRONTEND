@@ -152,72 +152,66 @@ TaskManager.defineTask(DAY_GPS_TASK, async ({ data, error }) => {
   }
 });
 
-export type LiveGpsState = 'on' | 'gps_off' | 'needs_always' | 'starting';
+export type LiveGpsState = 'on' | 'gps_off' | 'needs_permission' | 'starting';
 
-/** Live GPS for the running day: on, phone GPS off, or "Allow all the time" not given. */
+/**
+ * Location permission is "While using the app" only (not "Allow all the time": it uses more battery).
+ * The day's GPS runs as a foreground service with the "your day has started" notification, which
+ * Android allows with "While using the app" permission.
+ */
+async function hasLocationPermission() {
+  const fg = await Location.getForegroundPermissionsAsync();
+  return fg.status === 'granted';
+}
+
+/** Live GPS for the running day: on, phone GPS off, or location permission not given. */
 export async function liveGpsState(): Promise<LiveGpsState> {
   try {
     if (!(await Location.hasServicesEnabledAsync())) return 'gps_off';
-    const bg = await Location.getBackgroundPermissionsAsync();
-    if (bg.status !== 'granted') return 'needs_always';
+    if (!(await hasLocationPermission())) return 'needs_permission';
     return (await Location.hasStartedLocationUpdatesAsync(DAY_GPS_TASK)) ? 'on' : 'starting';
   } catch {
-    return 'needs_always';
+    return 'needs_permission';
   }
 }
 
-/** Android shows "Allow all the time" only on the app's settings page; explain it first. */
-function explainAlwaysAllow(): Promise<void> {
-  return new Promise((resolve) =>
-    Alert.alert(
-      'Allow location all the time',
-      'Your location is tracked from Start Day to End Day, also when the app is closed. On the next screen choose "Allow all the time".',
-      [{ text: 'Continue', onPress: () => resolve() }],
-      { cancelable: false }
-    )
-  );
-}
-
-/** Turn live GPS on: phone GPS, then "Allow all the time", then start the day's tracking. */
+/** Turn live GPS on: phone GPS, then "While using the app" permission, then start the day's tracking. */
 export async function enableLiveGps(): Promise<LiveGpsState> {
   try {
     if (!(await Location.hasServicesEnabledAsync()) && Platform.OS === 'android') {
       await Location.enableNetworkProviderAsync().catch(() => undefined);
     }
-    const bg = await Location.getBackgroundPermissionsAsync();
-    if (bg.status !== 'granted' && !bg.canAskAgain) {
-      await explainAlwaysAllow();
+    const fg = await Location.getForegroundPermissionsAsync();
+    if (fg.status !== 'granted' && !fg.canAskAgain) {
+      await new Promise<void>((resolve) =>
+        Alert.alert('Allow location', 'On the next screen open Permissions → Location and choose "Allow only while using the app".', [
+          { text: 'Continue', onPress: () => resolve() },
+        ])
+      );
       await Linking.openSettings();
-      return 'needs_always';
+      return 'needs_permission';
     }
   } catch {
     // fall through to startDayTracking
   }
-  await startDayTracking({ explain: true });
+  await startDayTracking();
   void sendDeviceStatus();
   return liveGpsState();
 }
 
 /**
- * Start Day: keep GPS on until End Day. Asks for "Allow all the time" location; when the
- * employee refuses it, GPS still runs while the app is open.
- * @returns whether background GPS is on
+ * Start Day: keep GPS on until End Day. Needs only "While using the app" location permission;
+ * the foreground service notification keeps GPS running when the app is in the background.
+ * @returns whether the day's GPS is on
  */
-export async function startDayTracking({ explain = true }: { explain?: boolean } = {}): Promise<boolean> {
+export async function startDayTracking(_opts: { explain?: boolean } = {}): Promise<boolean> {
   startForegroundTracking();
   void sendDeviceStatus();
   try {
-    const fg = await Location.getForegroundPermissionsAsync();
-    if (fg.status !== 'granted') {
+    if (!(await hasLocationPermission())) {
       const asked = await Location.requestForegroundPermissionsAsync();
       if (asked.status !== 'granted') return false;
     }
-    let bg = await Location.getBackgroundPermissionsAsync();
-    if (bg.status !== 'granted' && bg.canAskAgain) {
-      if (explain && Platform.OS === 'android') await explainAlwaysAllow();
-      bg = await Location.requestBackgroundPermissionsAsync();
-    }
-    if (bg.status !== 'granted') return false;
     if (await Location.hasStartedLocationUpdatesAsync(DAY_GPS_TASK)) return true;
     await Location.startLocationUpdatesAsync(DAY_GPS_TASK, {
       // A point every ~20 s / 40 m while moving, so the day's route follows the roads on the map
@@ -236,7 +230,7 @@ export async function startDayTracking({ explain = true }: { explain?: boolean }
     });
     return true;
   } catch (err) {
-    console.warn('[tracking] background GPS failed:', (err as Error)?.message || err);
+    console.warn('[tracking] day GPS failed:', (err as Error)?.message || err);
     return false;
   }
 }
@@ -255,7 +249,7 @@ export async function stopDayTracking(): Promise<void> {
 
 /** Match GPS to the attendance: on while today's day is started and not ended. */
 export async function syncDayTracking(attendance: { endTime?: string | null } | null | undefined): Promise<void> {
-  // On app open: start quietly; the home card asks for "Allow all the time" when it is missing.
+  // On app open: start the day's GPS again when the day is running.
   if (attendance && !attendance.endTime) await startDayTracking({ explain: false });
   else await stopDayTracking();
 }

@@ -32,6 +32,7 @@ type Expense = ApprovalExpense & {
   gpsAmount?: number | null;
   expItemId?: string;
   receipt?: string;
+  receipts?: string[];
   ticketReceipt?: string;
   transportType?: string;
   travelFrom?: string;
@@ -358,9 +359,11 @@ export default function ExpenseManagerUpdateScreen({ navigation, route }: any) {
                 multiline
                 style={styles.remarks}
               />
-              {exp.receipt || exp.ticketReceipt ? (
+              {(exp.receipts?.length || exp.receipt || exp.ticketReceipt) ? (
                 <View style={styles.billRow}>
-                  <ExpenseBillButton label="Image 1" url={exp.receipt} />
+                  {(exp.receipts?.length ? exp.receipts : exp.receipt ? [exp.receipt] : []).map((url, i, all) => (
+                    <ExpenseBillButton key={url} label={all.length > 1 ? `Image ${i + 1}` : 'Image 1'} url={url} />
+                  ))}
                   <ExpenseBillButton label="Ticket" url={exp.ticketReceipt} />
                 </View>
               ) : null}

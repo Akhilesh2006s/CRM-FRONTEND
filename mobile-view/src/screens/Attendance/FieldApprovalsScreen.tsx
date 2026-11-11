@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, StyleSheet, Alert } from 'react-native';
+import { View, StyleSheet, Alert, Linking, Text } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import ScreenShell from '../../ui/ScreenShell';
 import { WebButton, WebInput } from '../../ui/WebPrimitives';
@@ -20,6 +20,22 @@ type Review = {
   reviewReason?: string;
 };
 
+type LocationRequest = {
+  _id: string;
+  employeeId: Person;
+  schoolCode: string;
+  schoolName?: string;
+  latitude: number;
+  longitude: number;
+  createdAt: string;
+};
+type Kind = 'request' | 'review' | 'location';
+const DECIDE_PATH: Record<Kind, (id: string) => string> = {
+  request: (id) => `/field-day/permission/${id}/decide`,
+  review: (id) => `/field-day/reviews/${id}/decide`,
+  location: (id) => `/field-day/school-location/${id}/decide`,
+};
+
 const when = (v?: string) =>
   v ? new Date(v).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true }) : '—';
 
@@ -27,6 +43,7 @@ const when = (v?: string) =>
 export default function FieldApprovalsScreen() {
   const [requests, setRequests] = useState<FieldRequest[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [locations, setLocations] = useState<LocationRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [remarks, setRemarks] = useState<Record<string, string>>({});
@@ -37,6 +54,7 @@ export default function FieldApprovalsScreen() {
       const data = await apiService.get('/field-day/approvals');
       setRequests(Array.isArray(data?.requests) ? data.requests : []);
       setReviews(Array.isArray(data?.reviews) ? data.reviews : []);
+      setLocations(Array.isArray(data?.locations) ? data.locations : []);
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Could not load approvals');
     } finally {
@@ -51,7 +69,7 @@ export default function FieldApprovalsScreen() {
     }, [load])
   );
 
-  const decide = async (kind: 'request' | 'review', id: string, decision: 'approve' | 'reject') => {
+  const decide = async (kind: Kind, id: string, decision: 'approve' | 'reject') => {
     const note = (remarks[id] || '').trim();
     if (decision === 'reject' && !note) {
       Alert.alert('Remarks needed', 'Enter the reason for rejecting.');
@@ -59,8 +77,7 @@ export default function FieldApprovalsScreen() {
     }
     setBusy(`${id}-${decision}`);
     try {
-      const path = kind === 'request' ? `/field-day/permission/${id}/decide` : `/field-day/reviews/${id}/decide`;
-      await apiService.put(path, { decision, remarks: note });
+      await apiService.put(DECIDE_PATH[kind](id), { decision, remarks: note });
       await load();
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Could not save the decision');
@@ -69,7 +86,7 @@ export default function FieldApprovalsScreen() {
     }
   };
 
-  const actions = (kind: 'request' | 'review', id: string) => (
+  const actions = (kind: Kind, id: string) => (
     <>
       <WebInput
         placeholder="Remarks (required to reject)"
@@ -90,7 +107,7 @@ export default function FieldApprovalsScreen() {
   return (
     <ScreenShell
       title="Field Approvals"
-      subtitle="Office-to-field requests and check-out reviews."
+      subtitle="Office-to-field requests, check-out reviews and school location updates."
       loading={loading && !refreshing}
       refreshing={refreshing}
       onRefresh={() => {
@@ -109,6 +126,26 @@ export default function FieldApprovalsScreen() {
           <InfoRow label="Places" value={r.places} />
           <ActionRow>
             <View style={{ flex: 1 }}>{actions('request', r._id)}</View>
+          </ActionRow>
+        </Card>
+      ))}
+
+      <SectionTitle>{`School location updates (${locations.length})`}</SectionTitle>
+      {locations.length === 0 ? <EmptyState icon="✅" title="No location updates waiting" /> : null}
+      {locations.map((l) => (
+        <Card key={l._id}>
+          <CardTitle title={l.schoolName || l.schoolCode} subtitle={l.schoolCode} badge="Pending" tone="warning" />
+          <InfoRow label="Asked by" value={l.employeeId?.name || '—'} />
+          <InfoRow label="Asked" value={when(l.createdAt)} />
+          <InfoRow label="New location" value={`${Number(l.latitude).toFixed(6)}, ${Number(l.longitude).toFixed(6)}`} />
+          <Text
+            style={styles.link}
+            onPress={() => void Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${l.latitude},${l.longitude}`)}
+          >
+            Open in Google Maps
+          </Text>
+          <ActionRow>
+            <View style={{ flex: 1 }}>{actions('location', l._id)}</View>
           </ActionRow>
         </Card>
       ))}
@@ -138,4 +175,5 @@ export default function FieldApprovalsScreen() {
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: 8 },
+  link: { color: '#2563EB', fontWeight: '600', marginVertical: 6 },
 });
