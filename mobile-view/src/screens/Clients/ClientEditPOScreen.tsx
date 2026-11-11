@@ -131,18 +131,22 @@ const idOf = (v: any): string | null => {
   return String(v);
 };
 
-/** Fixed column widths — header and body must use the same values */
+/**
+ * Fixed column widths — header and body must use the same values.
+ * Dropdown columns need room: Android's picker uses ~50 px for its arrow and padding, so a narrow
+ * column showed the picked value ("Prime", "Maths") as "…" and it looked like nothing was selected.
+ */
 const EDIT_PO_TABLE_COLUMNS = [
-  { id: 'product', label: 'Product', width: 110 },
-  { id: 'dcCategory', label: 'Category', width: 130 },
-  { id: 'category', label: 'Series', width: 84 },
-  { id: 'class', label: 'Class', width: 56 },
-  { id: 'subject', label: 'Subject', width: 76 },
-  { id: 'level', label: 'Level', width: 76 },
-  { id: 'specs', label: 'Specs', width: 76 },
-  { id: 'qty', label: 'Qty', width: 56, align: 'center' as const },
-  { id: 'price', label: 'Unit Price', width: 76, align: 'right' as const },
-  { id: 'total', label: 'Total', width: 68, align: 'right' as const },
+  { id: 'product', label: 'Product', width: 120 },
+  { id: 'dcCategory', label: 'Category', width: 170 },
+  { id: 'category', label: 'Series', width: 150 },
+  { id: 'class', label: 'Class', width: 90 },
+  { id: 'subject', label: 'Subject', width: 130 },
+  { id: 'level', label: 'Level', width: 130 },
+  { id: 'specs', label: 'Specs', width: 130 },
+  { id: 'qty', label: 'Qty', width: 64, align: 'center' as const },
+  { id: 'price', label: 'Unit Price', width: 90, align: 'right' as const },
+  { id: 'total', label: 'Total', width: 84, align: 'right' as const },
   { id: 'action', label: '', width: 32 },
 ];
 const EDIT_PO_TABLE_WIDTH = EDIT_PO_TABLE_COLUMNS.reduce((sum, col) => sum + col.width, 0);
