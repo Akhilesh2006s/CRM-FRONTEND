@@ -57,12 +57,12 @@ export default function CreateExpensePage() {
   }, [])
 
   // GPS km recorded between Start Day and End Day on the expense date (read-only, from the server).
-  const [gps, setGps] = useState<{ gpsKm: number; window?: string; signOutAt?: string | null } | null>(null)
+  const [gps, setGps] = useState<{ gpsKm: number; window?: string; signOutAt?: string | null; roadKm?: { bike: number | null; car: number | null } | null } | null>(null)
   useEffect(() => {
     if (!form.date) return
     let live = true
     setGps(null)
-    apiRequest<{ gpsKm: number; window?: string; signOutAt?: string | null }>(`/expenses/gps-km?date=${encodeURIComponent(form.date)}`)
+    apiRequest<{ gpsKm: number; window?: string; signOutAt?: string | null; roadKm?: { bike: number | null; car: number | null } | null }>(`/expenses/gps-km?date=${encodeURIComponent(form.date)}`)
       .then((d) => live && setGps(d || { gpsKm: 0 }))
       .catch(() => live && setGps({ gpsKm: 0 }))
     return () => {
@@ -70,6 +70,10 @@ export default function CreateExpensePage() {
     }
   }, [form.date])
 
+  // Bike / Car: Google Maps shortest road km of the day's legs (start point -> schools) when the server has it.
+  const roadMode = form.transportType === 'Bike' ? 'bike' : form.transportType === 'Car' ? 'car' : null
+  const roadKm = roadMode ? gps?.roadKm?.[roadMode] : null
+  const shownKm = roadKm != null ? roadKm : Number(gps?.gpsKm || 0)
   const amountLocked = isTravelAmountLocked(form.type, form.transportType)
   const autoAmount = amountLocked ? calcTravelAmount(form.transportType, Number(form.approxKms) || 0, rates) : ''
   const amountValue = amountLocked ? autoAmount : form.amount
@@ -229,14 +233,18 @@ export default function CreateExpensePage() {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="flex items-center justify-between gap-4 rounded-lg border border-blue-200 bg-blue-50 p-4">
             <div>
-              <div className="text-sm font-semibold text-neutral-900">GPS recorded KM · {form.date}</div>
+              <div className="text-sm font-semibold text-neutral-900">
+                {roadKm != null ? `Google Maps road KM (${form.transportType})` : 'GPS recorded KM'} · {form.date}
+              </div>
               <p className="text-xs text-neutral-600 mt-1">
-                {gps?.window === 'sign_in_out'
+                {roadKm != null
+                  ? 'Shortest road distance from your start point to each school, as in Google Maps. Read-only; your manager sees it with your claimed km.'
+                  : gps?.window === 'sign_in_out'
                   ? `Start Day → ${gps.signOutAt ? 'End Day' : 'now (day not ended)'}. Read-only; your manager sees it with your claimed km.`
                   : 'No Start Day on this date; GPS points of the whole day are counted. Read-only.'}
               </p>
             </div>
-            <div className="text-2xl font-bold text-blue-700 whitespace-nowrap">{gps ? `${Number(gps.gpsKm || 0).toFixed(2)} km` : '…'}</div>
+            <div className="text-2xl font-bold text-blue-700 whitespace-nowrap">{gps ? `${shownKm.toFixed(2)} km` : '…'}</div>
           </div>
           <div>
             <Label htmlFor="type">Type *</Label>

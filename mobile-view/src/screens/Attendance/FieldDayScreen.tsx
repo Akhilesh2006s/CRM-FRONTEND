@@ -51,6 +51,8 @@ type FieldDay = {
   next: { startTrip: string | null; schoolEntry: string | null; checkout: string | null };
   summary: {
     distanceKm: number;
+    /** Google Maps shortest road km (start point -> schools), by Bike and by Car; null without a Google key. */
+    roadKm?: { bike: number | null; car: number | null } | null;
     tripCount: number;
     schoolCount: number;
     schoolMinutes: number;
@@ -233,7 +235,11 @@ export default function FieldDayScreen() {
 
       {summary ? (
         <View style={styles.statsRow}>
-          <Stat label="Distance" value={`${(summary.distanceKm || 0).toFixed(2)} km`} />
+          {summary.roadKm && summary.roadKm.bike != null ? (
+            <Stat label={summary.roadKm.car != null ? `Bike (Car ${summary.roadKm.car} km)` : 'Bike'} value={`${summary.roadKm.bike} km`} />
+          ) : (
+            <Stat label="Distance" value={`${(summary.distanceKm || 0).toFixed(2)} km`} />
+          )}
           <Stat label="Schools" value={String(summary.schoolCount)} />
           <Stat label="At schools" value={hours(summary.schoolMinutes)} />
           <Stat label="Working" value={hours(summary.workingMinutes)} />

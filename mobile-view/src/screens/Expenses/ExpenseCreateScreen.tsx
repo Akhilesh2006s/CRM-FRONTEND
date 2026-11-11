@@ -87,7 +87,13 @@ export default function ExpenseCreateScreen({ navigation }: any) {
 
   const isTravelType = form.type === 'travel';
   // GPS km recorded between Start Day and End Day on the expense date (read-only, from the server).
-  const [gps, setGps] = useState<{ gpsKm: number; window?: string; signInAt?: string | null; signOutAt?: string | null } | null>(null);
+  const [gps, setGps] = useState<{
+    gpsKm: number;
+    window?: string;
+    signInAt?: string | null;
+    signOutAt?: string | null;
+    roadKm?: { bike: number | null; car: number | null } | null;
+  } | null>(null);
   useEffect(() => {
     if (!form.date) return;
     let live = true;
@@ -100,6 +106,10 @@ export default function ExpenseCreateScreen({ navigation }: any) {
       live = false;
     };
   }, [form.date]);
+  // Bike / Car: Google Maps shortest road km of the day's legs (start point -> schools) when the server has it.
+  const roadMode = form.transportType === 'Bike' ? 'bike' : form.transportType === 'Car' ? 'car' : null;
+  const roadKm = roadMode ? gps?.roadKm?.[roadMode] : null;
+  const shownKm = roadKm != null ? roadKm : Number(gps?.gpsKm || 0);
   const needsHotel = form.type === 'food' || form.type === 'accommodation';
   const isStay = form.type === 'accommodation';
   const amountLocked = isTravelType && isPerKmMode(form.transportType);
@@ -300,14 +310,18 @@ export default function ExpenseCreateScreen({ navigation }: any) {
           {errorMessage && <MessageBanner type="error" message={errorMessage} onDismiss={() => setErrorMessage(null)} />}
           <View style={styles.gpsCard}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.gpsTitle}>GPS recorded KM · {ymdToDmy(isStay ? form.checkInDate || form.date : form.date)}</Text>
+              <Text style={styles.gpsTitle}>
+                {roadKm != null ? `Google Maps road KM (${form.transportType})` : 'GPS recorded KM'} · {ymdToDmy(isStay ? form.checkInDate || form.date : form.date)}
+              </Text>
               <Text style={styles.hint}>
-                {gps?.window === 'sign_in_out'
+                {roadKm != null
+                  ? 'Shortest road distance from your start point to each school, as in Google Maps. Read-only; your manager sees it with your claimed km.'
+                  : gps?.window === 'sign_in_out'
                   ? `Start Day → ${gps.signOutAt ? 'End Day' : 'now (day not ended)'}. Read-only; your manager sees it with your claimed km.`
                   : 'No Start Day on this date; GPS points of the whole day are counted. Read-only.'}
               </Text>
             </View>
-            <Text style={styles.gpsKm}>{gps ? `${Number(gps.gpsKm || 0).toFixed(2)} km` : '…'}</Text>
+            <Text style={styles.gpsKm}>{gps ? `${shownKm.toFixed(2)} km` : '…'}</Text>
           </View>
 
           <View style={styles.sectionCard}>

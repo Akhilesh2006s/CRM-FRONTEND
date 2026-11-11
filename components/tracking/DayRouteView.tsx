@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { apiRequest } from '@/lib/api'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { routeMapHtml, legDirectionsUrl, type DayRoute } from '@/lib/routeMapHtml'
+import { routeMapHtml, legDirectionsUrl, legKmText, dayKmText, type DayRoute } from '@/lib/routeMapHtml'
 import { Battery, MapPin, Navigation, Route as RouteIcon, Satellite } from 'lucide-react'
 
 const time = (v?: string | null) =>
@@ -38,7 +38,9 @@ export function DayRouteView({ employeeId, initialDate }: { employeeId: string; 
     void load()
   }, [load])
 
-  const html = useMemo(() => (route ? routeMapHtml(route, focus) : ''), [route, focus])
+  // Google Maps road view when the server has a Google key; else our map of the GPS points.
+  const googleUrl = route ? (focus != null ? route.legs[focus]?.embedUrl : route.embedUrl) || null : null
+  const html = useMemo(() => (route && !googleUrl ? routeMapHtml(route, focus) : ''), [route, focus, googleUrl])
 
   return (
     <div className="space-y-3 text-sm">
@@ -57,7 +59,7 @@ export function DayRouteView({ employeeId, initialDate }: { employeeId: string; 
       {route ? (
         <>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-            <Stat icon={<RouteIcon className="h-4 w-4" />} label="Total travelled" value={`${route.km} km`} />
+            <Stat icon={<RouteIcon className="h-4 w-4" />} label={route.roadKm ? 'Road distance (Google)' : 'Total travelled'} value={dayKmText(route)} />
             <Stat icon={<MapPin className="h-4 w-4" />} label="Start Day" value={time(route.signInAt)} />
             <Stat icon={<MapPin className="h-4 w-4" />} label="End Day" value={route.signOutAt ? time(route.signOutAt) : 'Running'} />
             <Stat
@@ -74,11 +76,16 @@ export function DayRouteView({ employeeId, initialDate }: { employeeId: string; 
           </div>
 
           <div className="rounded-xl overflow-hidden border border-slate-200" style={{ height: 420 }}>
-            <iframe title="Route map" srcDoc={html} className="w-full h-full border-0" />
+            {googleUrl ? (
+              <iframe title="Route map" src={googleUrl} className="w-full h-full border-0" loading="lazy" referrerPolicy="no-referrer-when-downgrade" allowFullScreen />
+            ) : (
+              <iframe title="Route map" srcDoc={html} className="w-full h-full border-0" />
+            )}
           </div>
           <p className="text-xs text-slate-500">
-            Blue line: the GPS route recorded by the phone ({route.pointCount} points). S = Start Day, numbers = schools, E = End Day.
-            The same km is used in Expenses and Field Day.
+            {route.roadKm
+              ? 'Km is the shortest road distance in Google Maps from the start point to each school (by bike and by car). The same km is used in Expenses and Field Day.'
+              : `Blue line: the GPS route recorded by the phone (${route.pointCount} points). S = Start Day, numbers = schools, E = End Day. The same km is used in Expenses and Field Day.`}
           </p>
 
           <div className="rounded-xl border border-slate-200 divide-y divide-slate-100">
@@ -90,7 +97,7 @@ export function DayRouteView({ employeeId, initialDate }: { employeeId: string; 
                     {leg.from} → {leg.to}
                   </p>
                   <p className="text-slate-600">
-                    {time(leg.startAt)} – {time(leg.endAt)} · {duration(leg.minutes)} · {leg.km} km
+                    {time(leg.startAt)} – {time(leg.endAt)} · reached in {duration(leg.minutes)} · {legKmText(leg)}
                   </p>
                 </div>
                 <Button type="button" size="sm" variant="outline" className="rounded-xl" onClick={() => setFocus(focus === i ? undefined : i)}>

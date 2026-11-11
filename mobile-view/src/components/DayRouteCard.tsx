@@ -8,7 +8,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Linking } 
 import { WebView } from 'react-native-webview';
 import { apiService } from '../services/api';
 import { colors } from '../theme/colors';
-import { routeMapHtml, legDirectionsUrl, type DayRoute } from '../lib/routeMapHtml';
+import { routeMapHtml, legDirectionsUrl, legKmText, dayKmText, type DayRoute } from '../lib/routeMapHtml';
 
 const time = (v?: string | null) =>
   v ? new Date(v).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' }) : '—';
@@ -49,13 +49,21 @@ export default function DayRouteCard({
     void load();
   }, [load, refreshKey]);
 
-  const html = useMemo(() => (route ? routeMapHtml(route, focus) : ''), [route, focus]);
+  // Google Maps road view when the server has a Google key; else our map of the GPS points.
+  const googleUrl = route ? (focus != null ? route.legs[focus]?.embedUrl : route.embedUrl) || null : null;
+  const html = useMemo(() => {
+    if (!route) return '';
+    if (googleUrl) {
+      return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;height:100%}iframe{border:0;width:100%;height:100%}</style></head><body><iframe src="${googleUrl.replace(/"/g, '&quot;')}" allowfullscreen></iframe></body></html>`;
+    }
+    return routeMapHtml(route, focus);
+  }, [route, focus, googleUrl]);
 
   return (
     <View style={styles.card}>
       <View style={styles.head}>
         <Text style={styles.title}>{title}</Text>
-        {route ? <Text style={styles.km}>{route.km} km</Text> : null}
+        {route ? <Text style={styles.km}>{dayKmText(route)}</Text> : null}
       </View>
       {route ? (
         <Text style={styles.meta}>
@@ -78,7 +86,7 @@ export default function DayRouteCard({
                 {leg.from} → {leg.to}
               </Text>
               <Text style={styles.legMeta}>
-                {time(leg.startAt)} – {time(leg.endAt)} · {duration(leg.minutes)} · {leg.km} km
+                {time(leg.startAt)} – {time(leg.endAt)} · reached in {duration(leg.minutes)} · {legKmText(leg)}
               </Text>
               <View style={styles.legBtns}>
                 <TouchableOpacity onPress={() => setFocus(focus === i ? undefined : i)}>
@@ -92,7 +100,11 @@ export default function DayRouteCard({
               </View>
             </View>
           ))}
-          <Text style={styles.note}>The same km is used in Expenses and Field Day.</Text>
+          <Text style={styles.note}>
+            {route.roadKm
+              ? 'Km is the shortest road distance in Google Maps from the start point to each school. The same km is used in Expenses and Field Day.'
+              : 'The same km is used in Expenses and Field Day.'}
+          </Text>
         </>
       ) : null}
     </View>
@@ -103,7 +115,7 @@ const styles = StyleSheet.create({
   card: { backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: colors.borderLight, padding: 14, marginBottom: 14 },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   title: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
-  km: { fontSize: 16, fontWeight: '700', color: colors.primary },
+  km: { fontSize: 14, fontWeight: '700', color: colors.primary, flexShrink: 1, textAlign: 'right', marginLeft: 8 },
   meta: { fontSize: 12, color: colors.textSecondary, marginTop: 4, marginBottom: 10 },
   map: { height: 280, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: colors.borderLight, marginBottom: 10 },
   leg: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.borderLight },

@@ -14,7 +14,12 @@ export type RouteLeg = {
   km: number
   start?: { latitude: number; longitude: number } | null
   end?: { latitude: number; longitude: number } | null
+  /** Google Maps shortest road distance of this leg (null when the server has no Google key). */
+  road?: { bike: RoadLeg | null; car: RoadLeg | null } | null
+  /** Google Maps Embed URL showing this leg on the roads. */
+  embedUrl?: string | null
 }
+export type RoadLeg = { km: number; minutes: number }
 export type DayRoute = {
   day: string
   employee?: { name?: string }
@@ -27,6 +32,25 @@ export type DayRoute = {
   points: RoutePoint[]
   stops: RouteStop[]
   legs: RouteLeg[]
+  /** Sum of the legs' Google road km, by Bike and by Car (null without a Google key). */
+  roadKm?: { bike: number | null; car: number | null } | null
+  /** Google Maps Embed URL of the whole day on the roads. */
+  embedUrl?: string | null
+}
+
+/** "Bike 4.5 km · Car 4.8 km" from Google, else the GPS km. */
+export function legKmText(leg: RouteLeg) {
+  const bike = leg.road?.bike?.km
+  const car = leg.road?.car?.km
+  if (bike != null || car != null) return [bike != null ? `Bike ${bike} km` : '', car != null ? `Car ${car} km` : ''].filter(Boolean).join(' · ')
+  return `${leg.km} km (GPS)`
+}
+
+/** Headline km: Google road km by Bike / Car when available, else GPS km. */
+export function dayKmText(route: DayRoute) {
+  const r = route.roadKm
+  if (r && (r.bike != null || r.car != null)) return [r.bike != null ? `Bike ${r.bike} km` : '', r.car != null ? `Car ${r.car} km` : ''].filter(Boolean).join(' · ')
+  return `${route.km} km`
 }
 
 const time = (v?: string) =>
