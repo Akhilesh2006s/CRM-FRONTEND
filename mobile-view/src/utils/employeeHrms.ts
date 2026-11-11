@@ -98,12 +98,12 @@ export function formatPermanentAddress(details: PermanentAddressDetails): string
   return `${parts.join(', ')}${pin ? ` - ${pin}` : ''}`
 }
 
-/** Problem with the permanent address, or null. */
-export function permanentAddressError(details: PermanentAddressDetails): string | null {
+/** Problem with an address (permanent or temporary; both have the same parts), or null. */
+export function permanentAddressError(details: PermanentAddressDetails, title = 'Permanent address'): string | null {
   for (const { key, label, required } of PERMANENT_ADDRESS_FIELDS) {
-    if (required && !details[key].trim()) return `Permanent address: ${label} is required`
+    if (required && !details[key].trim()) return `${title}: ${label} is required`
   }
-  if (!/^\d{6}$/.test(details.pincode.trim())) return 'Permanent address: PIN Code must contain 6 digits'
+  if (!/^\d{6}$/.test(details.pincode.trim())) return `${title}: PIN Code must contain 6 digits`
   return null
 }
 

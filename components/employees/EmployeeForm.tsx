@@ -9,7 +9,6 @@ import { useRouter } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
@@ -125,6 +124,7 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
     onboardingOtherNote: '',
     address1: '',
     temporaryAddress: '',
+    temporaryAddressDetails: emptyPermanentAddress() as PermanentAddressDetails,
     permanentAddress: '',
     permanentAddressDetails: emptyPermanentAddress() as PermanentAddressDetails,
     state: '',
@@ -196,6 +196,9 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
   }
   const REFERENCE_RELATIONS = ['Wife', 'Husband', 'Brother', 'Sister', 'Father', 'Mother'] as const
   const [tagOptions, setTagOptions] = useState<EmployeeOption[]>([])
+  /** Every employee in the organization (any user type) for the Employee Relationship Declaration. */
+  const [allEmployees, setAllEmployees] = useState<(EmployeeOption & { isActive?: boolean })[]>([])
+  const [loadingAllEmployees, setLoadingAllEmployees] = useState(true)
   const filteredTagOptions = useMemo(
     () => filterTagOptions(tagOptions, form.role),
     [tagOptions, form.role]
@@ -412,6 +415,36 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
   const setPermanentAddress = (patch: Partial<PermanentAddressDetails>) =>
     setForm((f) => ({ ...f, permanentAddressDetails: { ...f.permanentAddressDetails, ...patch } }))
 
+  const setTemporaryAddress = (patch: Partial<PermanentAddressDetails>) =>
+    setForm((f) => ({ ...f, temporaryAddressDetails: { ...f.temporaryAddressDetails, ...patch } }))
+
+  /** Temporary address PIN Code fills its District and State (the zone comes from the permanent address). */
+  const handleTemporaryPincodeChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const pincode = e.target.value.replace(/\D/g, '').slice(0, 6)
+    setTemporaryAddress({ pincode })
+    if (pincode.length !== 6) return
+    try {
+      const response = await apiRequest<{ city?: string; town?: string; district?: string; state?: string; success: boolean }>(
+        `/location/resolve?pincode=${pincode}`
+      )
+      if (!response.success) return
+      setForm((f) => {
+        const address = f.temporaryAddressDetails
+        return {
+          ...f,
+          temporaryAddressDetails: {
+            ...address,
+            state: response.state || address.state,
+            district: response.district || address.district,
+            villageTownCity: address.villageTownCity || response.city || response.town || '',
+          },
+        }
+      })
+    } catch {
+      // Keep the fields editable when this PIN Code has no mapping.
+    }
+  }
+
   const handlePincodeChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const pincode = e.target.value.replace(/\D/g, '').slice(0, 6)
     setForm((f) => ({ ...f, pincode, permanentAddressDetails: { ...f.permanentAddressDetails, pincode } }))
@@ -512,6 +545,7 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
       onboardingOtherNote: String(emp.onboardingOtherNote || ''),
       address1: String(emp.address1 || ''),
       temporaryAddress,
+      temporaryAddressDetails: permanentAddressFromSaved(emp.temporaryAddressDetails),
       permanentAddress,
       permanentAddressDetails: permanentAddressFromSaved(emp.permanentAddressDetails),
       state: String(emp.state || ''),
@@ -534,7 +568,10 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
     }))
     setDobParts(datePartsOf(dob))
     setDojParts(datePartsOf(doj))
-    setSameAsPermanent(Boolean(permanentAddress.trim()) && permanentAddress === temporaryAddress)
+    setSameAsPermanent(
+      emp.temporaryAddressSameAsPermanent === true ||
+        (Boolean(permanentAddress.trim()) && permanentAddress === temporaryAddress)
+    )
     setPayrollDetails(payrollDetailsFromEmployee(emp))
     setBankDetails(bankDetailsFromEmployee(emp))
     const productIds = Array.isArray(emp.assignedProductIds) ? emp.assignedProductIds : []
@@ -547,6 +584,11 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
     apiRequest<EmployeeOption[]>('/employees?isActive=true')
       .then((data) => setTagOptions(Array.isArray(data) ? data.filter((e) => e._id !== employeeId) : []))
       .catch(() => setTagOptions([]))
+    setLoadingAllEmployees(true)
+    apiRequest<(EmployeeOption & { isActive?: boolean })[]>('/employees')
+      .then((data) => setAllEmployees(Array.isArray(data) ? data.filter((e) => e.isActive !== false) : []))
+      .catch(() => setAllEmployees([]))
+      .finally(() => setLoadingAllEmployees(false))
     if (isEdit) {
       if (!employeeId) return
       setLoadingEmployee(true)
@@ -585,11 +627,11 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
   const productsLeft = productsLeftForTraining(productNames, form.onboardingProductTraining)
   const relationshipOptions = useMemo(
     () =>
-      tagOptions
+      allEmployees
         .filter((e) => e._id !== employeeId)
         .map((e) => ({ value: e._id, label: `${e.name} (${displayRoleName(e.role)})` }))
         .sort((a, b) => a.label.localeCompare(b.label)),
-    [tagOptions, employeeId]
+    [allEmployees, employeeId]
   )
   /** A declaration saved before the employee picker: typed name, no employee picked. */
   const legacyRelationship =
@@ -598,7 +640,7 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
     Boolean(original?.employeeRelationshipDetails?.fullName) &&
     form.employeeRelationshipDetails.fullName === String(original?.employeeRelationshipDetails?.fullName || '')
   const pickRelatedEmployee = (id: string) => {
-    const picked = tagOptions.find((e) => e._id === id)
+    const picked = allEmployees.find((e) => e._id === id)
     setForm((f) => ({
       ...f,
       employeeRelationshipDetails: {
@@ -662,9 +704,15 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
       const permanentAddressText = keepLegacyPermanentAddress
         ? form.permanentAddress
         : formatPermanentAddress(form.permanentAddressDetails)
+      const temporaryPartsBlank = isBlankPermanentAddress(form.temporaryAddressDetails)
+      // A one-line temporary address saved before the parts existed may stay until the parts are filled.
+      const keepLegacyTemporaryAddress =
+        !sameAsPermanent && isEdit && temporaryPartsBlank && !onFile('temporaryAddressDetails') && Boolean(form.temporaryAddress.trim())
       const temporaryAddress = sameAsPermanent
         ? permanentAddressText
-        : form.temporaryAddress
+        : keepLegacyTemporaryAddress
+          ? form.temporaryAddress
+          : formatPermanentAddress(form.temporaryAddressDetails)
 
       if (!form.mobile.trim()) {
         const message = 'Employee mobile number is required.'
@@ -833,10 +881,17 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
           return
         }
       }
-      if (!temporaryAddress.trim() && (needs('temporaryAddress') || (isEdit && onFile('address1')))) {
-        setError('Temporary address is required')
-        setSubmitting(false)
-        return
+      const skipTemporaryParts =
+        sameAsPermanent ||
+        keepLegacyTemporaryAddress ||
+        (isEdit && temporaryPartsBlank && !onFile('temporaryAddressDetails') && !onFile('temporaryAddress') && !onFile('address1'))
+      if (!skipTemporaryParts) {
+        const temporaryError = permanentAddressError(form.temporaryAddressDetails, 'Temporary address')
+        if (temporaryError) {
+          setError(temporaryError)
+          setSubmitting(false)
+          return
+        }
       }
       if (!form.aadhaarUrl.trim() && needs('aadhaarUrl')) {
         setError('Aadhaar upload is required')
@@ -909,6 +964,12 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
       }
       if (keepLegacyPermanentAddress || (isEdit && addressPartsBlank)) {
         delete payload.permanentAddressDetails
+      }
+      payload.temporaryAddressSameAsPermanent = sameAsPermanent
+      payload.temporaryAddressDetails = sameAsPermanent ? form.permanentAddressDetails : form.temporaryAddressDetails
+      if (keepLegacyTemporaryAddress || (sameAsPermanent && keepLegacyPermanentAddress) || (isEdit && !sameAsPermanent && temporaryPartsBlank)) {
+        delete payload.temporaryAddressDetails
+        delete payload.temporaryAddressSameAsPermanent
       }
       if (!supportsEmployeeTagging(form.role)) {
         delete payload.taggedEmployeeIds
@@ -1257,10 +1318,13 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
                     options={relationshipOptions}
                     value={form.employeeRelationshipDetails.employeeId}
                     onValueChange={pickRelatedEmployee}
-                    placeholder="Search and select the employee"
+                    placeholder={loadingAllEmployees ? 'Loading employees…' : 'Search and select the employee'}
                     searchPlaceholder="Search employees…"
-                    emptyText="No employee found."
+                    emptyText="No employees found."
                   />
+                  {!loadingAllEmployees && relationshipOptions.length === 0 && (
+                    <p className="mt-1 text-xs text-amber-700">No employees found. Select No if there is no one to declare.</p>
+                  )}
                   {legacyRelationship && (
                     <p className="mt-1 text-xs text-amber-700">
                       Saved earlier as &quot;{form.employeeRelationshipDetails.fullName}&quot;. Select the employee from the list to update it.
@@ -1321,6 +1385,7 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
               {key === 'pincode' && !loadingPincode && <p className="text-xs text-neutral-500 mt-1">PIN Code fills District, State and Zone.</p>}
             </div>
           ))}
+          <div className="md:col-span-2 text-lg font-semibold mt-4">Temporary Address *</div>
           <div className="md:col-span-2 flex items-center gap-2">
             <input
               id="sameAsPermanent"
@@ -1330,27 +1395,30 @@ export function EmployeeForm({ mode = 'create', employeeId }: EmployeeFormProps)
               onChange={(e) => {
                 const checked = e.target.checked
                 setSameAsPermanent(checked)
-                if (checked) {
-                  setForm((f) => ({ ...f, temporaryAddress: formatPermanentAddress(f.permanentAddressDetails) || f.permanentAddress }))
-                }
               }}
             />
             <Label htmlFor="sameAsPermanent" className="mb-0">
               Same as permanent address
             </Label>
           </div>
-          <div className="md:col-span-2">
-            <Label>Temporary address *</Label>
-            <Textarea
-              className="bg-white text-neutral-900"
-              name="temporaryAddress"
-              value={sameAsPermanent ? formatPermanentAddress(form.permanentAddressDetails) || form.permanentAddress : form.temporaryAddress}
-              onChange={onChange}
-              placeholder="Temporary / current address"
-              readOnly={sameAsPermanent}
-              required
-            />
-          </div>
+          {isEdit && !sameAsPermanent && isBlankPermanentAddress(form.temporaryAddressDetails) && form.temporaryAddress.trim() && (
+            <p className="md:col-span-2 -mt-2 text-xs text-neutral-500">Saved earlier as: {form.temporaryAddress}. Fill in the parts below to update it.</p>
+          )}
+          {PERMANENT_ADDRESS_FIELDS.map(({ key, label, required }) => (
+            <div key={`temporary-${key}`}>
+              <Label htmlFor={`temporary-${key}`}>{label}{required ? ' *' : ''}</Label>
+              <Input
+                id={`temporary-${key}`}
+                className={sameAsPermanent ? 'bg-neutral-100 text-neutral-900' : 'bg-white text-neutral-900'}
+                value={sameAsPermanent ? form.permanentAddressDetails[key] : form.temporaryAddressDetails[key]}
+                readOnly={sameAsPermanent}
+                inputMode={key === 'pincode' ? 'numeric' : undefined}
+                maxLength={key === 'pincode' ? 6 : undefined}
+                onChange={key === 'pincode' ? handleTemporaryPincodeChange : (e) => setTemporaryAddress({ [key]: e.target.value })}
+                placeholder={key === 'pincode' ? '6-digit PIN Code' : label}
+              />
+            </div>
+          ))}
 
           <div className="md:col-span-2 text-lg font-semibold mb-2 mt-4">Documents *</div>
           <div>

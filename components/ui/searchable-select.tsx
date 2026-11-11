@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { Check, ChevronsUpDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button'
 import {
   Command,
   CommandEmpty,
@@ -44,23 +44,23 @@ export function SearchableSelect({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          id={id}
-          type="button"
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          disabled={disabled}
-          className={cn(
-            'w-full justify-between font-normal bg-white text-neutral-900 hover:bg-white',
-            !value && 'text-muted-foreground',
-            className
-          )}
-        >
-          {selected ? selected.label : placeholder}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
+      {/* PopoverTrigger renders the button itself: Button is not a forwardRef component,
+          so with asChild the popover gets no anchor and opens off-screen. */}
+      <PopoverTrigger
+        id={id}
+        type="button"
+        role="combobox"
+        aria-expanded={open}
+        disabled={disabled}
+        className={cn(
+          buttonVariants({ variant: 'outline' }),
+          'w-full justify-between font-normal bg-white text-neutral-900 hover:bg-white',
+          !value && 'text-muted-foreground',
+          className
+        )}
+      >
+        <span className="truncate">{selected ? selected.label : placeholder}</span>
+        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
       </PopoverTrigger>
       <PopoverContent
         className="w-[var(--radix-popover-trigger-width)] p-0"

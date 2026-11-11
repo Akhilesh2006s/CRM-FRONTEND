@@ -87,6 +87,7 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
     permanentAddress: '',
     permanentAddressDetails: emptyPermanentAddress() as PermanentAddressDetails,
     temporaryAddress: '',
+    temporaryAddressDetails: emptyPermanentAddress() as PermanentAddressDetails,
     department: '',
     state: '',
     zone: '',
@@ -135,6 +136,9 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
   const [productId, setProductId] = useState('');
   const [products, setProducts] = useState<Product[]>([]);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
+  /** Every employee in the organization (any user type) for the Employee Relationship Declaration. */
+  const [allEmployees, setAllEmployees] = useState<(EmployeeOption & { isActive?: boolean })[]>([]);
+  const [loadingAllEmployees, setLoadingAllEmployees] = useState(true);
   const [uploading, setUploading] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [zones, setZones] = useState<string[]>([]);
@@ -187,6 +191,11 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
       .get('/employees?isActive=true')
       .then((d: any) => setEmployees(Array.isArray(d) ? d : []))
       .catch(() => setEmployees([]));
+    apiService
+      .get('/employees')
+      .then((d: any) => setAllEmployees(Array.isArray(d) ? d.filter((e: any) => e?.isActive !== false) : []))
+      .catch(() => setAllEmployees([]))
+      .finally(() => setLoadingAllEmployees(false));
     loadDepartments();
   }, []);
 
@@ -248,6 +257,7 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
           permanentAddress,
           permanentAddressDetails: permanentAddressFromSaved(emp.permanentAddressDetails),
           temporaryAddress,
+          temporaryAddressDetails: permanentAddressFromSaved(emp.temporaryAddressDetails),
           department: String(emp.department || ''),
           state: String(emp.state || ''),
           zone: savedZones[0] || '',
@@ -283,7 +293,9 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
           verticalManagerId: emp.verticalManagerId ? String(emp.verticalManagerId?._id || emp.verticalManagerId) : '',
           bankPassbookUrl: String(emp.bankPassbookUrl || ''),
         }));
-        setSameAsPermanent(Boolean(permanentAddress.trim()) && permanentAddress === temporaryAddress);
+        setSameAsPermanent(
+          emp.temporaryAddressSameAsPermanent === true || (Boolean(permanentAddress.trim()) && permanentAddress === temporaryAddress)
+        );
         const productIds = Array.isArray(emp.assignedProductIds) ? emp.assignedProductIds : [];
         setProductId(productIds.length ? String(productIds[0]?._id || productIds[0]) : '');
       } catch (e: any) {
@@ -320,6 +332,33 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
   const fail = (msg: string) => {
     setErrorMessage(msg);
     scrollRef.current?.scrollTo({ y: 0, animated: true });
+  };
+
+  const setTemporaryAddress = (patch: Partial<PermanentAddressDetails>) =>
+    setForm((f) => ({ ...f, temporaryAddressDetails: { ...f.temporaryAddressDetails, ...patch } }));
+
+  /** Temporary address PIN Code fills its District and State (the zone comes from the permanent address). */
+  const handleTemporaryPincodeChange = async (value: string) => {
+    const pincode = value.replace(/\D/g, '').slice(0, 6);
+    setTemporaryAddress({ pincode });
+    if (pincode.length !== 6) return;
+    try {
+      const location: any = await apiService.get(`/location/resolve?pincode=${pincode}`);
+      setForm((f) => {
+        const address = f.temporaryAddressDetails;
+        return {
+          ...f,
+          temporaryAddressDetails: {
+            ...address,
+            state: location?.state || address.state,
+            district: location?.district || address.district,
+            villageTownCity: address.villageTownCity || location?.city || location?.town || '',
+          },
+        };
+      });
+    } catch {
+      // Keep the fields editable when this PIN Code has no mapping.
+    }
   };
 
   const setPermanentAddress = (patch: Partial<PermanentAddressDetails>) =>
@@ -426,12 +465,11 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
     form.employeeRelationshipDetails.fullName === String(original?.employeeRelationshipDetails?.fullName || '');
   const relationMatches = useMemo(() => {
     const q = relationSearch.trim().toLowerCase();
-    if (!q) return [];
-    return employees
-      .filter((e) => e._id !== editId && `${e.name} ${ROLE_NAMES[e.role] || e.role}`.toLowerCase().includes(q))
+    return allEmployees
+      .filter((e) => e._id !== editId && (!q || `${e.name} ${ROLE_NAMES[e.role] || e.role}`.toLowerCase().includes(q)))
       .sort((a, b) => a.name.localeCompare(b.name))
-      .slice(0, 8);
-  }, [employees, relationSearch, editId]);
+      .slice(0, 20);
+  }, [allEmployees, relationSearch, editId]);
   const pickRelatedEmployee = (picked: EmployeeOption) => {
     setRelationSearch('');
     setForm((f) => ({
@@ -470,7 +508,15 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
     // Employees saved before the address parts existed may keep their one-line address.
     const keepLegacyPermanentAddress = isEdit && addressPartsBlank && !onFile('permanentAddressDetails') && Boolean(form.permanentAddress.trim());
     const permanentAddressText = keepLegacyPermanentAddress ? form.permanentAddress : formatPermanentAddress(form.permanentAddressDetails);
-    const temporaryAddress = sameAsPermanent ? permanentAddressText : form.temporaryAddress;
+    const temporaryPartsBlank = isBlankPermanentAddress(form.temporaryAddressDetails);
+    // A one-line temporary address saved before the parts existed may stay until the parts are filled.
+    const keepLegacyTemporaryAddress =
+      !sameAsPermanent && isEdit && temporaryPartsBlank && !onFile('temporaryAddressDetails') && Boolean(form.temporaryAddress.trim());
+    const temporaryAddress = sameAsPermanent
+      ? permanentAddressText
+      : keepLegacyTemporaryAddress
+        ? form.temporaryAddress
+        : formatPermanentAddress(form.temporaryAddressDetails);
     if (!form.firstName?.trim()) return fail('First Name is required');
     if (!form.email?.trim()) return fail('Email is required');
     if (!form.mobile.trim()) return fail('Employee mobile number is required.');
@@ -532,7 +578,14 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
       const addressError = permanentAddressError(form.permanentAddressDetails);
       if (addressError) return fail(addressError);
     }
-    if (!temporaryAddress.trim() && (needs('temporaryAddress') || (isEdit && onFile('address1')))) return fail('Temporary address is required');
+    const skipTemporaryParts =
+      sameAsPermanent ||
+      keepLegacyTemporaryAddress ||
+      (isEdit && temporaryPartsBlank && !onFile('temporaryAddressDetails') && !onFile('temporaryAddress') && !onFile('address1'));
+    if (!skipTemporaryParts) {
+      const temporaryError = permanentAddressError(form.temporaryAddressDetails, 'Temporary address');
+      if (temporaryError) return fail(temporaryError);
+    }
     if (!form.aadhaarUrl.trim() && needs('aadhaarUrl')) return fail('Aadhaar upload is required');
     if (!form.locationPhotoUrl.trim() && needs('locationPhotoUrl')) return fail('Location upload is required');
     const keepLegacyManager = isEdit && original?.role === 'Manager' && !onFile('assignedProductIds') && !productId;
@@ -567,6 +620,12 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
       };
       if (form.role !== 'Executive') delete payload.cluster;
       if (keepLegacyPermanentAddress || (isEdit && addressPartsBlank)) delete payload.permanentAddressDetails;
+      payload.temporaryAddressSameAsPermanent = sameAsPermanent;
+      payload.temporaryAddressDetails = sameAsPermanent ? form.permanentAddressDetails : form.temporaryAddressDetails;
+      if (keepLegacyTemporaryAddress || (sameAsPermanent && keepLegacyPermanentAddress) || (isEdit && !sameAsPermanent && temporaryPartsBlank)) {
+        delete payload.temporaryAddressDetails;
+        delete payload.temporaryAddressSameAsPermanent;
+      }
       if (!supportsEmployeeTagging(form.role)) delete payload.taggedEmployeeIds;
       if (form.role === 'Manager' && productId) payload.assignedProductIds = [productId];
       if (form.role !== 'Trainer') {
@@ -739,16 +798,18 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
                 ) : (
                   <>
                     <WebInput style={styles.input} value={relationSearch} onChangeText={setRelationSearch} placeholder="Search and select the employee" />
-                    {relationSearch.trim() ? (
-                      <View style={styles.listBox}>
-                        {relationMatches.length === 0 ? <Text style={styles.helper}>No employee found.</Text> : null}
-                        {relationMatches.map((e) => (
-                          <TouchableOpacity key={e._id} style={styles.checkRow} onPress={() => pickRelatedEmployee(e)}>
-                            <Text style={styles.checkLabel}>{`${e.name} (${ROLE_NAMES[e.role] || e.role})`}</Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    ) : null}
+                    <View style={styles.listBox}>
+                      {loadingAllEmployees ? <Text style={styles.helper}>Loading employees…</Text> : null}
+                      {!loadingAllEmployees && relationMatches.length === 0 ? (
+                        <Text style={styles.helper}>No employees found.</Text>
+                      ) : null}
+                      {relationMatches.map((e) => (
+                        <TouchableOpacity key={e._id} style={styles.checkRow} onPress={() => pickRelatedEmployee(e)}>
+                          <Ionicons name="person-circle-outline" size={20} color={colors.textMuted} />
+                          <Text style={styles.checkLabel}>{`${e.name} (${ROLE_NAMES[e.role] || e.role})`}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
                     {legacyRelationship ? (
                       <Text style={styles.helper}>
                         Saved earlier as "{form.employeeRelationshipDetails.fullName}". Select the employee from the list to update it.
@@ -795,19 +856,28 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
               {key === 'pincode' && loadingPincode ? <Text style={styles.lookupText}>Looking up location…</Text> : null}
             </React.Fragment>
           ))}
+        </PageSection>
+
+        <PageSection title="Temporary Address *">
           <Check checked={sameAsPermanent} label="Same as permanent address" onPress={() => setSameAsPermanent((v) => !v)} />
-          <View style={[styles.fieldContainer, { marginTop: 8 }]}>
-            <WebLabel>Temporary address *</WebLabel>
-            <WebInput
-              style={[styles.textArea, sameAsPermanent && styles.textAreaDisabled]}
-              value={sameAsPermanent ? formatPermanentAddress(form.permanentAddressDetails) || form.permanentAddress : form.temporaryAddress}
-              editable={!sameAsPermanent}
-              onChangeText={(t: string) => setForm((f) => ({ ...f, temporaryAddress: t }))}
-              placeholder="Temporary / current address"
-              multiline
-              numberOfLines={3}
-            />
-          </View>
+          {isEdit && !sameAsPermanent && isBlankPermanentAddress(form.temporaryAddressDetails) && form.temporaryAddress.trim() ? (
+            <Text style={styles.lookupText}>Saved earlier as: {form.temporaryAddress}. Fill in the parts below to update it.</Text>
+          ) : null}
+          {PERMANENT_ADDRESS_FIELDS.map(({ key, label, required }) =>
+            sameAsPermanent ? (
+              <ReadOnlyField key={`temporary-${key}`} label={`${label}${required ? ' *' : ''}`} value={form.permanentAddressDetails[key]} placeholder="Copied from the permanent address" />
+            ) : (
+              <FormField
+                key={`temporary-${key}`}
+                label={`${label}${required ? ' *' : ''}`}
+                value={form.temporaryAddressDetails[key]}
+                onChangeText={key === 'pincode' ? handleTemporaryPincodeChange : (t: string) => setTemporaryAddress({ [key]: t })}
+                placeholder={key === 'pincode' ? '6-digit PIN Code' : label}
+                keyboardType={key === 'pincode' ? 'number-pad' : undefined}
+                maxLength={key === 'pincode' ? 6 : undefined}
+              />
+            )
+          )}
         </PageSection>
 
         <PageSection title="Documents" description="PDF files only.">
@@ -1054,11 +1124,11 @@ export default function EmployeeNewScreen({ navigation, route }: any) {
   );
 }
 
-function ReadOnlyField({ label, value }: { label: string; value: string }) {
+function ReadOnlyField({ label, value, placeholder }: { label: string; value: string; placeholder?: string }) {
   return (
     <View style={styles.fieldContainer}>
       <WebLabel>{label}</WebLabel>
-      <WebInput style={[styles.input, styles.textAreaDisabled]} value={value} editable={false} placeholder="Filled from the selected employee" />
+      <WebInput style={[styles.input, styles.textAreaDisabled]} value={value} editable={false} placeholder={placeholder ?? 'Filled from the selected employee'} />
     </View>
   );
 }
