@@ -220,10 +220,12 @@ export async function startDayTracking({ explain = true }: { explain?: boolean }
     if (bg.status !== 'granted') return false;
     if (await Location.hasStartedLocationUpdatesAsync(DAY_GPS_TASK)) return true;
     await Location.startLocationUpdatesAsync(DAY_GPS_TASK, {
-      accuracy: Location.Accuracy.Balanced,
-      timeInterval: 2 * 60 * 1000,
-      distanceInterval: 50,
-      deferredUpdatesInterval: 5 * 60 * 1000,
+      // A point every ~20 s / 40 m while moving, so the day's route follows the roads on the map
+      // and the km is measured along the way (not straight lines between far-apart points).
+      accuracy: Location.Accuracy.High,
+      timeInterval: 20 * 1000,
+      distanceInterval: 40,
+      deferredUpdatesInterval: 2 * 60 * 1000,
       pausesUpdatesAutomatically: false,
       showsBackgroundLocationIndicator: true,
       foregroundService: {

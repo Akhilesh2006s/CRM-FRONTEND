@@ -8,6 +8,7 @@ import { WebButton, WebInput, WebLabel } from '../../ui/WebPrimitives';
 import { useAuth } from '../../context/AuthContext';
 import MissedExitCard from '../../components/MissedExitCard';
 import SchoolVisitForm from '../../components/SchoolVisitForm';
+import DayRouteCard from '../../components/DayRouteCard';
 import { colors } from '../../theme/colors';
 import { apiService } from '../../services/api';
 import { getCurrentLocation } from '../../services/location';
@@ -313,6 +314,10 @@ export default function FieldDayScreen() {
             <WebButton title="Check In" onPress={onCheckIn} loading={busy === 'entry'} disabled={!school} />
           </View>
         )
+      ) : null}
+
+      {user?._id && (day?.attendance || summary?.timeline?.length) ? (
+        <DayRouteCard employeeId={user._id} refreshKey={day} />
       ) : null}
 
       {summary?.timeline?.length ? (

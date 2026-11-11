@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Alert, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, StyleSheet, Alert, ActivityIndicator, Platform, Modal, ScrollView, TouchableOpacity } from 'react-native';
+import DayRouteCard from '../../components/DayRouteCard';
 import { colors } from '../../theme/colors';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
 import { WebInput, WebButton, WebSelect } from '../../ui/WebPrimitives';
@@ -140,24 +141,14 @@ export default function ReportsEmployeeTrackScreen() {
     }
   };
 
-  const viewRoute = async (rec: TrackingData) => {
-    const employeeId = rec.employeeId || rec._id;
-    const date =
-      rec.lastUsed && !Number.isNaN(new Date(rec.lastUsed).getTime())
-        ? new Date(rec.lastUsed).toISOString().slice(0, 10)
-        : new Date().toISOString().slice(0, 10);
-    try {
-      const route = await apiService.get<any>(
-        `/tracking/${employeeId}/route?date=${encodeURIComponent(date)}`
-      );
-      Alert.alert(
-        'Route summary',
-        `${rec.employeeName}\nDate: ${date}\nDistance: ${route?.distanceKm ?? 0} km\nPoints: ${route?.pointCount ?? 0}`
-      );
-    } catch (error: any) {
-      Alert.alert('Route', error?.message || 'Failed to load route');
-    }
+  /** Daily Travel Report: the day the employee was last active (India date). */
+  const [routeFor, setRouteFor] = useState<{ employeeId: string; name: string; date: string } | null>(null);
+  const istDay = (v?: string) => {
+    const d = v ? new Date(v) : new Date();
+    return new Date((Number.isNaN(d.getTime()) ? Date.now() : d.getTime()) + 330 * 60000).toISOString().slice(0, 10);
   };
+  const viewRoute = (rec: TrackingData) =>
+    setRouteFor({ employeeId: rec.employeeId || rec._id, name: rec.employeeName || 'Employee', date: istDay(rec.lastUsed) });
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -308,17 +299,33 @@ export default function ReportsEmployeeTrackScreen() {
                 }
               />
               <ActionRow>
-                <WebButton title="View route" variant="outline" onPress={() => viewRoute(rec)} />
+                <WebButton title="Daily Travel Report" variant="outline" onPress={() => viewRoute(rec)} />
               </ActionRow>
             </Card>
           );
         })
       )}
+      <Modal visible={Boolean(routeFor)} animationType="slide" onRequestClose={() => setRouteFor(null)}>
+        <View style={styles.modalHead}>
+          <Text style={styles.modalTitle} numberOfLines={1}>
+            {routeFor?.name} · {routeFor?.date}
+          </Text>
+          <TouchableOpacity onPress={() => setRouteFor(null)}>
+            <Text style={styles.close}>Close</Text>
+          </TouchableOpacity>
+        </View>
+        <ScrollView contentContainerStyle={{ padding: 14, paddingBottom: 40 }}>
+          {routeFor ? <DayRouteCard employeeId={routeFor.employeeId} date={routeFor.date} title="Daily Travel Report" /> : null}
+        </ScrollView>
+      </Modal>
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
+  modalHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 44, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: colors.borderLight, backgroundColor: '#fff' },
+  modalTitle: { flex: 1, fontSize: 16, fontWeight: '700', color: colors.textPrimary, marginRight: 12 },
+  close: { fontSize: 15, fontWeight: '700', color: colors.primary },
   logRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   logCount: { fontSize: 14, fontWeight: '700', color: colors.textPrimary, minWidth: 28 },
   logBarTrack: { flex: 1, height: 6, borderRadius: 999, backgroundColor: colors.backgroundMuted, overflow: 'hidden' },

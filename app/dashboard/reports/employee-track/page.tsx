@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog'
 import { Download, MapPin, Radio, Route, Search, Users } from 'lucide-react'
 import { toast } from 'sonner'
+import { DayRouteView } from '@/components/tracking/DayRouteView'
 
 type TrackingData = {
   _id: string
@@ -29,6 +30,8 @@ type TrackingData = {
   lastLatitude?: number
   lastLongitude?: number
   logCount: number
+  batteryLevel?: number | null
+  gpsStatus?: 'on' | 'off' | null
 }
 
 type TrackingLatestRow = {
@@ -40,6 +43,8 @@ type TrackingLatestRow = {
   lastUsed?: string
   lastLocation?: { latitude?: number; longitude?: number } | string
   pings?: number
+  batteryLevel?: number | null
+  gpsStatus?: 'on' | 'off' | null
 }
 
 type RouteSummary = {
@@ -109,6 +114,8 @@ function mapLatestToTracking(rows: TrackingLatestRow[]): TrackingData[] {
       lastLatitude: lat,
       lastLongitude: lng,
       logCount: Number(row.pings) || 0,
+      batteryLevel: row.batteryLevel ?? null,
+      gpsStatus: row.gpsStatus ?? null,
     }
   })
 }
@@ -255,27 +262,6 @@ export default function EmployeeTrackingReportPage() {
     setRouteTrack(track)
     setRouteSummary(null)
     setRouteDate(localYmd(track.lastUsed) || localYmd(new Date().toISOString()))
-  }
-
-  const loadRoute = async () => {
-    if (!routeTrack) return
-    const employeeId = routeTrack.employeeId || routeTrack._id
-    if (!employeeId || !routeDate) {
-      toast.error('Select a date to view the route')
-      return
-    }
-    setRouteLoading(true)
-    try {
-      const data = await apiRequest<RouteSummary>(
-        `/tracking/${employeeId}/route?date=${encodeURIComponent(routeDate)}`
-      )
-      setRouteSummary(data)
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to load route')
-      setRouteSummary(null)
-    } finally {
-      setRouteLoading(false)
-    }
   }
 
   const zones = useMemo(() => {
@@ -441,6 +427,12 @@ export default function EmployeeTrackingReportPage() {
                             Idle
                           </span>
                         )}
+                        <p className="mt-1 text-xs text-slate-600">
+                          Battery {track.batteryLevel != null ? `${track.batteryLevel}%` : '—'} · GPS{' '}
+                          <span className={track.gpsStatus === 'off' ? 'text-red-600 font-semibold' : track.gpsStatus === 'on' ? 'text-emerald-700 font-semibold' : ''}>
+                            {track.gpsStatus === 'on' ? 'On' : track.gpsStatus === 'off' ? 'Off' : '—'}
+                          </span>
+                        </p>
                       </td>
                       <td className="px-4 py-3 text-slate-600">
                         <p>First Check-in: {formatDate(track.started)}</p>
@@ -481,7 +473,7 @@ export default function EmployeeTrackingReportPage() {
                             className="rounded-xl border-blue-200 text-blue-700 hover:bg-blue-50"
                           >
                             <Route className="h-3.5 w-3.5 mr-1" />
-                            View route
+                            Daily Travel Report
                           </Button>
                         </div>
                       </td>
@@ -560,75 +552,12 @@ export default function EmployeeTrackingReportPage() {
           }
         }}
       >
-        <DialogContent className="rounded-xl sm:max-w-lg">
+        <DialogContent className="rounded-xl sm:max-w-5xl max-h-[92vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>View route</DialogTitle>
-            <DialogDescription>
-              {routeTrack?.employeeName || 'Employee'} — distance and GPS points for the selected day
-            </DialogDescription>
+            <DialogTitle>Daily Travel Report — {routeTrack?.employeeName || 'Employee'}</DialogTitle>
+            <DialogDescription>Route travelled on the map, distance, time between stops, battery and GPS status</DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 text-sm">
-            <div>
-              <label className="text-xs font-medium text-slate-600 mb-1 block">Date</label>
-              <div className="flex gap-2">
-                <Input
-                  type="date"
-                  value={routeDate}
-                  onChange={(e) => setRouteDate(e.target.value)}
-                  className="rounded-xl"
-                />
-                <Button
-                  type="button"
-                  onClick={loadRoute}
-                  disabled={routeLoading}
-                  className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  {routeLoading ? 'Loading…' : 'Load'}
-                </Button>
-              </div>
-            </div>
-            {routeSummary && (
-              <>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Distance</p>
-                    <p className="text-slate-800 font-semibold">{routeSummary.distanceKm ?? 0} km</p>
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Point count</p>
-                    <p className="text-slate-800 font-semibold">{routeSummary.pointCount ?? 0}</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">First ping</p>
-                    <p className="text-slate-800">{formatDate(routeSummary.firstPingAt || undefined)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Last ping</p>
-                    <p className="text-slate-800">{formatDate(routeSummary.lastPingAt || undefined)}</p>
-                  </div>
-                </div>
-                {Array.isArray(routeSummary.points) && routeSummary.points.length > 0 && (
-                  <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-200">
-                    <ul className="divide-y divide-slate-100 text-xs">
-                      {routeSummary.points.slice(0, 50).map((p, i) => (
-                        <li key={`${p.recordedAt}-${i}`} className="px-3 py-2 flex justify-between gap-2">
-                          <span className="text-slate-600">{formatDate(p.recordedAt)}</span>
-                          <span className="text-slate-800 font-mono">
-                            {Number(p.latitude).toFixed(5)}, {Number(p.longitude).toFixed(5)}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                    {routeSummary.points.length > 50 && (
-                      <p className="px-3 py-2 text-slate-500">Showing first 50 of {routeSummary.points.length} points</p>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
+          {routeTrack ? <DayRouteView employeeId={routeTrack.employeeId || routeTrack._id} initialDate={routeDate || undefined} /> : null}
         </DialogContent>
       </Dialog>
     </div>
