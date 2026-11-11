@@ -7,12 +7,12 @@ import { Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { colors } from '../../theme/colors';
 import { apiService } from '../../services/api';
 import ScreenShell, { PageSection } from '../../ui/ScreenShell';
-import { WebInput, WebButton, WebLabel } from '../../ui/WebPrimitives';
+import { WebInput, WebButton, WebLabel, WebSelect } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 import { Card, CardTitle, InfoRow, EmptyState } from '../../ui/Kit';
-import { fmtTicketDate, ticketStatusLabel, type Ticket } from './ticketHelpers';
+import { fmtTicketDate, ticketStatusLabel, TICKET_PURPOSES, ticketPurposeText, type Ticket } from './ticketHelpers';
 
-const emptyForm = { subject: '', description: '', schoolName: '', schoolCode: '' };
+const emptyForm = { purpose: '', purposeOther: '', description: '', schoolName: '', schoolCode: '' };
 
 export default function RaiseTicketScreen() {
   const [form, setForm] = useState(emptyForm);
@@ -41,13 +41,17 @@ export default function RaiseTicketScreen() {
 
   const onSubmit = async () => {
     setMessage(null);
-    if (!form.subject.trim() || !form.description.trim()) {
-      setMessage({ type: 'error', text: 'Subject and description are required' });
+    const subject = ticketPurposeText(form.purpose, form.purposeOther);
+    if (!subject || !form.description.trim()) {
+      setMessage({
+        type: 'error',
+        text: form.purpose === 'Others' && !form.purposeOther.trim() ? 'Enter the purpose' : 'Purpose and description are required',
+      });
       return;
     }
     setSubmitting(true);
     try {
-      const payload: Record<string, string> = { subject: form.subject.trim(), description: form.description.trim() };
+      const payload: Record<string, string> = { subject, description: form.description.trim() };
       if (form.schoolName.trim()) payload.schoolName = form.schoolName.trim();
       if (form.schoolCode.trim()) payload.schoolCode = form.schoolCode.trim();
       await apiService.post('/complaints', payload);
@@ -74,8 +78,16 @@ export default function RaiseTicketScreen() {
       {message ? <MessageBanner type={message.type} message={message.text} onDismiss={() => setMessage(null)} /> : null}
 
       <PageSection title="New ticket">
-        <WebLabel>Subject *</WebLabel>
-        <WebInput value={form.subject} onChangeText={(t) => setForm((f) => ({ ...f, subject: t }))} placeholder="Subject" />
+        <WebLabel>Purpose *</WebLabel>
+        <WebSelect
+          value={form.purpose}
+          placeholder="Select purpose"
+          onValueChange={(v) => setForm((f) => ({ ...f, purpose: v, purposeOther: v === 'Others' ? f.purposeOther : '' }))}
+          items={TICKET_PURPOSES.map((p) => ({ label: p, value: p }))}
+        />
+        {form.purpose === 'Others' ? (
+          <WebInput value={form.purposeOther} onChangeText={(t) => setForm((f) => ({ ...f, purposeOther: t }))} placeholder="Enter the purpose" />
+        ) : null}
         <WebLabel>School name</WebLabel>
         <WebInput value={form.schoolName} onChangeText={(t) => setForm((f) => ({ ...f, schoolName: t }))} placeholder="School name (optional)" />
         <WebLabel>School code</WebLabel>

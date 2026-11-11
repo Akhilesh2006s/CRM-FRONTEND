@@ -3,6 +3,8 @@ import { Alert, View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityInd
 import { apiService } from '../services/api';
 import { colors } from '../theme/colors';
 import { Badge } from '../ui/Kit';
+import { WebSelect } from '../ui/WebPrimitives';
+import { TICKET_PURPOSES, ticketPurposeText } from '../screens/Tickets/ticketHelpers';
 
 type Ticket = {
   _id: string;
@@ -21,7 +23,8 @@ const date = (v?: string) => (v ? new Date(v).toLocaleDateString('en-IN', { day:
  * from the school record; the ticket goes to the coordinators' ticket inbox.
  */
 export default function SchoolTicket({ schoolCode, schoolName, town }: { schoolCode?: string; schoolName: string; town?: string }) {
-  const [subject, setSubject] = useState('');
+  const [purpose, setPurpose] = useState('');
+  const [purposeOther, setPurposeOther] = useState('');
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
   const [tickets, setTickets] = useState<Ticket[] | null>(null);
@@ -41,11 +44,15 @@ export default function SchoolTicket({ schoolCode, schoolName, town }: { schoolC
   }, [load]);
 
   const submit = async () => {
-    if (!subject.trim() || !description.trim()) return Alert.alert('Details needed', 'Enter the subject and description.');
+    const subject = ticketPurposeText(purpose, purposeOther);
+    if (!subject || !description.trim()) {
+      return Alert.alert('Details needed', purpose === 'Others' && !purposeOther.trim() ? 'Enter the purpose.' : 'Select the purpose and enter the description.');
+    }
     setSaving(true);
     try {
-      await apiService.post('/complaints', { subject: subject.trim(), description: description.trim(), schoolCode, schoolName, town });
-      setSubject('');
+      await apiService.post('/complaints', { subject, description: description.trim(), schoolCode, schoolName, town });
+      setPurpose('');
+      setPurposeOther('');
       setDescription('');
       Alert.alert('Ticket raised', 'Your ticket was sent to the coordinator.');
       await load();
@@ -64,8 +71,25 @@ export default function SchoolTicket({ schoolCode, schoolName, town }: { schoolC
         <Row label="Area / Town" value={town || '—'} />
       </View>
 
-      <Text style={styles.label}>Subject *</Text>
-      <TextInput style={styles.input} value={subject} onChangeText={setSubject} placeholder="Subject" placeholderTextColor={colors.textMuted} />
+      <Text style={styles.label}>Purpose *</Text>
+      <WebSelect
+        value={purpose}
+        placeholder="Select purpose"
+        onValueChange={(v) => {
+          setPurpose(v);
+          if (v !== 'Others') setPurposeOther('');
+        }}
+        items={TICKET_PURPOSES.map((p) => ({ label: p, value: p }))}
+      />
+      {purpose === 'Others' ? (
+        <TextInput
+          style={styles.input}
+          value={purposeOther}
+          onChangeText={setPurposeOther}
+          placeholder="Enter the purpose"
+          placeholderTextColor={colors.textMuted}
+        />
+      ) : null}
       <Text style={styles.label}>Description *</Text>
       <TextInput
         style={[styles.input, { minHeight: 90, textAlignVertical: 'top' }]}

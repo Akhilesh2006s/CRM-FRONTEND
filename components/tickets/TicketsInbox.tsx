@@ -39,6 +39,17 @@ const VIEWS: { view: TicketsView; label: string; href: string; status?: Ticket['
   { view: 'pending', label: 'Pending Tickets', href: '/dashboard/complaints/pending', status: 'Open' },
 ]
 
+/** Raise Ticket "Purpose" options (stored in the ticket's subject). */
+export const TICKET_PURPOSES = ['Payment', 'Books', 'School', 'Training', 'Others'] as const
+
+/** The purpose saved on the ticket; "Others" needs the typed purpose. Returns '' when incomplete. */
+export function ticketPurposeText(purpose: string, other: string) {
+  if (!purpose) return ''
+  if (purpose !== 'Others') return purpose
+  const text = other.trim()
+  return text ? `Others: ${text}` : ''
+}
+
 /** Stored ticket status → the label used everywhere in the app. */
 export function ticketStatusLabel(status: Ticket['status']) {
   return status === 'Resolved' ? 'Solved' : 'Pending'
@@ -172,7 +183,7 @@ export function TicketsInbox({ view }: { view: TicketsView }) {
               <tr className="bg-neutral-100 border-b">
                 <th className="py-2 px-3 text-left">Raised by</th>
                 <th className="py-2 px-3 text-left">Designation</th>
-                <th className="py-2 px-3 text-left">Subject</th>
+                <th className="py-2 px-3 text-left">Purpose</th>
                 <th className="py-2 px-3 text-left">School</th>
                 <th className="py-2 px-3 text-left">Status</th>
                 <th className="py-2 px-3 text-left">Raised</th>

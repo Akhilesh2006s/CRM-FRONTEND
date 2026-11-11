@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
-import { ticketStatusLabel } from '@/components/tickets/TicketsInbox'
+import { ticketStatusLabel, TICKET_PURPOSES, ticketPurposeText } from '@/components/tickets/TicketsInbox'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 type Complaint = {
   _id: string
@@ -20,7 +21,7 @@ type Complaint = {
   createdAt: string
 }
 
-const emptyForm = { subject: '', description: '', schoolName: '', schoolCode: '' }
+const emptyForm = { purpose: '', purposeOther: '', description: '', schoolName: '', schoolCode: '' }
 
 export default function RaiseComplaintPage() {
   const [form, setForm] = useState(emptyForm)
@@ -47,15 +48,16 @@ export default function RaiseComplaintPage() {
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.subject.trim() || !form.description.trim()) {
-      toast.error('Subject and description are required')
+    const subject = ticketPurposeText(form.purpose, form.purposeOther)
+    if (!subject || !form.description.trim()) {
+      toast.error(form.purpose === 'Others' && !form.purposeOther.trim() ? 'Enter the purpose' : 'Purpose and description are required')
       return
     }
     setSubmitting(true)
     try {
       await apiRequest('/complaints', {
         method: 'POST',
-        body: JSON.stringify(form),
+        body: JSON.stringify({ subject, description: form.description, schoolName: form.schoolName, schoolCode: form.schoolCode }),
       })
       toast.success('Ticket sent to the coordinator')
       setForm(emptyForm)
@@ -77,13 +79,28 @@ export default function RaiseComplaintPage() {
       <Card className="p-4 md:p-6 max-w-3xl">
         <form onSubmit={onSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label>Subject *</Label>
-            <Input
-              className="bg-white"
-              value={form.subject}
-              onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}
-              required
-            />
+            <Label>Purpose *</Label>
+            <Select value={form.purpose} onValueChange={(v) => setForm((f) => ({ ...f, purpose: v, purposeOther: v === 'Others' ? f.purposeOther : '' }))}>
+              <SelectTrigger className="bg-white">
+                <SelectValue placeholder="Select purpose" />
+              </SelectTrigger>
+              <SelectContent>
+                {TICKET_PURPOSES.map((p) => (
+                  <SelectItem key={p} value={p}>
+                    {p}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {form.purpose === 'Others' ? (
+              <Input
+                className="bg-white"
+                value={form.purposeOther}
+                onChange={(e) => setForm((f) => ({ ...f, purposeOther: e.target.value }))}
+                placeholder="Enter the purpose"
+                required
+              />
+            ) : null}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -127,7 +144,7 @@ export default function RaiseComplaintPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-neutral-100 border-b">
-                <th className="py-2 px-3 text-left">Subject</th>
+                <th className="py-2 px-3 text-left">Purpose</th>
                 <th className="py-2 px-3 text-left">School</th>
                 <th className="py-2 px-3 text-left">Status</th>
                 <th className="py-2 px-3 text-left">Raised</th>

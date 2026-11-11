@@ -16,6 +16,17 @@ export type Ticket = {
   createdAt: string;
 };
 
+/** Raise Ticket "Purpose" options (stored in the ticket's subject). Same as web. */
+export const TICKET_PURPOSES = ['Payment', 'Books', 'School', 'Training', 'Others'];
+
+/** The purpose saved on the ticket; "Others" needs the typed purpose. Returns '' when incomplete. */
+export function ticketPurposeText(purpose: string, other: string) {
+  if (!purpose) return '';
+  if (purpose !== 'Others') return purpose;
+  const text = other.trim();
+  return text ? `Others: ${text}` : '';
+}
+
 /** Stored ticket status → the label used everywhere in the app. */
 export function ticketStatusLabel(status: Ticket['status']) {
   return status === 'Resolved' ? 'Solved' : 'Pending';
