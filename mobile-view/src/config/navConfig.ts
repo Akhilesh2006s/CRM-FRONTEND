@@ -127,7 +127,7 @@ function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
       {
         title: 'Leave Management',
         items: [
-          { label: 'Leave Request', screen: 'LeaveRequest' },
+          { label: 'Apply for Leave', screen: 'LeaveRequest' },
           { label: 'My Leaves', screen: 'LeavesApproved' },
         ],
       },
@@ -172,7 +172,7 @@ function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
       {
         title: 'Leave Management',
         items: [
-          { label: 'Leave Request', screen: 'LeaveRequest' },
+          { label: 'Apply for Leave', screen: 'LeaveRequest' },
           { label: 'My Leaves', screen: 'LeavesApproved' },
         ],
       },
@@ -225,14 +225,13 @@ function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
           { label: 'All My Expenses', screen: 'ExpenseMy', params: { view: 'all' } },
           { label: 'Team Expenses to Approve', screen: 'ExpenseExecutiveManagerPending' },
           { label: 'Team Approved / Rejected', screen: 'ExpenseExecutiveManagerPending', params: { tab: 'decided' } },
-          { label: 'Employee Track', screen: 'ReportsEmployeeTrack' },
         ],
       },
       {
         title: 'Leave Management',
         items: [
           { label: 'Team Leaves', screen: 'ExecutiveManagerLeaves', params: { managerId } },
-          { label: 'Leave Request', screen: 'LeaveRequest' },
+          { label: 'Apply for Leave', screen: 'LeaveRequest' },
           { label: 'My Leaves', screen: 'LeavesApproved' },
         ],
       },
@@ -263,7 +262,7 @@ function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
         items: [
           { label: 'Pending Leaves', screen: 'LeavesPending', icon: '⏳' },
           { label: 'Leaves Report', screen: 'LeavesReport', icon: '📊' },
-          { label: 'Leave Request', screen: 'LeaveRequest', icon: '➕' },
+          { label: 'Apply for Leave', screen: 'LeaveRequest', icon: '➕' },
           { label: 'My Leaves', screen: 'LeavesApproved', icon: '📅' },
         ],
       },
@@ -289,7 +288,7 @@ function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
         title: 'Leave Management',
         icon: I.leaves,
         items: [
-          { label: 'Leave Request', screen: 'LeaveRequest', icon: '➕' },
+          { label: 'Apply for Leave', screen: 'LeaveRequest', icon: '➕' },
           { label: 'My Leaves', screen: 'LeavesApproved', icon: '📅' },
         ],
       },
@@ -332,7 +331,7 @@ function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
         icon: I.leaves,
         items: [
           { label: 'Pending Leaves', screen: 'LeavesPending' },
-          { label: 'Leave Request', screen: 'LeaveRequest' },
+          { label: 'Apply for Leave', screen: 'LeaveRequest' },
           { label: 'My Leaves', screen: 'LeavesApproved' },
         ],
       },
@@ -383,7 +382,7 @@ function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
         title: 'Leave Management',
         items: [
           { label: 'Pending Leaves', screen: 'LeavesPending' },
-          { label: 'Leave Request', screen: 'LeaveRequest' },
+          { label: 'Apply for Leave', screen: 'LeaveRequest' },
           { label: 'My Leaves', screen: 'LeavesApproved' },
         ],
       },
@@ -433,7 +432,7 @@ function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
         title: 'Leave Management',
         icon: I.leaves,
         items: [
-          { label: 'Leave Request', screen: 'LeaveRequest' },
+          { label: 'Apply for Leave', screen: 'LeaveRequest' },
           { label: 'My Leaves', screen: 'LeavesApproved' },
         ],
       },
@@ -492,7 +491,7 @@ function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
       items: [
         { label: 'Pending Leaves', screen: 'LeavesPending', icon: '⏳' },
         { label: 'Leaves Report', screen: 'LeavesReport', icon: '📊' },
-        { label: 'Leave Request', screen: 'LeaveRequest', icon: '➕' },
+        { label: 'Apply for Leave', screen: 'LeaveRequest', icon: '➕' },
         { label: 'My Leaves', screen: 'LeavesApproved', icon: '📅' },
       ],
     },
@@ -786,23 +785,39 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
     }
   }
 
-  const extra: NavLink[] = [];
-  if (!hasScreen(sections, 'MyAttendance')) extra.push({ label: 'Attendance', screen: 'MyAttendance', icon: '🕒' });
-  // Trips, school entry / exit photos and field visit permission.
-  if (!hasScreen(sections, 'FieldDay')) extra.push({ label: 'My Field Day', screen: 'FieldDay', icon: '📍' });
+  // Same order as the web menu: ... Leave Management, Attendance, Team Attendance, Raise Ticket,
+  // Field Approvals, PJP, then My Data (My Field Day, My Pay Slips) and Settings.
+  const before: NavSection[] = [];
+  const after: NavSection[] = [];
+  if (!hasScreen(sections, 'MyAttendance')) {
+    before.push({ title: 'Attendance', icon: '🕒', items: [{ label: 'Attendance', screen: 'MyAttendance', icon: '🕒' }] });
+  }
   if (TEAM_ATTENDANCE_ROLES.has(role) && !hasScreen(sections, 'AttendanceRoster')) {
-    extra.push({ label: 'Team Attendance', screen: 'AttendanceRoster', icon: '👥' });
+    before.push({ title: 'Team Attendance', icon: '👥', items: [{ label: 'Team Attendance', screen: 'AttendanceRoster', icon: '👥' }] });
   }
   // Reporting managers approve field visits and office / field check-out mismatches (Admin: everyone's).
   if (TEAM_ATTENDANCE_ROLES.has(role) && !hasScreen(sections, 'FieldApprovals')) {
-    extra.push({ label: 'Field Approvals', screen: 'FieldApprovals', icon: '✅' });
+    after.push({ title: 'Field Approvals', icon: '✅', items: [{ label: 'Field Approvals', screen: 'FieldApprovals', icon: '✅' }] });
   }
   // PJP: Sales, Trainers, managers, Admin and Super Admin plan visits; team heads also see Team PJP.
   const pjpSuper = role === 'Super Admin' || !!(user as { isSuperAdmin?: boolean } | null | undefined)?.isSuperAdmin;
   if ((pjpSuper || PJP_ROLES.has(role)) && !hasScreen(sections, 'PjpList')) {
-    extra.push({ label: 'My PJP', screen: 'PjpList', params: { scope: 'mine' }, icon: '🗓️' });
-    if (pjpSuper || PJP_TEAM_ROLES.has(role)) extra.push({ label: 'Team PJP', screen: 'PjpList', params: { scope: 'team' }, icon: '📋' });
+    const pjp: NavLink[] = [{ label: 'My PJP', screen: 'PjpList', params: { scope: 'mine' }, icon: '🗓️' }];
+    if (pjpSuper || PJP_TEAM_ROLES.has(role)) pjp.push({ label: 'Team PJP', screen: 'PjpList', params: { scope: 'team' }, icon: '📋' });
+    after.push({ title: 'PJP', icon: '🗓️', items: pjp });
   }
+  const ticketAt = sections.findIndex((section) => section.title === 'Tickets');
+  if (ticketAt >= 0) {
+    sections = [...sections.slice(0, ticketAt), ...before, sections[ticketAt], ...after, ...sections.slice(ticketAt + 1)];
+  } else {
+    const at = sections.findIndex((section) => section.title === 'Settings');
+    const add = [...before, ...after];
+    sections = at >= 0 ? [...sections.slice(0, at), ...add, ...sections.slice(at)] : [...sections, ...add];
+  }
+
+  const extra: NavLink[] = [];
+  // Trips, school entry / exit photos and field visit permission.
+  if (!hasScreen(sections, 'FieldDay')) extra.push({ label: 'My Field Day', screen: 'FieldDay', icon: '📍' });
   if (!hasScreen(sections, 'MyPayslips')) extra.push({ label: 'My Pay Slips', screen: 'MyPayslips', icon: '🧾' });
   if (extra.length) {
     const settingsAt = sections.findIndex((section) => section.title === 'Settings');
@@ -812,7 +827,17 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
       : [...sections, mine];
   }
   const superAdmin = role === 'Super Admin' || !!(user as { isSuperAdmin?: boolean } | null | undefined)?.isSuperAdmin;
-  return moveDemoVideosToMyData(addWebPortedLinks(sections, role, superAdmin));
+  return addHolidayCalendar(moveDemoVideosToMyData(addWebPortedLinks(sections, role, superAdmin)));
+}
+
+/** Leave Management matches the web: ... Apply for Leave, My Leaves, Holiday Calendar. */
+function addHolidayCalendar(sections: NavSection[]): NavSection[] {
+  if (hasScreen(sections, 'HolidayCalendar')) return sections;
+  return sections.map((s) =>
+    s.items.some((item) => item.screen === 'LeaveRequest')
+      ? { ...s, items: [...s.items, { label: 'Holiday Calendar', screen: 'HolidayCalendar', icon: '🎉' }] }
+      : s
+  );
 }
 
 /** Demo Videos sit under My Data (not Leads). */

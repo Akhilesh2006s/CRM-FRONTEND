@@ -20,8 +20,14 @@ export function LeavePaymentBreakdown({ allocation, compact = false }: { allocat
       <div className="font-medium text-neutral-900">Leave counted: {fmtDays(chargedDays)}</div>
       {sandwichDates.length > 0 && (
         <div className="text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-          Sandwich: {sandwichDates.map(shortDay).join(', ')} {sandwichDates.length === 1 ? 'counts' : 'count'} as leave
-          (leave on the working day before and after).
+          {allocation.sandwichRuns?.length
+            ? allocation.sandwichRuns.map((r) => (
+                <div key={r.dates.join()}>
+                  Sandwich: {r.dates.map(shortDay).join(', ')} {r.dates.length === 1 ? 'counts' : 'count'} as leave because you are on
+                  leave on {shortDay(r.before)} and {shortDay(r.after)}.
+                </div>
+              ))
+            : `Sandwich: ${sandwichDates.map(shortDay).join(', ')} ${sandwichDates.length === 1 ? 'counts' : 'count'} as leave (leave on the working day before and after).`}
         </div>
       )}
       <ul className="space-y-0.5 text-neutral-700">

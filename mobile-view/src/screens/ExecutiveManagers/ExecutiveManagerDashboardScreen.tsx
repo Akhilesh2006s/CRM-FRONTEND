@@ -385,7 +385,7 @@ export default function ExecutiveManagerDashboardScreen({ navigation, route }: a
         setRefreshing(true);
         loadDashboard();
       }}
-      showBack={!isOwnDashboard || flags.isAdmin}
+      showBack
       headerRight={headerActions}
       noScroll
     >

@@ -11,8 +11,14 @@ export default function LeavePaymentBreakdown({ allocation }: { allocation: Leav
       <Text style={styles.title}>Leave counted: {fmtDays(chargedDays)}</Text>
       {sandwichDates.length > 0 && (
         <Text style={styles.sandwich}>
-          Sandwich: {sandwichDates.map(shortDay).join(', ')} {sandwichDates.length === 1 ? 'counts' : 'count'} as leave (leave on the
-          working day before and after).
+          {allocation.sandwichRuns?.length
+            ? allocation.sandwichRuns
+                .map(
+                  (r) =>
+                    `Sandwich: ${r.dates.map(shortDay).join(', ')} ${r.dates.length === 1 ? 'counts' : 'count'} as leave because you are on leave on ${shortDay(r.before)} and ${shortDay(r.after)}.`
+                )
+                .join(' ')
+            : `Sandwich: ${sandwichDates.map(shortDay).join(', ')} ${sandwichDates.length === 1 ? 'counts' : 'count'} as leave (leave on the working day before and after).`}
         </Text>
       )}
       {monthlyDays > 0 && <Text style={styles.line}>{SOURCE_LABELS.monthly}: {fmtDays(monthlyDays)}</Text>}

@@ -162,6 +162,7 @@ import AttendanceRosterScreen from './src/screens/Attendance/AttendanceRosterScr
 import FieldDayScreen from './src/screens/Attendance/FieldDayScreen';
 import FieldApprovalsScreen from './src/screens/Attendance/FieldApprovalsScreen';
 import PjpListScreen from './src/screens/Pjp/PjpListScreen';
+import HolidayCalendarScreen from './src/screens/Leaves/HolidayCalendarScreen';
 import PjpEditScreen from './src/screens/Pjp/PjpEditScreen';
 import PjpDetailScreen from './src/screens/Pjp/PjpDetailScreen';
 import EmployeeVerificationScreen from './src/screens/Employees/EmployeeVerificationScreen';
@@ -468,6 +469,7 @@ function AuthenticatedStack() {
         <Stack.Screen name="FieldDay" component={FieldDayScreen} />
         <Stack.Screen name="FieldApprovals" component={FieldApprovalsScreen} />
         <Stack.Screen name="PjpList" component={PjpListScreen} />
+        <Stack.Screen name="HolidayCalendar" component={HolidayCalendarScreen} />
         <Stack.Screen name="PjpEdit" component={PjpEditScreen} />
         <Stack.Screen name="PjpDetail" component={PjpDetailScreen} />
         <Stack.Screen name="EmployeeVerification" component={EmployeeVerificationScreen} />

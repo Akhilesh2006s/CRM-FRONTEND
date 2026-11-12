@@ -17,6 +17,7 @@ export type AllocationEntry = { date: string; fraction: number; source: 'monthly
 export type LeaveAllocation = {
   entries: AllocationEntry[];
   sandwichDates: string[];
+  sandwichRuns?: { dates: string[]; before: string; after: string }[];
   chargedDays: number;
   monthlyDays: number;
   compOffDays: number;
