@@ -1,3 +1,4 @@
+import { PJP_ROLES, PJP_TEAM_ROLES } from '../lib/pjp';
 /**
  * Mobile nav items — aligned with navbar-landing/components/dashboard/Sidebar.tsx
  * (dealership DMS and AI dashboard removed)
@@ -795,6 +796,12 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
   // Reporting managers approve field visits and office / field check-out mismatches (Admin: everyone's).
   if (TEAM_ATTENDANCE_ROLES.has(role) && !hasScreen(sections, 'FieldApprovals')) {
     extra.push({ label: 'Field Approvals', screen: 'FieldApprovals', icon: '✅' });
+  }
+  // PJP: Sales, Trainers, managers, Admin and Super Admin plan visits; team heads also see Team PJP.
+  const pjpSuper = role === 'Super Admin' || !!(user as { isSuperAdmin?: boolean } | null | undefined)?.isSuperAdmin;
+  if ((pjpSuper || PJP_ROLES.has(role)) && !hasScreen(sections, 'PjpList')) {
+    extra.push({ label: 'My PJP', screen: 'PjpList', params: { scope: 'mine' }, icon: '🗓️' });
+    if (pjpSuper || PJP_TEAM_ROLES.has(role)) extra.push({ label: 'Team PJP', screen: 'PjpList', params: { scope: 'team' }, icon: '📋' });
   }
   if (!hasScreen(sections, 'MyPayslips')) extra.push({ label: 'My Pay Slips', screen: 'MyPayslips', icon: '🧾' });
   if (extra.length) {

@@ -1,4 +1,5 @@
 import { permissionForPath } from './nav-permissions'
+import { PJP_ROLES, PJP_TEAM_ROLES } from './pjp'
 import {
   type AuthUserWithPermissions,
   hasPermission,
@@ -235,6 +236,9 @@ export function canAccessPath(
   if (matchesRoute(pathname, '/dashboard/settings/offices')) {
     return role === 'admin' || hasPermission(user, 'settings.offices.page.view')
   }
+  // PJP: Sales, Trainers, managers and Admin plan visits; Team PJP is for team heads (the API scopes rows).
+  if (matchesRoute(pathname, '/dashboard/pjp/team')) return PJP_TEAM_ROLES.has(user.role) || role === 'admin'
+  if (matchesRoute(pathname, '/dashboard/pjp')) return PJP_ROLES.has(user.role) || role === 'admin'
   // Every employee sees and records their own attendance.
   if (pathname === '/dashboard/attendance' || pathname.startsWith('/dashboard/attendance/')) {
     return !['vendor', 'partner', 'franchise'].includes(role)

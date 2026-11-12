@@ -54,6 +54,7 @@ import {
   MapPin,
   FolderOpen,
 } from 'lucide-react'
+import { PJP_ROLES, PJP_TEAM_ROLES } from '@/lib/pjp'
 
 function isChildRouteActive(
   pathname: string | null | undefined,
@@ -205,6 +206,27 @@ function ensureTrackingNav(
     entry = { label: 'Field Approvals', icon: MapPin, href: '/dashboard/tracking/approvals' }
   }
   if (!entry) return nav
+  const at = nav.findIndex((item) => item.label === 'Settings' || item.label === 'Sign out')
+  return at < 0 ? [...nav, entry] : [...nav.slice(0, at), entry, ...nav.slice(at)]
+}
+
+/** PJP: Sales, Trainers, managers, Admin and Super Admin plan visits; team heads also see Team PJP. */
+function ensurePjpNav(nav: NavItem[], role: string | undefined, superAdmin: boolean): NavItem[] {
+  const r = String(role || '')
+  const has = (items: NavItem[] | undefined): boolean =>
+    (items || []).some((item) => item.href === '/dashboard/pjp' || has(item.children as NavItem[] | undefined))
+  if (has(nav) || !(superAdmin || PJP_ROLES.has(r))) return nav
+  const team = superAdmin || PJP_TEAM_ROLES.has(r)
+  const entry: NavItem = team
+    ? {
+        label: 'PJP',
+        icon: CalendarDays,
+        children: [
+          { label: 'My PJP', href: '/dashboard/pjp' },
+          { label: 'Team PJP', href: '/dashboard/pjp/team' },
+        ],
+      }
+    : { label: 'My PJP', icon: CalendarDays, href: '/dashboard/pjp' }
   const at = nav.findIndex((item) => item.label === 'Settings' || item.label === 'Sign out')
   return at < 0 ? [...nav, entry] : [...nav.slice(0, at), entry, ...nav.slice(at)]
 }
@@ -1609,6 +1631,11 @@ export function Sidebar() {
     Boolean((permUser as { isSuperAdmin?: boolean } | null | undefined)?.isSuperAdmin)
   )
 
+  finalNav = ensurePjpNav(
+    finalNav,
+    user?.role || permUser?.role,
+    Boolean((permUser as { isSuperAdmin?: boolean } | null | undefined)?.isSuperAdmin)
+  )
   finalNav = normalizeExpensesNav(finalNav)
 
   const navReady = mounted && (!rbacActive || permissionsReady)

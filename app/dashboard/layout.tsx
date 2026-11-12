@@ -10,6 +10,7 @@ import { PermissionsProvider } from "@/components/permissions/PermissionsProvide
 import { RouteGuard } from "@/components/permissions/RouteGuard"
 import { PendingAdvanceApprovals } from "@/components/advances/PendingAdvanceApprovals"
 import { BirthdayWish } from "@/components/dashboard/BirthdayWish"
+import { TodayRemindersPopup } from "@/components/dashboard/TodayRemindersPopup"
 
 function MainContent({ children }: { children: React.ReactNode }) {
   return (
@@ -21,6 +22,7 @@ function MainContent({ children }: { children: React.ReactNode }) {
         <RouteGuard>
           <div className="w-full min-w-0">
             <BirthdayWish />
+            <TodayRemindersPopup />
             <PendingAdvanceApprovals />
             {children}
           </div>

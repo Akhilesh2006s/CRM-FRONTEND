@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SideMenu from '../../navigation/SideMenu';
 import { navigateRoot } from '../../navigation/navigationRef';
 import HomeSummaryCard from '../../components/HomeSummaryCard';
+import TodayRemindersModal from '../../components/TodayRemindersModal';
 import { getRoleFlags } from '../../utils/roles';
 import { colors } from '../../theme/colors';
 
@@ -64,6 +65,7 @@ export default function DashboardScreen() {
       <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {showAttendance ? <AttendanceCard /> : null}
         <HomeSummaryCard />
+        <TodayRemindersModal userId={(user as { _id?: string } | null)?._id} />
         <PendingAdvanceApprovalsCard />
 
         <TouchableOpacity style={styles.menuCard} onPress={() => setMenuOpen(true)} activeOpacity={0.8}>
