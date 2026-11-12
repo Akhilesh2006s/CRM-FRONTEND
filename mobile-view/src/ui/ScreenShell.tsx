@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   type ViewStyle,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -87,6 +89,8 @@ export default function ScreenShell({
         <View style={styles.headerRight}>{headerRight}</View>
       </View>
 
+      {/* The content shrinks above the on-screen keyboard so the field being typed in stays visible. */}
+      <KeyboardAvoidingView style={styles.contentFill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       {noScroll ? (
         <View style={[styles.contentFill, { paddingBottom: bottomPad }, contentContainerStyle]}>{body}</View>
       ) : (
@@ -103,6 +107,7 @@ export default function ScreenShell({
           {body}
         </ScrollView>
       )}
+      </KeyboardAvoidingView>
     </View>
   );
 }

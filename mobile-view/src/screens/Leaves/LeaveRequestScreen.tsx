@@ -258,6 +258,8 @@ export default function LeaveRequestScreen({ navigation }: any) {
             value={form.reason}
             onChangeText={(text) => setForm((f) => ({ ...f, reason: text }))}
             placeholder="Brief reason for leave"
+            // Keep the box above the keyboard while typing.
+            onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 300)}
             multiline
             numberOfLines={4}
           />
