@@ -259,7 +259,7 @@ export default function ReportsSalesVisitScreen() {
                 {isConvertedToClient(visit) ? <Badge label="Converted to Client" tone="success" /> : null}
               </View>
             ) : null}
-            <InfoRow label="Executive" value={getExecutive(visit)} />
+            <InfoRow label="BDE" value={getExecutive(visit)} />
             <InfoRow label="Zone" value={getZone(visit)} />
             <InfoRow label="Town" value={getTown(visit)} />
             <InfoRow label="Remarks" value={visit.remarks || '-'} />

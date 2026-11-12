@@ -541,7 +541,7 @@ function CreateSaleForm({ navigation }: { navigation: any }) {
         keyboardType="number-pad"
       />
       <WebSelect
-        label="Assign to (Executive) *"
+        label="Assign to (BDE) *"
         value={form.assigned_to}
         onValueChange={(v) => setField('assigned_to', v)}
         items={employees.map((e) => ({ label: e.name, value: e._id }))}

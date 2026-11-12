@@ -297,7 +297,7 @@ export default function DCAdminFullView() {
       <WebSelect
         value={filterEmployee}
         onValueChange={setFilterEmployee}
-        placeholder="All Executives"
+        placeholder="All BDEs"
         items={employees.map((e) => ({ label: e.name, value: e._id }))}
       />
       {filterEmployee ? (
@@ -322,7 +322,7 @@ export default function DCAdminFullView() {
                   tone={statusTone(status)}
                 />
                 <InfoRow label="Created" value={formatCreatedOn(d.createdAt)} />
-                <InfoRow label="Executive" value={getExecutiveName(d)} />
+                <InfoRow label="BDE" value={getExecutiveName(d)} />
                 <InfoRow label="Phone" value={phone === '—' ? '' : phone} phone />
                 <InfoRow label="Product" value={getProduct(d) === '—' ? '' : getProduct(d)} />
                 <InfoRow label="PO photo" value={d.poPhotoUrl ? 'Uploaded' : 'Not uploaded'} />
@@ -373,7 +373,7 @@ export default function DCAdminFullView() {
             {selectedForRaise ? (
               <View style={styles.raiseSummary}>
                 <InfoRow label="School" value={getCustomerName(selectedForRaise)} bold />
-                <InfoRow label="Executive" value={getExecutiveName(selectedForRaise)} />
+                <InfoRow label="BDE" value={getExecutiveName(selectedForRaise)} />
                 <InfoRow label="Phone" value={selectedForRaise.customerPhone || selectedForRaise.dcOrderId?.contact_mobile || '—'} />
                 <InfoRow label="Products" value={getProduct(selectedForRaise)} />
                 <InfoRow label="Status" value={selectedForRaise.status || 'created'} />

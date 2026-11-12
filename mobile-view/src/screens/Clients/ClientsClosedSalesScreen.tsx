@@ -283,12 +283,12 @@ export default function ClientsClosedSalesScreen() {
       const list = Array.isArray(empData) ? empData : [];
       setAssignedIds(list.map((emp: any) => String(emp._id)));
       setExecutives([
-        { label: 'Select Executive', value: '' },
+        { label: 'Select BDE', value: '' },
         ...list.map((emp: any) => ({ label: emp.name || 'Executive', value: String(emp._id) })),
       ]);
     } catch {
       setAssignedIds([]);
-      setExecutives([{ label: 'Select Executive', value: '' }]);
+      setExecutives([{ label: 'Select BDE', value: '' }]);
     }
   }, [user?._id]);
 
@@ -509,7 +509,7 @@ export default function ClientsClosedSalesScreen() {
   return (
     <ScreenShell
       title="PO Edit Request"
-      subtitle="Review and approve/reject PO edit requests from Executives"
+      subtitle="Review and approve/reject PO edit requests from BDEs"
       noScroll
     >
       <View style={styles.pageRoot}>
@@ -572,11 +572,11 @@ export default function ClientsClosedSalesScreen() {
             placeholder="Select Zone"
           />
           <WebSelect
-            label="Executive"
+            label="BDE"
             value={draftFilters.executive}
             onValueChange={(executive) => setDraftFilters((f) => ({ ...f, executive }))}
             items={executives}
-            placeholder="Select Executive"
+            placeholder="Select BDE"
           />
           <WebButton title="Apply filters" onPress={() => setAppliedFilters(draftFilters)} />
         </PageSection>
@@ -606,7 +606,7 @@ export default function ClientsClosedSalesScreen() {
             <InfoRow label="School Type" value={item.pendingEdit?.school_type || item.school_type} />
             <InfoRow label="Zone" value={item.pendingEdit?.zone || item.zone} />
             <InfoRow label="Town" value={townOf(item)} />
-            <InfoRow label="Executive" value={executiveName(item)} />
+            <InfoRow label="BDE" value={executiveName(item)} />
             <InfoRow label="Mobile" value={item.pendingEdit?.contact_mobile || item.contact_mobile} phone />
             <InfoRow label="Products" value={productsDisplay(item)} />
             {hasPendingPoChange(item) || item.pendingEdit?.pod_proof_url ? (
@@ -649,7 +649,7 @@ export default function ClientsClosedSalesScreen() {
                 ) : null}
 
                 <View style={styles.poBox}>
-                  <Text style={styles.poBoxTitle}>Edited PO from Executive</Text>
+                  <Text style={styles.poBoxTitle}>Edited PO from BDE</Text>
                   <Text style={styles.poBoxHint}>Current document vs the PO the executive submitted for approval.</Text>
                   <View style={styles.poActions}>
                     <TouchableOpacity

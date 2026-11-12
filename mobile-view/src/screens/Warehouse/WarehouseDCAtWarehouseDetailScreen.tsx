@@ -723,7 +723,7 @@ export default function WarehouseDCAtWarehouseDetailScreen({ navigation, route }
           onChangeText={setSchoolType}
           placeholder="New"
         />
-        <Field label="Executive" value={executiveName} editable={false} placeholder="Executive" />
+        <Field label="BDE" value={executiveName} editable={false} placeholder="BDE" />
       </View>
 
       <View style={styles.section}>

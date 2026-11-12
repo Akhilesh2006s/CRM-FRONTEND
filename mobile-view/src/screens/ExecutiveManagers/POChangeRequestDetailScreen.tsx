@@ -155,7 +155,7 @@ export default function POChangeRequestDetailScreen({ navigation, route }: any) 
     >
 <Card>
         <CardTitle title={order.school_name || '—'} badge="Pending" tone="warning" />
-        <InfoRow label="Executive" value={executiveName} />
+        <InfoRow label="BDE" value={executiveName} />
         <InfoRow label="Requested" value={requestedAt} />
       </Card>
 
@@ -192,7 +192,7 @@ export default function POChangeRequestDetailScreen({ navigation, route }: any) 
           multiline
           numberOfLines={4}
         />
-        <Text style={styles.hint}>Required. The Executive will see this.</Text>
+        <Text style={styles.hint}>Required. The BDE will see this.</Text>
         <View style={styles.actions}>
           <View style={{ flex: 1 }}>
             <WebButton title="Approve" variant="success" onPress={handleApprove} disabled={!!acting} loading={acting === 'approve'} />

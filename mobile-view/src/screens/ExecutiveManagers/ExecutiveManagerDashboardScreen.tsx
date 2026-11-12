@@ -378,7 +378,7 @@ export default function ExecutiveManagerDashboardScreen({ navigation, route }: a
 
   return (
     <ScreenShell
-      title="Executive Manager Dashboard"
+      title="Zonal Manager Dashboard"
       loading={loading && !refreshing}
       refreshing={refreshing}
       onRefresh={() => {
@@ -510,7 +510,7 @@ export default function ExecutiveManagerDashboardScreen({ navigation, route }: a
 
                 <View style={styles.statGrid}>
                   <StatCard
-                    label="Active Executives"
+                    label="Active BDEs"
                     value={activeExecutives}
                     subtitle={`out of ${data.totalEmployees} executives`}
                     ion="people-circle-outline"
@@ -526,7 +526,7 @@ export default function ExecutiveManagerDashboardScreen({ navigation, route }: a
                     bg="#D1FAE5"
                   />
                   <StatCard
-                    label="Top Sales Executive"
+                    label="Top BDE"
                     value={shortName(topBySales[0]?.name || 'N/A')}
                     subtitle={`${topBySales[0]?.totalSales || 0} sales closed`}
                     ion="trophy-outline"
@@ -549,7 +549,7 @@ export default function ExecutiveManagerDashboardScreen({ navigation, route }: a
               <>
                 {sortedForChart.length > 0 ? (
                   <GroupedBarChart
-                    title="Executive Performance Comparison"
+                    title="BDE Performance Comparison"
                     subtitle="Detailed comparison of all executives' activities and performance"
                     labels={sortedForChart.map((e) => shortName(e.name))}
                     datasets={[
@@ -778,7 +778,7 @@ export default function ExecutiveManagerDashboardScreen({ navigation, route }: a
                 </View>
 
                 <View style={styles.sectionCard}>
-                  <Text style={styles.sectionTitle}>Top 10 Executives by Activity</Text>
+                  <Text style={styles.sectionTitle}>Top 10 BDEs by Activity</Text>
                   <Text style={styles.sectionSubtitle}>
                     Ranked by total activities (Leads + DCs + Sales)
                   </Text>
@@ -813,7 +813,7 @@ export default function ExecutiveManagerDashboardScreen({ navigation, route }: a
 
                 {byActivity.length > 0 ? (
                   <GroupedBarChart
-                    title="Executive Activity Distribution"
+                    title="BDE Activity Distribution"
                     subtitle="How activities are distributed across executives"
                     labels={byActivity.slice(0, 8).map((e) => shortName(e.name))}
                     datasets={[
@@ -837,7 +837,7 @@ export default function ExecutiveManagerDashboardScreen({ navigation, route }: a
                 ) : null}
 
                 <View style={styles.sectionCard}>
-                  <Text style={styles.sectionTitle}>Executive Activity Insights</Text>
+                  <Text style={styles.sectionTitle}>BDE Activity Insights</Text>
                   <View style={styles.activityRow}>
                     <View style={styles.activityCard}>
                       <Text style={styles.activityLabel}>High Performers</Text>
@@ -845,7 +845,7 @@ export default function ExecutiveManagerDashboardScreen({ navigation, route }: a
                       <Text style={styles.activitySub}>above average activity</Text>
                     </View>
                     <View style={styles.activityCard}>
-                      <Text style={styles.activityLabel}>Active Executives</Text>
+                      <Text style={styles.activityLabel}>Active BDEs</Text>
                       <Text style={[styles.activityValue, { color: '#047857' }]}>{activeExecutives}</Text>
                       <Text style={styles.activitySub}>with at least one activity</Text>
                     </View>
@@ -855,7 +855,7 @@ export default function ExecutiveManagerDashboardScreen({ navigation, route }: a
                       <Text style={styles.activitySub}>no activities recorded</Text>
                     </View>
                     <View style={styles.activityCard}>
-                      <Text style={styles.activityLabel}>Avg Activity/Executive</Text>
+                      <Text style={styles.activityLabel}>Avg Activity/BDE</Text>
                       <Text style={[styles.activityValue, { color: '#7C3AED' }]}>{avgActivity}</Text>
                       <Text style={styles.activitySub}>total activities per executive</Text>
                     </View>

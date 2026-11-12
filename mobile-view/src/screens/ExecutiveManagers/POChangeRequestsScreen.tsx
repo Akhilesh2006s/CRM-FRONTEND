@@ -50,7 +50,7 @@ export default function POChangeRequestsScreen({ navigation }: any) {
         <EmptyState
           icon="📄"
           title="No pending PO change requests"
-          message="Requests are routed only to the Executive Manager assigned to each Executive."
+          message="Requests are routed only to the Zonal Manager assigned to each BDE."
         />
       ) : (
         list.map((order) => {
@@ -61,7 +61,7 @@ export default function POChangeRequestsScreen({ navigation }: any) {
           return (
             <Card key={order._id} onPress={open}>
               <CardTitle title={order.school_name || '—'} badge="Pending" tone="warning" />
-              <InfoRow label="Executive" value={executiveName} />
+              <InfoRow label="BDE" value={executiveName} />
               <InfoRow label="Requested" value={requestedAt} />
               <InfoRow label="Reason" value={req?.remarks || ''} />
               <ActionRow>

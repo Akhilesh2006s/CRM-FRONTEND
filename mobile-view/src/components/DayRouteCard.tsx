@@ -79,27 +79,45 @@ export default function DayRouteCard({
           <View style={styles.map}>
             <WebView originWhitelist={['*']} source={{ html }} style={{ flex: 1 }} nestedScrollEnabled />
           </View>
-          {route.legs.length === 0 ? <Text style={styles.muted}>No travel recorded yet.</Text> : null}
-          {route.legs.map((leg, i) => (
-            <View key={i} style={[styles.leg, focus === i && styles.legOn]}>
-              <Text style={styles.legTitle}>
-                {leg.from} → {leg.to}
-              </Text>
-              <Text style={styles.legMeta}>
-                {time(leg.startAt)} – {time(leg.endAt)} · reached in {duration(leg.minutes)} · {legKmText(leg)}
-              </Text>
-              <View style={styles.legBtns}>
-                <TouchableOpacity onPress={() => setFocus(focus === i ? undefined : i)}>
-                  <Text style={styles.link}>{focus === i ? 'Show whole day' : 'Show on map'}</Text>
-                </TouchableOpacity>
-                {legDirectionsUrl(leg) ? (
-                  <TouchableOpacity onPress={() => void Linking.openURL(legDirectionsUrl(leg))}>
-                    <Text style={styles.link}>Open in Google Maps</Text>
-                  </TouchableOpacity>
-                ) : null}
+          {/* Route line: Start Day → each school → End Day, with the time and km between stops. */}
+          {route.stops.length === 0 ? <Text style={styles.muted}>No travel recorded yet.</Text> : null}
+          {route.stops.map((stop, i) => {
+            const leg = route.legs[i];
+            const last = i === route.stops.length - 1;
+            const color = stop.kind === 'start' ? '#16A34A' : stop.kind === 'end' || stop.kind === 'last' ? '#DC2626' : '#7C3AED';
+            const label = stop.kind === 'start' ? 'S' : stop.kind === 'end' || stop.kind === 'last' ? 'E' : String(i);
+            return (
+              <View key={i} style={styles.stopRow}>
+                <View style={styles.rail}>
+                  <View style={[styles.dot, { backgroundColor: color }]}>
+                    <Text style={styles.dotText}>{label}</Text>
+                  </View>
+                  {!last ? <View style={styles.railLine} /> : null}
+                </View>
+                <View style={{ flex: 1, paddingBottom: last ? 0 : 6 }}>
+                  <Text style={styles.legTitle}>
+                    {stop.name}
+                    <Text style={styles.legMeta}>{`  ${time(stop.at)}${stop.endAt && stop.endAt !== stop.at ? ` – ${time(stop.endAt)}` : ''}`}</Text>
+                  </Text>
+                  {leg && !last ? (
+                    <View style={[styles.legBox, focus === i && styles.legOn]}>
+                      <Text style={styles.legMeta}>{`↓ ${duration(leg.minutes)} · ${legKmText(leg)}`}</Text>
+                      <View style={styles.legBtns}>
+                        <TouchableOpacity onPress={() => setFocus(focus === i ? undefined : i)}>
+                          <Text style={styles.link}>{focus === i ? 'Show whole day' : 'Show on map'}</Text>
+                        </TouchableOpacity>
+                        {legDirectionsUrl(leg) ? (
+                          <TouchableOpacity onPress={() => void Linking.openURL(legDirectionsUrl(leg))}>
+                            <Text style={styles.link}>Google Maps</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                      </View>
+                    </View>
+                  ) : null}
+                </View>
               </View>
-            </View>
-          ))}
+            );
+          })}
           <Text style={styles.note}>
             {route.roadKm
               ? 'Km is the shortest road distance in Google Maps from the start point to each school. The same km is used in Expenses and Field Day.'
@@ -118,7 +136,12 @@ const styles = StyleSheet.create({
   km: { fontSize: 14, fontWeight: '700', color: colors.primary, flexShrink: 1, textAlign: 'right', marginLeft: 8 },
   meta: { fontSize: 12, color: colors.textSecondary, marginTop: 4, marginBottom: 10 },
   map: { height: 280, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: colors.borderLight, marginBottom: 10 },
-  leg: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
+  stopRow: { flexDirection: 'row', gap: 10 },
+  rail: { width: 24, alignItems: 'center' },
+  dot: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  dotText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  railLine: { flex: 1, width: 3, backgroundColor: '#3B82F6', marginVertical: 2 },
+  legBox: { paddingVertical: 8, paddingHorizontal: 6, borderRadius: 8 },
   legOn: { backgroundColor: '#EFF6FF' },
   legTitle: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
   legMeta: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },

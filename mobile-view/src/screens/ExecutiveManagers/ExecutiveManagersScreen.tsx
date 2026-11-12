@@ -149,7 +149,7 @@ export default function ExecutiveManagersScreen({ navigation }: any) {
 
   return (
     <ScreenShell
-      title="Executive Managers"
+      title="Zonal Managers"
       loading={loading && !refreshing}
       refreshing={refreshing}
       onRefresh={onRefresh}
@@ -163,7 +163,7 @@ export default function ExecutiveManagersScreen({ navigation }: any) {
 
       {filteredManagers.length === 0 ? (
         <>
-          <EmptyState icon="👥" title="No Executive Managers found" />
+          <EmptyState icon="👥" title="No Zonal Managers found" />
           <WebButton title="Create one" variant="outline" onPress={() => navigation.navigate('ExecutiveManagerNew')} />
         </>
       ) : (
@@ -193,7 +193,7 @@ export default function ExecutiveManagersScreen({ navigation }: any) {
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Assign Employees to {selectedManager?.name}</Text>
-            <Text style={styles.modalSubtitle}>Select executives to assign to this Executive Manager</Text>
+            <Text style={styles.modalSubtitle}>Select executives to assign to this Zonal Manager</Text>
 
             {loadingEmployees ? (
               <ActivityIndicator size="large" color={colors.primary} style={{ marginVertical: 24 }} />

@@ -227,7 +227,7 @@ export default function ReturnsWarehouseExecutiveScreen({ navigation }: any) {
               { label: 'Sort: Fin Year', value: 'finYear' },
               { label: 'Sort: School Name', value: 'schoolName' },
               { label: 'Sort: School Code', value: 'schoolCode' },
-              { label: 'Sort: Executive', value: 'executive' },
+              { label: 'Sort: BDE', value: 'executive' },
               { label: 'Sort: Return Date', value: 'returnDate' },
               { label: 'Sort: Remarks', value: 'remarks' },
               { label: 'Sort: Status', value: 'status' },
@@ -258,7 +258,7 @@ export default function ReturnsWarehouseExecutiveScreen({ navigation }: any) {
               <InfoRow label="LR No" value={row.lrNumber || '-'} />
               <InfoRow label="Fin Year" value={row.finYear || '-'} />
               <InfoRow label="School Code" value={resolveSchoolCode(row)} />
-              <InfoRow label="Executive" value={resolveExecutive(row)} />
+              <InfoRow label="BDE" value={resolveExecutive(row)} />
               <InfoRow label="Return Date" value={formatReturnDate(row.returnDate)} />
               <InfoRow label="Remarks" value={resolveRemarks(row)} />
               <ActionRow>

@@ -252,7 +252,7 @@ export default function ReturnsEmployeeScreen({ navigation, route }: any) {
               <InfoRow label="LR No" value={cell(ret.lrNumber)} />
               <InfoRow label="Fin Year" value={cell(ret.finYear)} />
               <InfoRow label="Return Date" value={formatDate(ret.returnDate)} />
-              {isAdmin && <InfoRow label="Executive" value={getExecutiveName(ret)} />}
+              {isAdmin && <InfoRow label="BDE" value={getExecutiveName(ret)} />}
               <InfoRow label="Remarks" value={cell(ret.remarks)} />
               {isAdmin && manager.text !== '-' ? (
                 <InfoRow

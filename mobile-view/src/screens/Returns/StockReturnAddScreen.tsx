@@ -789,7 +789,7 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
           <CardTitle title={displayReturnId || '—'} subtitle={customerName || undefined} badge={statusDisplay} tone={toneFor(statusDisplay)} />
           <InfoRow label="Sale ID" value={saleIdDisplay} />
           <InfoRow label="Return Type" value={cell(returnType)} />
-          <InfoRow label="Executive" value={executiveDisplay} />
+          <InfoRow label="BDE" value={executiveDisplay} />
           <InfoRow label="LR No" value={cell(existingReturn.lrNumber)} />
           <InfoRow label="Fin Year" value={cell(existingReturn.finYear)} />
           <InfoRow label="School Code" value={cell(existingReturn.schoolCode)} />
@@ -876,7 +876,7 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
         <View style={formStyles.section}>
           <Text style={styles.sectionTitle}>Basic Return Information</Text>
           <InfoRow label="Return ID" value={displayReturnId || '—'} />
-          <InfoRow label="Executive" value={user?.name || '—'} />
+          <InfoRow label="BDE" value={user?.name || '—'} />
           <View style={{ height: 8 }} />
 
           <ReadOnlyField label="Customer / Outlet *" value={customerName || '—'} />
@@ -1125,7 +1125,7 @@ export default function StockReturnAddScreen({ navigation, route }: any) {
               )}
             />
           )}
-          <Text style={formStyles.label}>Executive Remarks</Text>
+          <Text style={formStyles.label}>BDE Remarks</Text>
           <WebInput
             style={[styles.input, styles.textArea]}
             value={executiveRemarks}

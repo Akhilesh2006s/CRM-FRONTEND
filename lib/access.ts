@@ -196,6 +196,8 @@ export function canAccessPath(
     const key = permissionForPath(pathname) || 'advance.status.page.view'
     return !['Vendor', 'Partner', 'Franchise'].includes(user.role) && hasPermission(user, key)
   }
+  // Every login can change its own password.
+  if (pathname === '/dashboard/settings/password') return true
   // HR accounts are granted the employee approval-status screen by role. Keep
   // this working even when an older auth payload uses roleName or has not yet
   // received the refreshed RBAC permission catalog.

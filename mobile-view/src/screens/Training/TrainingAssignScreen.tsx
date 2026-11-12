@@ -623,8 +623,8 @@ export default function TrainingAssignScreen({ navigation }: any) {
           <View style={rk.row2}>
             <View style={rk.col}>
               <WebSelect
-                label="Executive"
-                placeholder="All Executives"
+                label="BDE"
+                placeholder="All BDEs"
                 value={draftFilters.executive}
                 onValueChange={(v) => setDraftFilters((f) => ({ ...f, executive: v }))}
                 items={executives.map((e) => ({ label: e, value: e }))}
@@ -670,7 +670,7 @@ export default function TrainingAssignScreen({ navigation }: any) {
                 <InfoRow label="Contact" value={school.contact_person || '-'} />
                 <InfoRow label="Mobile" value={school.contact_mobile || '-'} phone />
                 <InfoRow label="Products" value={productsLabel(school.products)} />
-                <InfoRow label="Executive" value={school.assigned_to?.name || '-'} />
+                <InfoRow label="BDE" value={school.assigned_to?.name || '-'} />
                 <InfoRow label="Location" value={school.location || '-'} />
                 <ActionRow>
                   <View style={rk.col}>

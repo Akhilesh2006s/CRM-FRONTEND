@@ -176,7 +176,7 @@ export default function ReportsReturnsScreen() {
   return (
     <ScreenShell
       title="Returns Report"
-      subtitle="Executive and warehouse stock returns"
+      subtitle="BDE and warehouse stock returns"
       loading={loading && !refreshing}
       refreshing={refreshing}
       onRefresh={onRefresh}

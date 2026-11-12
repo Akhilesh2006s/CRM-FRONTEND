@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { displayRoleName } from '../lib/roleLabels';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
@@ -79,7 +80,7 @@ export default function SideMenu({ visible, onClose }: { visible: boolean; onClo
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.name} numberOfLines={1}>{user?.name || 'User'}</Text>
-              {user?.role ? <Text style={styles.role} numberOfLines={1}>{user.role}</Text> : null}
+              {user?.role ? <Text style={styles.role} numberOfLines={1}>{displayRoleName(user.role)}</Text> : null}
             </View>
             <TouchableOpacity onPress={onClose} hitSlop={12} accessibilityLabel="Close menu">
               <Ionicons name="close" size={24} color={colors.textSecondary} />

@@ -805,7 +805,7 @@ export default function WarehouseCompletedDCScreen({ navigation }: any) {
             <InfoRow label="School Code" value={row.schoolCode} />
             <InfoRow label="School Type" value={row.schoolType} />
             <InfoRow label="Zone" value={row.zone} />
-            <InfoRow label="Executive" value={row.executive} />
+            <InfoRow label="BDE" value={row.executive} />
             <InfoRow label="Completed" value={formatDate(row.completedDate)} />
             <InfoRow label="LR Info" value={row.lrNo} />
             <InfoRow label="LR Date" value={formatDate(row.lrDate)} />

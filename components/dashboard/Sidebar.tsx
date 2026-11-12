@@ -118,9 +118,6 @@ function ensureExpenseApprovalNav(
     if (!linksCreate) {
       wanted.unshift(
         { label: 'Create Expenses', href: '/dashboard/expenses/create' },
-        { label: 'Pending Expenses', href: '/dashboard/expenses/my?view=pending' },
-        { label: 'Completed Expenses', href: '/dashboard/expenses/my?view=completed' },
-        { label: 'Rejected Expenses', href: '/dashboard/expenses/my?view=rejected' },
         { label: 'All My Expenses', href: '/dashboard/expenses/my?view=all' },
       )
     }
@@ -263,6 +260,51 @@ const LEAVE_REPORT_NAV_ROLES = new Set(['HR Manager', 'HR Executive', 'Admin', '
  * Admin approves new employees in the same Employee Verification queue as Super Admin and HR
  * (the old "Employee Requests" page read a different, legacy queue).
  */
+/** Old per-status expense links: All My Expenses has the Pending / Completed / Rejected filters. */
+const OLD_EXPENSE_LINKS = new Set([
+  '/dashboard/expenses/my?view=pending',
+  '/dashboard/expenses/my?view=completed',
+  '/dashboard/expenses/my?view=rejected',
+  '/dashboard/advance/status',
+  '/dashboard/reports/contact-queries',
+])
+
+/**
+ * Same as the app on every login: Expenses = Create Expenses + All My Expenses (filters inside),
+ * Advance = Request Advance + Advance History (all requests with status), inside Expenses.
+ */
+function normalizeExpensesNav(nav: NavItem[]): NavItem[] {
+  const cleaned = nav
+    .map((item) => {
+      const isExpenses =
+        item.label === 'Expense' || item.label === 'Expenses' ||
+        (item.children || []).some((c) => c.href === '/dashboard/expenses/create')
+      if (!item.children) return isExpenses && item.label === 'Expense' ? { ...item, label: 'Expenses' } : item
+      const children = item.children
+        .filter((c) => !c.href || !OLD_EXPENSE_LINKS.has(c.href))
+        .map((c) => (c.href === '/dashboard/expenses/my' ? { ...c, label: 'All My Expenses', href: '/dashboard/expenses/my?view=all' } : c))
+      return { ...item, label: isExpenses ? 'Expenses' : item.label, children }
+    })
+    .filter((item) => item.href || (item.children && item.children.length))
+  return ensureChangePasswordNav(mergeAdvanceIntoExpenses(cleaned))
+}
+
+/** Change Password under Settings on every login (as in the app). */
+function ensureChangePasswordNav(nav: NavItem[]): NavItem[] {
+  const href = '/dashboard/settings/password'
+  if (nav.some((item) => item.href === href || (item.children || []).some((c) => c.href === href))) return nav
+  const link = { label: 'Change Password', href }
+  const at = nav.findIndex((item) => item.label === 'Settings')
+  if (at >= 0) {
+    const settings = nav[at]
+    const children = settings.children || (settings.href ? [{ label: 'Settings', href: settings.href, icon: settings.icon }] : [])
+    return nav.map((item, i) => (i === at ? { ...item, href: undefined, children: [...children, link] } : item))
+  }
+  const signOut = nav.findIndex((item) => item.href === '/auth/login')
+  const group: NavItem = { label: 'Settings', icon: Settings, children: [link] }
+  return signOut >= 0 ? [...nav.slice(0, signOut), group, ...nav.slice(signOut)] : [...nav, group]
+}
+
 /** Advance options live inside Expenses, as in the app. */
 function mergeAdvanceIntoExpenses(nav: NavItem[]): NavItem[] {
   const advance = nav.find((item) => item.label === 'Advance')
@@ -571,7 +613,6 @@ const NAV: NavItem[] = [
       { label: 'Leads Report', href: '/dashboard/reports/leads' },
       { label: 'Sales Visit Report', href: '/dashboard/reports/sales-visit' },
       { label: 'Employee Track Report', href: '/dashboard/reports/employee-track' },
-      { label: 'Contact Enquiries Report', href: '/dashboard/reports/contact-queries' },
       { label: 'Change Logs Report', href: '/dashboard/reports/change-logs' },
       { label: 'Stock Report', href: '/dashboard/reports/stock' },
       { label: 'DC Report', href: '/dashboard/reports/dc' },
@@ -1305,26 +1346,21 @@ export function Sidebar() {
     // For Trainer role, show only specified menu items
     finalNav = [
       { label: 'My Dashboard', icon: LayoutDashboard, href: '/dashboard' },
+      // Same as the app: one Training & Services group.
       {
-        label: 'Completed Training & Services',
-        icon: CheckCircle2,
-        href: '/dashboard/training/trainer/completed',
-      },
-      {
-        label: 'Training',
+        label: 'Training & Services',
         icon: GraduationCap,
         children: [
+          { label: 'Training & Services (Active / Upcoming)', href: '/dashboard/training/trainer/my', icon: Clock },
+          { label: 'Completed Training & Services', href: '/dashboard/training/trainer/completed', icon: CheckCircle2 },
           { label: 'Training Request', href: '/dashboard/training/request', icon: PlusCircle },
         ],
       },
       {
-        label: 'Expense',
+        label: 'Expenses',
         icon: Calculator,
         children: [
           { label: 'Create Expenses', href: '/dashboard/expenses/create', icon: PlusCircle },
-          { label: 'Pending Expenses', href: '/dashboard/expenses/my?view=pending', icon: Clock },
-          { label: 'Completed Expenses', href: '/dashboard/expenses/my?view=completed', icon: CheckCircle2 },
-          { label: 'Rejected Expenses', href: '/dashboard/expenses/my?view=rejected', icon: XCircle },
           { label: 'All My Expenses', href: '/dashboard/expenses/my?view=all', icon: History },
         ],
       },
@@ -1337,14 +1373,7 @@ export function Sidebar() {
           { label: 'Holiday Calendar', href: '/dashboard/leaves/holidays', icon: CalendarDays },
         ],
       },
-      {
-        label: 'Reports',
-        icon: BarChart3,
-        children: [
-          { label: 'Leads Report', href: '/dashboard/reports/leads', icon: FileText },
-          { label: 'All Expenses Report', href: '/dashboard/reports/expenses', icon: Receipt },
-        ],
-      },
+      // No Reports for Trainers (Leads / All Expenses reports are not theirs).
       {
         label: 'Settings',
         icon: Settings,
@@ -1552,7 +1581,6 @@ export function Sidebar() {
   if (!finalNav.some((item) => item.label === 'Advance')) {
     const children = [
       { label: 'Request Advance', href: '/dashboard/advance/request', icon: PlusCircle },
-      { label: 'Advance Status', href: '/dashboard/advance/status', icon: Clock },
       { label: 'Advance History', href: '/dashboard/advance/history', icon: History },
       { label: 'Advance Approvals', href: '/dashboard/advance/approvals', icon: CheckCircle2 },
     ].filter((item) => canAccessHref(permUser, item.href))
@@ -1580,6 +1608,8 @@ export function Sidebar() {
     permUser?.permissions,
     Boolean((permUser as { isSuperAdmin?: boolean } | null | undefined)?.isSuperAdmin)
   )
+
+  finalNav = normalizeExpensesNav(finalNav)
 
   const navReady = mounted && (!rbacActive || permissionsReady)
 

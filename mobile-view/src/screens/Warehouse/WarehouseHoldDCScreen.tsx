@@ -165,7 +165,7 @@ export default function WarehouseHoldDCScreen({ navigation }: any) {
             <InfoRow label="School Type" value={r.schoolType} />
             <InfoRow label="School Code" value={r.schoolCode} />
             <InfoRow label="Zone" value={r.zone} />
-            <InfoRow label="Executive" value={r.executive} />
+            <InfoRow label="BDE" value={r.executive} />
             <InfoRow label="Hold Remarks" value={r.holdRemarks} />
             <ActionRow>
               <WebButton

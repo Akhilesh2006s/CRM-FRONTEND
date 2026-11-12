@@ -226,7 +226,7 @@ export default function ReportsEmployeeTrackScreen() {
     >
       <StatGrid
         items={[
-          { label: 'Field Executives', value: summary.fieldExecutives, tone: 'blue' },
+          { label: 'BDEs', value: summary.fieldExecutives, tone: 'blue' },
           { label: 'Total GPS Logs', value: summary.totalGpsLogs, tone: 'green' },
           { label: 'Zone Coverage', value: summary.zoneCoverage, tone: 'purple' },
         ]}

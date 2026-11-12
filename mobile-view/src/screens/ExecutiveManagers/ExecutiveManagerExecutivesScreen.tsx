@@ -69,8 +69,8 @@ export default function ExecutiveManagerExecutivesScreen() {
 
   return (
     <ScreenShell
-      title="Executives"
-      subtitle="Executives assigned to you"
+      title="BDEs"
+      subtitle="BDEs assigned to you"
       loading={loading && !refreshing}
       refreshing={refreshing}
       onRefresh={() => {

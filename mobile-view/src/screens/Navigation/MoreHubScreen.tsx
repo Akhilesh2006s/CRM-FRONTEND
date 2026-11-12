@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { displayRoleName } from '../../lib/roleLabels';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { navigateRoot } from '../../navigation/navigationRef';
@@ -57,7 +58,7 @@ export default function MoreHubScreen() {
           ) : null}
           {user?.role ? (
             <View style={styles.roleBadge}>
-              <Text style={styles.profileRole}>{user.role}</Text>
+              <Text style={styles.profileRole}>{displayRoleName(user.role)}</Text>
             </View>
           ) : null}
         </View>

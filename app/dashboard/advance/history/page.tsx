@@ -16,6 +16,8 @@ export default function AdvanceHistoryPage() {
   const [selected, setSelected] = useState<Advance | null>(null)
   const [refresh, setRefresh] = useState(0)
   const [error, setError] = useState('')
+  // Same as All My Expenses: every request, filtered by status.
+  const [statusFilter, setStatusFilter] = useState<'All' | 'Pending' | 'Approved' | 'Rejected'>('All')
   const canViewAll = user?.isSuperAdmin || ['Super Admin', 'Admin', 'Finance Manager'].includes(user?.role || '')
   const chosenId = employeeId || user?._id
   useEffect(() => {
@@ -64,7 +66,11 @@ export default function AdvanceHistoryPage() {
           <td className="max-w-sm break-words p-4">{entry.description}</td><td className="whitespace-nowrap p-4">{entry.kind === 'expense' ? '−' : entry.kind === 'advance' ? '+' : ''}{advanceMoney(entry.amount)}</td><td className={`whitespace-nowrap p-4 font-medium ${entry.balance < 0 ? 'text-red-700' : entry.balance > 0 ? 'text-green-700' : ''}`}>{advanceMoney(entry.balance)}</td>
         </tr>)}</tbody></table></Card>
       <h3 className="text-lg font-medium">All Advance Requests</h3>
-      <Card className="divide-y">{history.requests.length === 0 ? <p className="p-6 text-center text-sm text-neutral-500">No advance requests yet.</p> : history.requests.map((request) => <div key={request._id} className="flex flex-wrap items-center justify-between gap-4 p-4 text-sm">
+      <div className="flex flex-wrap gap-2">{(['Pending', 'Approved', 'Rejected', 'All'] as const).map((s) => {
+        const count = s === 'All' ? history.requests.length : history.requests.filter((r) => r.status === s).length
+        return <Button key={s} size="sm" variant={statusFilter === s ? 'default' : 'outline'} className="rounded-full" onClick={() => setStatusFilter(s)}>{s} ({count})</Button>
+      })}</div>
+      <Card className="divide-y">{history.requests.filter((r) => statusFilter === 'All' || r.status === statusFilter).length === 0 ? <p className="p-6 text-center text-sm text-neutral-500">No advance requests here.</p> : history.requests.filter((r) => statusFilter === 'All' || r.status === statusFilter).map((request) => <div key={request._id} className="flex flex-wrap items-center justify-between gap-4 p-4 text-sm">
         <div><p className="font-medium">{request.advanceType} · {advanceAmountLabel(request)}</p><p className="text-neutral-500">{advanceDate(request.date)}</p></div><AdvanceStatusBadge advance={request} /><Button variant="outline" onClick={() => setSelected(request)}>Details</Button>
       </div>)}</Card>
     </>}

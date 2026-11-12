@@ -117,9 +117,9 @@ function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
         ],
       },
       {
-        title: 'Expense',
+        title: 'Expenses',
         items: [
-          { label: 'Create Expense', screen: 'ExpenseCreate' },
+          { label: 'Create Expenses', screen: 'ExpenseCreate' },
           { label: 'My Expenses', screen: 'ExpenseMy' },
         ],
       },
@@ -188,8 +188,8 @@ function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
         ],
       },
       {
-        title: 'Executives',
-        items: [{ label: 'Executives', screen: 'ExecutiveManagerExecutives' }],
+        title: 'BDEs',
+        items: [{ label: 'BDEs', screen: 'ExecutiveManagerExecutives' }],
       },
       {
         // Same day-to-day DC, client and lead work as the BDEs they supervise (web menu).
@@ -525,7 +525,7 @@ function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
       icon: I.returns,
       items: [
         { label: 'Employee Returns List', screen: 'ReturnsEmployee', icon: '👤' },
-        { label: 'Executive Stock Returns', screen: 'ReturnsExecutive', icon: '📋' },
+        { label: 'BDE Stock Returns', screen: 'ReturnsExecutive', icon: '📋' },
         { label: 'Warehouse Executive Returns', screen: 'ReturnsWarehouseExecutive', icon: '🏭' },
         { label: 'Warehouse Manager Returns', screen: 'ReturnsWarehouseManager', icon: '✅' },
         { label: 'Warehouse Returns List', screen: 'ReturnsWarehouse', icon: '🏢' },
@@ -563,7 +563,6 @@ function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
         { label: 'Leads Report', screen: 'ReportsLeads', icon: '📋' },
         { label: 'Sales Visit Report', screen: 'ReportsSalesVisit', icon: '🚗' },
         { label: 'Employee Track Report', screen: 'ReportsEmployeeTrack', icon: '📍' },
-        { label: 'Contact Enquiries Report', screen: 'ReportsContactQueries', icon: '📞' },
         { label: 'Change Logs Report', screen: 'ReportsChangeLogs', icon: '📝' },
         { label: 'Stock Report', screen: 'ReportsStock', icon: '📊' },
         { label: 'DC Report', screen: 'ReportsDC', icon: '📦' },
@@ -751,11 +750,11 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
   if (!role || NON_EMPLOYEE_ROLES.has(role)) return sections;
   const advanceLinks: NavLink[] = [
     { label: 'Request Advance', screen: 'AdvanceRequest' },
-    { label: 'Advance Status', screen: 'AdvanceStatus' },
     { label: 'Advance History', screen: 'AdvanceHistory' },
     { label: 'Advance Approvals', screen: 'AdvanceApprovals' },
   ];
-  const advanceKeys = ['advance.request.page.view', 'advance.status.page.view', 'advance.history.page.view', 'advance.approvals.page.view'];
+  // Advance: Request Advance and Advance History (every request with its status), plus approvals for approvers.
+  const advanceKeys = ['advance.request.page.view', 'advance.history.page.view', 'advance.approvals.page.view'];
   const permittedAdvanceLinks = advanceLinks.filter((_, index) => user?.isSuperAdmin || role === 'Super Admin'
     || user?.rbacEnabled === false || user?.permissions?.includes(advanceKeys[index]));
 

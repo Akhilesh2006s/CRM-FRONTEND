@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { displayRoleName } from '../../lib/roleLabels';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import AttendanceCard from '../../components/AttendanceCard';
@@ -55,7 +56,7 @@ export default function DashboardScreen() {
         </View>
         <View style={styles.roleBadge}>
           <Text style={styles.roleText} numberOfLines={1}>
-            {user?.role || 'User'}
+            {displayRoleName(user?.role) || 'User'}
           </Text>
         </View>
       </View>

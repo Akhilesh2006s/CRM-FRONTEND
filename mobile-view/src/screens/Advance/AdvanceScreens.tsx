@@ -199,6 +199,8 @@ export function AdvanceHistoryScreen() {
   const [selected, setSelected] = useState<Advance | null>(null);
   const [refresh, setRefresh] = useState(0);
   const [error, setError] = useState('');
+  // Same as All My Expenses: every request, filtered by status.
+  const [statusFilter, setStatusFilter] = useState<'All' | 'Pending' | 'Approved' | 'Rejected'>('All');
   const canViewAll = user?.isSuperAdmin || ['Super Admin', 'Admin', 'Finance Manager'].includes(user?.role || '');
   const chosenId = employeeId || user?._id;
   useEffect(() => { if (canViewAll) apiService.get('/advances/people').then(setPeople).catch((err) => setError(message(err))); }, [canViewAll]);
@@ -234,14 +236,31 @@ export function AdvanceHistoryScreen() {
       {history.ledger.map((entry) => <View key={entry.id} style={styles.card}><Text>{advanceDate(entry.date)} · {entry.kind === 'incentive' ? 'Incentive (excluded)' : entry.kind === 'advance' ? 'Advance' : 'Approved expense'}</Text><Text>{entry.description}</Text>
         <Text>{entry.kind === 'expense' ? '−' : entry.kind === 'advance' ? '+' : ''}{advanceMoney(entry.amount)}</Text><Text style={entry.balance < 0 ? styles.negative : styles.positive}>Running Balance: {advanceMoney(entry.balance)}</Text></View>)}
       <SectionTitle>All Advance Requests</SectionTitle>
-      {!history.requests.length && <Text>No advance requests yet.</Text>}
-      {history.requests.map((r) => <RequestCard key={r._id} advance={r} onPress={() => setSelected(r)} />)}
+      <View style={styles.chips}>
+        {(['Pending', 'Approved', 'Rejected', 'All'] as const).map((st) => {
+          const count = st === 'All' ? history.requests.length : history.requests.filter((r) => r.status === st).length;
+          return (
+            <TouchableOpacity key={st} style={[styles.chip, statusFilter === st && styles.chipOn]} onPress={() => setStatusFilter(st)}>
+              <Text style={[styles.chipText, statusFilter === st && styles.chipTextOn]}>{`${st} (${count})`}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      {!history.requests.filter((r) => statusFilter === 'All' || r.status === statusFilter).length && <Text>No advance requests here.</Text>}
+      {history.requests
+        .filter((r) => statusFilter === 'All' || r.status === statusFilter)
+        .map((r) => <RequestCard key={r._id} advance={r} onPress={() => setSelected(r)} />)}
     </>}
     {selected && <RequestDetails key={selected._id} advance={selected} onClose={() => setSelected(null)} onUpdated={(r) => { setSelected(r); setRefresh((n) => n + 1); }} />}
   </ScreenShell>;
 }
 
 const styles = StyleSheet.create({
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
+  chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: '#CBD5E1', backgroundColor: '#fff' },
+  chipOn: { backgroundColor: '#2563EB', borderColor: '#2563EB' },
+  chipText: { fontSize: 13, fontWeight: '600', color: '#334155' },
+  chipTextOn: { color: '#fff' },
   card: { backgroundColor: '#FFFFFF', borderColor: '#EEF2F7', borderWidth: 1, borderRadius: 14, padding: 16, gap: 8, marginBottom: 12 },
   heading: { fontSize: 16, fontWeight: '700', color: '#1E293B', marginVertical: 4 },
   muted: { fontSize: 13, color: '#64748B', lineHeight: 18, marginBottom: 8 },

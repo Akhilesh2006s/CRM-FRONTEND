@@ -393,7 +393,7 @@ export default function StockReturnWarehouseManagerReviewScreen({ navigation, ro
                   <InfoPair label="Sold" value={String(line.soldQty)} />
 
                   <View style={styles.groupBlue}>
-                    <Text style={styles.groupTitle}>Field Executive</Text>
+                    <Text style={styles.groupTitle}>Field BDE</Text>
                     <InfoPair label="Return Qty" value={String(line.fieldExecQty)} />
                     <InfoPair label="Reason" value={line.reason || '—'} />
                   </View>

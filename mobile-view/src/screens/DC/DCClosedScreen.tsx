@@ -86,7 +86,7 @@ export default function DCClosedScreen({ navigation }: any) {
   const executiveOptions = useMemo(() => {
     const executives = new Map<string, string>();
     items.forEach((item) => { const id = assignedId(item); if (id) executives.set(id, executiveName(item)); });
-    return [{ label: 'All Executives', value: '' }, ...Array.from(executives).map(([value, label]) => ({ value, label }))];
+    return [{ label: 'All BDEs', value: '' }, ...Array.from(executives).map(([value, label]) => ({ value, label }))];
   }, [items]);
   const filteredItems = useMemo(() => items.filter((item) => {
     const created = new Date(item.createdAt || item.created_at || 0);
@@ -127,7 +127,7 @@ export default function DCClosedScreen({ navigation }: any) {
             <InfoRow label="School type" value={item.school_type} />
             <InfoRow label="Zone" value={item.zone} />
             <InfoRow label="Town" value={townOf(item)} />
-            <InfoRow label="Executive" value={executiveName(item)} />
+            <InfoRow label="BDE" value={executiveName(item)} />
             <InfoRow label="Mobile" value={item.contact_mobile} phone />
             <InfoRow label="Products" value={productsOf(item)} />
             <ActionRow>

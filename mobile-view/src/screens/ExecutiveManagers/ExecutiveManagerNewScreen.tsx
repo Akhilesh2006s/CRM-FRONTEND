@@ -53,7 +53,7 @@ export default function ExecutiveManagerNewScreen({ navigation }: any) {
   };
 
   return (
-    <ScreenShell title="Create Executive Manager">
+    <ScreenShell title="Create Zonal Manager">
       {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
       <PageSection title="Personal">
         <WebLabel>Full name *</WebLabel>

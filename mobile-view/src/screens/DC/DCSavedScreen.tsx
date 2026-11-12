@@ -318,7 +318,7 @@ export default function DCSavedScreen({ navigation }: any) {
                 <InfoRow label="School type" value={item.school_type} />
                 <InfoRow label="Zone" value={item.zone} />
                 <InfoRow label="Town" value={townOf(item)} />
-                <InfoRow label="Executive" value={executiveName(item)} />
+                <InfoRow label="BDE" value={executiveName(item)} />
                 <InfoRow label="Mobile" value={item.contact_mobile} phone />
                 <InfoRow label="Products" value={productsSummary(item, linked)} />
                 {!hasPo ? <InfoRow label="PO" value="Not uploaded" /> : null}

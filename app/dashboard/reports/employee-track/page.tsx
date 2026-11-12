@@ -351,6 +351,7 @@ export default function EmployeeTrackingReportPage() {
             <label className="text-xs font-medium text-slate-600 mb-1 block">Started</label>
             <Input
               type="date"
+              allowPastDates
               value={fromDate}
               onChange={(e) => setFromDate(e.target.value)}
               className="rounded-xl bg-white w-full xl:w-40"
@@ -360,6 +361,7 @@ export default function EmployeeTrackingReportPage() {
             <label className="text-xs font-medium text-slate-600 mb-1 block">Last Used</label>
             <Input
               type="date"
+              allowPastDates
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}
               className="rounded-xl bg-white w-full xl:w-40"

@@ -1,6 +1,7 @@
 /**
- * Home page figures for the logged-in employee: revenue, clients, leads and payments
- * (total, old years' and this academic year's). GET /dashboard/my-summary.
+ * Home page figures for the login's department (GET /dashboard/my-summary): sales for BDEs,
+ * team sales for Zonal / Regional managers, trainings for Trainers, HR figures for HR,
+ * own attendance / leaves / expenses / tickets for office staff.
  */
 import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
@@ -8,16 +9,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import { apiService } from '../services/api';
 import { colors } from '../theme/colors';
 
-type Summary = {
-  academicYear: string;
-  revenue: number;
-  clients: number;
-  leads: number;
-  payments: number;
-  totalPayments: number;
-  oldPayments: number;
-  thisYearPayments: number;
-};
+type Tile = { label: string; value: number; money?: boolean };
+type Summary = { kind?: string; title?: string; tiles?: Tile[] };
+const COLORS = ['#0D9488', '#2563EB', '#EA580C', '#7C3AED', '#16A34A', '#D97706', '#0891B2', '#DC2626'];
 
 const rupees = (n: number) => `₹${(Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
 
@@ -38,21 +32,15 @@ export default function HomeSummaryCard() {
     }, [])
   );
 
-  const tiles: { label: string; value: string; color: string }[] = data
-    ? [
-        { label: `Revenue (${data.academicYear})`, value: rupees(data.revenue), color: '#0D9488' },
-        { label: 'Clients', value: String(data.clients), color: '#2563EB' },
-        { label: 'Leads', value: String(data.leads), color: '#EA580C' },
-        { label: 'Payments', value: String(data.payments), color: '#7C3AED' },
-        { label: 'Total Payments', value: rupees(data.totalPayments), color: '#16A34A' },
-        { label: 'Old Payments', value: rupees(data.oldPayments), color: '#D97706' },
-        { label: "This Year's Payments", value: rupees(data.thisYearPayments), color: '#0891B2' },
-      ]
-    : [];
+  const tiles = (data?.tiles || []).map((t, i) => ({
+    label: t.label,
+    value: t.money ? rupees(t.value) : String(t.value ?? 0),
+    color: COLORS[i % COLORS.length],
+  }));
 
   return (
     <View style={styles.card}>
-      <Text style={styles.title}>My Summary</Text>
+      <Text style={styles.title}>{data?.title || 'My Summary'}</Text>
       {!data && !error ? <ActivityIndicator color={colors.primary} style={{ marginVertical: 12 }} /> : null}
       {error && !data ? <Text style={styles.error}>{error}</Text> : null}
       <View style={styles.grid}>

@@ -233,7 +233,7 @@ export default function ReportsContactQueriesScreen() {
                 <Badge label="New school" tone="info" />
               </View>
             ) : null}
-            <InfoRow label="Executive" value={query.executive?.name} />
+            <InfoRow label="BDE" value={query.executive?.name} />
             <InfoRow label="Zone" value={query.zone} />
             <InfoRow label="Contact" value={extractContactName(query)} />
             <InfoRow label="Mobile" value={query.contact_mobile} phone />
