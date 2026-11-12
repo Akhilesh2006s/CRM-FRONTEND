@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { attendanceBadge, attendanceTone } from '../../utils/attendanceStatus';
 import { useFocusEffect } from '@react-navigation/native';
 import ScreenShell from '../../ui/ScreenShell';
 import MessageBanner from '../../components/MessageBanner';
@@ -11,6 +12,7 @@ type AttendanceRow = {
   _id: string;
   startTime?: string;
   endTime?: string;
+  reviewStatus?: string;
   attendanceReason?: string;
   town?: string;
   /** Sunday / company holiday worked (earns a comp-off once End Day is done). */
@@ -74,8 +76,8 @@ export default function MyAttendanceScreen() {
             <CardTitle
               title={attendanceReasonLabel(row.attendanceReason)}
               subtitle={row.town || undefined}
-              badge={row.endTime ? 'Ended' : 'Open'}
-              tone={row.endTime ? 'neutral' : 'success'}
+              badge={attendanceBadge(row, 'Ended', 'Open')}
+              tone={attendanceTone(row)}
             />
             <InfoRow label="Start" value={when(row.startTime)} />
             <InfoRow label="End" value={when(row.endTime)} />

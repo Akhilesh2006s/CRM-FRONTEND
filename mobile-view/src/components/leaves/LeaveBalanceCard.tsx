@@ -12,11 +12,12 @@ export default function LeaveBalanceCard({ balance }: { balance: LeaveBalance | 
     <View style={styles.card}>
       <View style={styles.row}>
         <View style={styles.cell}>
-          <Text style={styles.label}>Paid leave this month</Text>
+          <Text style={styles.label}>Paid leave this month (used)</Text>
           <Text style={styles.value}>
-            {m.remaining}
+            {m.used}
             <Text style={styles.of}> / {m.allowance}</Text>
           </Text>
+          <Text style={styles.of}>{m.remaining > 0 ? `${m.remaining} left` : 'None left'}</Text>
         </View>
         <View style={styles.cell}>
           <Text style={styles.label}>Comp-Offs available</Text>

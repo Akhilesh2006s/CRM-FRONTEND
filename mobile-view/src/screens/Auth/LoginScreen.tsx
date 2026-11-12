@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import PasswordInput from '../../ui/PasswordInput';
 import { useAuth } from '../../context/AuthContext';
 import { apiService } from '../../services/api';
 import { colors, gradients } from '../../theme/colors';
@@ -161,7 +162,7 @@ export default function LoginScreen() {
                     <Ionicons name="lock-closed-outline" size={16} color={colors.textSecondary} />
                     <Text style={styles.inputLabel}>Password</Text>
                   </View>
-                  <TextInput
+                  <PasswordInput
                     style={styles.input}
                     placeholder="Enter your password"
                     placeholderTextColor={colors.textMuted}
@@ -242,7 +243,7 @@ export default function LoginScreen() {
                   onChangeText={setForgotOtp}
                   keyboardType="number-pad"
                 />
-                <TextInput
+                <PasswordInput
                   style={[styles.input, { marginTop: 12 }]}
                   placeholder="New password"
                   placeholderTextColor={colors.textMuted}

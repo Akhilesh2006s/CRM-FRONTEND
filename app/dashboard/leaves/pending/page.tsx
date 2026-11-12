@@ -19,6 +19,7 @@ import { toast } from 'sonner'
 import { leaveTypeLabel } from '@/lib/leaveTypes'
 import { LeaveDayTypeBadge } from '@/components/leaves/LeaveDayTypeBadge'
 import { formatEmployeeCode } from '@/lib/employeeCode'
+import { LeaveHistoryButton, ApproveWithChangesButton } from '@/components/leaves/LeaveFinalApproverTools'
 import {
   LeaveApprovalStatus,
   slotLabel,
@@ -43,6 +44,8 @@ type Leave = LeaveApprovalFields & {
   dayType?: string
   halfDaySession?: string | null
   days?: number
+  canChangeDates?: boolean
+  canViewHistory?: boolean
 }
 
 export default function AdminPendingLeavesPage() {
@@ -234,6 +237,7 @@ export default function AdminPendingLeavesPage() {
                             Reject
                           </Button>
                         </div>
+                        {l.canChangeDates ? <ApproveWithChangesButton leave={l} disabled={acting} onDone={load} /> : null}
                         {showOverride(l) && (
                           <Button
                             size="sm"
@@ -248,6 +252,11 @@ export default function AdminPendingLeavesPage() {
                     ) : (
                       <span className="text-xs text-neutral-500">{waitingText(l)}</span>
                     )}
+                    {l.canViewHistory && typeof l.employeeId === 'object' && l.employeeId?._id ? (
+                      <div className="mt-2 flex justify-end">
+                        <LeaveHistoryButton employeeId={l.employeeId._id} name={l.employeeId.name} />
+                      </div>
+                    ) : null}
                   </td>
                 </tr>
               ))}

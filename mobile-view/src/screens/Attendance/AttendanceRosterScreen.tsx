@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking, Image, ActivityIndicator } from 'react-native';
+import { attendanceBadge, attendanceTone } from '../../utils/attendanceStatus';
 import { colors } from '../../theme/colors';
 import { Card, CardTitle, InfoRow, ActionRow, EmptyState } from '../../ui/Kit';
 import { WebLabel } from '../../ui/WebPrimitives';
@@ -24,6 +25,7 @@ type RosterRow = {
   _id: string;
   startTime?: string;
   endTime?: string;
+  reviewStatus?: string;
   attendanceReason?: string;
   town?: string;
   pincode?: string;
@@ -133,8 +135,8 @@ export default function AttendanceRosterScreen() {
               ]
                 .filter(Boolean)
                 .join(' · ')}
-              badge={row.endTime ? 'Checked out' : 'Checked in'}
-              tone={row.endTime ? 'neutral' : 'success'}
+              badge={attendanceBadge(row, 'Checked out', 'Checked in')}
+              tone={attendanceTone(row)}
             />
             <InfoRow label="Start" value={when(row.startTime)} />
             <InfoRow label="End" value={when(row.endTime)} />

@@ -11,9 +11,9 @@ export function LeaveBalanceCard({ balance }: { balance: LeaveBalance | null }) 
     <Card className="p-4 shadow-sm">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div>
-          <div className="text-xs uppercase tracking-wide text-neutral-500">Paid leave this month</div>
+          <div className="text-xs uppercase tracking-wide text-neutral-500">Paid leave this month (used)</div>
           <div className="text-2xl font-semibold text-neutral-900">
-            {m.remaining} <span className="text-sm font-normal text-neutral-500">/ {m.allowance}</span>
+            {m.used} <span className="text-sm font-normal text-neutral-500">/ {m.allowance} · {m.remaining > 0 ? `${m.remaining} left` : 'none left'}</span>
           </div>
           <div className="text-xs text-neutral-500">Sick Leave or Company Paid Leave, no salary deduction</div>
         </div>

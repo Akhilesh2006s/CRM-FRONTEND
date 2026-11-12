@@ -9,6 +9,7 @@ import {
   Platform,
   type TextInputProps,
 } from 'react-native';
+import PasswordInput from './PasswordInput';
 import { Picker } from '@react-native-picker/picker';
 import { colors, radii, spacing } from '../theme/colors';
 
@@ -17,6 +18,9 @@ export function WebLabel({ children }: { children: string }) {
 }
 
 export function WebInput(props: TextInputProps) {
+  if (props.secureTextEntry) {
+    return <PasswordInput {...props} placeholderTextColor={colors.textMuted} style={[styles.input, props.style]} />;
+  }
   return (
     <TextInput
       {...props}

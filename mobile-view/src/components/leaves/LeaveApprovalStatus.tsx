@@ -7,6 +7,7 @@ import {
   leaveStatusColors,
   slotLabel,
 } from '../../lib/leaveApproval';
+import { leaveDateChangeText } from './LeaveFinalApproverTools';
 
 /**
  * Dual-approval status for a leave: overall badge, a one-line summary
@@ -52,6 +53,7 @@ export default function LeaveApprovalStatus({
             </View>
           ))
         : null}
+      {leaveDateChangeText(leave) ? <Text style={[styles.muted, { color: '#B45309' }]}>{leaveDateChangeText(leave)}</Text> : null}
       {(legacy || compact || showRejectionReason) && leave.status === 'Rejected' && leave.rejectionReason ? (
         <Text style={styles.muted}>Reason: {leave.rejectionReason}</Text>
       ) : null}

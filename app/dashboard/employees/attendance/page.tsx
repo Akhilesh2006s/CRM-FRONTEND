@@ -13,6 +13,10 @@ type RosterRow = {
   _id: string
   startTime?: string
   endTime?: string
+  /** pending = waiting for the manager (e.g. End Day done the next day). */
+  reviewStatus?: string
+  reviewReason?: string
+  reviewRemarks?: string
   attendanceReason?: string
   town?: string
   pincode?: string
@@ -119,7 +123,11 @@ export default function AttendanceRosterPage() {
                     <td className="py-2 px-3">{employee?.role ? displayRoleName(employee.role) : '—'}</td>
                     <td className="py-2 px-3">{employee?.zone || '—'}</td>
                     <td className="py-2 px-3">
-                      {row.endTime ? (
+                      {row.reviewStatus === 'pending' ? (
+                        <span className="font-medium text-amber-700" title={row.reviewReason || ''}>Review</span>
+                      ) : row.reviewStatus === 'rejected' ? (
+                        <span className="text-red-600" title={row.reviewRemarks || ''}>Rejected</span>
+                      ) : row.endTime ? (
                         <span className="text-neutral-600">Checked out</span>
                       ) : (
                         <span className="text-green-700">Checked in</span>

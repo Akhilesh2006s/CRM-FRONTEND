@@ -26,6 +26,11 @@ export type LeaveApprovalFields = {
   decidableSlots?: string[];
   decisionIsOverride?: boolean;
   canOverride?: boolean;
+  canChangeDates?: boolean;
+  canViewHistory?: boolean;
+  requestedStartDate?: string;
+  requestedEndDate?: string;
+  requestedDays?: number;
 };
 
 const SLOT_LABELS: Record<string, string> = {

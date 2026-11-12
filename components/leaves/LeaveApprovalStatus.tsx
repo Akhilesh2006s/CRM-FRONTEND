@@ -1,5 +1,7 @@
 'use client'
 
+import { leaveDateChangeText } from './LeaveFinalApproverTools'
+
 /**
  * Dual-approval status for a leave: overall badge, a one-line summary
  * ("Approved by Zonal Manager, pending HR Manager") and each approver's decision.
@@ -28,6 +30,9 @@ export type LeaveApprovalFields = {
   decidableSlots?: string[]
   decisionIsOverride?: boolean
   canOverride?: boolean
+  requestedStartDate?: string
+  requestedEndDate?: string
+  requestedDays?: number
 }
 
 const SLOT_LABELS: Record<string, string> = {
@@ -101,6 +106,9 @@ export function LeaveApprovalStatus({
           ))}
         </ul>
       )}
+      {leaveDateChangeText(leave) ? (
+        <div className="text-xs text-amber-700">{leaveDateChangeText(leave)}</div>
+      ) : null}
       {legacy && leave.status === 'Rejected' && leave.rejectionReason && (
         <div className="text-xs text-neutral-500">Reason: {leave.rejectionReason}</div>
       )}

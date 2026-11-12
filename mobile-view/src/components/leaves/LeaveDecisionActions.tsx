@@ -10,6 +10,7 @@ import {
   showOverride,
   waitingText,
 } from '../../lib/leaveApproval';
+import { ApproveWithChangesButton, LeaveHistoryButton } from './LeaveFinalApproverTools';
 
 /**
  * Approve / Reject / Approve-all (override) controls for one leave, via PUT /leaves/:id/approve.
@@ -20,7 +21,14 @@ export default function LeaveDecisionActions({
   isOwn = false,
   onDone,
 }: {
-  leave: LeaveApprovalFields & { _id: string };
+  leave: LeaveApprovalFields & {
+    _id: string;
+    startDate?: string;
+    endDate?: string;
+    dayType?: string;
+    days?: number;
+    employeeId?: any;
+  };
   isOwn?: boolean;
   onDone: () => void;
 }) {
@@ -28,8 +36,19 @@ export default function LeaveDecisionActions({
   const [rejectOpen, setRejectOpen] = useState(false);
   const [reason, setReason] = useState('');
 
-  if (leave.status !== 'Pending') return null;
-  if (!leave.canDecide) return <Text style={styles.waiting}>{waitingText(leave, isOwn)}</Text>;
+  const employeeId = typeof leave.employeeId === 'object' && leave.employeeId ? leave.employeeId._id : leave.employeeId;
+  const history =
+    leave.canViewHistory && employeeId ? (
+      <LeaveHistoryButton employeeId={String(employeeId)} name={leave.employeeId?.name} />
+    ) : null;
+  if (leave.status !== 'Pending') return history;
+  if (!leave.canDecide)
+    return (
+      <View style={styles.root}>
+        <Text style={styles.waiting}>{waitingText(leave, isOwn)}</Text>
+        {history}
+      </View>
+    );
 
   const approve = async (override = false) => {
     setActing(true);
@@ -80,11 +99,20 @@ export default function LeaveDecisionActions({
           <Text style={styles.btnText}>Reject</Text>
         </TouchableOpacity>
       </View>
+      {leave.canChangeDates && leave.startDate && leave.endDate ? (
+        <ApproveWithChangesButton
+          leave={{ _id: leave._id, startDate: leave.startDate, endDate: leave.endDate, dayType: leave.dayType, days: leave.days }}
+          disabled={acting}
+          onDone={onDone}
+        />
+      ) : null}
       {showOverride(leave) ? (
         <TouchableOpacity style={[styles.btn, styles.override]} disabled={acting} onPress={() => approve(true)}>
           <Text style={styles.overrideText}>Approve all (override)</Text>
         </TouchableOpacity>
       ) : null}
+
+      {history}
 
       <Modal visible={rejectOpen} transparent animationType="slide" onRequestClose={() => setRejectOpen(false)}>
         <View style={styles.overlay}>

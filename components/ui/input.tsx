@@ -1,4 +1,7 @@
+'use client'
+
 import * as React from 'react'
+import { Eye, EyeOff } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 import { todayDateString } from '@/lib/todayDate'
@@ -44,10 +47,32 @@ function Input({ className, type, allowPastDates, min, ...props }: InputProps) {
     className,
   )
 
+  // Every password box gets a show / hide eye.
+  if (type === 'password') return <PasswordInput className={classes} {...props} />
+
   // Dates are shown DD/MM/YYYY on every browser; the value stays YYYY-MM-DD.
   if (type === 'date') return <DateInput data-slot="input" min={dateMin} className={classes} {...props} />
 
   return <input type={type} min={dateMin} data-slot="input" className={classes} {...props} />
+}
+
+function PasswordInput({ className, ...props }: React.ComponentProps<'input'>) {
+  const [shown, setShown] = React.useState(false)
+  return (
+    <div className="relative w-full">
+      <input type={shown ? 'text' : 'password'} data-slot="input" className={cn(className, 'pr-10')} {...props} />
+      <button
+        type="button"
+        tabIndex={-1}
+        onClick={() => setShown((s) => !s)}
+        className="absolute inset-y-0 right-0 flex items-center px-3 text-neutral-500 hover:text-neutral-800"
+        aria-label={shown ? 'Hide password' : 'Show password'}
+        title={shown ? 'Hide password' : 'Show password'}
+      >
+        {shown ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+      </button>
+    </div>
+  )
 }
 
 export { Input }
