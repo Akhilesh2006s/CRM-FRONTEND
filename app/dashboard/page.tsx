@@ -20,6 +20,7 @@ import { getCurrentUser } from '@/lib/auth'
 import VendorDashboard from '@/components/dashboard/VendorDashboard'
 import ChainClientsPanel from '@/components/dashboard/ChainClientsPanel'
 import { BirthdaysCard } from '@/components/dashboard/BirthdaysCard'
+import { HomeSummaryTiles } from '@/components/dashboard/HomeSummaryTiles'
 
 const sections = [
   { href: '/dashboard/leads', label: 'Leads' },
@@ -524,6 +525,19 @@ export default function DashboardPage() {
             </Card>
           </Link>
         </div>
+      </div>
+    )
+  }
+
+  // Trainer: the same Home as the app (trainings and services, no leads / sales).
+  if (currentUser?.role === 'Trainer') {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-neutral-900">My Dashboard</h1>
+          <p className="text-sm text-neutral-600 mt-1">Your trainings and services</p>
+        </div>
+        <HomeSummaryTiles />
       </div>
     )
   }
