@@ -365,19 +365,25 @@ function roleNavSections(user: CrmUser | null | undefined): NavSection[] {
           { label: 'DC Listed', screen: 'WarehouseDCListed' },
         ],
       },
-      {
-        title: 'Expenses',
-        items: [{ label: 'Pending Expenses', screen: 'ExpensePending' }],
-      },
-      {
-        title: 'Reports',
-        items: [
-          { label: 'Leads', screen: 'ReportsLeads' },
-          { label: 'Sales Visit', screen: 'ReportsSalesVisit' },
-          { label: 'Employee Track', screen: 'ReportsEmployeeTrack' },
-          { label: 'All Expenses', screen: 'ReportsExpenses' },
-        ],
-      },
+      // A Coordinator sees only its own expenses and no Leads / Sales Visit / Employee Track /
+      // All Expenses reports (same as the web); the Senior Coordinator keeps them.
+      ...(isSeniorCoordinator
+        ? [
+            {
+              title: 'Expenses',
+              items: [{ label: 'Pending Expenses', screen: 'ExpensePending' }],
+            },
+            {
+              title: 'Reports',
+              items: [
+                { label: 'Leads', screen: 'ReportsLeads' },
+                { label: 'Sales Visit', screen: 'ReportsSalesVisit' },
+                { label: 'Employee Track', screen: 'ReportsEmployeeTrack' },
+                { label: 'All Expenses', screen: 'ReportsExpenses' },
+              ],
+            },
+          ]
+        : []),
       {
         title: 'Leave Management',
         items: [
@@ -796,7 +802,8 @@ export function getNavSections(user: CrmUser | null | undefined): NavSection[] {
     before.push({ title: 'Team Attendance', icon: '👥', items: [{ label: 'Team Attendance', screen: 'AttendanceRoster', icon: '👥' }] });
   }
   // Reporting managers approve field visits and office / field check-out mismatches (Admin: everyone's).
-  if (TEAM_ATTENDANCE_ROLES.has(role) && !hasScreen(sections, 'FieldApprovals')) {
+  // Coordinators do not approve field visits (same as the web).
+  if (TEAM_ATTENDANCE_ROLES.has(role) && role !== 'Coordinator' && !hasScreen(sections, 'FieldApprovals')) {
     after.push({ title: 'Field Approvals', icon: '✅', items: [{ label: 'Field Approvals', screen: 'FieldApprovals', icon: '✅' }] });
   }
   // PJP: Sales, Trainers, managers, Admin and Super Admin plan visits; team heads also see Team PJP.

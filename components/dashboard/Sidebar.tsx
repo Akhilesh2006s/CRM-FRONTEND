@@ -55,6 +55,7 @@ import {
   FolderOpen,
 } from 'lucide-react'
 import { PJP_ROLES, PJP_TEAM_ROLES } from '@/lib/pjp'
+import { isCoordinatorHiddenPath } from '@/lib/access'
 
 function isChildRouteActive(
   pathname: string | null | undefined,
@@ -208,6 +209,17 @@ function ensureTrackingNav(
   if (!entry) return nav
   const at = nav.findIndex((item) => item.label === 'Settings' || item.label === 'Sign out')
   return at < 0 ? [...nav, entry] : [...nav.slice(0, at), entry, ...nav.slice(at)]
+}
+
+/** Coordinator: drop the pages it must not open (see COORDINATOR_HIDDEN_PATHS), and empty groups. */
+function hideCoordinatorPages(nav: NavItem[], role: string | undefined): NavItem[] {
+  if (role !== 'Coordinator') return nav
+  return nav.flatMap((item) => {
+    if (item.href && isCoordinatorHiddenPath(role, item.href)) return []
+    if (!item.children) return [item]
+    const children = item.children.filter((c) => !isCoordinatorHiddenPath(role, c.href))
+    return children.length ? [{ ...item, children }] : []
+  })
 }
 
 /** PJP: Sales, Trainers, managers, Admin and Super Admin plan visits; team heads also see Team PJP. */
@@ -1637,6 +1649,7 @@ export function Sidebar() {
     Boolean((permUser as { isSuperAdmin?: boolean } | null | undefined)?.isSuperAdmin)
   )
   finalNav = normalizeExpensesNav(finalNav)
+  finalNav = hideCoordinatorPages(finalNav, user?.role || permUser?.role)
 
   const navReady = mounted && (!rbacActive || permissionsReady)
 

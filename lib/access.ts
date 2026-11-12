@@ -152,6 +152,33 @@ const LEAVE_APPROVER_ROLES = new Set([
 /** Coordinators view all leaves and attendance, read-only. */
 const LEAVE_VIEWER_ROLES = new Set(['Coordinator', 'Senior Coordinator'])
 /** Roles with a Team Attendance view (mobile-view navConfig TEAM_ATTENDANCE_ROLES matches). */
+/**
+ * Pages a Coordinator never opens, whatever the role's permissions say: employee management,
+ * payment approvals, other employees' expenses, the Leads / Sales Visit / Employee Track /
+ * All Expenses reports and Field Approvals. (Own expenses, attendance and leaves stay.)
+ */
+export const COORDINATOR_HIDDEN_PATHS = [
+  '/dashboard/employees/active',
+  '/dashboard/employees/inactive',
+  '/dashboard/employees/new',
+  '/dashboard/payments/approval-pending-cash',
+  '/dashboard/payments/approval-pending-cheques',
+  '/dashboard/expenses/pending',
+  '/dashboard/expenses/finance-pending',
+  '/dashboard/expenses/executive-manager-pending',
+  '/dashboard/reports/expenses',
+  '/dashboard/reports/leads',
+  '/dashboard/reports/sales-visit',
+  '/dashboard/reports/employee-track',
+  '/dashboard/tracking/approvals',
+]
+
+export const isCoordinatorHiddenPath = (role: string | undefined, href: string) => {
+  if (role !== 'Coordinator') return false
+  const path = href.split('?')[0]
+  return COORDINATOR_HIDDEN_PATHS.some((p) => path === p || path.startsWith(`${p}/`))
+}
+
 export const TEAM_ATTENDANCE_ROLES = new Set([
   'Admin', 'Super Admin', 'HR Manager', 'HR Executive', 'Manager', 'Executive Manager',
   'Coordinator', 'Senior Coordinator', 'Regional Manager', 'Regional Head', 'National Head',
@@ -193,6 +220,7 @@ export function canAccessPath(
   if (options?.loading) return true
   if (!user) return false
   if (isSuperAdmin(user)) return true
+  if (isCoordinatorHiddenPath(user.role, pathname)) return false
   if (pathname === '/dashboard/advance' || pathname.startsWith('/dashboard/advance/')) {
     const key = permissionForPath(pathname) || 'advance.status.page.view'
     return !['Vendor', 'Partner', 'Franchise'].includes(user.role) && hasPermission(user, key)
