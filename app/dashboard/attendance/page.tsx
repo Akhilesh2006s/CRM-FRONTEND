@@ -169,6 +169,7 @@ export default function MyAttendancePage() {
   // Check-out takes an exit photo and the location: office days end in the office, field days in the field.
   const checkOut = async () => {
     if (!exitPhoto) return toast.error('Take the exit photo to check out')
+    if (!window.confirm('Are you sure you want to end the day?')) return
     setBusy(true)
     try {
       const position = await currentPosition()

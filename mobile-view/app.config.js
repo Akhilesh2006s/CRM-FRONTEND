@@ -37,6 +37,8 @@ module.exports = ({ config }) => ({
     blockedPermissions: ['android.permission.ACCESS_BACKGROUND_LOCATION'],
   },
   extra: {
+    // Changes with every APK build: Terms & Conditions are asked again after an app update.
+    buildStamp: process.env.EAS_BUILD_ID || String(Date.now()),
     eas: {
       projectId: '6fbb940c-2bbd-4d25-ae08-68d19179063c',
     },

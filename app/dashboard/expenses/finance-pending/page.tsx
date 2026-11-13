@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { toast } from 'sonner'
 import { type ApprovalExpense, type ExpensePerson, firstLevelApprovedBy } from '@/lib/expenseApproval'
+import { ExpenseDateFilterBar } from '@/components/expenses/ExpenseDateFilterBar'
+import { EMPTY_EXPENSE_FILTER, expenseYears, filterExpenses } from '@/lib/expenseDateFilter'
 
 type Expense = ApprovalExpense & {
   _id: string
@@ -39,6 +41,8 @@ type Trainer = {
 
 export default function FinancePendingExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([])
+  const [df, setDf] = useState(EMPTY_EXPENSE_FILTER)
+  const visible = filterExpenses(expenses, df)
   const [loading, setLoading] = useState(true)
   const [employees, setEmployees] = useState<Employee[]>([])
   const [trainers, setTrainers] = useState<Trainer[]>([])
@@ -100,6 +104,8 @@ export default function FinancePendingExpensesPage() {
       <div>
         <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Finance Approved Exp List</h1>
       </div>
+
+      <ExpenseDateFilterBar value={df} onChange={setDf} years={expenseYears(expenses)} shown={visible.length} total={expenses.length} />
 
       {/* Filter Section */}
       <Card className="p-4 shadow-sm">
@@ -173,7 +179,7 @@ export default function FinancePendingExpensesPage() {
                     Loading expenses...
                   </TableCell>
                 </TableRow>
-              ) : expenses.length === 0 ? (
+              ) : visible.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={12} className="text-center py-8">
                     <div className="flex flex-col items-center gap-2">
@@ -185,7 +191,7 @@ export default function FinancePendingExpensesPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                expenses.map((expense, index) => (
+                visible.map((expense, index) => (
                   <TableRow
                     key={expense._id}
                     className={`${index % 2 === 0 ? 'bg-white' : 'bg-neutral-50/50'}`}

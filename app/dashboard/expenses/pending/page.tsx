@@ -30,6 +30,8 @@ import {
   firstLevelApproverLabel,
   firstLevelApprovedBy,
 } from '@/lib/expenseApproval'
+import { ExpenseDateFilterBar } from '@/components/expenses/ExpenseDateFilterBar'
+import { EMPTY_EXPENSE_FILTER, expenseYears, filterExpenses } from '@/lib/expenseDateFilter'
 
 type Expense = ApprovalExpense & {
   _id: string
@@ -105,6 +107,8 @@ const getPendingMonth = (expense: Expense) => {
 export default function ManagerPendingExpensesPage() {
   const router = useRouter()
   const [expenses, setExpenses] = useState<Expense[]>([])
+  const [df, setDf] = useState(EMPTY_EXPENSE_FILTER)
+  const visible = filterExpenses(expenses, df)
   const [loading, setLoading] = useState(true)
   const [employees, setEmployees] = useState<Employee[]>([])
   const [trainers, setTrainers] = useState<Trainer[]>([])
@@ -195,6 +199,8 @@ export default function ManagerPendingExpensesPage() {
         </p>
       </div>
 
+      <ExpenseDateFilterBar value={df} onChange={setDf} years={expenseYears(expenses)} shown={visible.length} total={expenses.length} />
+
       {/* Filter Section */}
       <Card className="p-4 shadow-sm">
         <div className="flex flex-wrap items-center gap-4">
@@ -264,14 +270,14 @@ export default function ManagerPendingExpensesPage() {
                     Loading expenses...
                   </TableCell>
                 </TableRow>
-              ) : expenses.length === 0 ? (
+              ) : visible.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={9} className="text-center py-8 text-neutral-500">
                     No expenses are awaiting your approval.
                   </TableCell>
                 </TableRow>
               ) : (
-                expenses.map((expense, index) => (
+                visible.map((expense, index) => (
                   <TableRow
                     key={expense._id}
                     className={`${index % 2 === 0 ? 'bg-white' : 'bg-neutral-50/50'}`}

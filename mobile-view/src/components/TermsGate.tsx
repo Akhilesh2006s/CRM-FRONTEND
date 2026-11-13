@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 import { useAuth } from '../context/AuthContext';
 import { apiService } from '../services/api';
 import { colors } from '../theme/colors';
@@ -9,9 +11,15 @@ import LogoutButton from './LogoutButton';
 /** Logins that are not employees do not accept the employee terms. */
 const NO_TERMS_ROLES = new Set(['Vendor', 'Partner', 'Franchise']);
 
+/** This APK build: a new build (app update) asks for the terms again. */
+const BUILD = String((Constants.expoConfig?.extra as any)?.buildStamp || Constants.expoConfig?.version || '');
+const keyFor = (userId: string) => `termsAccepted:${userId}`;
+const stampFor = (version: string) => `${BUILD}|${version}`;
+
 /**
- * Terms & Conditions at every sign-in: the employee must tick the box and continue before using
- * the app. Acceptance (date and time) is saved on the server; signing in again asks again.
+ * Terms & Conditions the first time a login is used on this phone, and again after an app update
+ * or a change to the terms. Signing out and in again on the same phone does not ask again.
+ * Every acceptance (date and time) is saved on the server.
  */
 export default function TermsGate({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -25,18 +33,17 @@ export default function TermsGate({ children }: { children: React.ReactNode }) {
   const check = useCallback(async () => {
     if (exempt) return setState('done');
     try {
-      const me: any = await apiService.get('/auth/me');
-      const accepted = me?.termsAcceptedAt ? new Date(me.termsAcceptedAt).getTime() : 0;
-      const signedIn = me?.lastLogin ? new Date(me.lastLogin).getTime() : 0;
-      if (accepted && accepted >= signedIn) return setState('done');
       const t: any = await apiService.get('/auth/terms');
-      setTerms({ version: String(t?.version || ''), text: String(t?.text || '') });
+      const version = String(t?.version || '');
+      const saved = await AsyncStorage.getItem(keyFor(String(user?._id || ''))).catch(() => null);
+      if (saved && saved === stampFor(version)) return setState('done');
+      setTerms({ version, text: String(t?.text || '') });
       setState('needed');
     } catch {
       // Never lock the app out when the server can't answer.
       setState('done');
     }
-  }, [exempt]);
+  }, [exempt, user?._id]);
 
   useEffect(() => {
     setTicked(false);
@@ -49,6 +56,7 @@ export default function TermsGate({ children }: { children: React.ReactNode }) {
     setError('');
     try {
       await apiService.post('/auth/accept-terms', { accepted: true, version: terms?.version, platform: Platform.OS });
+      await AsyncStorage.setItem(keyFor(String(user?._id || '')), stampFor(terms?.version || '')).catch(() => {});
       setState('done');
     } catch (e: any) {
       setError(e?.message || 'Could not save. Try again.');

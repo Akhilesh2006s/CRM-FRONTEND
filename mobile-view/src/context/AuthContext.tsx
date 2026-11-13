@@ -1,5 +1,17 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Application from 'expo-application';
+import { Platform } from 'react-native';
+
+/** Android ID (per phone and app signing key) or the iOS vendor id; '' when unavailable. */
+async function phoneId(): Promise<string> {
+  try {
+    const id = Platform.OS === 'android' ? Application.getAndroidId() : await Application.getIosIdForVendorAsync();
+    return id ? `${Platform.OS}-${id}` : '';
+  } catch {
+    return '';
+  }
+}
 import { apiService } from '../services/api';
 
 interface User {
@@ -76,15 +88,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('Attempting login with mobile:', mobile);
       // One login = one phone: the first login binds this device; another phone needs a Device Reset by Admin.
-      let deviceId = await AsyncStorage.getItem('deviceId');
-      if (!deviceId) {
-        deviceId = `dev-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-        await AsyncStorage.setItem('deviceId', deviceId);
+      // The phone's own id stays the same after logout, app updates and reinstalls, so the same phone
+      // never needs a Device Reset. The older stored id is sent too, so phones bound before keep working.
+      let legacyDeviceId = await AsyncStorage.getItem('deviceId');
+      if (!legacyDeviceId) {
+        legacyDeviceId = `dev-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+        await AsyncStorage.setItem('deviceId', legacyDeviceId);
       }
+      const hardwareId = await phoneId();
       const response = await apiService.post('/auth/login', {
         mobile,
         password,
-        deviceId,
+        deviceId: hardwareId || legacyDeviceId,
+        legacyDeviceId,
       });
       const { token, ...userData } = response;
 

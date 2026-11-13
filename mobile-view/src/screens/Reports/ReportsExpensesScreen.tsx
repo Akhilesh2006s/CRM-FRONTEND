@@ -25,6 +25,8 @@ import {
 } from '../../lib/expenseApproval';
 
 import DateField from '../../ui/DateField';
+import ExpenseDateFilterBar from '../../components/expenses/ExpenseDateFilterBar';
+import { EMPTY_EXPENSE_FILTER, expenseYears, filterExpenses } from '../../lib/expenseDateFilter';
 type Expense = ApprovalExpense & {
   _id: string;
   expItemId?: string;
@@ -90,6 +92,8 @@ function formatExpDate(dateString?: string) {
 
 export default function ReportsExpensesScreen() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [df, setDf] = useState(EMPTY_EXPENSE_FILTER);
+  const visible = filterExpenses(expenses, df);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [zones, setZones] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -241,12 +245,13 @@ export default function ReportsExpensesScreen() {
           </View>
         </PageSection>
 
-        <SectionTitle>{`Expenses (${expenses.length})`}</SectionTitle>
+        <SectionTitle>{`Expenses (${visible.length})`}</SectionTitle>
 
-        {expenses.length === 0 ? (
+        <ExpenseDateFilterBar value={df} onChange={setDf} years={expenseYears(expenses)} shown={visible.length} total={expenses.length} />
+        {visible.length === 0 ? (
           <EmptyState title="No expenses found" />
         ) : (
-          expenses.map((expense, index) => {
+          visible.map((expense, index) => {
             const badge = expenseStatusColor(expense.status || '');
             const expNo = expense.expItemId || String(expense._id).slice(-5);
             const employeeName =

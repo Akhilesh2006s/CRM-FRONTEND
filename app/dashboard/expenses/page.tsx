@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { apiRequest } from '@/lib/api'
+import { ExpenseDateFilterBar } from '@/components/expenses/ExpenseDateFilterBar'
+import { EMPTY_EXPENSE_FILTER, expenseYears, filterExpenses } from '@/lib/expenseDateFilter'
 
 type Expense = {
   _id: string
@@ -28,6 +30,8 @@ function statusColor(status: Expense['status']) {
 
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([])
+  const [df, setDf] = useState(EMPTY_EXPENSE_FILTER)
+  const visible = filterExpenses(expenses, df)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -48,8 +52,10 @@ export default function ExpensesPage() {
         <h1 className="text-2xl md:text-3xl font-semibold text-neutral-900">Expenses</h1>
       </div>
 
+      <ExpenseDateFilterBar value={df} onChange={setDf} years={expenseYears(expenses)} shown={visible.length} total={expenses.length} />
+
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {expenses.map((e) => (
+        {visible.map((e) => (
           <Card key={e._id} className="p-5 shadow-sm">
             <div className="flex items-start justify-between">
               <div className="text-lg font-medium text-neutral-900">{e.title}</div>
@@ -60,7 +66,7 @@ export default function ExpensesPage() {
             <div className="text-xs text-neutral-500 mt-2">Date: {new Date(e.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}</div>
           </Card>
         ))}
-        {!loading && expenses.length === 0 && (
+        {!loading && visible.length === 0 && (
           <div className="text-neutral-500">No expenses yet.</div>
         )}
       </div>

@@ -7,6 +7,8 @@ import { Card, CardTitle, InfoRow, EmptyState } from '../../ui/Kit';
 import { WebInput, WebButton, WebSelect, DataTable, WebLabel } from '../../ui/WebPrimitives';
 import { apiService } from '../../services/api';
 import { type ApprovalExpense, type ExpensePerson, firstLevelApprovedBy } from '../../lib/expenseApproval';
+import ExpenseDateFilterBar from '../../components/expenses/ExpenseDateFilterBar';
+import { EMPTY_EXPENSE_FILTER, expenseYears, filterExpenses } from '../../lib/expenseDateFilter';
 
 type Expense = ApprovalExpense & {
   _id: string;
@@ -33,6 +35,8 @@ interface OptionItem {
 
 export default function ExpenseFinancePendingScreen({ navigation }: any) {
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [df, setDf] = useState(EMPTY_EXPENSE_FILTER);
+  const visible = filterExpenses(expenses, df);
   const [employees, setEmployees] = useState<OptionItem[]>([]);
   const [trainers, setTrainers] = useState<OptionItem[]>([]);
   const [filters, setFilters] = useState({ employeeId: 'all', trainerId: 'all' });
@@ -139,10 +143,11 @@ export default function ExpenseFinancePendingScreen({ navigation }: any) {
         <WebButton title="Search" onPress={handleSearch} />
       </PageSection>
 
-      {expenses.length === 0 ? (
+      <ExpenseDateFilterBar value={df} onChange={setDf} years={expenseYears(expenses)} shown={visible.length} total={expenses.length} />
+      {visible.length === 0 ? (
         <EmptyState icon="📄" title="No finance approved expenses found" />
       ) : (
-        expenses.map((expense) => (
+        visible.map((expense) => (
           <Card key={expense._id} onPress={() => navigation.navigate('ExpenseDetail', { id: expense._id })}>
             <CardTitle
               title={expense.title || 'Expense'}

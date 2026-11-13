@@ -19,10 +19,14 @@ import { colors } from '../../theme/colors';
 import MessageBanner from '../../components/MessageBanner';
 
 import DateField from '../../ui/DateField';
+import ExpenseDateFilterBar from '../../components/expenses/ExpenseDateFilterBar';
+import { EMPTY_EXPENSE_FILTER, expenseYears, filterExpenses } from '../../lib/expenseDateFilter';
 export default function ExpenseListScreen({ navigation, route }: any) {
   const { user } = useAuth();
   const showMyExpenses = route?.params?.myExpenses || false;
   const [expenses, setExpenses] = useState<any[]>([]);
+  const [df, setDf] = useState(EMPTY_EXPENSE_FILTER);
+  const visible = filterExpenses(expenses, df);
   const [loading, setLoading] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -135,10 +139,11 @@ export default function ExpenseListScreen({ navigation, route }: any) {
       }
     >
       {successMessage && <MessageBanner type="success" message={successMessage} onDismiss={clearMessages} />}
-      {expenses.length === 0 ? (
+      <ExpenseDateFilterBar value={df} onChange={setDf} years={expenseYears(expenses)} shown={visible.length} total={expenses.length} />
+      {visible.length === 0 ? (
         <EmptyState icon="🧾" title="No expenses found" />
       ) : (
-        expenses.map((expense) => (
+        visible.map((expense) => (
           <Card key={expense._id}>
             <CardTitle
               title={expense.category || 'N/A'}

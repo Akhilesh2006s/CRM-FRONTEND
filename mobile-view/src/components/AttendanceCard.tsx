@@ -90,9 +90,9 @@ export default function AttendanceCard({ onChange }: { onChange?: () => void } =
 
   // End Day takes an exit photo and the location: office days end in the office, field days in the field.
   const handleCheckOut = () => {
-    Alert.alert('End Day', 'End your day now? GPS tracking stops after this.', [
+    Alert.alert('End Day', 'Are you sure you want to end the day? GPS tracking stops after this.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'End Day', style: 'destructive', onPress: () => void endDay() },
+      { text: 'Yes, End Day', style: 'destructive', onPress: () => void endDay() },
     ]);
   };
 

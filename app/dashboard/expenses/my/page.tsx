@@ -23,6 +23,8 @@ import {
   toMyExpenseView,
 } from '@/lib/expenseApproval'
 import { ExpenseBillButton } from '@/components/expenses/ExpenseBillViewer'
+import { ExpenseDateFilterBar } from '@/components/expenses/ExpenseDateFilterBar'
+import { EMPTY_EXPENSE_FILTER, expenseYears, filterExpenses } from '@/lib/expenseDateFilter'
 
 type Expense = ApprovalExpense & {
   _id: string
@@ -149,7 +151,9 @@ function MyExpensesList() {
     })()
   }, [])
 
-  const shown = expenses.filter((e) => inMyExpenseView(e, view))
+  const [df, setDf] = useState(EMPTY_EXPENSE_FILTER)
+  const inView = expenses.filter((e) => inMyExpenseView(e, view))
+  const shown = filterExpenses(inView, df)
   const showReason = view === 'rejected'
   const columns = showReason ? 8 : 7
 
@@ -176,6 +180,8 @@ function MyExpensesList() {
           </Link>
         ))}
       </div>
+
+      <ExpenseDateFilterBar value={df} onChange={setDf} years={expenseYears(expenses)} shown={shown.length} total={inView.length} />
 
       <Card className="shadow-sm">
         <div className="overflow-x-auto">

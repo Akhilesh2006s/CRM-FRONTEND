@@ -12,6 +12,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { type ApprovalExpense, expenseStatusColor, expenseStatusText } from '@/lib/expenseApproval'
 import { toast } from 'sonner'
+import { ExpenseDateFilterBar } from '@/components/expenses/ExpenseDateFilterBar'
+import { EMPTY_EXPENSE_FILTER, expenseYears, filterExpenses } from '@/lib/expenseDateFilter'
 
 type Expense = ApprovalExpense & {
   _id: string
@@ -59,6 +61,8 @@ function ExecutiveManagerExpenses() {
   const router = useRouter()
   const tab: 'pending' | 'decided' = useSearchParams()?.get('tab') === 'decided' ? 'decided' : 'pending'
   const [expenses, setExpenses] = useState<Expense[]>([])
+  const [df, setDf] = useState(EMPTY_EXPENSE_FILTER)
+  const visible = filterExpenses(expenses, df)
   const [loading, setLoading] = useState(true)
   const [employees, setEmployees] = useState<Employee[]>([])
   const [filters, setFilters] = useState({
@@ -160,6 +164,8 @@ function ExecutiveManagerExpenses() {
         </div>
       </div>
 
+      <ExpenseDateFilterBar value={df} onChange={setDf} years={expenseYears(expenses)} shown={visible.length} total={expenses.length} />
+
       {/* Filter Section */}
       <Card className="p-4 shadow-sm">
         <div className="flex flex-wrap items-center gap-4">
@@ -218,12 +224,12 @@ function ExecutiveManagerExpenses() {
                   <TableRow>
                     <TableCell colSpan={8} className="text-center py-8 text-neutral-500">Loading expenses...</TableCell>
                   </TableRow>
-                ) : expenses.length === 0 ? (
+                ) : visible.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center py-8 text-neutral-500">You have not approved or rejected any expenses yet.</TableCell>
                   </TableRow>
                 ) : (
-                  expenses.map((expense, index) => (
+                  visible.map((expense, index) => (
                     <TableRow key={expense._id} className={index % 2 === 0 ? 'bg-white' : 'bg-neutral-50/50'}>
                       <TableCell>{index + 1}</TableCell>
                       <TableCell className="font-medium">{getEmployee(expense)?.name || '-'}</TableCell>
@@ -271,7 +277,7 @@ function ExecutiveManagerExpenses() {
                     Loading expenses...
                   </TableCell>
                 </TableRow>
-              ) : expenses.length === 0 ? (
+              ) : visible.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center py-8 text-neutral-500">
                     {employees.length === 0 
@@ -280,7 +286,7 @@ function ExecutiveManagerExpenses() {
                   </TableCell>
                 </TableRow>
               ) : (
-                expenses.map((expense, index) => (
+                visible.map((expense, index) => (
                   <TableRow
                     key={expense._id}
                     className={`${index % 2 === 0 ? 'bg-white' : 'bg-neutral-50/50'}`}

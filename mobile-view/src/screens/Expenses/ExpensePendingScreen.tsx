@@ -23,6 +23,8 @@ import {
   expenseStatusText,
   firstLevelAmount,
 } from '../../lib/expenseApproval';
+import ExpenseDateFilterBar from '../../components/expenses/ExpenseDateFilterBar';
+import { EMPTY_EXPENSE_FILTER, expenseYears, filterExpenses } from '../../lib/expenseDateFilter';
 
 type Person = { _id: string; name: string; email?: string; empCode?: string; role?: string };
 
@@ -83,6 +85,8 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 export default function ExpensePendingScreen({ navigation }: any) {
   const { user } = useAuth();
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [df, setDf] = useState(EMPTY_EXPENSE_FILTER);
+  const visible = filterExpenses(expenses, df);
   const [employees, setEmployees] = useState<OptionItem[]>([]);
   const [trainers, setTrainers] = useState<OptionItem[]>([]);
   const [filters, setFilters] = useState({ employeeId: '', trainerId: '' });
@@ -197,10 +201,11 @@ export default function ExpensePendingScreen({ navigation }: any) {
           <WebButton title="Search" onPress={handleSearch} />
         </View>
 
-        {expenses.length === 0 ? (
+        <ExpenseDateFilterBar value={df} onChange={setDf} years={expenseYears(expenses)} shown={visible.length} total={expenses.length} />
+        {visible.length === 0 ? (
           <EmptyState icon="✅" title="Nothing to approve" message="No expenses are awaiting your approval." />
         ) : (
-          expenses.map((expense, index) => {
+          visible.map((expense, index) => {
             const badge = expenseStatusColor(expense.status);
             return (
               <TouchableOpacity key={expense._id} style={styles.card} onPress={() => openReview(expense)} activeOpacity={0.85}>

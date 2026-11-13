@@ -20,6 +20,8 @@ import {
   type MyExpenseView,
 } from '../../lib/expenseApproval';
 import { ExpenseBillButton } from '../../components/expenses/ExpenseBillViewer';
+import ExpenseDateFilterBar from '../../components/expenses/ExpenseDateFilterBar';
+import { EMPTY_EXPENSE_FILTER, expenseYears, filterExpenses } from '../../lib/expenseDateFilter';
 
 type Expense = ApprovalExpense & {
   _id: string;
@@ -172,7 +174,9 @@ export default function ExpenseMyScreen({ navigation, route }: any) {
   };
 
   const countFor = (v: MyExpenseView) => expenses.filter((e) => inMyExpenseView(e, v)).length;
-  const shown = expenses.filter((e) => inMyExpenseView(e, view));
+  const [df, setDf] = useState(EMPTY_EXPENSE_FILTER);
+  const inView = expenses.filter((e) => inMyExpenseView(e, view));
+  const shown = filterExpenses(inView, df);
 
   return (
     <ScreenShell
@@ -204,6 +208,7 @@ export default function ExpenseMyScreen({ navigation, route }: any) {
           ))}
         </View>
 
+        <ExpenseDateFilterBar value={df} onChange={setDf} years={expenseYears(expenses)} shown={shown.length} total={inView.length} />
         {shown.length === 0 ? (
           <EmptyState icon="🧾" title={MY_EXPENSE_VIEW_EMPTY[view]} />
         ) : (

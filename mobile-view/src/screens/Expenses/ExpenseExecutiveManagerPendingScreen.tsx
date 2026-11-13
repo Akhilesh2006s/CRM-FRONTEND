@@ -9,6 +9,8 @@ import { WebSelect } from '../../ui/WebPrimitives';
 import MessageBanner from '../../components/MessageBanner';
 import { navigateRoot } from '../../navigation/navigationRef';
 import { type ApprovalExpense, expenseStatusColor, expenseStatusText } from '../../lib/expenseApproval';
+import ExpenseDateFilterBar from '../../components/expenses/ExpenseDateFilterBar';
+import { EMPTY_EXPENSE_FILTER, expenseYears, filterExpenses } from '../../lib/expenseDateFilter';
 
 type Person = { _id: string; name: string; email?: string };
 
@@ -53,6 +55,8 @@ const getPendingMonth = (e: Expense) =>
 export default function ExpenseExecutiveManagerPendingScreen({ navigation, route }: any) {
   const tab: Tab = route?.params?.tab === 'decided' ? 'decided' : 'pending';
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [df, setDf] = useState(EMPTY_EXPENSE_FILTER);
+  const visible = filterExpenses(expenses, df);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -135,7 +139,8 @@ export default function ExpenseExecutiveManagerPendingScreen({ navigation, route
 
       {error ? <MessageBanner type="error" message={error} onDismiss={() => setError(null)} /> : null}
 
-      {expenses.length === 0 ? (
+      <ExpenseDateFilterBar value={df} onChange={setDf} years={expenseYears(expenses)} shown={visible.length} total={expenses.length} />
+      {visible.length === 0 ? (
         <EmptyState
           icon="🧾"
           title={tab === 'decided' ? 'Nothing decided yet' : 'Nothing to approve'}
@@ -148,7 +153,7 @@ export default function ExpenseExecutiveManagerPendingScreen({ navigation, route
           }
         />
       ) : tab === 'decided' ? (
-        expenses.map((exp, i) => {
+        visible.map((exp, i) => {
           const c = expenseStatusColor(exp.status);
           return (
             <Card key={exp._id}>
@@ -180,7 +185,7 @@ export default function ExpenseExecutiveManagerPendingScreen({ navigation, route
           );
         })
       ) : (
-        expenses.map((exp, i) => (
+        visible.map((exp, i) => (
           <Card key={exp._id} onPress={() => openReview(exp)}>
             <CardTitle title={`${i + 1}. ${getEmployee(exp)?.name || '-'}`} badge="Pending" tone="warning" />
             <InfoRow label="Amount" value={Number(exp.amount).toFixed(2)} bold />
